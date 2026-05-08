@@ -1,0 +1,39 @@
+# Dependabot keeps three pin surfaces fresh: GitHub Actions in workflows,
+# npm packages (test harness), and Go modules (hextra + transitive).
+# Updates land as PRs you can review and merge — they never gate CI.
+#
+# Grouping is intentional: actions and npm release frequently. Without
+# groups, you'd get one PR per patch bump and lose interest fast.
+version: 2
+updates:
+  # Workflow actions: actions/checkout, setup-node, peaceiris/actions-hugo,
+  # cache, upload-artifact, etc.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  # Test harness deps (@playwright/test, smol-toml, serve).
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      npm-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    # Major version bumps (e.g., Playwright v2) get their own PR so the
+    # release-notes review happens before the merge.
+
+  # Hugo modules: hextra and anything pulled transitively. Bumping these
+  # affects rendering across all consumer repos that pin to this module's
+  # main branch, so each PR runs the full harness in CI before merging.
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
