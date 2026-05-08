@@ -523,6 +523,32 @@ Final step in the procedure.
 
 {{% /steps %}}
 
+## Hextra defaults
+
+Several shortcodes ship with Hextra and aren't overridden by the module. The fixture exercises a representative subset so the harness catches regressions when Hextra is upgraded.
+
+### Badge
+
+The `badge` shortcode renders a labeled pill. Real docs use it for status indicators (deprecated, beta, enterprise-only):
+
+{{< badge "MARKER_BADGE" >}}
+
+### Filetree
+
+The `filetree` shortcode is a composite of container, folder, and file. The folder `name` attribute below puts MARKER_FILETREE in the rendered tree, confirming the composite resolves end-to-end:
+
+{{< filetree/container >}}
+  {{< filetree/folder name="MARKER_FILETREE" >}}
+    {{< filetree/file name="example.md" >}}
+  {{< /filetree/folder >}}
+{{< /filetree/container >}}
+
+### Include
+
+The `include` shortcode renders another content page's shortcodes inline. Distinct from the module's `reuse` shortcode, which reads from `assets/conrefs/`:
+
+{{% include "hextra-include-target" %}}
+
 ## Versioned content
 
 Each block below renders only when the page's section matches the version filter. Sentinels make per-version assertions trivial.

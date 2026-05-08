@@ -1,0 +1,24 @@
+{{- /*
+  Shortcode: details
+  Renders a collapsible details/summary block. Default state is *closed*
+  — explicitly inverts Hextra's upstream default-open behavior because
+  collapsed-by-default is the conservative UX for docs (a details block
+  is "click to reveal extra info," not "always visible").
+
+  Parameters:
+    - title: The clickable summary heading (markdown supported).
+    - open: Pass `open="true"` to render the block expanded on page load.
+
+  Hextra's upstream uses the inverted `closed="true"` parameter to close.
+  We don't read that param: existing module-consumer content uses
+  `open="true"` to open, and Hextra's `closed="true"` becomes a no-op
+  here (which renders correctly anyway, since the default is already
+  closed).
+*/ -}}
+{{- $title := .Get "title" | default "" -}}
+{{- $open := eq (.Get "open") "true" -}}
+
+<details class="hx:last-of-type:mb-0 hx:rounded-lg hx:bg-neutral-50 hx:dark:bg-neutral-800 hx:p-2 hx:mt-4 hx:group" {{ if $open }}open{{ end }}>
+  <summary class="hx:flex hx:items-center hx:cursor-pointer hx:select-none hx:list-none hx:p-1 hx:rounded hx:transition-colors hx:hover:bg-gray-100 hx:dark:hover:bg-neutral-800 hx:before:mr-1 hx:before:inline-block hx:before:transition-transform hx:before:content-[''] hx:dark:before:invert hx:rtl:before:rotate-180 hx:group-open:before:rotate-90"><strong class="hx:text-lg">{{ $title | markdownify }}</strong></summary>
+  <div class="hx:p-2 hx:overflow-hidden">{{- .InnerDeindent | markdownify -}}</div>
+</details>
