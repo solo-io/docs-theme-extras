@@ -45,7 +45,12 @@ test.describe("page renders without errors", () => {
         if (msg.type() === "error") errors.push(`console.error: ${msg.text()}`);
       });
       await page.goto(url);
-      await page.waitForLoadState("networkidle", { timeout: 15_000 });
+      // page.goto() already waits for "load". Don't add waitForLoadState
+      // ("networkidle") here: firefox counts in-flight Google Fonts +
+      // Material Symbols + Mermaid CDN requests in its idle calculation,
+      // which on CI runners can leave the network "busy" past 15s and
+      // time out the test. The structural locator assertions below
+      // auto-retry, so we don't need an explicit wait.
       // Engine-agnostic structural assertions.
       await expect(page.locator(".hextra-nav-container").first()).toBeVisible();
       await expect(page.locator(".hextra-sidebar-container").first()).toBeVisible();
