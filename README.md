@@ -114,13 +114,19 @@ module:
 ```
 
 ```sh
-hugo mod get github.com/solo-io/docs-theme-extras@v0.1.0
+# During active development, track main:
+hugo mod get github.com/solo-io/docs-theme-extras@main
 hugo mod tidy
 ```
 
-Use an explicit version tag, never `@latest` or a branch name. The pin
-makes "did the module change or did content change?" debuggable when CI
-goes red.
+The module is still iterating quickly, so consumers track `main` for now.
+Hugo's module system rewrites `@main` into a pseudo-version + commit SHA
+in `go.mod` (e.g., `v0.0.0-20260508153012-abc1234def56`), so the pin is
+still reproducible — bumping it is `hugo mod get …@main` again, which
+shows up as a SHA change in the PR diff.
+
+Once the module stabilizes, switch to explicit semver tags (`@v0.1.0`,
+etc.) and treat `@latest` / floating branch refs as unsupported.
 
 ### 2. Declare your brand
 
