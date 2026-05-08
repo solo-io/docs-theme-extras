@@ -1,0 +1,14 @@
+{{- /* Render a version-specific banner if configured in [[params.versions]].
+       Matches the current page's URL path against linkVersion entries. */ -}}
+{{- $versionPath := trim .FirstSection.RelPermalink "/" -}}
+{{- $bannerText := "" -}}
+{{- range .Site.Params.versions -}}
+  {{- if and (not $bannerText) .banner $versionPath (in $versionPath .linkVersion) -}}
+    {{- $bannerText = .banner -}}
+  {{- end -}}
+{{- end -}}
+{{- with $bannerText }}
+<div class="version-banner">
+  {{ . | markdownify }}
+</div>
+{{- end -}}

@@ -1,0 +1,11 @@
+name = "Docs Theme Extras"
+license = "Apache-2.0"
+licenselink = "https://github.com/solo-io/docs-theme-extras/blob/main/LICENSE"
+description = "Solo overlay on top of the Hextra Hugo theme. Ships shortcodes, a dual-mode page-context partial, and a bundled HTML test harness."
+homepage = "https://github.com/solo-io/docs-theme-extras"
+tags = ["docs", "hextra", "overlay", "shortcodes"]
+features = ["shortcodes"]
+
+[author]
+  name = "Solo.io"
+  homepage = "https://solo.io"

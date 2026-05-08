@@ -1,0 +1,18 @@
+{
+  "name": "docs-theme-extras",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Solo overlay on top of the Hextra Hugo theme. Ships shortcodes, partials, and a bundled HTML test harness runnable against any Hugo doc set via `make test CONFIG=path/to/x.toml`.",
+  "scripts": {
+    "test": "playwright test",
+    "test:static": "playwright test --project=static",
+    "test:browser": "playwright test --project=browser",
+    "test:smoke": "playwright test --project=smoke",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.0",
+    "serve": "^14.2.4",
+    "smol-toml": "^1.3.1"
+  }
+}

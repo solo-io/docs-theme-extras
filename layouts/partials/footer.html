@@ -1,0 +1,30 @@
+{{- /* Custom Solo footer override — replaces Hextra's "Hextra Project" footer.
+       Matches the look of the previous docs-theme-lotus footer. */ -}}
+{{- $copyright := .Site.Params.footer.copyright | default "Solo.io copyright 2026" -}}
+
+<footer class="solo-footer hx:print:hidden">
+  <div class="solo-footer-inner">
+    <p>{{ $copyright | markdownify }}</p>
+  </div>
+</footer>
+
+<button id="solo-back-to-top" type="button" aria-label="Back to top" class="hx:print:hidden" hidden>
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M12 19V5M5 12l7-7 7 7"/>
+  </svg>
+</button>
+<script>
+(function(){
+  var btn = document.getElementById('solo-back-to-top');
+  if (!btn) return;
+  function update(){
+    if (window.scrollY > 300) btn.removeAttribute('hidden');
+    else btn.setAttribute('hidden', '');
+  }
+  btn.addEventListener('click', function(){
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+  window.addEventListener('scroll', update, { passive: true });
+  update();
+})();
+</script>

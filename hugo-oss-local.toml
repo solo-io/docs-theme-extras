@@ -1,0 +1,197 @@
+# Local-dev variant of hugo-oss.toml. Used by `make server-oss`. baseURL is
+# "/" instead of "/test" so `hugo server` mounts the home page at
+# http://localhost:1313/ rather than the malformed
+# http://localhost:1313//test/ that path-only baseURLs produce in dev mode.
+# Production-shaped URL prefixes (folder, productPath, version urls) are
+# stripped to match the bare-rooted layout.
+baseURL = "/"
+languageCode = "en-us"
+title = "Docs framework test fixture (OSS brand)"
+linkTitle = "Test"
+contentDir = "fixture/content/en/test"
+publishDir = "public-oss-local"
+enableInlineShortcodes = true
+
+[module]
+  [[module.imports]]
+    path = "github.com/imfing/hextra"
+    disable = false
+
+  # Surface fixture/assets and fixture/static into Hugo's standard locations
+  # for the self-test build. The fixture stays under fixture/ so it isn't
+  # exposed to consumers that import this module via go.mod — they only see
+  # top-level layouts/.
+  [[module.mounts]]
+    source = "layouts"
+    target = "layouts"
+
+  # Module's own CSS/JS overlay (custom.css drives version-dropdown,
+  # copy-md-btn, and other docs-specific component styling that Hextra's
+  # head partial auto-picks-up via resources.Get "css/custom.css").
+  [[module.mounts]]
+    source = "assets"
+    target = "assets"
+
+  [[module.mounts]]
+    source = "fixture/assets"
+    target = "assets"
+
+  [[module.mounts]]
+    source = "fixture/static"
+    target = "static"
+
+[build]
+  writeStats = true
+  [[build.cachebusters]]
+    source = "assets/watching/hugo_stats\\.json"
+    target = "styles\\.css"
+  [[build.cachebusters]]
+    source = "(postcss|tailwind)\\.config\\.js"
+    target = "css"
+  [[build.cachebusters]]
+    source = "assets/.*\\.(js|ts|jsx|tsx)"
+    target = "js"
+  [[build.cachebusters]]
+    source = "assets/.*\\.(.*)$"
+    target = "$1"
+
+[params]
+
+product = "Docs framework test fixture"
+productPath = "/"
+buildCondition = "test"
+currentProduct = "test"
+pathName = "/docs"
+version = "latest"
+defaultVersion = "v2"
+folder = ""
+versionBanner = false
+versionBannerText = ""
+versionSpecificBanner = true
+
+# This module's page-context partial dispatches on this flag. The fixture was
+# authored against the docs convention (Site.Params.folder / currentProduct).
+# Other consumers that follow the /docs/<section>/<version>/... URL shape can
+# either omit this param (default is "url") or set it to "url" explicitly.
+pageContextMode = "siteParams"
+
+# Brand layer selector for head-end.html. Loads brand-oss.css.
+[params.themeExtras]
+  brand = "oss"
+
+[params.footer]
+  copyright = "Solo.io copyright 2026"
+  displayPoweredBy = false
+
+[params.docs]
+  title = "Docs framework test fixture"
+  toc = true
+
+[params.navbar]
+  displayTitle = false
+  displayLogo = true
+  width = "wide"
+
+  # OSS navbar shows the product logo, not Solo's company mark. SVG aspect
+  # ratio is ~3.79:1 (viewBox 2708×714), so width=152 / height=40 preserves
+  # proportions without stretching.
+  [params.navbar.logo]
+    path = "images/logos/logo-oss-test.svg"
+    dark = "images/logos/logo-oss-test-dark.svg"
+    width = 152
+    height = 40
+
+# OSS leaves the sidebar product logo unset on purpose — the navbar already
+# displays the product logo, so the sidebar slot would be a redundant
+# duplicate. Hextra's sidebar partial skips the logo block entirely when
+# Site.Params.sidebar.logo is unset.
+
+[params.page]
+  width = "wide"
+
+[params.theme]
+  default = "system"
+  displayToggle = false
+
+[params.search]
+  enable = true
+  type = "flexsearch"
+
+  [params.search.flexsearch]
+    index = "content"
+
+[params.editURL]
+  enable = false
+
+[[params.versions]]
+  version = "v2"
+  dropdown = "v2 (current)"
+  linkVersion = "v2"
+  url = "/v2"
+  product = "test"
+  productName = "Docs framework test fixture"
+
+[[params.versions]]
+  version = "v1"
+  dropdown = "v1"
+  linkVersion = "v1"
+  url = "/v1"
+  product = "test"
+  productName = "Docs framework test fixture"
+
+[[params.versions]]
+  version = "main"
+  dropdown = "main (dev)"
+  linkVersion = "main"
+  url = "/main"
+  banner = "This version of the documentation is currently under development. "
+  product = "test"
+  productName = "Docs framework test fixture"
+
+[[menu.main]]
+  name = "Search"
+  weight = 1
+  [menu.main.params]
+    type = "search"
+
+[[menu.main]]
+  name = "Theme"
+  weight = 5
+  [menu.main.params]
+    type = "theme-toggle"
+    label = false
+
+[[menu.main]]
+  name = "GitHub"
+  weight = 3
+  url = "https://github.com/solo-io"
+  [menu.main.params]
+    icon = "github"
+
+[outputs]
+  home = ["HTML", "RSS", "llms"]
+  page = ["HTML", "markdown"]
+  section = ["HTML", "RSS", "markdown"]
+
+[markup]
+
+[markup.tableOfContents]
+  endLevel = 6
+  startLevel = 1
+
+[markup.goldmark.renderer]
+  unsafe = true
+
+[markup.goldmark.parser]
+  attribute = true
+
+[markup.goldmark.extensions.extras.superscript]
+  enable = true
+
+[markup.highlight]
+  noClasses = false
+
+[sitemap]
+  changeFreq = ''
+  filename = 'sitemap.xml'
+  priority = -1

@@ -1,0 +1,123 @@
+{{ $file := .Get "file" }}
+{{/* Set to default value, here agentgateway. This is required so that the product value will persist after the if statement. */}}
+{{ $product := "agentgateway" }}
+
+{{/*
+Resolve the content version from the page URL and prepend
+<product>/<version>/ to the file path so it resolves to the assembled
+directory (e.g. agw-docs/kubernetes/... → agentgateway/2.3.x/agw-docs/kubernetes/...).
+
+Scan every URL segment (not just index 1) so this works regardless of whether
+the baseURL has a path prefix (e.g. https://docs.solo.io/agentgateway/). The
+first segment that matches a known version wins.
+*/}}
+{{ $version := "" }}
+
+{{ $urlParts := split .Page.RelPermalink "/" }}
+{{ range $urlPart := $urlParts }}
+  {{ if not $version }}
+    {{ range $.Site.Params.versions }}
+      {{ if eq .version $urlPart }}
+        {{ $version = .version }}
+        {{ $product = .product | default "agentgateway" }}
+      {{ end }}
+    {{ end }}
+  {{ end }}
+{{ end }}
+
+{{ $currentProduct := $.Site.Params.currentProduct | default "" }}
+{{ $doc := false }}
+{{ if and $version $currentProduct }}
+  {{ $versionedFile := printf "%s/%s/%s" $currentProduct $version $file }}
+  {{ $doc = resources.Get $versionedFile }}
+  {{ if $doc }}
+    {{ $file = $versionedFile }}
+  {{ end }}
+{{ end }}
+{{ if not $doc }}
+  {{ $doc = resources.Get $file }}
+{{ end }}
+{{ if not $doc }}
+  {{ errorf "rebase: resource not found: %q (page: %s). Run 'make server PRODUCT=<product>' to assemble versioned assets." (.Get "file") .Page.RelPermalink }}
+{{ end }}
+{{ $content := $doc.Content }}
+
+{{/* For kgateway/envoy content, override product so link-hextra can apply
+     envoy-specific path transformations (e.g. reference/api → /reference/api/kgateway).
+     Version is NOT overridden — the URL-based inference above is correct. */}}
+{{ if or (in $file "envoy/latest") (in $file "envoy/main") }}
+{{ $product = "envoy" }}
+{{ end }}
+
+{{/* Optional: mark that this page may contain Mermaid diagrams */}}
+{{ .Page.Store.Set "hasMermaid" true }}
+
+{{/* Suppress list.html's auto-generated section cards when the rebased content
+     already provides its own {{< cards >}} block. Detected before shortcode
+     conversion, so it catches both {{< cards >}} and {{% cards %}} forms. */}}
+{{ if or (in $content "{{< cards") (in $content "{{% cards") }}
+  {{ .Page.Store.Set "hasManualCards" true }}
+{{ end }}
+
+{{/* Strip out front matter (--- ... ---) */}}
+{{ $clean := replaceRE `(?s)^---.*?---\s*` "" $content }}
+
+{{/* Convert percent-bracket shortcodes to angle-bracket so RenderString processes them.
+     Tab/tabs are converted back below so their inner content gets markdown-rendered. */}}
+{{ $clean = replaceRE `\{\{%\s*` "{{< " $clean }}
+{{ $clean = replaceRE `\s*%\}\}` " >}}" $clean }}
+
+{{/* Convert inner tab back to percent-bracket so its code blocks get markdown-rendered.
+     Leave outer tabs as angle-bracket so its block-level HTML is inserted after markdown
+     parsing, not re-parsed. Re-parsing would let CommonMark treat the wrapping <div> as
+     a type-6 HTML block and terminate any surrounding ordered/unordered list. */}}
+{{ $clean = replaceRE `\{\{<\s*(tab\s[^>]*)>}}` "{{% $1%}}" $clean }}
+{{ $clean = replaceRE `\{\{<\s*(/tab)\s*>}}` "{{% $1 %}}" $clean }}
+
+{{/* Convert steps back to percent-bracket. Hextra's steps shortcode just wraps
+     `.Inner`; with angle-bracket form the inner H3 headings stay as raw markdown
+     text instead of rendering as <h3>. */}}
+{{ $clean = replaceRE `\{\{<\s*(steps)\s*>}}` "{{% $1 %}}" $clean }}
+{{ $clean = replaceRE `\{\{<\s*(/steps)\s*>}}` "{{% $1 %}}" $clean }}
+
+{{/* Adjust any relative doc links if needed */}}
+{{ $clean = replaceRE `\((\/?)docs\/` "(/" $clean }}
+
+{{/* Replace link and reuse shortcodes to pass version */}}
+{{ $clean = replaceRE `{{<\s*link-hextra\s*(.*?)>}}` (printf "{{< link-hextra $1 version=\"%s\" product=\"%s\" >}}" $version $product ) $clean }}
+{{ $clean = replaceRE `{{<\s*reuse\s*"([^"]+)"\s*>}}` (printf "{{< reuse \"%s\" \"%s\" \"%s\" >}}" "$1" $version $product ) $clean }}
+
+{{/* ------------------------------------------------------------------ */}}
+{{/* keepVersion: preserve version string, inject page version, convert to {{% %}} */}}
+{{ $clean = replaceRE `\{\{<\s*(version\s+(?:include|exclude)-if="[^"]+?")\s+keepVersion="true"\s*>}}` (printf `{{%% $1 version="%s" %%}}` $version) $clean }}
+
+{{/* Two-pass OSS→enterprise version remapping from [[params.versions]].
+     Pass 1 replaces OSS versions with indexed placeholders so overlapping
+     version strings (e.g. OSS 2.2.x vs enterprise 2.2.x) never double-match.
+     Pass 2 swaps placeholders for the enterprise versions. */}}
+{{ range $i, $v := $.Site.Params.versions }}
+  {{- if and $v.ossVersion (ne $v.ossVersion $v.version) -}}
+    {{- $oss := replaceRE `\.` `\.` $v.ossVersion -}}
+    {{- $ph := printf "__V%d__" $i -}}
+    {{- $clean = replaceRE (printf `(\{\{<\s*version\s[^>]*?(?:in|ex)clude-if="[^"]*?)%s` $oss) (printf "${1}%s" $ph) $clean -}}
+  {{- end -}}
+{{ end }}
+{{ range $i, $v := $.Site.Params.versions }}
+  {{- if and $v.ossVersion (ne $v.ossVersion $v.version) -}}
+    {{- $ph := printf "__V%d__" $i -}}
+    {{- $clean = replace $clean $ph $v.version -}}
+  {{- end -}}
+{{ end }}
+
+{{/* Leave remaining {{< version >}} blocks in angle-bracket form so .Inner
+     stays as raw markdown for version.html. The percent form ({{% %}}) would
+     trigger Hugo's parent-context pre-render of .Inner BEFORE version.html
+     runs, and indented inner content would get wrapped in <pre><code> by
+     CommonMark's "4 spaces = code" rule before we ever see it. */}}
+
+
+
+
+{{/* ------------------------------------------------------------------ */}}
+
+{{ $clean | .Page.RenderString }}

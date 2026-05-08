@@ -1,0 +1,32 @@
+{{- $icon_map := dict
+  "info"    "info"
+  "warning" "warning"
+  "success" "check_circle"
+  "danger"  "report"
+  "default" "notifications"
+  "primary" "info"
+-}}
+{{- $color_map := dict
+  "info"    "alert-info"
+  "warning" "alert-warning"
+  "success" "alert-success"
+  "danger"  "alert-danger"
+  "default" "alert-default"
+  "primary" "alert-info"
+-}}
+{{- $context := .Get "context" | default "default" -}}
+{{- $colors := index $color_map $context | default "alert-default" -}}
+{{- $icon := index $icon_map $context | default "notifications" -}}
+<div class="solo-alert {{ $colors }}" role="alert">
+  <div class="solo-alert-icon">
+  {{- with .Get "icon" }}{{ . }}{{ else }}<i class="material-icons" aria-hidden="true">{{ $icon }}</i>{{ end -}}
+  </div>
+  {{- with .Get "text" }}<div class="solo-alert-body">{{ . | markdownify }}</div>
+  {{- else -}}
+  {{- with .Inner -}}
+  <div class="solo-alert-body">{{ . }}</div>
+  {{- else -}}
+  <div class="solo-alert-body"><p><em>Alert content not available</em></p></div>
+  {{- end -}}
+  {{- end -}}
+</div>

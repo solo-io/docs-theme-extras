@@ -1,0 +1,47 @@
+{{ $src := .Get "src" }}
+{{ $srcDark := .Get "srcDark"}}
+{{ $width := .Get "width" }}
+{{ $alt := .Get "alt" }}
+{{ $image := resources.Get $src }}
+{{ $imageDark := resources.Get $srcDark }}
+{{ $caption := .Get "caption" }}
+
+{{/* Fallback: if the image isn't at assets/img/<file>, look for it at
+     assets/<product>/<version>/img/<file>. Version is resolved by scanning
+     every URL segment for a known site version. */}}
+{{ if or (not $image) (not $imageDark) }}
+  {{ $version := "" }}
+  {{ range $part := split .Page.RelPermalink "/" }}
+    {{ if not $version }}
+      {{ range $.Site.Params.versions }}
+        {{ if eq .version $part }}{{ $version = .version }}{{ end }}
+      {{ end }}
+    {{ end }}
+  {{ end }}
+  {{ if $version }}
+    {{ $product := $.Site.Params.currentProduct }}
+    {{ if not $image }}
+      {{ $trimmed := strings.TrimPrefix "/" $src }}
+      {{ $versioned := printf "%s/%s/%s" $product $version $trimmed }}
+      {{ $r := resources.Get $versioned }}
+      {{ with $r }}
+        {{/* Strip product prefix so publishDir doesn't double it */}}
+        {{ $targetPath := printf "%s/%s" $version $trimmed }}
+        {{ $image = resources.Copy $targetPath $r }}
+      {{ end }}
+    {{ end }}
+    {{ if and $srcDark (not $imageDark) }}
+      {{ $trimmedDark := strings.TrimPrefix "/" $srcDark }}
+      {{ $versionedDark := printf "%s/%s/%s" $product $version $trimmedDark }}
+      {{ $r := resources.Get $versionedDark }}
+      {{ with $r }}
+        {{ $targetPath := printf "%s/%s" $version $trimmedDark }}
+        {{ $imageDark = resources.Copy $targetPath $r }}
+      {{ end }}
+    {{ end }}
+  {{ end }}
+{{ end }}
+
+{{- with $image -}}
+<div style="text-align: center;" class="toggle-dark"><figure><img src="{{ .RelPermalink }}" width="{{ $width }}" alt="{{ $alt }}"/> <figcaption style="font-style:italic">{{ $caption }}</figcaption></figure></div>
+{{- end -}}

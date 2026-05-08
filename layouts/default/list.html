@@ -1,0 +1,41 @@
+{{- /* Redirect root page to the default version defined in TOML config.
+       Matches params.defaultVersion against [[params.versions]] entries to
+       resolve the correct linkVersion (URL path), since the version label
+       (e.g., "2.12.x") may differ from the content folder (e.g., "latest").
+       Falls back to the first visible entry if defaultVersion is not set. */ -}}
+{{- $target := "" -}}
+{{- $dv := site.Params.defaultVersion -}}
+{{- if $dv -}}
+  {{- range site.Params.versions -}}
+    {{- if and (not $target) (eq .version $dv) -}}
+      {{- $target = printf "%s/" .linkVersion | relURL -}}
+    {{- end -}}
+  {{- end -}}
+  {{- /* Fallback: use defaultVersion directly if no matching entry found */ -}}
+  {{- if not $target -}}
+    {{- $target = printf "%s/" $dv | relURL -}}
+  {{- end -}}
+{{- else -}}
+  {{- range site.Params.versions -}}
+    {{- if and (not $target) .dropdown (ne (trim .dropdown " ") "") -}}
+      {{- $target = printf "%s/" .linkVersion | relURL -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Redirecting&hellip;</title>
+  {{- with $target }}
+  <meta http-equiv="refresh" content="0; url={{ . }}">
+  <link rel="canonical" href="{{ . }}">
+  {{- end }}
+</head>
+<body>
+  {{- with $target }}
+  <script>window.location.replace("{{ . }}");</script>
+  <p>Redirecting to <a href="{{ . }}">{{ . }}</a>&hellip;</p>
+  {{- end }}
+</body>
+</html>

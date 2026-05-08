@@ -1,0 +1,8 @@
+/* Per-repo custom CSS slot.
+   Hextra's head.html does `resources.Get "css/custom.css"` and concats
+   the result into its compiled main bundle. This file exists so the
+   bundle resolves cleanly when the bundled fixture builds. Each
+   *consumer* repo (solo-io/docs, agentgateway-oss-website, etc.) ships
+   its own assets/css/custom.css to add per-repo overrides on top of the
+   module's shared layers. The bundled fixture stays bare to verify the
+   shared layers work without any per-repo paint. */

@@ -1,0 +1,97 @@
+name: Test
+
+# Build the bundled fixture (OSS + enterprise variants) and run the
+# Playwright HTML-only harness against each. Gates on green for both
+# brand layers — surfaces brand-specific regressions before consumer
+# repos see them.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  HUGO_VERSION: 0.160.1
+  NODE_VERSION: '20'
+
+jobs:
+  test-all:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Hugo
+        uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: ${{ env.HUGO_VERSION }}
+          extended: true
+
+      - name: Set up Go (Hugo modules use go.mod)
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Cache Hugo modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/hugo_cache
+          key: ${{ runner.os }}-hugo-${{ hashFiles('go.sum', 'go.mod') }}
+          restore-keys: |
+            ${{ runner.os }}-hugo-
+
+      - name: Install npm dependencies
+        run: npm ci || npm install
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Install Playwright OS deps (cache-hit path)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps
+
+      # Override HUGO=hugo160 (the local convention) with HUGO=hugo (what
+      # peaceiris/actions-hugo installs the binary as). Run both brand
+      # variants. test-all chains build-oss + test-oss + build-enterprise
+      # + test-enterprise.
+      - name: Run test-all
+        run: HUGO=hugo make test-all
+
+      - name: Upload Playwright HTML report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7
+
+      - name: Upload Hugo build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hugo-build-logs
+          path: |
+            .build-oss.log
+            .build-enterprise.log
+          retention-days: 7
+          if-no-files-found: ignore

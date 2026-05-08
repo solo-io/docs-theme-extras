@@ -1,0 +1,64 @@
+{{- $content := .Inner -}}
+{{- $items := split $content "\n" -}}
+{{- $idx := .Page.Scratch.Get "checklist-count" | default 0 -}}
+{{- .Page.Scratch.Set "checklist-count" (add (int $idx) 1) -}}
+<div class="docs-checklist" data-checklist-index="{{ $idx }}">
+  {{- range $items -}}
+    {{- $line := trim . " \t" -}}
+    {{- $line = replaceRE `^-\s*\[\s*\]\s*` "" $line -}}
+    {{- $line = replaceRE `^-\s+` "" $line -}}
+    {{- $line = trim $line " \t" -}}
+    {{- if $line -}}
+  <div class="docs-checklist-item">
+    <label class="docs-checklist-label">
+      <input type="checkbox" class="docs-checklist-checkbox">
+      <span class="docs-checklist-text">{{ $line | markdownify }}</span>
+    </label>
+  </div>
+    {{- end -}}
+  {{- end -}}
+</div>
+{{- if not (.Page.Scratch.Get "checklist-style-loaded") -}}
+{{- .Page.Scratch.Set "checklist-style-loaded" true -}}
+<script>
+(function() {
+  function initChecklists() {
+    document.querySelectorAll('.docs-checklist').forEach(function(list, listIdx) {
+      var id = list.getAttribute('data-checklist-index') || listIdx;
+      var checkboxes = list.querySelectorAll('.docs-checklist-checkbox');
+      checkboxes.forEach(function(cb, i) {
+        var itemKey = 'docs-checklist-' + (window.location.pathname || '') + '-' + id + '-' + i;
+        try {
+          if (localStorage.getItem(itemKey) === 'true') cb.checked = true;
+        } catch (e) {}
+        cb.addEventListener('change', function() {
+          try { localStorage.setItem(itemKey, cb.checked); } catch (e) {}
+        });
+      });
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initChecklists);
+  } else {
+    initChecklists();
+  }
+})();
+</script>
+<style>
+.docs-checklist { list-style: none; padding-left: 0; margin: 1rem 0; }
+.docs-checklist-item { padding: 0.375rem 0; line-height: 1.5; }
+.docs-checklist-label { display: flex; align-items: flex-start; gap: 0.625rem; cursor: pointer; }
+.docs-checklist-checkbox {
+  flex-shrink: 0; width: 1.25rem; height: 1.25rem; margin-top: 0.25rem;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+.docs-checklist-text { flex: 1; transition: color 0.2s ease, text-decoration 0.2s ease; }
+.docs-checklist-label:has(.docs-checklist-checkbox:checked) .docs-checklist-text {
+  color: #6b7280;
+  text-decoration: line-through;
+}
+.docs-checklist-text :first-child { margin-top: 0; }
+.docs-checklist-text :last-child { margin-bottom: 0; }
+</style>
+{{- end -}}

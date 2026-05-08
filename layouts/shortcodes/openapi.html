@@ -1,0 +1,171 @@
+{{ $url := .Get "url" }}
+{{ $src := .Get "src" }}
+
+{{/* Resolve the spec URL and capture the parsed content so we can also emit a
+     plain-text summary for the "Copy as Markdown" feature. Swagger UI renders
+     the live spec client-side, but transform.HTMLToMarkdown only sees the empty
+     placeholder div, so the API content is lost from the copy without this. */}}
+{{ $specResource := false }}
+{{ if $src }}
+  {{ $specResource = resources.Get $src }}
+  {{ with $specResource }}{{ $url = .RelPermalink }}{{ end }}
+{{ else if $url }}
+  {{ $specResource = resources.GetRemote $url }}
+{{ end }}
+
+{{ $info := dict }}
+{{ with $specResource }}
+  {{ $parsed := . | transform.Unmarshal }}
+  {{ with $parsed.info }}{{ $info = . }}{{ end }}
+{{ end }}
+
+{{/* Swagger UI assets are already minified upstream. Don't run them through
+     resources.Minify — re-minifying webpack-bundled JS can rename internal
+     identifiers (e.g. webpackUniversalModuleDefinition) and leave
+     SwaggerUIBundle undefined at runtime. Just fingerprint for SRI. */}}
+{{ $swaggerCSS := resources.GetRemote "https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui.css" | resources.Fingerprint }}
+<link rel="stylesheet" href="{{ $swaggerCSS.RelPermalink }}" integrity="{{ $swaggerCSS.Data.Integrity }}">
+
+{{ $swaggerBundle := resources.GetRemote "https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-bundle.js" | resources.Fingerprint }}
+<script src="{{ $swaggerBundle.RelPermalink }}" integrity="{{ $swaggerBundle.Data.Integrity }}"></script>
+
+{{ $swaggerPreset := resources.GetRemote "https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-standalone-preset.js" | resources.Fingerprint }}
+<script src="{{ $swaggerPreset.RelPermalink }}" integrity="{{ $swaggerPreset.Data.Integrity }}"></script>
+
+<div class="openapi-container">
+  <div id="swagger-ui" data-spec-url="{{ $url }}"></div>
+</div>
+
+{{- /* Hidden summary surfaced only by the "Copy as Markdown" button. Kept off-screen
+       (display:none, also .copy-md-only in custom.css) but visible to
+       transform.HTMLToMarkdown so the copy isn't empty. */ -}}
+{{- with $info -}}
+<div class="copy-md-only" style="display:none" aria-hidden="true">
+  <p><strong>API reference: {{ .title }}{{ with .version }} v{{ . }}{{ end }}</strong></p>
+  {{- with .description }}<p>{{ . }}</p>{{ end }}
+  <p>Full OpenAPI spec: <a href="{{ $url }}">{{ $url }}</a></p>
+</div>
+{{- end -}}
+
+<style>
+  .swagger-ui .topbar .download-url-wrapper {
+    display: none !important;
+  }
+  .openapi-container {
+    width: 100%;
+    margin: 2rem 0;
+  }
+  .swagger-ui {
+    width: 100% !important;
+    background: #ffffff !important;
+    color: #333333 !important;
+  }
+  .swagger-ui .opblock {
+    background: #ffffff !important;
+    border: 1px solid #e0e0e0 !important;
+    border-radius: 4px !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+    margin: 0 0 15px !important;
+  }
+  .swagger-ui .opblock .opblock-summary {
+    background: #f8f8f8 !important;
+    border-bottom: 1px solid #e0e0e0 !important;
+    padding: 8px 20px !important;
+  }
+  .swagger-ui .opblock .opblock-summary-method {
+    background: #4990e2 !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    padding: 6px 10px !important;
+    border-radius: 3px !important;
+  }
+  .swagger-ui .info {
+    background: #ffffff !important;
+    color: #333333 !important;
+  }
+  .swagger-ui .info .title {
+    color: #333333 !important;
+  }
+  .swagger-ui .info .description {
+    color: #333333 !important;
+  }
+  .swagger-ui .model {
+    color: #333333 !important;
+  }
+  .swagger-ui .model-toggle {
+    color: #333333 !important;
+  }
+  .swagger-ui .model-title {
+    color: #333333 !important;
+  }
+  .swagger-ui .model-description {
+    color: #333333 !important;
+  }
+  .swagger-ui .parameter__name {
+    color: #333333 !important;
+  }
+  .swagger-ui .parameter__type {
+    color: #333333 !important;
+  }
+  .swagger-ui .parameter__description {
+    color: #333333 !important;
+  }
+  .swagger-ui .response-col_status {
+    color: #333333 !important;
+  }
+  .swagger-ui .response-col_description {
+    color: #333333 !important;
+  }
+  .swagger-ui .response-col_links {
+    color: #333333 !important;
+  }
+  .swagger-ui .response__description {
+    color: #333333 !important;
+  }
+  .swagger-ui .response__description__inner {
+    color: #333333 !important;
+  }
+  .swagger-ui .response__description__inner p {
+    color: #333333 !important;
+  }
+  .swagger-ui .response__description__inner code {
+    background: #f8f8f8 !important;
+    color: #333333 !important;
+  }
+  .swagger-ui .response__description__inner pre {
+    background: #f8f8f8 !important;
+    color: #333333 !important;
+  }
+  .swagger-ui .response__description__inner pre code {
+    background: transparent !important;
+    color: #333333 !important;
+  }
+</style>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var el = document.getElementById('swagger-ui');
+    SwaggerUIBundle({
+      url: el.dataset.specUrl,
+      dom_id: '#swagger-ui',
+      deepLinking: true,
+      presets: [
+        SwaggerUIBundle.presets.apis,
+        SwaggerUIStandalonePreset
+      ],
+      plugins: [
+        SwaggerUIBundle.plugins.DownloadUrl
+      ],
+      layout: 'StandaloneLayout',
+      supportedSubmitMethods: ['get', 'post', 'put', 'delete', 'patch'],
+      operationsSorter: 'alpha',
+      tagsSorter: 'alpha',
+      docExpansion: 'list',
+      defaultModelsExpandDepth: 3,
+      defaultModelExpandDepth: 3,
+      displayRequestDuration: true,
+      showExtensions: true,
+      showCommonExtensions: true
+    });
+  });
+</script>

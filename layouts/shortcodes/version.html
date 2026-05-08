@@ -1,0 +1,87 @@
+{{- $version := .Page.FirstSection.RelPermalink -}}
+{{- $version_without_product := replace $version .Site.Params.folder "" -}}
+{{- $condition := trim $version_without_product "/" -}}
+
+{{- if ne $condition "" -}}
+  {{- $include := .Get "include-if" | default "" -}}
+  {{- $exclude := .Get "exclude-if" | default "" -}}
+  {{- $include_if := split $include "," -}}
+  {{- $exclude_if := split $exclude "," -}}
+  {{- $currentProduct := .Site.Params.currentProduct | default "" -}}
+  {{- $rendered := false -}}
+  {{ range .Site.Params.versions }}
+    {{- if in $condition .linkVersion -}}
+       {{- $versionToml := .version -}}
+       {{- $productMatches := or (not $currentProduct) (eq .product $currentProduct) -}}
+           {{- if and (in $include_if $versionToml) (in $exclude_if $versionToml) -}}
+              {{- errorf "Build condition %q appears in both include-if and exclude-if parameters" $condition -}}
+           {{- end -}}
+           {{- if isset $.Params "include-if" -}}
+             {{- if and (in $include_if $versionToml) $productMatches (not $rendered) -}}
+                {{- $.Page.RenderString (dict "display" "inline") $.Inner -}}
+                {{- $rendered = true -}}
+             {{- end -}}
+             {{- else if isset $.Params "exclude-if" -}}
+                {{- if and (not (in $exclude_if $versionToml)) $productMatches (not $rendered) -}}
+                   {{- $.Page.RenderString (dict "display" "inline") $.Inner -}}
+                   {{- $rendered = true -}}
+             {{- end -}}
+           {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if eq $condition "" -}}
+   {{- $include := .Get "include-if" | default "" -}}
+   {{- if ne $include "" -}}
+        {{- $versionImport := .Get "version" -}}
+        {{- $versionAdjusted := "" -}}
+        {{- range $.Site.Params.versions -}}
+          {{- if not $versionAdjusted -}}
+            {{- if or (eq .version $versionImport) (eq .linkVersion $versionImport) -}}
+              {{- $versionAdjusted = .version -}}
+            {{- else if and .ossDir (eq .ossDir $versionImport) -}}
+              {{- $versionAdjusted = .version -}}
+            {{- end -}}
+          {{- end -}}
+        {{- end -}}
+        {{- $currentProduct := .Site.Params.currentProduct | default "" -}}
+        {{- $rendered := false -}}
+        {{- range .Site.Params.versions -}}
+            {{- $versionToml := .version -}}
+            {{- $productMatches := or (not $currentProduct) (eq .product $currentProduct) -}}
+               {{- if and (in $include $versionToml) (in $include $versionAdjusted) $productMatches (not $rendered) -}}
+                      {{- $.Page.RenderString (dict "display" "inline") $.Inner -}}
+                      {{- $rendered = true -}}
+               {{- end -}}
+        {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if eq $condition "" -}}
+   {{- $exclude := .Get "exclude-if" | default "" -}}
+   {{- if ne $exclude "" -}}
+       {{- $versionImport := .Get "version" -}}
+       {{- $versionAdjusted := "" -}}
+       {{- range $.Site.Params.versions -}}
+         {{- if not $versionAdjusted -}}
+           {{- if or (eq .version $versionImport) (eq .linkVersion $versionImport) -}}
+             {{- $versionAdjusted = .version -}}
+           {{- else if and .ossDir (eq .ossDir $versionImport) -}}
+             {{- $versionAdjusted = .version -}}
+           {{- end -}}
+         {{- end -}}
+       {{- end -}}
+       {{- $currentProduct := .Site.Params.currentProduct | default "" -}}
+       {{- $rendered := false -}}
+       {{- range .Site.Params.versions -}}
+          {{- $versionToml := .version -}}
+          {{- $productMatches := or (not $currentProduct) (eq .product $currentProduct) -}}
+            {{- if and (not (or (in $exclude $versionToml) (in $exclude $versionAdjusted))) $productMatches (not $rendered) -}}
+                  {{- $.Page.RenderString (dict "display" "inline") $.Inner -}}
+                  {{- $rendered = true -}}
+            {{- end -}}
+          {{- end -}}
+       {{- end -}}
+{{- end -}}
+

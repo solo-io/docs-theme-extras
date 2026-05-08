@@ -1,0 +1,11 @@
+openapi: 3.0.3
+info:
+  title: Test fixture sample API
+  version: 0.1.0
+paths:
+  /marker-openapi:
+    get:
+      summary: MARKER_OPENAPI sample endpoint
+      responses:
+        '200':
+          description: OK

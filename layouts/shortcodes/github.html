@@ -1,0 +1,25 @@
+{{- /*
+  Shortcode: github
+  Fetches a remote file by URL and inlines its contents.
+
+  Behavior depends on the URL's file extension:
+    - `.md` URLs are rendered through the page's markdown renderer, so
+      headings, tables, and links inside the fetched file render correctly.
+    - All other URLs (yaml, json, text, etc.) are passed through as-is via
+      safeHTML. Callers typically wrap these in a code fence so they render
+      as a code block.
+
+  Parameters:
+    - url: The remote URL of the file to fetch and display.
+*/ -}}
+{{- $url := .Get "url" -}}
+
+{{- with resources.GetRemote $url -}}
+  {{- if hasSuffix $url ".md" -}}
+    {{- $.Page.RenderString .Content -}}
+  {{- else -}}
+    {{- .Content | safeHTML -}}
+  {{- end -}}
+{{- else -}}
+  <p><strong>Error:</strong> Unable to load code from {{ $url }}</p>
+{{- end -}}

@@ -1,0 +1,20 @@
+{{- $path := .Get "path" -}}
+{{- $finalURL := printf "/%s/%s" .Page.FirstSection.RelPermalink $path -}}
+
+{{- /* Append a slash if the link is not a fragment */ -}}
+{{- if not (strings.Contains $finalURL "#") -}}
+  {{- $finalURL = printf "%s/" $finalURL -}}
+{{- end -}}
+
+{{- /* Replace all double slashes with single slashes as a safety measure */ -}}
+{{- /* Preserve the protocol separator (://) by temporarily replacing it */ -}}
+{{- $finalURL = replace $finalURL "://" "__PROTOCOL_SEPARATOR__" -}}
+{{- /* Loop until no more double slashes exist (max 10 iterations for safety) */ -}}
+{{- range $i := (seq 10) -}}
+  {{- if (strings.Contains $finalURL "//") -}}
+    {{- $finalURL = replace $finalURL "//" "/" -}}
+  {{- end -}}
+{{- end -}}
+{{- /* Restore the protocol separator */ -}}
+{{- $finalURL = replace $finalURL "__PROTOCOL_SEPARATOR__" "://" -}}
+{{- $finalURL -}}

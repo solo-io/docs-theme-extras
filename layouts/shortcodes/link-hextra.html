@@ -1,0 +1,69 @@
+{{- $path := .Get "path" -}}
+{{- $ver := .Get "version" -}}
+{{- $product := .Get "product" -}}
+{{- $finalURL := "" -}}
+
+{{- /* If no version was passed (typical when called from inside a reuse-included */ -}}
+{{- /* snippet that the rebase shortcode didn't rewrite), infer from the current page's */ -}}
+{{- /* permalink so links resolve to the same product/version as the page they appear on. */ -}}
+{{- /* Strip the baseURL path prefix first so the regex sees a site-relative URL regardless */ -}}
+{{- /* of whether this is a full-docs build (baseURL "/") or a single-product preview */ -}}
+{{- /* build (baseURL "/kgateway", "/agentgateway", etc.). */ -}}
+{{- if not $ver -}}
+  {{- $relURL := .Page.RelPermalink -}}
+  {{- $baseURLPath := replaceRE `^https?://[^/]*` "" .Site.BaseURL | strings.TrimSuffix "/" -}}
+  {{- if $baseURLPath -}}
+    {{- $relURL = strings.TrimPrefix $baseURLPath $relURL -}}
+  {{- end -}}
+  {{- with findRE `(?:kgateway|agentgateway|gateway|envoy)/(\d+\.\d+\.x|latest|main)` $relURL 1 -}}
+    {{- $ver = replaceRE `^.*/` "" (index . 0) -}}
+  {{- end -}}
+  {{- if not $ver -}}
+    {{- with findRE `^/(\d+\.\d+\.x|latest|main)` $relURL 1 -}}
+      {{- $ver = index . 0 | strings.TrimPrefix "/" -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if not $ver -}}
+  {{- /* Last-resort fallback so something is always emitted, but log a warning. */ -}}
+  {{- warnf "link-hextra called with no version and could not infer one from %q (path=%q)" .Page.RelPermalink $path -}}
+  {{- $ver = "latest" -}}
+{{- end -}}
+
+{{- if and (in $path "agentgateway") (eq $ver "2.1.x") -}}
+  {{- $path = replace $path "agentgateway/" "" -}}
+{{- end -}}
+{{- if and (in $path "reference/api") (eq $ver "2.1.x") -}}
+  {{- if eq $product "envoy" -}}
+    {{- $path = replace $path "reference/api" "/reference/api/kgateway" -}}
+  {{- end -}}
+  {{- if eq $product "agentgateway" -}}
+    {{- $path = replace $path "reference/api" "/reference/api/api" -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if or (eq .Site.BaseURL "/") (in .Site.BaseURL "localhost") -}}
+{{- $finalURL = printf "/%s%s" $ver $path -}}
+{{- else -}}
+{{- $finalURL = printf "%s/%s%s" .Site.BaseURL $ver $path -}}
+{{- end -}}
+
+{{- /* Append a slash if the link is not a fragment */ -}}
+{{- if not (strings.Contains $finalURL "#") -}}
+  {{- $finalURL = printf "%s/" $finalURL -}}
+{{- end -}}
+
+
+{{- /* Replace all double slashes with single slashes as a safety measure */ -}}
+{{- /* Preserve the protocol separator (://) by temporarily replacing it */ -}}
+{{- $finalURL = replace $finalURL "://" "__PROTOCOL_SEPARATOR__" -}}
+{{- /* Loop until no more double slashes exist (max 10 iterations for safety) */ -}}
+{{- range $i := (seq 10) -}}
+  {{- if (strings.Contains $finalURL "//") -}}
+    {{- $finalURL = replace $finalURL "//" "/" -}}
+  {{- end -}}
+{{- end -}}
+{{- /* Restore the protocol separator */ -}}
+{{- $finalURL = replace $finalURL "__PROTOCOL_SEPARATOR__" "://" -}}
+{{- $finalURL -}}

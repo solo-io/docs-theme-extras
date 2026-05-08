@@ -1,0 +1,1 @@
+MARKER_READFILE. Plain-text content read from a static file via the readfile shortcode.

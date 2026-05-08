@@ -1,0 +1,102 @@
+{{- /* Initialize */ -}}
+{{- $asset := "" -}}
+{{- $parentVersion := "" -}}
+{{- $parentProduct := "" -}}
+
+{{- /* Get params */ -}}
+{{- with (.Get 0) -}}
+  {{- $asset = . -}}
+{{- else -}}
+  {{- errorf "The %q shortcode requires a single positional parameter; the relative path to a file in the assets directory. See %s" .Name .Position -}}
+{{- end -}}
+
+{{- /* Optional second param: version passed from parent */ -}}
+{{- if ge (len .Params) 2 -}}
+  {{- $parentVersion = .Get 1 -}}
+{{- end -}}
+{{- /* Optional third param: product passed from parent */ -}}
+{{- if ge (len .Params) 3 -}}
+{{- $parentProduct = .Get 2 -}}
+{{- end -}}
+
+{{- /* Strip leading slash from asset paths */ -}}
+{{- $asset = strings.TrimPrefix "/" $asset -}}
+
+{{- /* For assembled products, try the versioned path at
+     <product>/<version>/<asset> first. Falls back to the direct path for
+     non-assembled products that also have versions (e.g. gloo-mesh).
+     In the OSS repo (no currentProduct/versions), the path is used as-is. */ -}}
+{{- $resolvedVersion := $parentVersion -}}
+{{- if not $resolvedVersion -}}
+  {{- $urlParts := split .Page.RelPermalink "/" -}}
+  {{- range $urlPart := $urlParts -}}
+    {{- if not $resolvedVersion -}}
+      {{- range $.Site.Params.versions -}}
+        {{- if eq .version $urlPart -}}
+          {{- $resolvedVersion = .version -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $currentProduct := .Site.Params.currentProduct | default "" -}}
+{{- if and $resolvedVersion $currentProduct -}}
+  {{- $versionedAsset := printf "%s/%s/%s" $currentProduct $resolvedVersion $asset -}}
+  {{- $versionedR := resources.Get $versionedAsset -}}
+  {{- if $versionedR -}}
+    {{- $asset = $versionedAsset -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* Get resource */ -}}
+{{- $r := resources.Get $asset -}}
+{{- if not $r -}}
+  {{- errorf "The %q shortcode was unable to find %q. See %s" .Name $asset .Position -}}
+{{- end -}}
+
+{{- $content := $r.Content -}}
+
+{{- /* Strip front matter */ -}}
+{{- $content = replaceRE `(?s)^---.*?---\s*` "" $content -}}
+
+{{- /* Inject parent version into nested link/reuse shortcodes */ -}}
+{{- if $parentVersion -}}
+  {{- /* Add version to link shortcodes */ -}}
+  {{- $content = replaceRE `{{<\s*link-hextra\s*(.*?)>}}` (printf "{{< link-hextra $1 version=\"%s\" product=\"%s\" >}}" $parentVersion $parentProduct ) $content -}}
+  {{- $content = replaceRE `{{<\s*reuse\s*"([^"]+)"\s*>}}` (printf "{{< reuse \"%s\" \"%s\" \"%s\" >}}" "$1" $parentVersion $parentProduct ) $content -}}
+  {{- /* keepVersion: preserve version string, inject parent version, convert to {{% %}} */ -}}
+  {{- $content = replaceRE `\{\{<\s*(version\s+(?:include|exclude)-if="[^"]+?")\s+keepVersion="true"\s*>}}` (printf `{{%% $1 version="%s" %%}}` $parentVersion) $content -}}
+
+  {{- /* Two-pass OSS→enterprise version remapping from [[params.versions]].
+         Pass 1 replaces OSS versions with indexed placeholders so overlapping
+         version strings (e.g. OSS 2.2.x vs enterprise 2.2.x) never double-match.
+         Pass 2 swaps placeholders for the enterprise versions. */ -}}
+  {{- range $i, $v := $.Site.Params.versions -}}
+    {{- if and $v.ossVersion (ne $v.ossVersion $v.version) -}}
+      {{- $oss := replaceRE `\.` `\.` $v.ossVersion -}}
+      {{- $ph := printf "__V%d__" $i -}}
+      {{- $content = replaceRE (printf `(\{\{<\s*version\s[^>]*?(?:in|ex)clude-if="[^"]*?)%s` $oss) (printf "${1}%s" $ph) $content -}}
+    {{- end -}}
+  {{- end -}}
+  {{- range $i, $v := $.Site.Params.versions -}}
+    {{- if and $v.ossVersion (ne $v.ossVersion $v.version) -}}
+      {{- $ph := printf "__V%d__" $i -}}
+      {{- $content = replace $content $ph $v.version -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- /* Leave remaining {{< version >}} blocks in angle-bracket form so .Inner
+         stays as raw markdown for version.html. The percent form ({{% %}}) would
+         trigger Hugo's parent-context pre-render of .Inner BEFORE version.html
+         runs, and indented inner content would get wrapped in <pre><code> by
+         CommonMark's "4 spaces = code" rule before we ever see it. */ -}}
+
+{{- end -}}
+
+{{- /* Render content. Trim trailing whitespace/newlines so a reuse used inline
+       (e.g. `--version {{< reuse "..." >}} \`) doesn't drop a stray newline
+       into the middle of a code-block continuation line. RenderString wraps
+       single-line content in a paragraph and emits a trailing newline. */ -}}
+{{- $rendered := $content | .Page.RenderString -}}
+{{- strings.TrimRight " \n\t" $rendered | safeHTML -}}
+

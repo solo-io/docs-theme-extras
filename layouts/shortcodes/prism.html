@@ -1,0 +1,15 @@
+{{- /* Stub for the prism shortcode from docs-theme-lotus.
+     Maps to Hugo's built-in Chroma highlighting.
+     Supports: lang (positional or named), line (highlight lines). */ -}}
+{{- $lang := .Get "lang" | default (.Get 0) | default "" -}}
+{{- $line := .Get "line" | default "" -}}
+{{- $options := "" -}}
+{{- if $line -}}
+  {{- $options = printf "hl_lines=%s" (replace $line "," " ") -}}
+{{- end -}}
+{{- $code := trim .InnerDeindent "\n" -}}
+{{- if $lang -}}
+  {{- highlight $code $lang $options -}}
+{{- else -}}
+  <pre><code>{{ $code }}</code></pre>
+{{- end -}}

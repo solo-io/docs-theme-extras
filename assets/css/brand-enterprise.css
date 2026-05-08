@@ -1,0 +1,48 @@
+/* Solo enterprise brand layer.
+   Loaded when the consumer's hugo config sets:
+     [params.themeExtras]
+       brand = "enterprise"
+   Applies to solo-io/docs and (eventually) kagent-enterprise. */
+
+/* ── Brand colors ────────────────────────────────────────────────────── */
+/* Solo primary blue: #158bc2 → hsl(197, 80%, 42%).
+   Sets both Hextra's tailwind primary HSL (compile-time) and the
+   docs-theme-extras runtime CSS vars used by component rules. */
+:root {
+  --primary-hue: 197deg;
+  --primary-saturation: 80%;
+  --primary-lightness: 42%;
+  --theme-primary:       #158bc2;
+  --theme-primary-hover: #106a94;
+  --theme-primary-tint:  rgba(21, 139, 194, 0.1);
+}
+.dark {
+  --theme-primary:       #60b5e0;
+  --theme-primary-tint:  rgba(96, 181, 224, 0.1);
+}
+
+/* ── Typography ──────────────────────────────────────────────────────── */
+/* Solo enterprise body font stack. The OSS brand may override this with a
+   different stack; consumer-specific custom.css can override either. */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Ubuntu, sans-serif;
+}
+
+/* Heading color matching old docs-theme-lotus enterprise theme */
+.content h1, .content h2, .content h3, .content h4, .content h5, .content h6 {
+  color: #253e58;
+}
+.dark .content h1, .dark .content h2, .dark .content h3,
+.dark .content h4, .dark .content h5, .dark .content h6 {
+  color: #fff;
+}
+
+/* ── Links ───────────────────────────────────────────────────────────── */
+/* Enterprise link color (solo blue). Component layer keeps generic color
+   inheritance; this layer paints links in the solo palette. */
+.content a {
+  color: #158bc2;
+}
+.content a:hover {
+  color: #106a94;
+}

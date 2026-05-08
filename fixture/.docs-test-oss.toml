@@ -1,0 +1,59 @@
+# Configuration for the harness when run against the bundled fixture
+# (`make self-test`). The Makefile sets DOCS_TEST_CONFIG to this file's
+# absolute path; all relative paths below resolve against this file's
+# directory (fixture/).
+
+version = "1"
+name    = "docs-theme-extras-fixture-oss"
+
+# Brand-OSS variant: hugo-oss.toml builds into ../public-oss, with the same
+# baseURL "/test" so the page-list URLs stay aligned with the bare build.
+builtRoot = "../public-oss"
+baseURL   = "/test"
+
+# Hugo build log captured by `make build-oss` (2> .build-oss.log).
+buildLog  = "../.build-oss.log"
+
+# Source-tree roots for author-side lints (curl-quotes). The fixture is the
+# only source the module ships, so scope stays tight.
+scanRoots = [
+  "./content/en/test",
+  "./assets/conrefs/test",
+]
+
+# Explicit page list (mirrors solo-io/docs's TEST_PAGES). Specs that walk
+# the whole tree use crawl.ts; this list gates the per-page sample specs.
+[[pages]]
+url = "/test/"
+
+[[pages]]
+url = "/test/v2/everything/"
+
+[[pages]]
+url = "/test/v2/rebased/"
+
+[[pages]]
+url = "/test/v1/everything/"
+
+[[pages]]
+url = "/test/v1/rebased/"
+
+[[pages]]
+url = "/test/main/everything/"
+
+[[pages]]
+url = "/test/main/rebased/"
+
+# Version segment is /v1/, /v2/, or /main/ at the start of the URL (after
+# baseURL is stripped by target.versionOf).
+[versioning]
+versionFromPath = "^/(?<version>v\\d+|main)/"
+versions        = ["v1", "v2", "main"]
+
+# All checks default to enabled. cross-browser is opt-in (slow).
+[checks]
+crossBrowser = false
+
+# Allowlists: known-benign Hugo deprecation noise from hextra 0.12.2.
+[allowlists]
+hugoWarnings = ["\\.Site\\.Data was deprecated"]

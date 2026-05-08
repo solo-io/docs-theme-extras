@@ -1,0 +1,28 @@
+# Hugo build output
+public/
+public-oss/
+public-enterprise/
+public-oss-local/
+public-enterprise-local/
+public-local/
+resources/
+.hugo_build.lock
+hugo_stats.json
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local-only build logs
+.build*.log

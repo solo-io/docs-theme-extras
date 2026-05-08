@@ -1,0 +1,24 @@
+<div style="display:flex;">
+<select name="type" id="solodocs-select-type">
+    <option value="minorrelease">By Release</option>
+    <option value="chronological">By Chronological Order</option>
+    <option value="compareversions">Compare Versions</option>
+</select>
+{{ if eq (.Get "enterprise") "true" }}
+<input type="checkbox" name="solodocs-showOpenSource" id="solodocs-showOpenSource" style="margin-top: 0.5%;margin-left: 5%;" checked>
+<label for="solodocs-showOpenSource">Show Open Source Notes</label>
+{{ end }}
+</div>
+
+<div id="solodocs-changelogdiv"></div>
+{{ $changelogPath := .Get "path"}}
+<script>const changelogPath = '{{ .Site.Params.productPath }}{{$changelogPath}}'</script>
+<!-- Defer script execution till all scripts are fully parsed, so even if scripts are loaded out of order, no error is thrown at execution time -->
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/showdown/1.9.1/showdown.min.js" integrity="sha512-L03kznCrNOfVxOUovR6ESfCz9Gfny7gihUX/huVbQB9zjODtYpxaVtIaAkpetoiyV2eqWbvxMH9fiSv5enX7bw==" crossorigin="anonymous"></script>
+<script
+  src="https://code.jquery.com/jquery-3.7.1.slim.min.js"
+  integrity="sha256-kmHvs0B+OpCW5GVHUNjv9rOmY0IvSIRcf7zGUDTDQM8="
+  crossorigin="anonymous"></script>
+<script defer src="{{ .Site.Params.productPath }}{{"/changelog/Renderers.js"|relURL}}"></script>
+<script defer src="{{ .Site.Params.productPath }}{{"/changelog/changelog_utils.js"|relURL}}"></script>
+<script defer src="{{ .Site.Params.productPath }}{{"/changelog/render_changelog.js"|relURL}}"></script>

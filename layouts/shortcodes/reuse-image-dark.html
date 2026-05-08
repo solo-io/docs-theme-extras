@@ -1,0 +1,33 @@
+{{ $srcDark := .Get "srcDark"}}
+{{ $width := .Get "width" }}
+{{ $alt := .Get "alt" }}
+{{ $imageDark := resources.Get $srcDark }}
+{{ $caption := .Get "caption" }}
+
+{{/* Fallback: if the image isn't at assets/img/<file>, look for it at
+     assets/<product>/<version>/img/<file>. */}}
+{{ if not $imageDark }}
+  {{ $version := "" }}
+  {{ range $part := split .Page.RelPermalink "/" }}
+    {{ if not $version }}
+      {{ range $.Site.Params.versions }}
+        {{ if eq .version $part }}{{ $version = .version }}{{ end }}
+      {{ end }}
+    {{ end }}
+  {{ end }}
+  {{ if $version }}
+    {{ $product := $.Site.Params.currentProduct }}
+    {{ $trimmed := strings.TrimPrefix "/" $srcDark }}
+    {{ $versioned := printf "%s/%s/%s" $product $version $trimmed }}
+    {{ $r := resources.Get $versioned }}
+    {{ with $r }}
+      {{/* Strip product prefix so publishDir doesn't double it */}}
+      {{ $targetPath := printf "%s/%s" $version $trimmed }}
+      {{ $imageDark = resources.Copy $targetPath $r }}
+    {{ end }}
+  {{ end }}
+{{ end }}
+
+{{- with $imageDark -}}
+<div style="text-align: center;" class="toggle-light"><figure><img src="{{ .RelPermalink }}" width="{{ $width }}" alt="{{ $alt }}"/> <figcaption style="font-style:italic">{{ $caption }}</figcaption></figure></div>
+{{- end -}}

@@ -1,0 +1,41 @@
+/* Solo OSS brand layer.
+   Loaded when the consumer's hugo config sets:
+     [params.themeExtras]
+       brand = "oss"
+   Applies to agentgateway-oss-website, agentregistry-oss-website,
+   kgateway-oss, kagent-oss-website.
+
+   Seeded from agentgateway-oss-website's brand styling. Per-repo tweaks
+   (e.g. agw's chatbot widget, kgw's testimonial section) still go in each
+   consumer's own assets/css/custom.css; this layer is the cross-OSS-
+   consumer shared baseline. */
+
+/* ── Brand colors ────────────────────────────────────────────────────── */
+/* OSS primary blue: hsl(212, 100%, 45%) → ~#0072E6.
+   Sets both Hextra's tailwind primary HSL (compile-time) and the
+   docs-theme-extras runtime CSS vars used by component rules. */
+:root {
+  --primary-hue: 212deg;
+  --primary-saturation: 100%;
+  --primary-lightness: 45%;
+  --theme-primary:       hsl(212, 100%, 45%);
+  --theme-primary-hover: hsl(212, 100%, 35%);
+  --theme-primary-tint:  hsla(212, 100%, 45%, 0.1);
+}
+.dark {
+  --theme-primary:       hsl(212, 100%, 60%);
+  --theme-primary-tint:  hsla(212, 100%, 60%, 0.1);
+}
+
+/* ── Typography ──────────────────────────────────────────────────────── */
+/* OSS uses Open Sans across body and headings. The Google Font import is
+   conditionally added by head-end.html when brand="oss" so this stack
+   resolves to the loaded family in browsers; otherwise it falls back. */
+body {
+  font-family: 'Open Sans', 'ui-sans-serif', 'system-ui', 'sans-serif', "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+.content h1, .content h2, .content h3, .content h4, .content h5, .content h6,
+.nav-container {
+  font-family: 'Open Sans', 'ui-sans-serif', 'system-ui', 'sans-serif', "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}

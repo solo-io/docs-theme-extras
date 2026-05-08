@@ -1,0 +1,23 @@
+{{- /* Use pathName prefix in production (baseURL has scheme); root-relative locally. */ -}}
+{{- $prefix := .Site.Params.pathName -}}
+{{- if not (or (hasPrefix site.BaseURL "http://") (hasPrefix site.BaseURL "https://")) -}}
+  {{- $prefix = "" -}}
+{{- end -}}
+{{ if os.FileExists "static/favicon.ico" -}}
+<link rel="icon" type="image/x-icon" href="{{ $prefix }}/favicon.ico" sizes="any">
+{{ end -}}
+{{ if os.FileExists "static/favicon.svg" -}}
+<link rel="icon" type="image/svg+xml" href="{{ $prefix }}/favicon.svg">
+{{ end -}}
+{{ if os.FileExists "static/apple-touch-icon.png" -}}
+<link rel="apple-touch-icon" href="{{ $prefix }}/apple-touch-icon.png">
+{{ end -}}
+{{ if os.FileExists "static/favicon-32x32.png" -}}
+<link rel="icon" type="image/png" href="{{ $prefix }}/favicon-32x32.png" sizes="32x32">
+{{ end -}}
+{{ if os.FileExists "static/favicon-16x16.png" -}}
+<link rel="icon" type="image/png" href="{{ $prefix }}/favicon-16x16.png" sizes="16x16">
+{{ end -}}
+{{ if os.FileExists "static/site.webmanifest" -}}
+<link rel="manifest" crossorigin="use-credentials" href="{{ $prefix }}/site.webmanifest">
+{{ end -}}
