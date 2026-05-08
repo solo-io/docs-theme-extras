@@ -85,13 +85,14 @@ test.describe("interactive components work cross-browser", () => {
   test("tabs are clickable and switch panels", async ({ page }) => {
     await page.goto(EVERYTHING);
     // Branch on tab markup variant (see browser.spec.ts for the full notes).
-    const container = page.locator(".hextra-tabs").first();
-    const hextraButtons = container.locator(".hextra-tabs-toggle");
-    const isHextraStyle = (await hextraButtons.count()) > 0;
+    const hextraTablist = page
+      .locator('[role="tablist"]')
+      .filter({ has: page.locator(".hextra-tabs-toggle") })
+      .first();
+    const isHextraStyle = (await hextraTablist.count()) > 0;
 
     if (isHextraStyle) {
-      const tablist = container.locator('[role="tablist"]').first();
-      const buttons = tablist.locator(".hextra-tabs-toggle");
+      const buttons = hextraTablist.locator(".hextra-tabs-toggle");
       await expect(buttons).toHaveCount(2);
 
       const panel0Id = await buttons.nth(0).getAttribute("aria-controls");
@@ -104,6 +105,10 @@ test.describe("interactive components work cross-browser", () => {
       await expect(panel0).toBeHidden();
       await expect(panel1).toBeVisible();
     } else {
+      const container = page
+        .locator(".hextra-tabs")
+        .filter({ has: page.locator(".hextra-tab-btn") })
+        .first();
       const buttons = container.locator(".hextra-tab-btn");
       await expect(buttons).toHaveCount(2);
       const panels = container.locator(
