@@ -51,7 +51,8 @@ export default defineConfig({
     {
       name: "browser",
       use: { ...devices["Desktop Chrome"] },
-      testMatch: /browser\.spec\.ts$|contrast\.spec\.ts$|viewport\.spec\.ts$/,
+      testMatch:
+        /browser\.spec\.ts$|contrast\.spec\.ts$|viewport\.spec\.ts$|brand\.spec\.ts$/,
     },
     {
       name: "cross-browser-chromium",

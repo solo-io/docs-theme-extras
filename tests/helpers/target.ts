@@ -5,7 +5,13 @@
 // Specs should import from here, not from `config.ts` directly.
 
 import path from "node:path";
-import { type Checks, loadConfig, type Page, type Config } from "./config";
+import {
+  type Brand,
+  type Checks,
+  loadConfig,
+  type Page,
+  type Config,
+} from "./config";
 
 class Target {
   private _config: Config | null = null;
@@ -17,6 +23,10 @@ class Target {
 
   get name(): string {
     return this.cfg().name;
+  }
+
+  get brand(): Brand {
+    return this.cfg().brand;
   }
 
   get builtRoot(): string {

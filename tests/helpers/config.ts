@@ -41,10 +41,16 @@ export type Allowlists = {
   shortcodes: string[];
 };
 
+export type Brand = "oss" | "enterprise" | "";
+
 export type Config = {
   version: string;
   name: string;
   configPath: string; // absolute path of the TOML file (for resolving relatives)
+  // Which brand layer the build under test was produced with. Empty string
+  // means no brand layer (bare component baseline). brand.spec.ts uses this
+  // to assert the right CSS / font / logo loaded for the build.
+  brand: Brand;
   builtRoot: string; // absolute
   baseURL: string;
   buildLog: string | null; // absolute, or null if unset
@@ -118,6 +124,7 @@ function validate(
     );
   }
   const name = stringField(data, "name");
+  const brand = parseBrand(data.brand, configPath);
   const builtRootRel = stringField(data, "builtRoot");
   const baseURL = stringField(data, "baseURL");
   const buildLogRel = optionalStringField(data, "buildLog");
@@ -171,6 +178,7 @@ function validate(
     version,
     name,
     configPath,
+    brand,
     builtRoot: path.resolve(configDir, builtRootRel),
     baseURL,
     buildLog: buildLogRel ? path.resolve(configDir, buildLogRel) : null,
@@ -194,6 +202,14 @@ function stringField(
     );
   }
   return v;
+}
+
+function parseBrand(v: unknown, configPath: string): Brand {
+  if (v === undefined || v === null || v === "") return "";
+  if (v === "oss" || v === "enterprise") return v;
+  throw new Error(
+    `brand must be "oss", "enterprise", or unset; got ${JSON.stringify(v)} in ${configPath}`,
+  );
 }
 
 function optionalStringField(

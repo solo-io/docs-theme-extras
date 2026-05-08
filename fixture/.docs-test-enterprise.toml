@@ -6,6 +6,11 @@
 version = "1"
 name    = "docs-theme-extras-fixture-enterprise"
 
+# Which brand layer the build under test was produced with. tests/brand.spec.ts
+# uses this to assert the right brand CSS / font / logo loaded for the build.
+# Must match the value of params.themeExtras.brand in hugo-enterprise.toml.
+brand   = "enterprise"
+
 # Brand-enterprise variant: hugo-enterprise.toml builds into
 # ../public-enterprise, with the same baseURL "/test" so the page-list URLs
 # stay aligned with the bare build.
