@@ -1,0 +1,38 @@
+# Consumer-facing module config. When a consumer imports this module via
+# go.mod, Hugo loads THIS file (not the brand-specific hugo-{oss,enterprise}.toml
+# files used for the module's own standalone builds) and merges its mounts.
+#
+# Scope is intentionally narrow: only [[module.mounts]] declarations.
+# No baseURL, no params, no theme settings — those belong in each consumer.
+
+[module]
+
+  # Layouts and CSS overlay (the "extras" the module is named for).
+  [[module.mounts]]
+    source = "layouts"
+    target = "layouts"
+
+  [[module.mounts]]
+    source = "assets"
+    target = "assets"
+
+  # Fixture content/assets/static are deliberately NOT mounted at the
+  # module level: a module-level mount at target="content" collides with
+  # consumer contentDir scoping and would surface the test fixture in
+  # every product build (wanted only in the consumer's test product).
+  #
+  # Consumers that want the fixture declare per-import mounts in their
+  # own hugo config, e.g.:
+  #
+  #   [[module.imports]]
+  #     path = "github.com/solo-io/docs-theme-extras"
+  #     [[module.imports.mounts]]
+  #       source = "fixture/content/en/test"
+  #       target = "content/en/test"
+  #     [[module.imports.mounts]]
+  #       source = "fixture/assets/conrefs/test"
+  #       target = "assets/conrefs/test"
+  #     # ...
+  #
+  # That way the test product (contentDir = "content/en/test") reads the
+  # module's fixture, and other products don't see /test/ at all.
