@@ -84,20 +84,38 @@ test.describe("layout at desktop breakpoint", () => {
 test.describe("interactive components work cross-browser", () => {
   test("tabs are clickable and switch panels", async ({ page }) => {
     await page.goto(EVERYTHING);
-    // Hextra default tabs (see browser.spec.ts for structure notes).
-    const tablist = page.locator('[role="tablist"]').first();
-    const buttons = tablist.locator(".hextra-tabs-toggle");
-    await expect(buttons).toHaveCount(2);
+    // Branch on tab markup variant (see browser.spec.ts for the full notes).
+    const container = page.locator(".hextra-tabs").first();
+    const hextraButtons = container.locator(".hextra-tabs-toggle");
+    const isHextraStyle = (await hextraButtons.count()) > 0;
 
-    const panel0Id = await buttons.nth(0).getAttribute("aria-controls");
-    const panel1Id = await buttons.nth(1).getAttribute("aria-controls");
-    const panel0 = page.locator(`#${panel0Id}`);
-    const panel1 = page.locator(`#${panel1Id}`);
-    await expect(panel0).toBeVisible();
-    await expect(panel1).toBeHidden();
-    await buttons.nth(1).click();
-    await expect(panel0).toBeHidden();
-    await expect(panel1).toBeVisible();
+    if (isHextraStyle) {
+      const tablist = container.locator('[role="tablist"]').first();
+      const buttons = tablist.locator(".hextra-tabs-toggle");
+      await expect(buttons).toHaveCount(2);
+
+      const panel0Id = await buttons.nth(0).getAttribute("aria-controls");
+      const panel1Id = await buttons.nth(1).getAttribute("aria-controls");
+      const panel0 = page.locator(`#${panel0Id}`);
+      const panel1 = page.locator(`#${panel1Id}`);
+      await expect(panel0).toBeVisible();
+      await expect(panel1).toBeHidden();
+      await buttons.nth(1).click();
+      await expect(panel0).toBeHidden();
+      await expect(panel1).toBeVisible();
+    } else {
+      const buttons = container.locator(".hextra-tab-btn");
+      await expect(buttons).toHaveCount(2);
+      const panels = container.locator(
+        ".hextra-tab-panels > .hextra-tab-panel",
+      );
+      await expect(panels).toHaveCount(2);
+      await expect(panels.nth(0)).toBeVisible();
+      await expect(panels.nth(1)).toBeHidden();
+      await buttons.nth(1).click();
+      await expect(panels.nth(0)).toBeHidden();
+      await expect(panels.nth(1)).toBeVisible();
+    }
   });
 
   test("version dropdown opens and lists configured versions", async ({ page }) => {

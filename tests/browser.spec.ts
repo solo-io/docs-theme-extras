@@ -24,30 +24,59 @@ test.describe("tabs are clickable and switch panels", () => {
     page,
   }) => {
     await page.goto(EVERYTHING);
-    // Hextra default tabs: <div role="tablist"> contains .hextra-tabs-toggle
-    // buttons; each button has aria-controls pointing at a sibling
-    // .hextra-tabs-panel by id. Active state lives on data-state="selected".
-    const tablist = page.locator('[role="tablist"]').first();
-    await expect(tablist).toBeVisible();
+    // Two tab variants render under .hextra-tabs:
+    //   - Hextra default: [role="tablist"] holds .hextra-tabs-toggle buttons;
+    //     aria-controls points at .hextra-tabs-panel by id; data-state="selected"
+    //     marks the active tab.
+    //   - docs override (solo-io/docs): plain <nav> holds .hextra-tab-btn buttons;
+    //     panels are .hextra-tab-panels > .hextra-tab-panel, hidden via .hx\:hidden.
+    //     Active button carries the literal "active" class.
+    // Detect by .hextra-tabs-toggle presence and branch — assertions on aria/
+    // data-state vs class+visibility have no shared form.
+    const container = page.locator(".hextra-tabs").first();
+    await expect(container).toBeVisible();
 
-    const buttons = tablist.locator(".hextra-tabs-toggle");
-    await expect(buttons).toHaveCount(2);
+    const hextraButtons = container.locator(".hextra-tabs-toggle");
+    const isHextraStyle = (await hextraButtons.count()) > 0;
 
-    const panel0Id = await buttons.nth(0).getAttribute("aria-controls");
-    const panel1Id = await buttons.nth(1).getAttribute("aria-controls");
-    const panel0 = page.locator(`#${panel0Id}`);
-    const panel1 = page.locator(`#${panel1Id}`);
+    if (isHextraStyle) {
+      const tablist = container.locator('[role="tablist"]').first();
+      await expect(tablist).toBeVisible();
 
-    // Initial state: first tab selected, first panel visible.
-    await expect(buttons.nth(0)).toHaveAttribute("data-state", "selected");
-    await expect(panel0).toBeVisible();
-    await expect(panel1).toBeHidden();
+      const buttons = tablist.locator(".hextra-tabs-toggle");
+      await expect(buttons).toHaveCount(2);
 
-    // Click the second tab and confirm visibility flips.
-    await buttons.nth(1).click();
-    await expect(buttons.nth(1)).toHaveAttribute("data-state", "selected");
-    await expect(panel0).toBeHidden();
-    await expect(panel1).toBeVisible();
+      const panel0Id = await buttons.nth(0).getAttribute("aria-controls");
+      const panel1Id = await buttons.nth(1).getAttribute("aria-controls");
+      const panel0 = page.locator(`#${panel0Id}`);
+      const panel1 = page.locator(`#${panel1Id}`);
+
+      await expect(buttons.nth(0)).toHaveAttribute("data-state", "selected");
+      await expect(panel0).toBeVisible();
+      await expect(panel1).toBeHidden();
+
+      await buttons.nth(1).click();
+      await expect(buttons.nth(1)).toHaveAttribute("data-state", "selected");
+      await expect(panel0).toBeHidden();
+      await expect(panel1).toBeVisible();
+    } else {
+      const buttons = container.locator(".hextra-tab-btn");
+      await expect(buttons).toHaveCount(2);
+
+      const panels = container.locator(
+        ".hextra-tab-panels > .hextra-tab-panel",
+      );
+      await expect(panels).toHaveCount(2);
+
+      await expect(buttons.nth(0)).toHaveClass(/\bactive\b/);
+      await expect(panels.nth(0)).toBeVisible();
+      await expect(panels.nth(1)).toBeHidden();
+
+      await buttons.nth(1).click();
+      await expect(buttons.nth(1)).toHaveClass(/\bactive\b/);
+      await expect(panels.nth(0)).toBeHidden();
+      await expect(panels.nth(1)).toBeVisible();
+    }
   });
 });
 
