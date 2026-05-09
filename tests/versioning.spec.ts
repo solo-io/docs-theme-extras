@@ -138,12 +138,20 @@ test.describe("reuse and rebase pipelines produce equivalent content", () => {
   // assertion in the new shape.
   for (const version of target.versions) {
     test(`${version}: everything and rebased contain the same sentinel set`, () => {
-      const everything = readFixture(
-        TEST_PAGES.find((p) => p.name === `${version}/everything`)!.filePath,
+      // Fixture-only assertion: skip when the consumer doesn't ship
+      // everything.md / rebased.md (i.e. .docs-test.toml has no [[pages]]).
+      const everythingPage = TEST_PAGES.find(
+        (p) => p.name === `${version}/everything`,
       );
-      const rebased = readFixture(
-        TEST_PAGES.find((p) => p.name === `${version}/rebased`)!.filePath,
+      const rebasedPage = TEST_PAGES.find(
+        (p) => p.name === `${version}/rebased`,
       );
+      test.skip(
+        !everythingPage || !rebasedPage,
+        "fixture pages not configured for this consumer",
+      );
+      const everything = readFixture(everythingPage!.filePath);
+      const rebased = readFixture(rebasedPage!.filePath);
       // Strip the embedded copy-as-md <script> tag so the comparison is
       // against rendered HTML, not the raw markdown source it captures.
       const sentinelsOf = (html: string): Set<string> => {

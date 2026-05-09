@@ -434,13 +434,23 @@ test.describe("ordered list (3 levels) renders all <li> with no gaps", () => {
 test.describe("section index pages preserve their navigation", () => {
   // Section index pages have different layout (they're auto-generated
   // landing pages) but should still have nav, footer, sidebar, etc.
-  const sectionIndexPages = target.versions.map((v) => ({
-    name: `${v} index`,
-    filePath: TEST_PAGES.find((p) => p.name === `${v}/everything`)!.filePath.replace(
-      /everything\/index\.html$/,
-      "index.html",
-    ),
-  }));
+  //
+  // Derived from TEST_PAGES (the fixture). When a consumer doesn't ship
+  // the fixture (i.e. .docs-test.toml has no [[pages]] entries), the
+  // result is an empty array and the for-loop below generates no tests.
+  const sectionIndexPages = target.versions
+    .map((v) => {
+      const page = TEST_PAGES.find((p) => p.name === `${v}/everything`);
+      if (!page) return null;
+      return {
+        name: `${v} index`,
+        filePath: page.filePath.replace(
+          /everything\/index\.html$/,
+          "index.html",
+        ),
+      };
+    })
+    .filter((x): x is { name: string; filePath: string } => x !== null);
 
   for (const idx of sectionIndexPages) {
     test(`${idx.name} has nav, sidebar, footer, version dropdown`, () => {
