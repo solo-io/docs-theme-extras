@@ -6,10 +6,8 @@ sites — plus a bundled HTML test harness that any consumer repo can
 re-run against its own built `public/`.
 
 Two faces, one repo:
-- **Hugo theme module** — consumers import this via `go.mod`. Hextra
-  comes along as a transitive dependency.
-- **Playwright HTML-only harness** — consumers point it at their built
-  output via `make test CONFIG=path/to/.docs-test.toml`.
+- **Hugo theme module** — consumers import this via `go.mod`. Hextra comes along as a transitive dependency.
+- **Playwright HTML-only harness** — consumers point it at their built output via `make test CONFIG=path/to/.docs-test.toml`.
 
 ## Architecture
 
@@ -56,11 +54,11 @@ A page rendered against this module loads CSS in this order:
 Each consumer declares one of two brand variants (or leaves it unset):
 
 ```toml
-# docs (enterprise)
+# Enterprise consumer
 [params.themeExtras]
   brand = "enterprise"
 
-# agentgateway-oss-website
+# OSS consumer
 [params.themeExtras]
   brand = "oss"
 
@@ -85,11 +83,12 @@ Some shortcodes need to know the page's section / version / build
 condition (e.g., `conditional-text`, `version`, `link-hextra`). Two
 URL conventions exist across consumers:
 
-- `siteParams` — used by solo-io/docs (`docs.solo.io/<product>/<version>/...`,
-  with `/docs/` in the domain). Reads `Site.Params.{folder, currentProduct,
-  buildCondition, versions}`.
-- `url` — used by agentgateway-oss-website (`agentgateway.dev/docs/<section>/<version>/...`).
-  Parses `Page.RelPermalink`.
+- `siteParams` — for multi-product hubs that mount each product at
+  `<host>/<product>/<version>/...` and surface that mapping via
+  `Site.Params.{folder, currentProduct, buildCondition, versions}`.
+- `url` — for single-site repos where the URL itself encodes section
+  and version (e.g., `<host>/docs/<section>/<version>/...`). Parses
+  `Page.RelPermalink`.
 
 Each consumer picks one in their hugo config:
 
@@ -136,14 +135,13 @@ etc.) and treat `@latest` / floating branch refs as unsupported.
   pageContextMode = "url"  # or "siteParams"
 ```
 
-### 3. Run the harness in CI
-
-Add a test config at the repo root:
+### 3. Add a test config at the consumer repo root
 
 ```toml
 # .docs-test.toml
 version   = "1"
 name      = "my-docs-site"
+brand     = "oss"        # or "enterprise"; matches params.themeExtras.brand
 builtRoot = "./public"
 baseURL   = "/docs"
 buildLog  = "./build.log"
@@ -157,19 +155,123 @@ versions        = ["v1", "v2", "main"]
 
 [checks]
 crossBrowser = false
+smoke        = false      # set true only for cross-product hub repos
 
 [allowlists]
 hugoWarnings = []
 ```
 
-In CI, after building your site:
+### 4. Wire CI to check out the harness at the module pin
+
+The harness lives here, in `tests/`. Each consumer's CI checks out
+`solo-io/docs-theme-extras` at the SHA pinned in its own `go.mod` (the
+pseudo-version that `hugo mod get` produced) so layouts and tests stay
+in lockstep — bumping the module pin is one PR that updates both.
+
+The minimum-viable workflow for a single-site consumer:
+
+```yaml
+# .github/workflows/framework-tests.yml
+name: Framework tests
+on: [pull_request, workflow_dispatch]
+jobs:
+  framework-test-static:
+    runs-on: ubuntu-latest
+    continue-on-error: true   # soft signal for the first ~week
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with: { go-version: 'stable', cache: false }
+      - uses: peaceiris/actions-hugo@v3
+        with: { hugo-version: '0.160.1', extended: true }
+
+      - name: Resolve docs-theme-extras SHA from go.mod
+        id: theme-sha
+        run: |
+          sha=$(grep "docs-theme-extras" go.mod | grep -oE '[0-9a-f]{12}' | head -1)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v6
+        with:
+          repository: solo-io/docs-theme-extras
+          ref: ${{ steps.theme-sha.outputs.sha }}
+          path: docs-theme-extras
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'docs-theme-extras/package-lock.json'
+
+      - name: Build site
+        run: hugo --gc --minify
+
+      - name: Install harness deps
+        working-directory: docs-theme-extras
+        run: npm ci
+
+      - name: Run static specs
+        working-directory: docs-theme-extras
+        env:
+          DOCS_TEST_CONFIG: ${{ github.workspace }}/.docs-test.toml
+        run: npx playwright test --project=static --reporter=list,html
+```
+
+Multi-product hub repos (one site, many product subpaths) use the same
+pattern with extra jobs for `--project=browser` and a smoke matrix per
+product, plus per-product artifact downloads in place of the inline
+`hugo` build step.
+
+### 5. Run the harness locally
+
+The local-invocation pattern depends on the consumer repo's setup. Two
+working examples today:
+
+**Pattern A — consumer ships Makefile targets that drive the harness
+from a sibling clone.** Recommended for repos where multiple developers
+will run tests regularly:
 
 ```sh
-git clone https://github.com/solo-io/docs-theme-extras
-cd docs-theme-extras
-make install
-make test CONFIG=$GITHUB_WORKSPACE/.docs-test.toml
+# One-time: clone docs-theme-extras as a sibling
+git clone https://github.com/solo-io/docs-theme-extras ../docs-theme-extras
+cd <consumer-repo>
+make test-install        # npm + Playwright browsers in the sibling
+
+# Build the test fixture / site, then run a project
+make test                # all projects (static, browser, cross-browser)
+make test-static         # fastest loop — ~2s after Hugo build
+make test-browser        # chromium only
+make test-cross-browser  # chromium + firefox + webkit
+make test-smoke PRODUCT=<name>     # multi-product hubs only
+
+# Override the sibling location if needed
+make test THEME_EXTRAS_DIR=/abs/path/to/docs-theme-extras
 ```
+
+The sibling-clone pattern, the `THEME_EXTRAS_DIR` override variable, and
+the per-target signatures are conventions a Makefile-shipping consumer
+opts into. See `Makefile` examples in the consumer repos for the full
+template.
+
+**Pattern B — consumer invokes the harness directly.** Works for any
+consumer without Makefile scaffolding; useful as a starter or for
+ad-hoc runs:
+
+```sh
+# One-time: clone docs-theme-extras as a sibling and install
+git clone https://github.com/solo-io/docs-theme-extras ../docs-theme-extras
+cd ../docs-theme-extras && npm ci && npx playwright install --with-deps chromium
+
+# Build the consumer site, then run the harness against it
+cd <consumer-repo> && hugo --gc --minify
+cd ../docs-theme-extras && \
+  DOCS_TEST_CONFIG=$(pwd)/../<consumer-repo>/.docs-test.toml \
+  npx playwright test --project=static
+```
+
+Either pattern resolves `builtRoot` from the consumer's `.docs-test.toml`,
+so any consumer can run the same harness against its own `public/` once
+the config is in place.
 
 ## Local development of this module
 
