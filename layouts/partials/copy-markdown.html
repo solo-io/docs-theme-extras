@@ -1,6 +1,15 @@
 {{- /* Copy as Markdown button — uses Hugo's transform.HTMLToMarkdown (v0.151+)
-       to convert rendered HTML back to clean markdown for clipboard copy. */ -}}
+       to convert rendered HTML back to clean markdown for clipboard copy.
+
+       Tab markup stripping runs both patterns unconditionally — each is a no-op
+       against markup it doesn't match — so the same partial works for consumers
+       on docs's tab override (.hextra-tabs > nav + .hextra-tab-panel[data-tab-name])
+       and for those on Hextra's default tabs ([role="tablist"] + .hextra-tabs-panel).
+
+       Absolute URL host comes from utils/prod-host (explicit
+       themeExtras.prodHost > site.BaseURL host > empty). */ -}}
 {{- $html := .Content -}}
+{{- $prodHost := partial "utils/prod-host.html" . -}}
 {{- /* Convert Hextra card links to simple <p><a> links before markdown conversion,
        otherwise transform.HTMLToMarkdown drops them entirely.
        Matches: <a class="hextra-card..."><span class="card-title">Title</span></a>
@@ -13,15 +22,27 @@
        Otherwise HTMLToMarkdown serializes the line-number <td> as its own fenced block
        above the actual code, producing an orphan "1\n2\n..." block in the copy output. */ -}}
 {{- $html = $html | replaceRE `(?s)<table class="lntable"><tr><td class="lntd">\s*<pre[^>]*><code><span class="lnt">.*?</td>\s*<td class="lntd">\s*(<pre[^>]*><code[^>]*>.*?</code></pre>)\s*</td>\s*</tr>\s*</table>` "$1" -}}
-{{- /* Tabs (solo-io custom shortcodes): strip the <nav> button bar from each .hextra-tabs
-       block, then prepend each panel with a "Option: <name>" label read from the
-       data-tab-name attribute set by layouts/shortcodes/tab.html. */ -}}
+{{- /* Tabs cleanup — we run two pattern sets so the same partial works for both
+       tab variants. Each set is a no-op against markup the other consumer emits.
+
+       Variant 1: docs's tab override emits <div class="hextra-tabs"> wrapping
+       <nav> + .hextra-tab-panel[data-tab-name]. Strip the nav, relabel panels. */ -}}
 {{- $html = $html | replaceRE `(?s)(<div class="hextra-tabs[^"]*"[^>]*>)\s*<nav[^>]*>.*?</nav>` "$1" -}}
 {{- $html = $html | replaceRE `<div class="hextra-tab-panel[^"]*"[^>]*data-tab-name="([^"]*)"[^>]*>` `<div><p><strong>Option: $1</strong></p>` -}}
+{{- /* Variant 2: Hextra default tabs — [role="tablist"] holds the buttons,
+       .hextra-tabs-panel[aria-labelledby] is the panel. Strip the tablist,
+       drop the panel-scoped aria-hidden so all panels show in the copy
+       (page-wide aria-hidden on icon <svg>s is intentionally untouched),
+       then relabel each panel with "Option: <id>". */ -}}
+{{- $html = $html | replaceRE `(?s)<div[^>]*role="tablist"[^>]*>.*?</div>` "" -}}
+{{- $html = $html | replaceRE `(<div class="hextra-tabs-panel[^"]*"[^>]*) aria-hidden="true"` "$1" -}}
+{{- $html = $html | replaceRE `<div class="hextra-tabs-panel[^"]*"[^>]*aria-labelledby="([^"]*)"[^>]*>` `<div style="display:block"><p><strong>Option: $1</strong></p>` -}}
 
-{{- /* Strip the dark-mode image variant emitted by reuse-image-dark.html (class
-       "toggle-light", hidden in light mode). Otherwise the copied markdown contains
-       both the light and dark images as separate ![](path) entries. */ -}}
+{{- /* Strip the dark-mode image variant emitted by the module's reuse-image-dark
+       shortcode (class "toggle-light", hidden in light mode). Otherwise the
+       copied markdown contains both the light and dark images as separate
+       ![](path) entries. No-op for consumers whose reuse-image-dark doesn't
+       emit .toggle-light. */ -}}
 {{- $html = $html | replaceRE `(?s)<div[^>]*class="toggle-light"[^>]*>.*?</div>` "" -}}
 {{- $md := printf "# %s\n\n%s" .Title ($html | transform.HTMLToMarkdown) -}}
 {{- /* Strip empty heading-permalink anchors only — [](#id) → "".
@@ -35,19 +56,18 @@
 {{- $md = $md | replaceRE "–" "-" -}}
 {{- $md = $md | replaceRE "—" "--" -}}
 {{- /* Resolve a canonical base URL for the copied markdown so links resolve when pasted
-       elsewhere. Each product is mounted at https://docs.solo.io/<folder>/ in prod.
-       In dev (site.BaseURL = "/"), rendered links are root-relative without the folder
-       (e.g. /2.3.x/...), so we prepend host + folder.
-       In prod (site.BaseURL has scheme), rendered links already include the folder
-       (e.g. /agentgateway/2.3.x/...), so we prepend just the host to avoid doubling it. */ -}}
+       elsewhere. $prodHost is the consumer's docs origin (e.g. docs.solo.io). For
+       multi-product hubs that mount each product at <prodHost>/<folder>/, the dev
+       server emits root-relative links without the folder, so we re-attach it.
+       In prod (site.BaseURL has scheme), rendered links already include the folder,
+       so we prepend just the host. Single-site consumers leave Site.Params.folder
+       unset and the folder branch is skipped. */ -}}
 {{- $siteBase := site.BaseURL | strings.TrimRight "/" -}}
 {{- $isDev := not (or (hasPrefix $siteBase "http://") (hasPrefix $siteBase "https://")) -}}
 {{- $folder := site.Params.folder | default "" -}}
-{{- $baseURL := "https://docs.solo.io" -}}
-{{- if $isDev -}}
-  {{- if $folder -}}
-    {{- $baseURL = printf "https://docs.solo.io/%s" $folder -}}
-  {{- end -}}
+{{- $baseURL := $prodHost -}}
+{{- if and $isDev $folder -}}
+  {{- $baseURL = printf "%s/%s" $prodHost $folder -}}
 {{- end -}}
 {{- /* Current page URL (without any trailing slash), normalized to use the canonical baseURL.
        In dev .Permalink is //localhost:PORT/path/ (path lacks folder); in prod it's
@@ -74,6 +94,21 @@
        must be alphanum or _/-; subsequent chars exclude ) and : so we skip absolute URLs
        (https://…, mailto:…) but allow # for fragment-suffixed relative links. */ -}}
 {{- $md = $md | replaceRE `(\[[^\]]+\]\()([a-zA-Z0-9_\-][^):]*)(\))` (printf "${1}%s/${2}${3}" $pageAbs) -}}
+{{- /* api-ref pages with a kubespec widget: extract the simplified schema markdown
+       embedded between <!--ks-md-start--> / <!--ks-md-end--> sentinels by render.go.
+       Bypasses transform.HTMLToMarkdown, which collapses adjacent spans (name + type)
+       and ignores <template> contents in the widget HTML. No-op for any page that
+       doesn't set Params.widgetHtml. */ -}}
+{{- if .Params.widgetHtml -}}
+  {{- range $i, $part := split .Params.widgetHtml "<!--ks-md-start" -}}
+    {{- if gt $i 0 -}}
+      {{- $schemaMd := index (split $part "ks-md-end-->") 0 | strings.TrimSpace -}}
+      {{- if $schemaMd -}}
+        {{- $md = printf "%s\n\n%s\n" $md $schemaMd -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
 {{- if $md -}}
 <div class="copy-md-wrapper" style="display:flex;justify-content:flex-end;margin-bottom:0.5rem;" data-page-url="{{ $pageAbs }}">
   <style>

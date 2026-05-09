@@ -1,0 +1,30 @@
+{{- /*
+  Returns the canonical production host (scheme + hostname, no trailing slash,
+  no path) as a string. Used by copy-markdown.html, llms.txt rendering,
+  page-to-markdown, and any layout that needs to emit absolute URLs that
+  still resolve when pasted outside the current build's preview URL.
+
+  Resolution order:
+    1. site.Params.themeExtras.prodHost (explicit override). Useful when
+       site.BaseURL doesn't include a scheme — e.g. local dev, or deploy
+       targets that don't override baseURL at build time.
+    2. The scheme+host portion of site.BaseURL when it includes a scheme.
+       Lets prod configs that already set `baseURL = "https://example.com/..."`
+       skip the explicit param.
+    3. Empty string. Caller-side gating (`with` / `if`) skips emitting an
+       absolute prefix at all and links remain root-relative.
+
+  Call site:
+    {{- $host := partial "utils/prod-host.html" . -}}
+*/ -}}
+{{- $host := "" -}}
+{{- with site.Params.themeExtras }}
+  {{- with .prodHost }}{{ $host = . }}{{ end }}
+{{- end -}}
+{{- if not $host -}}
+  {{- $base := site.BaseURL | strings.TrimRight "/" -}}
+  {{- if or (hasPrefix $base "http://") (hasPrefix $base "https://") -}}
+    {{- $host = replaceRE `^(https?://[^/]+).*$` "$1" $base -}}
+  {{- end -}}
+{{- end -}}
+{{- $host -}}
