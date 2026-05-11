@@ -7,6 +7,21 @@
 
 [module]
 
+  # Re-export hextra to consumers transitively. When a consumer imports
+  # this module via go.mod, Hugo reads THIS file and applies its imports
+  # transitively. By declaring hextra here, consumers don't need to list
+  # it separately in their own hugo configs — they get hextra at lower
+  # precedence than docs-theme-extras automatically (Hugo prefers
+  # files from this module's own layouts/ over the imported hextra
+  # ones because docs-theme-extras is the directly-importing module).
+  #
+  # The hextra version is pinned in this module's go.mod. Consumers
+  # bumping their docs-theme-extras pin pick up the matching hextra
+  # version in lockstep.
+  [[module.imports]]
+    path = "github.com/imfing/hextra"
+    disable = false
+
   # Layouts and CSS overlay (the "extras" the module is named for).
   [[module.mounts]]
     source = "layouts"
