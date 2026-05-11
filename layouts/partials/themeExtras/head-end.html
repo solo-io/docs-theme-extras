@@ -69,6 +69,64 @@ function toggleMobileTheme() {
      If JS is disabled the class is never added, so the sidebar stays visible. */}}
 <script>document.documentElement.classList.add('sidebar-loading');</script>
 
+{{/* Land the viewport on the URL hash without a visible "top first, then
+     jump" flash AND without a post-reveal jump from late-loading images
+     pushing content around.
+     Strategy: when the URL has a hash, synchronously mark <html> with
+     `hash-loading` BEFORE any paint. CSS (in docs-theme-extras.css)
+     hides the body while that class is present. We KEEP it hidden until
+     window.load (not DOMContentLoaded) so images / fonts / Mermaid have
+     all resolved and the anchor's final position is locked in before
+     the user sees anything. Then we scroll once (instant, invisible)
+     and reveal. A 2s safety timeout caps the worst-case blank time so
+     a stuck resource never traps the user in a permanently blank page.
+     Trade-off note: keeping body hidden until `load` makes the
+     perceived load slower than revealing at DCL, but it eliminates the
+     post-reveal "jump" entirely. Worth it on hash navigations; the
+     hash-loading class is not added at all on hash-less loads, so
+     regular page visits aren't affected. */}}
+<script>
+(function(){
+  if (!window.location.hash) return;
+  var id;
+  try {
+    id = decodeURIComponent(window.location.hash.slice(1));
+  } catch (e) { return; /* malformed hash */ }
+  if (!id) return;
+
+  document.documentElement.classList.add('hash-loading');
+
+  var revealed = false;
+  function scroll() {
+    var el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'instant', block: 'start' });
+  }
+  function scrollAndReveal() {
+    if (revealed) return;
+    revealed = true;
+    scroll();
+    document.documentElement.classList.remove('hash-loading');
+  }
+
+  // Safety: cap the blank-page time. If `load` doesn't fire within 2s
+  // (slow image, hung script, etc.), reveal anyway. The user will see
+  // a small jump in that case — better than a permanently blank page.
+  setTimeout(scrollAndReveal, 2000);
+
+  if (document.readyState === 'complete') {
+    scrollAndReveal();
+  } else {
+    window.addEventListener('load', function(){
+      // Two rAFs so any synchronous post-load handlers (Mermaid init,
+      // etc.) get a chance to mutate the DOM before we measure.
+      requestAnimationFrame(function(){
+        requestAnimationFrame(scrollAndReveal);
+      });
+    });
+  }
+})();
+</script>
+
 {{/* Tab switching logic for custom tabs/tab shortcodes */}}
 <script>
 document.addEventListener('DOMContentLoaded', function(){

@@ -80,6 +80,15 @@ first segment that matches a known version wins.
 {{ $clean = replaceRE `\{\{<\s*(steps)\s*>}}` "{{% $1 %}}" $clean }}
 {{ $clean = replaceRE `\{\{<\s*(/steps)\s*>}}` "{{% $1 %}}" $clean }}
 
+{{/* Convert `include` back to percent-bracket. Hextra's include shortcode
+     calls .RenderShortcodes on the target page and returns its raw markdown.
+     With angle-bracket form, that markdown is inserted AFTER the outer
+     markdown pass, so backticks, links, and headings appear as literal text.
+     The percent form lets the outer markdown engine re-process the inserted
+     content. Hextra explicitly documents include as a percent-form-only
+     shortcode for this reason. */}}
+{{ $clean = replaceRE `\{\{<\s*(include\s[^>]*)>}}` "{{% $1%}}" $clean }}
+
 {{/* Adjust any relative doc links if needed */}}
 {{ $clean = replaceRE `\((\/?)docs\/` "(/" $clean }}
 

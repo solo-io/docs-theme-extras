@@ -32,6 +32,7 @@ export type Checks = {
   viewport: boolean;
   versioning: boolean;
   shortcodeStructure: boolean;
+  shortcodeArgs: boolean;
   crossBrowser: boolean;
 };
 
@@ -85,6 +86,7 @@ const DEFAULT_CHECKS: Checks = {
   viewport: true,
   versioning: true,
   shortcodeStructure: true,
+  shortcodeArgs: true,
   crossBrowser: false,
 };
 

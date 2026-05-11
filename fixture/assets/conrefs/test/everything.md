@@ -41,7 +41,7 @@ In the local override at `layouts/shortcodes/callout.html`, the `callout` shortc
 {{< cards >}}
 {{% version include-if="v2" %}}{{< card link="../rebased/" title="Companion view" description="The same content rendered through the alternate render path." icon="document-duplicate" >}}{{% /version %}}
 {{< card link="https://github.com/solo-io/docs" title="solo-io/docs" description="Source repository for the docs framework." icon="github" >}}
-{{< card link="https://hugo.imfing.com/" title="Hextra theme" description="Upstream theme this module overlays. Uses the `code` icon, which renders both as a Heroicon SVG (module) and as a Material Icon (docs) — present in both maps." icon="code" >}}
+{{< card link="https://hugo.imfing.com/" title="Hextra theme" description="Upstream theme this module overlays. Uses the code icon, which renders both as a Heroicon SVG (module) and as a Material Icon (docs); present in both maps." icon="code" >}}
 {{< /cards >}}
 
 ## Checklist
@@ -265,14 +265,30 @@ An inline SVG with `role="img"` and `aria-label` (so screen readers announce the
 <svg xmlns="http://www.w3.org/2000/svg" width="240" height="80" viewBox="0 0 240 80" role="img" aria-label="MARKER_SVG_ALT. A diagram showing a Client box connected to a Server box by an arrow.">
   <title>MARKER_SVG_ALT. A diagram showing a Client box connected to a Server box by an arrow.</title>
   <defs>
+    <!-- currentColor here resolves to the stroke color of the <line>
+         that references this marker. The line itself uses currentColor,
+         which inherits from the surrounding text color — so the arrow
+         tip stays visible in both light and dark mode. -->
     <marker id="test-arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
-      <polygon points="0,0 10,3 0,6" fill="#1a1a1a"/>
+      <polygon points="0,0 10,3 0,6" fill="currentColor"/>
     </marker>
   </defs>
-  <rect x="5" y="20" width="80" height="40" fill="#fff" stroke="#1a1a1a" stroke-width="2"/>
+  <!-- Box stroke + connector line + arrow all use currentColor so they
+       adapt to the page theme. Box fill stays white and the text inside
+       stays dark — that contrast is intentional and works against both
+       light and dark page backgrounds. -->
+  <rect x="5" y="20" width="80" height="40" fill="#fff" stroke="currentColor" stroke-width="2"/>
   <text x="45" y="44" text-anchor="middle" font-family="-apple-system, system-ui, sans-serif" font-size="14" fill="#1a1a1a">Client</text>
-  <line x1="85" y1="40" x2="155" y2="40" stroke="#1a1a1a" stroke-width="2" marker-end="url(#test-arrow)"/>
-  <rect x="155" y="20" width="80" height="40" fill="#fff" stroke="#1a1a1a" stroke-width="2"/>
+  <!-- x2 stops at 152 (not 155) so the marker's arrow tip lands on the
+       page background just before the right box. If the tip overlaps the
+       white box, `currentColor` makes it invisible in dark mode (light
+       arrow on white box). With the line geometry:
+         line ends at world x=152
+         marker refX=9, markerWidth=10 → tip is at world x=153
+         box starts at x=155
+       → 2-unit gap; tip is always on page bg, always visible. -->
+  <line x1="85" y1="40" x2="152" y2="40" stroke="currentColor" stroke-width="2" marker-end="url(#test-arrow)"/>
+  <rect x="155" y="20" width="80" height="40" fill="#fff" stroke="currentColor" stroke-width="2"/>
   <text x="195" y="44" text-anchor="middle" font-family="-apple-system, system-ui, sans-serif" font-size="14" fill="#1a1a1a">Server</text>
 </svg>
 </a>
@@ -387,6 +403,12 @@ The `reuse-image` shortcode emits both the light and dark variants in one call. 
 The `reuse-image-dark` variant by itself (renders only when dark mode is active):
 
 {{< reuse-image-dark srcDark="img/test/dark.svg" alt="MARKER_REUSE_IMAGE_DARK. Dark-only variant." caption="Visible only when dark mode is active." width="160" >}}
+
+### Light variant only
+
+The `reuse-image-light` variant by itself (renders only when light mode is active):
+
+{{< reuse-image-light src="img/test/light.svg" alt="MARKER_REUSE_IMAGE_LIGHT. Light-only variant." caption="Visible only when light mode is active." width="160" >}}
 
 ### Version-gated image
 

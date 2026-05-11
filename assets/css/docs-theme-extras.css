@@ -27,6 +27,50 @@
 .dark .toggle-light { display: block; }
 .dark .toggle-dark  { display: none;  }
 
+/* ── Cards shortcode grid ────────────────────────────────────────────── */
+/* The module's `{{< cards >}}` shortcode emits
+     <div class="hextra-cards hextra-cards-grid" style="--hextra-cols: N;">
+   Hextra's bundled CSS styles `.hextra-cards` (grid-template-columns based
+   on `--hextra-cards-grid-cols`) but not `.hextra-cards-grid`, and our
+   shortcode uses the different `--hextra-cols` variable name. Without
+   these rules the container is just a regular block element and cards
+   stack full-width with no gap.
+   Mobile-first responsive: 1 col by default, 2 at sm, --hextra-cols (3
+   default) at lg. */
+.hextra-cards-grid {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 640px) {
+  .hextra-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 1024px) {
+  .hextra-cards-grid {
+    grid-template-columns: repeat(var(--hextra-cols, 3), minmax(0, 1fr));
+  }
+}
+
+/* When a card is wrapped by another element — most commonly Goldmark's
+   <p> around a card that itself lives inside a percent-form shortcode
+   like `{{% version %}}{{< card >}}{{% /version %}}` — the wrapper
+   becomes the direct grid child. CSS grid stretches the wrapper to the
+   row's height, but the <a> card inside doesn't fill the wrapper.
+   Result: a "short" card in an otherwise tall row.
+   Force any single-card wrapper to be a transparent flex column so the
+   card fills it. Scoped with :has() to single-child wrappers so plain
+   text content inside <cards> isn't affected. */
+.hextra-cards-grid > p:has(> .hextra-card:only-child) {
+  display: flex;
+  margin: 0;
+}
+.hextra-cards-grid > p:has(> .hextra-card:only-child) > .hextra-card {
+  flex: 1;
+}
+
 /* ── Version banner ──────────────────────────────────────────────────── */
 /* Matches old alert-info banner styling */
 .version-banner {
@@ -348,6 +392,18 @@ html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
   visibility: hidden;
 }
 
+/* Same FOUC-prevention pattern for the body when the URL has a #hash.
+   Without this, the browser starts painting the top of the page before
+   our JS scrolls to the anchor — the user perceives a "load at top,
+   then jump" flash. head-end.html adds .hash-loading synchronously in
+   <head> (only when window.location.hash is set), then removes it on
+   DOMContentLoaded after scrolling to the anchor. A 2s safety timeout
+   in the same script also removes the class, so a malformed hash or
+   missing target never traps the user in a blank page. */
+html.hash-loading body {
+  visibility: hidden;
+}
+
 /* Product logo in sidebar */
 .sidebar-product-logo {
   padding: 0.5rem 0 1rem;
@@ -401,6 +457,18 @@ html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
   padding: 1rem;
   border-radius: 6px;
   max-width: 100%;
+}
+
+/* Skip the white-card wrapper for images that ARE the dark variant.
+   reuse-image and reuse-image-dark wrap their dark output in
+   `<div class="toggle-light">` (shown only in dark mode). Those images
+   are already dark-themed, so the surrounding white card both clashes
+   visually and steals space from the SVG viewport (cutting off labels
+   like "MARKER_IMAGE_DARK"). */
+.dark .content .toggle-light img {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
 }
 
 /* ── Solo footer ─────────────────────────────────────────────────────── */

@@ -1,0 +1,45 @@
+{{/* Light-only image variant. Symmetric counterpart to reuse-image-dark.
+     Renders a single image wrapped in <div class="toggle-dark">, which CSS
+     shows in light mode and hides in dark mode (see docs-theme-extras.css
+     `.toggle-dark`/`.dark .toggle-dark`).
+     Use when you have a light-themed asset that should NOT appear in dark
+     mode at all — e.g., a screenshot whose dark-mode counterpart isn't
+     ready yet and the white-card wrapper would look wrong, or a diagram
+     whose colors are reference-specific. For the common "show this image
+     in both modes" case, use the reuse-image shortcode; for dark-only,
+     use reuse-image-dark. */}}
+{{ $src := .Get "src" }}
+{{ $width := .Get "width" }}
+{{ $alt := .Get "alt" }}
+{{ $image := resources.Get $src }}
+{{ $caption := .Get "caption" }}
+
+{{/* Fallback: if the image isn't at assets/img/<file>, look for it at
+     assets/<product>/<version>/img/<file>. Mirrors the lookup logic in
+     reuse-image-dark.html so authors get consistent path resolution
+     regardless of which variant they use. */}}
+{{ if not $image }}
+  {{ $version := "" }}
+  {{ range $part := split .Page.RelPermalink "/" }}
+    {{ if not $version }}
+      {{ range $.Site.Params.versions }}
+        {{ if eq .version $part }}{{ $version = .version }}{{ end }}
+      {{ end }}
+    {{ end }}
+  {{ end }}
+  {{ if $version }}
+    {{ $product := $.Site.Params.currentProduct }}
+    {{ $trimmed := strings.TrimPrefix "/" $src }}
+    {{ $versioned := printf "%s/%s/%s" $product $version $trimmed }}
+    {{ $r := resources.Get $versioned }}
+    {{ with $r }}
+      {{/* Strip product prefix so publishDir doesn't double it */}}
+      {{ $targetPath := printf "%s/%s" $version $trimmed }}
+      {{ $image = resources.Copy $targetPath $r }}
+    {{ end }}
+  {{ end }}
+{{ end }}
+
+{{- with $image -}}
+<div style="text-align: center;" class="toggle-dark"><figure><img src="{{ .RelPermalink }}" width="{{ $width }}" alt="{{ $alt }}"/> <figcaption style="font-style:italic">{{ $caption }}</figcaption></figure></div>
+{{- end -}}

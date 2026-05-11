@@ -46,7 +46,7 @@ export default defineConfig({
     {
       name: "static",
       testMatch:
-        /static\.spec\.ts$|versioning\.spec\.ts$|hugo-warnings\.spec\.ts$|auto-cards\.spec\.ts$|presence\.spec\.ts$|curl-quotes\.spec\.ts$|github-shortcode\.spec\.ts$/,
+        /static\.spec\.ts$|versioning\.spec\.ts$|hugo-warnings\.spec\.ts$|auto-cards\.spec\.ts$|presence\.spec\.ts$|curl-quotes\.spec\.ts$|shortcode-args\.spec\.ts$|github-shortcode\.spec\.ts$/,
     },
     {
       name: "browser",

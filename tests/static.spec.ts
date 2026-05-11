@@ -480,3 +480,77 @@ test.describe("title badges (PR 2414 regression guard)", () => {
     ).not.toContain('class="page-badges"');
   });
 });
+
+// Manual `{{< card >}}` blocks must render correctly even when wrapped by
+// the markdownify form of other shortcodes (e.g., `{{%/* version */%}}`),
+// and shortcode arg lexing must handle special characters in attribute
+// strings without silently dropping invocations.
+//
+// Two historical regressions both surfaced on the same cards block in
+// v2/everything:
+//
+//   1. The version-gated first card had a `<p class="card-subtitle">`
+//      inside its `<a>`, while Goldmark wrapped the whole card in a
+//      paragraph (the markdownify side-effect of `{{% version %}}`).
+//      Nested <p> triggers the browser's auto-close-the-outer-<p>
+//      behavior: the <a> closes early, and the description floats out
+//      as a sibling — visible as "a card with just a description" in
+//      the next grid cell.
+//
+//   2. The third card had backticks inside a double-quoted shortcode
+//      arg (`description="...uses the \`code\` icon..."`). Hugo's
+//      shortcode lexer treats backticks as an alternate quote delimiter
+//      and silently dropped the whole invocation.
+//
+// Both are easy to reintroduce; this guard makes them loud.
+test.describe("manual cards block renders intact (card subtitle + shortcode arg lexing)", () => {
+  const v2Everything = path.join(
+    TEST_PRODUCT_ROOT,
+    "v2",
+    "everything",
+    "index.html",
+  );
+
+  test.skip(
+    !fs.existsSync(v2Everything),
+    "v2/everything not present in builtRoot (fixture-only check)",
+  );
+
+  test("three cards declared → three rendered", () => {
+    const html = readFixture(v2Everything);
+    // Cards are inside the `<div class="hextra-cards hextra-cards-grid">`
+    // wrapper. Extract that container and count `<a class="hextra-card`
+    // matches inside it; counting at document scope would also catch the
+    // .hextra-card style block etc.
+    const containerMatch = html.match(
+      /<div class="hextra-cards hextra-cards-grid"[^>]*>([\s\S]*?)<\/div>/,
+    );
+    expect(
+      containerMatch,
+      "cards container missing — `{{< cards >}}` shortcode didn't render",
+    ).not.toBeNull();
+    const cards = (containerMatch![1].match(/<a class="hextra-card\b/g) ?? [])
+      .length;
+    expect(
+      cards,
+      "all three declared cards should render; if the count is short, a card was silently dropped (often a shortcode arg lexing issue — backticks/em-dash in description strings)",
+    ).toBe(3);
+  });
+
+  test("card subtitle is not a <p> (would nest-break inside markdownify-wrapped cards)", () => {
+    const html = readFixture(v2Everything);
+    // The card shortcode used to emit `<p class="card-subtitle">`. Inside
+    // a `{{% version %}}` wrapper, Goldmark also emits a paragraph around
+    // the card, and the nested <p> triggers HTML auto-close. The fix is
+    // to use a <span class="card-subtitle"> (display:block via CSS).
+    expect(
+      html,
+      "card subtitle should NOT be a <p>; use <span class=\"card-subtitle\"> so it nests safely inside a markdownify-wrapped card",
+    ).not.toMatch(/<p class="card-subtitle"/);
+    // And confirm the span form IS present (positive assertion).
+    expect(
+      html,
+      "card subtitle <span class=\"card-subtitle\"> should be present on cards that have descriptions",
+    ).toMatch(/<span class="card-subtitle"/);
+  });
+});

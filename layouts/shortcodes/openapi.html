@@ -148,7 +148,14 @@
     SwaggerUIBundle({
       url: el.dataset.specUrl,
       dom_id: '#swagger-ui',
-      deepLinking: true,
+      // deepLinking hijacks window.location.hash for Swagger's own routing
+      // (#/operations/... and #/components/schemas/...). On pages that also
+      // have a Hextra TOC, clicking a TOC entry sets the hash to e.g.
+      // #cards, then Swagger's hashchange listener rewrites it to #/cards
+      // — breaking the page's normal anchor navigation. Off by default;
+      // pages that are primarily API reference can re-enable via the
+      // `deepLinking=true` shortcode arg.
+      deepLinking: {{ eq (.Get "deepLinking" | default "false") "true" }},
       presets: [
         SwaggerUIBundle.presets.apis,
         SwaggerUIStandalonePreset
