@@ -175,18 +175,24 @@ test.describe("interactive components work cross-browser", () => {
     expect(box, "dialog has no bounding box").not.toBeNull();
 
     // Regression guard for a Safari-specific bug where the modal <dialog>
-    // resolved width:100% against its intrinsic-content containing block
-    // (collapsing the dialog to <pre> width, ~300px) instead of the
-    // viewport (Chrome/Firefox behavior). CSS now sets width directly.
+    // collapsed to its intrinsic content size on BOTH axes — width:100%
+    // resolved against the <pre>'s width (~300px), and the absence of an
+    // explicit `height` produced a dialog only as tall as its content
+    // (often a few hundred px) instead of the viewport-relative cap.
+    // CSS now sets width AND height explicitly with min(px, vw|vh).
     //
-    // At the cross-browser desktop viewport (1280px), the dialog should
-    // render at min(900px, 90vw) = 900px. Threshold 600px is generous
-    // enough to absorb sub-pixel rounding while still catching the
-    // collapsed-to-content failure mode (which produces widths < 400px).
+    // At the cross-browser desktop viewport (1280x800), the dialog should
+    // render at min(900px, 90vw) = 900px wide and min(700px, 85vh) = 680px
+    // tall. Thresholds are generous (600 / 500) to absorb sub-pixel
+    // rounding while catching the collapsed-to-content failure modes.
     expect(
       box!.width,
       `dialog width ${box!.width}px is too small — modal <dialog> likely collapsed to content`,
     ).toBeGreaterThan(600);
+    expect(
+      box!.height,
+      `dialog height ${box!.height}px is too small — modal <dialog> likely collapsed to content height`,
+    ).toBeGreaterThan(500);
   });
 
   test("theme toggle adds html.dark class", async ({ page }) => {
