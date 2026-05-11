@@ -1,3 +1,15 @@
+{{- /*
+  Module-internal head bootstrap. Invoked from the module's
+  partials/head.html shadow just before partial "custom/head-end.html".
+
+  Why this isn't in partials/custom/head-end.html: that path is the
+  Hextra-provided consumer override hook. If both the module and the
+  consumer ship a custom/head-end.html, Hugo's project-over-imports
+  precedence silently picks the consumer's version and the module's
+  bootstrap disappears. Putting bootstrap in this namespaced path
+  (themeExtras/, matching Site.Params.themeExtras) keeps it module-owned
+  and out of consumers' override surface.
+*/ -}}
 {{/* Google Material Symbols — unconditional, drives sidebar nav icons,
      section-card icons, and copy-as-md feedback icons across all brands. */}}
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">

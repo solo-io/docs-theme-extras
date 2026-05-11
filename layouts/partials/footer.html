@@ -1,11 +1,34 @@
-{{- /* Custom Solo footer override — replaces Hextra's "Hextra Project" footer.
-       Matches the look of the previous docs-theme-lotus footer. */ -}}
-{{- $copyright := .Site.Params.footer.copyright | default "Solo.io copyright 2026" -}}
+{{- /*
+  Solo footer override — replaces Hextra's "Powered by Hextra" footer.
+
+  Two ways consumers fill the footer content, and they're independent:
+
+  1. params.footer.copyright — if set, gets rendered inside the styled
+     .solo-footer-inner wrapper (centered, Solo type styling). Use this
+     when you want the module-provided Solo look and only need to set a
+     short copyright string. Markdown is supported. No default: leave it
+     unset to skip this block entirely.
+
+  2. partials/custom/footer.html — Hextra's standard footer-content hook.
+     Renders inside the <footer> element after the copyright block. Use
+     this when you want full HTML control over your footer (multiple
+     paragraphs, custom classes, scripts, etc.). Hextra ships an empty
+     default at this path, so consumers without an override see nothing
+     extra.
+
+  Both can coexist (param renders first, custom hook after) but the
+  common shapes are: param-only for Solo consumers, custom-only for
+  third-party consumers like agw-oss.
+*/ -}}
+{{- $copyright := .Site.Params.footer.copyright -}}
 
 <footer class="solo-footer hx:print:hidden">
-  <div class="solo-footer-inner">
-    <p>{{ $copyright | markdownify }}</p>
-  </div>
+  {{- with $copyright -}}
+    <div class="solo-footer-inner">
+      <p>{{ . | markdownify }}</p>
+    </div>
+  {{- end -}}
+  {{- partial "custom/footer.html" . -}}
 </footer>
 
 <button id="solo-back-to-top" type="button" aria-label="Back to top" class="hx:print:hidden" hidden>
