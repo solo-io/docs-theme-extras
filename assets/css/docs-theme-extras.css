@@ -392,18 +392,6 @@ html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
   visibility: hidden;
 }
 
-/* Same FOUC-prevention pattern for the body when the URL has a #hash.
-   Without this, the browser starts painting the top of the page before
-   our JS scrolls to the anchor — the user perceives a "load at top,
-   then jump" flash. head-end.html adds .hash-loading synchronously in
-   <head> (only when window.location.hash is set), then removes it on
-   DOMContentLoaded after scrolling to the anchor. A 2s safety timeout
-   in the same script also removes the class, so a malformed hash or
-   missing target never traps the user in a blank page. */
-html.hash-loading body {
-  visibility: hidden;
-}
-
 /* Product logo in sidebar */
 .sidebar-product-logo {
   padding: 0.5rem 0 1rem;

@@ -1,0 +1,18 @@
+{{- /*
+  Fixture's consumer-side head-end.
+
+  Two jobs:
+  1. Invoke the module bootstrap (themeExtras/head-end.html). Every
+     consumer must do this from their own custom/head-end.html — Hextra
+     calls custom/head-end.html and not themeExtras directly. If the
+     module shadowed custom/head-end.html itself, the consumer's shadow
+     would silently win and the bootstrap would disappear.
+  2. Emit MARKER_CUSTOM_HEAD_END (via a <meta> tag — HTML comments are
+     stripped from partial output by Hugo) so presence.spec.ts can
+     verify the Hextra → custom/head-end.html → themeExtras/head-end.html
+     chain is still wired. If a future module refactor stops calling
+     the bootstrap (or Hextra stops calling custom/head-end.html), the
+     marker won't appear and the test fails.
+*/ -}}
+{{ partial "themeExtras/head-end.html" . -}}
+<meta name="docs-theme-extras-marker" content="MARKER_CUSTOM_HEAD_END">

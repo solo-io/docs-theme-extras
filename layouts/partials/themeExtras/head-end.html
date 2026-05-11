@@ -1,14 +1,17 @@
 {{- /*
-  Module-internal head bootstrap. Invoked from the module's
-  partials/head.html shadow just before partial "custom/head-end.html".
+  Module-internal head bootstrap. Consumers invoke this from their own
+  layouts/partials/custom/head-end.html as the first line:
 
-  Why this isn't in partials/custom/head-end.html: that path is the
-  Hextra-provided consumer override hook. If both the module and the
-  consumer ship a custom/head-end.html, Hugo's project-over-imports
-  precedence silently picks the consumer's version and the module's
-  bootstrap disappears. Putting bootstrap in this namespaced path
-  (themeExtras/, matching Site.Params.themeExtras) keeps it module-owned
-  and out of consumers' override surface.
+      {{ partial "themeExtras/head-end.html" . }}
+
+  Why consumers call this instead of the module shipping it on a
+  Hextra-known hook (custom/head-end.html): Hugo's project-over-imports
+  precedence makes a consumer's custom/head-end.html silently win over
+  any module-shipped version. To avoid that footgun without shadowing
+  the entire Hextra head.html partial (an upgrade-cost trap), we ask
+  consumers to make the call explicitly. The fixture demonstrates the
+  contract; presence.spec.ts asserts the chain is still wired via the
+  MARKER_CUSTOM_HEAD_END sentinel.
 */ -}}
 {{/* Google Material Symbols — unconditional, drives sidebar nav icons,
      section-card icons, and copy-as-md feedback icons across all brands. */}}
@@ -69,22 +72,26 @@ function toggleMobileTheme() {
      If JS is disabled the class is never added, so the sidebar stays visible. */}}
 <script>document.documentElement.classList.add('sidebar-loading');</script>
 
-{{/* Land the viewport on the URL hash without a visible "top first, then
-     jump" flash AND without a post-reveal jump from late-loading images
-     pushing content around.
-     Strategy: when the URL has a hash, synchronously mark <html> with
-     `hash-loading` BEFORE any paint. CSS (in docs-theme-extras.css)
-     hides the body while that class is present. We KEEP it hidden until
-     window.load (not DOMContentLoaded) so images / fonts / Mermaid have
-     all resolved and the anchor's final position is locked in before
-     the user sees anything. Then we scroll once (instant, invisible)
-     and reveal. A 2s safety timeout caps the worst-case blank time so
-     a stuck resource never traps the user in a permanently blank page.
-     Trade-off note: keeping body hidden until `load` makes the
-     perceived load slower than revealing at DCL, but it eliminates the
-     post-reveal "jump" entirely. Worth it on hash navigations; the
-     hash-loading class is not added at all on hash-less loads, so
-     regular page visits aren't affected. */}}
+{{/* Land the viewport on the URL hash via manual scroll restoration.
+     Strategy: disable the browser's default pre-paint scroll-to-hash
+     (which fires before images / fonts / Mermaid have laid out, so the
+     anchor's Y position is still drifting and the browser scrolls to
+     the wrong place). Hold at scrollTop=0 during load, then scroll to
+     the anchor at DOMContentLoaded and re-scroll once more at
+     window.load to catch any layout shifts that happened between.
+
+     Trade-off: the user briefly sees the top of the page during
+     <head>-parse → DOMContentLoaded (typically a frame or two on a
+     fast connection). The prior "hide body until load" approach
+     eliminated that glimpse but at the cost of a blank screen during
+     the entire load. This swap trades blank-screen-time for
+     top-content-glimpse, which is the less alarming of the two on
+     slow connections. If the glimpse turns out to be perceptible
+     enough to bother readers, the fix is to make layout stable from
+     first paint (image dimensions, reserved space for Mermaid/Swagger)
+     rather than to re-introduce the body hide.
+
+     Hash-less loads are unaffected — the script returns immediately. */}}
 <script>
 (function(){
   if (!window.location.hash) return;
@@ -94,36 +101,28 @@ function toggleMobileTheme() {
   } catch (e) { return; /* malformed hash */ }
   if (!id) return;
 
-  document.documentElement.classList.add('hash-loading');
+  if ('scrollRestoration' in history) {
+    history.scrollRestoration = 'manual';
+  }
+  window.scrollTo(0, 0);
 
-  var revealed = false;
-  function scroll() {
+  function scrollToHash(){
     var el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: 'instant', block: 'start' });
   }
-  function scrollAndReveal() {
-    if (revealed) return;
-    revealed = true;
-    scroll();
-    document.documentElement.classList.remove('hash-loading');
-  }
 
-  // Safety: cap the blank-page time. If `load` doesn't fire within 2s
-  // (slow image, hung script, etc.), reveal anyway. The user will see
-  // a small jump in that case — better than a permanently blank page.
-  setTimeout(scrollAndReveal, 2000);
-
-  if (document.readyState === 'complete') {
-    scrollAndReveal();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', scrollToHash);
   } else {
-    window.addEventListener('load', function(){
-      // Two rAFs so any synchronous post-load handlers (Mermaid init,
-      // etc.) get a chance to mutate the DOM before we measure.
-      requestAnimationFrame(function(){
-        requestAnimationFrame(scrollAndReveal);
-      });
-    });
+    scrollToHash();
   }
+  // One more pass after window.load so any layout shifts between DCL
+  // and load (late images, lazy stylesheets) don't leave the anchor
+  // off-screen. rAF lets post-load handlers (Mermaid init, etc.) mutate
+  // the DOM first.
+  window.addEventListener('load', function(){
+    requestAnimationFrame(scrollToHash);
+  });
 })();
 </script>
 

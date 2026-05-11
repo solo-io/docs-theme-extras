@@ -25,6 +25,15 @@ enableInlineShortcodes = true
     source = "layouts"
     target = "layouts"
 
+  # Fixture's consumer-side layout overrides (partials/custom/head-end.html,
+  # partials/custom/footer.html). They demonstrate the module-bootstrap
+  # contract every real consumer must implement and emit MARKER_CUSTOM_*
+  # sentinels that presence.spec.ts checks for. NOT exposed to consumers
+  # via hugo.toml — only the self-test fixture sees these.
+  [[module.mounts]]
+    source = "fixture/layouts"
+    target = "layouts"
+
   # Module's own CSS/JS overlay (custom.css drives version-dropdown,
   # copy-md-btn, and other docs-specific component styling that Hextra's
   # head partial auto-picks-up via resources.Get "css/custom.css").

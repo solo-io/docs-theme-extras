@@ -25,6 +25,11 @@ enableInlineShortcodes = true
     source = "layouts"
     target = "layouts"
 
+  # Fixture's consumer-side layout overrides — see hugo-oss.toml comment.
+  [[module.mounts]]
+    source = "fixture/layouts"
+    target = "layouts"
+
   # Module's own CSS/JS overlay (custom.css drives version-dropdown,
   # copy-md-btn, and other docs-specific component styling that Hextra's
   # head partial auto-picks-up via resources.Get "css/custom.css").

@@ -431,6 +431,44 @@ test.describe("ordered list (3 levels) renders all <li> with no gaps", () => {
   }
 });
 
+test.describe("consumer override hooks are still wired", () => {
+  // Regression guard for "module silently drops a partial call" bugs.
+  //
+  // Two near-misses motivated this:
+  //   1. layouts/partials/footer.html shadowed Hextra's but didn't
+  //      forward to `partial "custom/footer.html"` — consumers'
+  //      copyright + back-to-top JS silently disappeared.
+  //   2. layouts/partials/custom/head-end.html in the module shadowed
+  //      consumers' override — module bootstrap loaded but consumers'
+  //      glossary / GTM / per-repo scripts didn't.
+  //
+  // Both classes of bug are caught by asserting that markers emitted
+  // from the fixture's custom/* partials appear in rendered HTML. If a
+  // future module change stops calling either custom hook, the marker
+  // won't render and the test fails with a precise pointer to which
+  // chain broke.
+  //
+  // The fixture ships:
+  //   fixture/layouts/partials/custom/head-end.html → MARKER_CUSTOM_HEAD_END
+  //   fixture/layouts/partials/custom/footer.html   → MARKER_CUSTOM_FOOTER
+  for (const page of TOPIC_PAGES) {
+    test(`${page.name}: MARKER_CUSTOM_HEAD_END appears (head-end hook fires)`, () => {
+      const html = readFixture(page.filePath);
+      expect(
+        html,
+        `${page.name}: Hextra → custom/head-end.html chain broken — module bootstrap will fail to load on consumers`,
+      ).toContain("MARKER_CUSTOM_HEAD_END");
+    });
+    test(`${page.name}: MARKER_CUSTOM_FOOTER appears (footer hook fires)`, () => {
+      const html = readFixture(page.filePath);
+      expect(
+        html,
+        `${page.name}: module footer.html → custom/footer.html chain broken — consumer footer content will silently disappear`,
+      ).toContain("MARKER_CUSTOM_FOOTER");
+    });
+  }
+});
+
 test.describe("section index pages preserve their navigation", () => {
   // Section index pages have different layout (they're auto-generated
   // landing pages) but should still have nav, footer, sidebar, etc.

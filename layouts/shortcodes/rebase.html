@@ -1,3 +1,33 @@
+{{- /*
+  rebase: render content from another version's asset tree into the
+  current page, with version-aware shortcode rewrites applied.
+
+  Pipeline overview — each block below is one stage:
+
+    1. SETUP            — resolve file path, page version, product, and
+                          look up the resource. Falls back to bare path
+                          if the versioned path isn't on disk.
+    2. CONTENT PREP     — strip front matter; mark page for Mermaid /
+                          manual-cards detection.
+    3. FORM CONVERSION  — bulk-rewrite percent-form shortcodes to angle-
+                          form so RenderString processes them, then
+                          revert specific shortcodes back to percent-
+                          form when their inner content must re-flow
+                          through markdown (tab, steps, include).
+    4. ARG INJECTION    — pass the resolved version + product into
+                          shortcodes that need them (link-hextra, reuse).
+    5. VERSION REMAP    — handle keepVersion= on the version shortcode,
+                          then two-pass OSS↔enterprise version-string
+                          swap via indexed placeholders.
+    6. RENDER           — hand the transformed markdown to RenderString.
+
+  When adding a new shortcode that needs special treatment under
+  rebase, find the right stage and add the rule there. The structural-
+  HTML parity test in versioning.spec.ts (everything vs rebased) is
+  the safety net — if you forget a stage, that test will fail.
+*/ -}}
+
+{{/* ─── Stage 1: SETUP ──────────────────────────────────────────────── */}}
 {{ $file := .Get "file" }}
 {{/* Set to default value, here agentgateway. This is required so that the product value will persist after the if statement. */}}
 {{ $product := "agentgateway" }}
@@ -49,6 +79,8 @@ first segment that matches a known version wins.
 {{ $product = "envoy" }}
 {{ end }}
 
+{{/* ─── Stage 2: CONTENT PREP ───────────────────────────────────────── */}}
+
 {{/* Optional: mark that this page may contain Mermaid diagrams */}}
 {{ .Page.Store.Set "hasMermaid" true }}
 
@@ -61,6 +93,8 @@ first segment that matches a known version wins.
 
 {{/* Strip out front matter (--- ... ---) */}}
 {{ $clean := replaceRE `(?s)^---.*?---\s*` "" $content }}
+
+{{/* ─── Stage 3: FORM CONVERSION ────────────────────────────────────── */}}
 
 {{/* Convert percent-bracket shortcodes to angle-bracket so RenderString processes them.
      Tab/tabs are converted back below so their inner content gets markdown-rendered. */}}
@@ -89,6 +123,8 @@ first segment that matches a known version wins.
      shortcode for this reason. */}}
 {{ $clean = replaceRE `\{\{<\s*(include\s[^>]*)>}}` "{{% $1%}}" $clean }}
 
+{{/* ─── Stage 4: ARG INJECTION ──────────────────────────────────────── */}}
+
 {{/* Adjust any relative doc links if needed */}}
 {{ $clean = replaceRE `\((\/?)docs\/` "(/" $clean }}
 
@@ -96,7 +132,8 @@ first segment that matches a known version wins.
 {{ $clean = replaceRE `{{<\s*link-hextra\s*(.*?)>}}` (printf "{{< link-hextra $1 version=\"%s\" product=\"%s\" >}}" $version $product ) $clean }}
 {{ $clean = replaceRE `{{<\s*reuse\s*"([^"]+)"\s*>}}` (printf "{{< reuse \"%s\" \"%s\" \"%s\" >}}" "$1" $version $product ) $clean }}
 
-{{/* ------------------------------------------------------------------ */}}
+{{/* ─── Stage 5: VERSION REMAP ──────────────────────────────────────── */}}
+
 {{/* keepVersion: preserve version string, inject page version, convert to {{% %}} */}}
 {{ $clean = replaceRE `\{\{<\s*(version\s+(?:include|exclude)-if="[^"]+?")\s+keepVersion="true"\s*>}}` (printf `{{%% $1 version="%s" %%}}` $version) $clean }}
 
@@ -124,9 +161,6 @@ first segment that matches a known version wins.
      runs, and indented inner content would get wrapped in <pre><code> by
      CommonMark's "4 spaces = code" rule before we ever see it. */}}
 
-
-
-
-{{/* ------------------------------------------------------------------ */}}
+{{/* ─── Stage 6: RENDER ─────────────────────────────────────────────── */}}
 
 {{ $clean | .Page.RenderString }}

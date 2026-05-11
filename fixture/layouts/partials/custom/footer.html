@@ -1,0 +1,11 @@
+{{- /*
+  Fixture's consumer-side footer hook.
+
+  Only job: emit MARKER_CUSTOM_FOOTER (via a hidden <span> — HTML
+  comments are stripped from partial output by Hugo) so
+  presence.spec.ts can verify the module's partials/footer.html
+  shadow is still calling `partial "custom/footer.html"`. We've
+  already had two near-misses where a footer.html refactor dropped
+  that call and consumers' copyright / scripts silently disappeared.
+*/ -}}
+<span hidden data-docs-theme-extras-marker="MARKER_CUSTOM_FOOTER"></span>
