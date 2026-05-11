@@ -173,4 +173,76 @@ test.describe("reuse and rebase pipelines produce equivalent content", () => {
       ).toEqual({ onlyInEverything: [], onlyInRebased: [] });
     });
   }
+
+  // Structural-HTML parity. The sentinel-set comparison above catches
+  // content drift (a marker present on one page but not the other), but
+  // it does not catch FORMATTING drift — e.g., backticks rendering as
+  // <code> on everything.md but as literal `text` on rebased.md. This
+  // exact bug bit us when the rebase pipeline converted
+  // {{%/* include */%}} to {{</* include */>}} and didn't convert back;
+  // the included page's markdown stopped being re-processed and
+  // backticks/links/headings landed as plain text.
+  //
+  // We count occurrences of specific HTML tags that come from markdown
+  // syntax (not from shortcode output) and expect them to be roughly
+  // equal between the two pages. Strict equality is the right bar — both
+  // pages source the same conref through the same version filter, so
+  // structural element counts should be identical post-render.
+  for (const version of target.versions) {
+    test(`${version}: everything and rebased have matching structural-HTML counts`, () => {
+      const everythingPage = TEST_PAGES.find(
+        (p) => p.name === `${version}/everything`,
+      );
+      const rebasedPage = TEST_PAGES.find(
+        (p) => p.name === `${version}/rebased`,
+      );
+      test.skip(
+        !everythingPage || !rebasedPage,
+        "fixture pages not configured for this consumer",
+      );
+      // Strip the embedded copy-as-md <script> (raw markdown captured
+      // for the clipboard feature) and the rendered scripts block; both
+      // pages capture different raw source, which would skew counts.
+      const cleanHtml = (html: string): string =>
+        html
+          .replace(
+            /<script[^>]*type=["']text\/markdown["'][^>]*>[\s\S]*?<\/script>/gi,
+            "",
+          )
+          .replace(/<script\b[\s\S]*?<\/script>/gi, "")
+          .replace(/<style\b[\s\S]*?<\/style>/gi, "");
+
+      const everything = cleanHtml(readFixture(everythingPage!.filePath));
+      const rebased = cleanHtml(readFixture(rebasedPage!.filePath));
+
+      const countTag = (html: string, tag: string): number =>
+        (html.match(new RegExp(`<${tag}\\b`, "g")) ?? []).length;
+
+      // Tags that originate from markdown syntax (backticks, fences,
+      // headings, lists, etc.). If a pipeline stops processing markdown
+      // partway through (the include bug), these counts diverge.
+      const tags = ["code", "pre", "h2", "h3", "h4", "ul", "ol", "li", "table", "img"];
+      const counts: Record<string, { everything: number; rebased: number }> = {};
+      for (const tag of tags) {
+        counts[tag] = {
+          everything: countTag(everything, tag),
+          rebased: countTag(rebased, tag),
+        };
+      }
+
+      // Diff: only report tags where counts differ. Empty diff = parity.
+      const diffs = Object.fromEntries(
+        Object.entries(counts).filter(
+          ([_, v]) => v.everything !== v.rebased,
+        ),
+      );
+      expect(
+        diffs,
+        "structural-HTML element counts differ between everything and rebased — " +
+          "if `code` or `pre` is off, the rebase pipeline likely lost markdown " +
+          "processing on an included/embedded block (e.g., `{{< include >}}` " +
+          "should be `{{% include %}}`).",
+      ).toEqual({});
+    });
+  }
 });

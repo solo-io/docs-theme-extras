@@ -33,6 +33,7 @@ export type Checks = {
   versioning: boolean;
   shortcodeStructure: boolean;
   shortcodeArgs: boolean;
+  includeForm: boolean;
   crossBrowser: boolean;
 };
 
@@ -87,6 +88,7 @@ const DEFAULT_CHECKS: Checks = {
   versioning: true,
   shortcodeStructure: true,
   shortcodeArgs: true,
+  includeForm: true,
   crossBrowser: false,
 };
 
