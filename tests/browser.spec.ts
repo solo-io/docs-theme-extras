@@ -175,6 +175,30 @@ test.describe("dark mode flips mermaid theme", () => {
     expect(darkFill, "mermaid text fill did not change with dark mode").not.toBe(
       lightFill,
     );
+
+    // PR 2412 regression guard: at least one <text> in the dark-mode SVG
+    // must be light-colored. The fixed bug was that actor labels and
+    // signal text both rendered near-black on a dark background, making
+    // the whole diagram unreadable. Looking at the *max* luminance across
+    // all texts (not the first one) is robust to legitimate dark-on-light
+    // text inside light-coloured node boxes — what we're catching is the
+    // case where *every* text is dark.
+    const maxLuminance = await darkSvg.evaluate((node) => {
+      const texts = node.querySelectorAll("text");
+      let max = 0;
+      for (const t of Array.from(texts)) {
+        const fill = window.getComputedStyle(t).fill;
+        const m = fill.match(/(\d+),\s*(\d+),\s*(\d+)/);
+        if (!m) continue;
+        const lum = 0.299 * +m[1] + 0.587 * +m[2] + 0.114 * +m[3];
+        if (lum > max) max = lum;
+      }
+      return max;
+    });
+    expect(
+      maxLuminance,
+      "no light-coloured text in dark-mode mermaid SVG — every <text> is dark on a dark background",
+    ).toBeGreaterThan(150);
   });
 });
 

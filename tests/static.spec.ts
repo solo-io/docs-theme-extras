@@ -266,3 +266,217 @@ test.describe("conditional-text excludes content correctly", () => {
     });
   }
 });
+
+// Regression guard for solo-io/docs#2389: the module's pager partial overrides
+// hextra's default to include section index pages (`_index.md`) as navigable
+// siblings. If anyone reverts to hextra's default, section landings silently
+// stop rendering prev/next links.
+test.describe("section-index pager (PR 2389 regression guard)", () => {
+  const sectionRel = path.join(
+    target.baseURL.replace(/^\/+|\/+$/g, "") || "",
+    "v2",
+    "index.html",
+  );
+  const sectionIndex = path.join(target.builtRoot, sectionRel);
+
+  test.skip(
+    !fs.existsSync(sectionIndex),
+    "section index /v2/ not present in builtRoot (fixture-only check)",
+  );
+
+  test("v2 section landing renders a pager linking to a sibling section", () => {
+    const html = readFixture(sectionIndex);
+    // The pager wrapper has a unique Tailwind class signature emitted by
+    // layouts/partials/components/pager.html. If the partial is dropped or
+    // hextra's default takes over (which skips _index pages), this match
+    // fails and the section landing silently loses navigation.
+    const pagerRe =
+      /<div class="hx:mb-8 hx:flex hx:items-center hx:border-t[^"]*"[^>]*>([\s\S]*?)<\/div>/;
+    const pagerMatch = html.match(pagerRe);
+    expect(pagerMatch, "no pager rendered on /v2/").not.toBeNull();
+    const inner = pagerMatch![1];
+    const hrefs = [...inner.matchAll(/<a[^>]+href="([^"]+)"/g)].map((m) => m[1]);
+    expect(hrefs.length, "pager has no <a> children").toBeGreaterThan(0);
+    // Every pager href on /v2/ should point at a sibling section landing
+    // (v1, main, etc.) — never at a non-existent path. Strip baseURL and
+    // expect it to match one of the configured sibling versions.
+    const baseAbs = "/" + target.baseURL.replace(/^\/+|\/+$/g, "");
+    const siblingVersions = target.versions.filter((v) => v !== "v2");
+    for (const href of hrefs) {
+      const rel = href.replace(baseAbs, "").replace(/\/$/, "").replace(/^\/+/, "");
+      expect(
+        siblingVersions,
+        `pager href ${href} should point at a sibling section`,
+      ).toContain(rel);
+    }
+  });
+});
+
+// Regression guard for solo-io/docs#2416: numbered-list counter integrity.
+// The bug was triggered by a `{{% version %}}` shortcode wrapping a sub-list
+// item, which broke CSS counter increments and produced gaps in step numbers.
+// We don't reproduce the exact pattern here, but the simpler check — that
+// the fixture's 3-level ordered list renders with the expected <ol>/<li>
+// structure — catches any regression that mangles list nesting.
+test.describe("ordered-list structure (PR 2416 regression guard)", () => {
+  const everythingV2 = path.join(TEST_PRODUCT_ROOT, "v2", "everything", "index.html");
+  test.skip(
+    !fs.existsSync(everythingV2),
+    "v2/everything not present in builtRoot (fixture-only check)",
+  );
+
+  test("3-level ordered list preserves nesting: outer 2 items, each with nested <ol>", () => {
+    const html = readFixture(everythingV2);
+    // Locate the "Ordered (3 levels)" section heading, then capture the
+    // first <ol> that follows it. This is the fixture's canonical
+    // three-level list from everything.md ("Ordered (3 levels)" subsection).
+    const headingIdx = html.indexOf('id="ordered-3-levels"');
+    expect(headingIdx, "ordered-3-levels heading not found").toBeGreaterThan(-1);
+    const tail = html.slice(headingIdx);
+    const olStart = tail.indexOf("<ol");
+    expect(olStart, "no <ol> follows the heading").toBeGreaterThan(-1);
+    // Extract the balanced top <ol> ... </ol> (with one level of nesting).
+    // Hugo emits this as well-formed HTML so a simple depth counter works.
+    let depth = 0;
+    let i = olStart;
+    let endIdx = -1;
+    while (i < tail.length) {
+      if (tail.startsWith("<ol", i)) {
+        depth++;
+        i += 3;
+      } else if (tail.startsWith("</ol>", i)) {
+        depth--;
+        if (depth === 0) {
+          endIdx = i + 5;
+          break;
+        }
+        i += 5;
+      } else {
+        i++;
+      }
+    }
+    expect(endIdx, "unbalanced <ol> tags").toBeGreaterThan(-1);
+    const outerOl = tail.slice(olStart, endIdx);
+    // Count direct-child <li> elements at the outer level. A naive count
+    // would include nested <li>; instead, count <li> *after* slicing out
+    // any nested <ol>...</ol> blocks first.
+    const outerWithoutNested = stripNested(outerOl, "<ol", "</ol>");
+    const outerLiCount = (outerWithoutNested.match(/<li\b/g) ?? []).length;
+    expect(
+      outerLiCount,
+      "top-level ordered list should have exactly 2 items",
+    ).toBe(2);
+    // The list MUST contain at least one nested <ol> (the bug pattern is
+    // that nesting collapses). Two <ol> total: outer + one nested.
+    const nestedOlCount = (outerOl.match(/<ol\b/g) ?? []).length;
+    expect(
+      nestedOlCount,
+      "list lost its nesting — expected outer + at least one nested <ol>",
+    ).toBeGreaterThan(1);
+  });
+});
+
+// Helper: remove every balanced `<openTag...</closeTag>` block from a string.
+// Used to count direct children at a given nesting depth.
+function stripNested(s: string, openTag: string, closeTag: string): string {
+  let out = "";
+  let i = 0;
+  // Skip the very first opening tag (we want to keep it as the outer wrapper).
+  const first = s.indexOf(openTag);
+  if (first < 0) return s;
+  out += s.slice(0, first + openTag.length);
+  i = first + openTag.length;
+  while (i < s.length) {
+    const nextOpen = s.indexOf(openTag, i);
+    const nextClose = s.indexOf(closeTag, i);
+    if (nextOpen < 0 || nextClose < 0 || nextClose < nextOpen) {
+      out += s.slice(i);
+      break;
+    }
+    // Found a nested open before the next close — skip everything between
+    // the nested open and its matching close.
+    out += s.slice(i, nextOpen);
+    let depth = 1;
+    let j = nextOpen + openTag.length;
+    while (j < s.length && depth > 0) {
+      if (s.startsWith(openTag, j)) {
+        depth++;
+        j += openTag.length;
+      } else if (s.startsWith(closeTag, j)) {
+        depth--;
+        j += closeTag.length;
+      } else {
+        j++;
+      }
+    }
+    i = j;
+  }
+  return out;
+}
+
+// Regression guard for solo-io/docs#2414: title badges. The fixture sets
+// every badge flag (enterprise/alpha/beta/oss/experimental) on v2/everything.md
+// so a single page exercises all five variants. v1/everything.md has none
+// of them, covering the negative case.
+test.describe("title badges (PR 2414 regression guard)", () => {
+  const v2Everything = path.join(
+    TEST_PRODUCT_ROOT,
+    "v2",
+    "everything",
+    "index.html",
+  );
+  const v1Everything = path.join(
+    TEST_PRODUCT_ROOT,
+    "v1",
+    "everything",
+    "index.html",
+  );
+
+  test.skip(
+    !fs.existsSync(v2Everything),
+    "v2/everything not present in builtRoot (fixture-only check)",
+  );
+
+  test("v2/everything renders .page-badges with all five badge variants", () => {
+    const html = readFixture(v2Everything);
+    // Pull out the .page-badges block. The module's docs/single.html only
+    // emits this wrapper when at least one flag is truthy.
+    const badgesMatch = html.match(
+      /<div class="page-badges">([\s\S]*?)<\/div>/,
+    );
+    expect(
+      badgesMatch,
+      ".page-badges container missing — badge front-matter not honored",
+    ).not.toBeNull();
+    const inner = badgesMatch![1];
+    // Each badge is a <span class="section-card-badge ...">LABEL</span>.
+    // Assert every label appears.
+    const expectedLabels = ["Enterprise", "Alpha", "Beta", "Open Source", "Experimental"];
+    for (const label of expectedLabels) {
+      expect(
+        inner,
+        `badge "${label}" should render when its front-matter flag is true`,
+      ).toContain(label);
+    }
+    // Variant classes: the alpha/beta/experimental badges should carry
+    // badge-tag, the oss badge carries badge-oss. Catches silent CSS-class
+    // regressions that would render the right text in the wrong color.
+    expect(inner, ".badge-tag should apply to alpha/beta/experimental").toMatch(
+      /section-card-badge badge-tag/,
+    );
+    expect(inner, ".badge-oss should apply to the Open Source badge").toMatch(
+      /section-card-badge badge-oss/,
+    );
+  });
+
+  test("v1/everything (no badge flags) does NOT render .page-badges", () => {
+    if (!fs.existsSync(v1Everything)) {
+      test.skip(true, "v1/everything not present in builtRoot");
+    }
+    const html = readFixture(v1Everything);
+    expect(
+      html,
+      "page-badges container leaked onto a page with no badge front-matter",
+    ).not.toContain('class="page-badges"');
+  });
+});

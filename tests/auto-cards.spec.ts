@@ -72,9 +72,19 @@ function extractCards(
     const descMatch = inner.match(
       /<p[^>]*class="section-card-desc"[^>]*>([\s\S]*?)<\/p>/,
     );
+    // Strip any badge spans from the title: list.html appends
+    // `<span class="section-card-badge ...">LABEL</span>` next to the
+    // title text when the target page sets enterprise/alpha/etc. flags.
+    // The badge presence is asserted separately; here we want just the
+    // human-readable title text.
+    const rawTitle = titleMatch?.[1] ?? "";
+    const titleWithoutBadges = rawTitle.replace(
+      /<span[^>]*class="section-card-badge[^"]*"[^>]*>[\s\S]*?<\/span>/g,
+      "",
+    );
     out.push({
       href: match[1],
-      title: (titleMatch?.[1] ?? "").replace(/\s+/g, " ").trim(),
+      title: titleWithoutBadges.replace(/\s+/g, " ").trim(),
       description: (descMatch?.[1] ?? "").replace(/\s+/g, " ").trim(),
     });
   }

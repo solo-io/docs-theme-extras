@@ -106,6 +106,75 @@ test.describe("viewport responsive layout", () => {
         expect(box, "version dropdown has no box").not.toBeNull();
         expect(box!.width, "version dropdown collapsed to zero width").toBeGreaterThan(0);
       });
+
+      // PR 2394 regression guard: on mobile the version dropdown elided
+      // the product-name prefix so the button fits one line in the
+      // narrow nav. On tablet and up, the product name is visible again.
+      test("version dropdown product-name visibility matches breakpoint", async ({
+        page,
+      }) => {
+        await page.goto(REPRESENTATIVE_PAGE!);
+        const productName = page
+          .locator(".version-dropdown-btn .version-product-name")
+          .first();
+        if (await productName.count() === 0) {
+          test.skip(
+            true,
+            "no .version-product-name in this build (consumer didn't set product name)",
+          );
+        }
+        if (vp.width < 768) {
+          await expect(
+            productName,
+            "product-name should be hidden under 768px to keep the dropdown narrow",
+          ).toBeHidden();
+        } else {
+          await expect(
+            productName,
+            "product-name should be visible at >=768px",
+          ).toBeVisible();
+        }
+      });
+
+      // PR 2388 regression guard: on mobile, cards must stack (one per row)
+      // and stay within the viewport width. The bug was a grid layout that
+      // produced multi-column cards on narrow viewports, which overflowed.
+      test("cards stack and stay within the viewport", async ({ page }) => {
+        await page.goto(REPRESENTATIVE_PAGE!);
+        const cards = page.locator(".hextra-cards .hextra-card");
+        const count = await cards.count();
+        if (count < 2) {
+          test.skip(true, "fewer than 2 cards on the sample page");
+        }
+        const viewportWidth = vp.width;
+        // Collect every card's bounding box, then assert none extends
+        // past the viewport edge (overflow bug from PR 2388).
+        const boxes = await cards.evaluateAll((els) =>
+          els.map((el) => el.getBoundingClientRect()).map((r) => ({
+            left: r.left,
+            right: r.right,
+            top: r.top,
+            width: r.width,
+          })),
+        );
+        for (const b of boxes) {
+          expect(
+            b.right,
+            `card extends past viewport right edge (${b.right} > ${viewportWidth})`,
+          ).toBeLessThanOrEqual(viewportWidth + 1);
+        }
+        // Mobile-specific: cards should stack vertically. A heuristic that
+        // works without coupling to CSS grid internals: no two cards share
+        // the same `top` (within a small tolerance) on mobile.
+        if (vp.width < 768 && boxes.length >= 2) {
+          const tops = boxes.map((b) => Math.round(b.top));
+          const uniqueTops = new Set(tops);
+          expect(
+            uniqueTops.size,
+            "cards should stack vertically on mobile (each on its own row)",
+          ).toBe(boxes.length);
+        }
+      });
     });
   }
 });
