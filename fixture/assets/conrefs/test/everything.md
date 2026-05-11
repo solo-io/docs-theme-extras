@@ -291,7 +291,7 @@ The link shortcode resolves to MARKER_LINK={{< link path="rebased" >}}.
 
 The `link-hextra` shortcode is the cross-product variant; it expects a product/version-prefixed URL. The fixture's URL pattern (`/test/v?/`) is not in link-hextra's auto-detect list, so the version must be passed explicitly:
 
-The link-hextra shortcode resolves to MARKER_LINK_HEXTRA={{< link-hextra path="/everything/" version="v2" product="test" >}}.
+The link-hextra shortcode resolves to a clickable [MARKER_LINK_HEXTRA]({{< link-hextra path="/everything/" version="v2" product="test" >}}) link.
 
 ## Lists (3-level ordered and unordered)
 
