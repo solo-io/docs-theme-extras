@@ -153,6 +153,42 @@ test.describe("interactive components work cross-browser", () => {
     expect(textContent).toContain("MARKER_MERMAID_REQUEST");
   });
 
+  test("'View as Markdown' dialog opens at consistent size across engines", async ({
+    page,
+  }) => {
+    await page.goto(EVERYTHING);
+
+    // Open the copy-md dropdown by clicking its caret toggle, then click
+    // the "View as Markdown" menu item. The dialog opens as a modal
+    // <dialog>, sized by CSS.
+    const toggle = page.locator(".copy-md-toggle").first();
+    if (await toggle.count() === 0) {
+      test.skip(true, "no copy-md dropdown on this page (consumer didn't wire it)");
+    }
+    await toggle.click();
+    const viewBtn = page.locator('button[data-action="view"]').first();
+    await viewBtn.click();
+
+    const dialog = page.locator(".copy-md-dialog").first();
+    await expect(dialog).toBeVisible({ timeout: 5_000 });
+    const box = await dialog.boundingBox();
+    expect(box, "dialog has no bounding box").not.toBeNull();
+
+    // Regression guard for a Safari-specific bug where the modal <dialog>
+    // resolved width:100% against its intrinsic-content containing block
+    // (collapsing the dialog to <pre> width, ~300px) instead of the
+    // viewport (Chrome/Firefox behavior). CSS now sets width directly.
+    //
+    // At the cross-browser desktop viewport (1280px), the dialog should
+    // render at min(900px, 90vw) = 900px. Threshold 600px is generous
+    // enough to absorb sub-pixel rounding while still catching the
+    // collapsed-to-content failure mode (which produces widths < 400px).
+    expect(
+      box!.width,
+      `dialog width ${box!.width}px is too small — modal <dialog> likely collapsed to content`,
+    ).toBeGreaterThan(600);
+  });
+
   test("theme toggle adds html.dark class", async ({ page }) => {
     await page.goto(EVERYTHING);
     // Force-toggle via the same class the Hextra theme button sets, so this

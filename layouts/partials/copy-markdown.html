@@ -136,7 +136,13 @@
     .dark .copy-md-dropdown button:hover{background:rgba(255,255,255,0.05);color:#f9fafb;}
     .copy-md-dropdown-sep{height:1px;background:#e5e7eb;margin:0.25rem 0;}
     .dark .copy-md-dropdown-sep{background:#374151;}
-    .copy-md-dialog{padding:0;border:none;border-radius:0.5rem;box-shadow:0 20px 60px rgba(0,0,0,0.3);max-width:min(900px,90vw);width:100%;max-height:85vh;flex-direction:column;background:#fff;}
+    /* Specify width directly rather than width:100%+max-width. Safari's
+       modal <dialog> resolves width:100% against an intrinsic-content
+       containing block, so the dialog shrinks to fit its <pre> child
+       rather than the viewport. Chrome/Firefox treat 100% as viewport-
+       relative. Setting width explicitly produces consistent sizing
+       across all three engines. */
+    .copy-md-dialog{padding:0;border:none;border-radius:0.5rem;box-shadow:0 20px 60px rgba(0,0,0,0.3);width:min(900px,90vw);max-height:85vh;flex-direction:column;background:#fff;}
     .copy-md-dialog[open]{display:flex;}
     .dark .copy-md-dialog{background:#1f2937;color:#e5e7eb;}
     .copy-md-dialog::backdrop{background:rgba(0,0,0,0.5);}
