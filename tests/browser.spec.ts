@@ -19,6 +19,15 @@ const REBASED =
 // The version dropdown test navigates to the first version in target.versions.
 const FIRST_VERSION = target.versions[0] ?? "";
 
+// Every test in this file navigates to EVERYTHING (and a few also to REBASED),
+// so when a consumer's CONFIG doesn't declare those fixture pages, skip the
+// whole suite instead of running tests that goto(""). Same opt-out pattern as
+// presence/versioning/auto-cards.
+test.skip(
+  !EVERYTHING,
+  "browser specs require a [[pages]] entry whose URL ends in /everything/",
+);
+
 test.describe("tabs are clickable and switch panels", () => {
   test("clicking the second tab shows its panel and hides the first", async ({
     page,
@@ -203,7 +212,10 @@ test.describe("copy-as-markdown button copies the embedded source", () => {
 });
 
 test.describe("no console errors during page load", () => {
-  for (const url of [EVERYTHING, REBASED]) {
+  // Dedupe + drop empties so this generates one test per real URL even when
+  // REBASED falls back to "" or coincidentally equals EVERYTHING.
+  const consoleUrls = [...new Set([EVERYTHING, REBASED].filter(Boolean))];
+  for (const url of consoleUrls) {
     test(`${url} loads without console errors`, async ({ page }) => {
       const errors: string[] = [];
       page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));

@@ -34,6 +34,14 @@ const PAGES = [
 
 test.use({ viewport: DESKTOP });
 
+// Skip cross-browser specs entirely when the consumer's CONFIG doesn't
+// declare the fixture pages — every test in this file navigates to
+// EVERYTHING (or a derivative). Matches browser.spec.ts.
+test.skip(
+  !EVERYTHING,
+  "cross-browser specs require a [[pages]] entry whose URL ends in /everything/",
+);
+
 test.describe("page renders without errors", () => {
   for (const url of PAGES) {
     test(`${url} loads with no console errors and core scaffolding`, async ({
