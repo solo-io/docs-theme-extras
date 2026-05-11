@@ -11,21 +11,26 @@
   Dispatches on Site.Params.pageContextMode:
 
     "siteParams" — derives from explicit Site.Params (folder, currentProduct,
-                   buildCondition, versions). Used by solo-io/docs and the
-                   bundled fixture: the docs domain owns the "/docs/" path
-                   so it doesn't appear in Page.RelPermalink.
+                   buildCondition, versions). Used by multi-product hubs:
+                   the host owns the "/<product>/" path prefix so it doesn't
+                   appear in Page.RelPermalink.
 
     "url"        — parses Page.RelPermalink as /docs/<section>/<version>/...
-                   (fallback /docs/<version>/...). Used by sites whose URL
-                   includes "/docs/" in the path, like agentgateway.dev.
-                   This branch is preliminary; it will be re-validated when
-                   the first url-mode consumer (agentgateway-oss-website)
-                   adopts the module in phase 4.
+                   (fallback /docs/<version>/...). Used by single-site repos
+                   where the URL itself encodes section and version.
 
-  Default mode: "url". Consumers using site-params should set
-  pageContextMode = "siteParams" in their hugo config.
+  Auto-detection: if pageContextMode isn't set, the partial picks "siteParams"
+  when Site.Params.folder is set (signals multi-product hub config) and "url"
+  otherwise. Set the mode explicitly to override.
 */}}
-{{- $mode := .Site.Params.pageContextMode | default "url" -}}
+{{- $mode := .Site.Params.pageContextMode -}}
+{{- if not $mode -}}
+  {{- if .Site.Params.folder -}}
+    {{- $mode = "siteParams" -}}
+  {{- else -}}
+    {{- $mode = "url" -}}
+  {{- end -}}
+{{- end -}}
 {{- $section := "" -}}
 {{- $version := "" -}}
 {{- $condition := "" -}}

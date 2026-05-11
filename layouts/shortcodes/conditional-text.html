@@ -1,5 +1,9 @@
-<!-- Get the current buildcondition from the config and lowercase it -->
-{{- $condition := .Site.Params.buildCondition -}}
+{{- /* Use the shared page-context partial so this shortcode works for both
+       URL conventions: multi-product hubs (condition from Site.Params.buildCondition)
+       and single-site repos that encode the section in the URL (condition derived
+       from the URL section). */ -}}
+{{- $ctx := partial "utils/page-context.html" . -}}
+{{- $condition := $ctx.condition -}}
 
 {{- if ne $condition "" -}}
     
