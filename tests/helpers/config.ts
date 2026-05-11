@@ -41,6 +41,15 @@ export type Allowlists = {
   shortcodes: string[];
 };
 
+// Per-spec knobs that don't fit the boolean [checks] table.
+export type Smoke = {
+  // Max HTML files smoke.spec.ts scans for shortcode-leak / copy-as-md checks.
+  // Default 50 keeps `make framework-test-smoke PRODUCT=<x>` fast on large
+  // corpora. Set to 0 for unlimited (walk every HTML file) — useful when
+  // smoke is the only coverage you have against that product's build.
+  maxFiles: number;
+};
+
 export type Brand = "oss" | "enterprise" | "";
 
 export type Config = {
@@ -61,6 +70,7 @@ export type Config = {
   versioning: Versioning | null;
   checks: Checks;
   allowlists: Allowlists;
+  smoke: Smoke;
 };
 
 const DEFAULT_CHECKS: Checks = {
@@ -82,6 +92,10 @@ const DEFAULT_ALLOWLISTS: Allowlists = {
   hugoWarnings: [],
   curlQuotes: [],
   shortcodes: [],
+};
+
+const DEFAULT_SMOKE: Smoke = {
+  maxFiles: 50,
 };
 
 let cached: Config | null = null;
@@ -173,6 +187,7 @@ function validate(
 
   const checks = mergeChecks(data.checks);
   const allowlists = mergeAllowlists(data.allowlists);
+  const smoke = mergeSmoke(data.smoke, configPath);
 
   return {
     version,
@@ -187,6 +202,7 @@ function validate(
     versioning,
     checks,
     allowlists,
+    smoke,
   };
 }
 
@@ -232,6 +248,21 @@ function mergeChecks(raw: unknown): Checks {
     const v = obj[key];
     if (typeof v === "boolean") out[key] = v;
   }
+  return out;
+}
+
+function mergeSmoke(raw: unknown, configPath: string): Smoke {
+  const out = { ...DEFAULT_SMOKE };
+  if (!raw || typeof raw !== "object") return out;
+  const obj = raw as Record<string, unknown>;
+  const v = obj.maxFiles;
+  if (v === undefined) return out;
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 0) {
+    throw new Error(
+      `[smoke].maxFiles must be a non-negative integer in ${configPath}; got ${JSON.stringify(v)}`,
+    );
+  }
+  out.maxFiles = v;
   return out;
 }
 

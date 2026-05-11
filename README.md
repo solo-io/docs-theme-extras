@@ -313,6 +313,22 @@ crossBrowser = false   # opt-in; full chromium/firefox/webkit pass is slow
 
 All checks default to enabled. Setting `false` skips that spec entirely.
 
+### 2a. `[smoke].maxFiles` tunes smoke coverage
+
+```toml
+[smoke]
+maxFiles = 0   # 0 = unlimited; default 50
+```
+
+Smoke's two checks (shortcode-leak scan, copy-as-md presence) default to
+sampling 50 HTML files per run — keeps `make framework-test-smoke
+PRODUCT=<x>` sub-second across any product. Set `maxFiles = 0` for
+unlimited (walk every HTML file). Worth doing when smoke is the *only*
+coverage you have against that product's build (e.g. cross-product
+invocations where the product isn't the consumer's primary `builtRoot`).
+For the consumer's own build the static project already crawls
+everything, so the default cap is the right choice.
+
 ### 3. `buildLog` enables hugo-warnings.spec
 
 ```toml

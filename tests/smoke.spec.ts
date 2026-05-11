@@ -21,6 +21,9 @@ const PRODUCT = process.env.SMOKE_PRODUCT;
 const SCAN_ROOT = PRODUCT ? path.join(target.builtRoot, PRODUCT) : target.builtRoot;
 const LABEL = PRODUCT ?? target.name;
 const ENABLED = target.shouldRun("smoke");
+// 0 means unlimited — walks every HTML file under SCAN_ROOT.
+const MAX_FILES = target.smoke.maxFiles;
+const SAMPLE_LABEL = MAX_FILES === 0 ? "all pages" : `sample of ${MAX_FILES}`;
 
 test.describe(`smoke: ${LABEL}`, () => {
   test.skip(!ENABLED, "smoke check disabled in CONFIG");
@@ -29,11 +32,11 @@ test.describe(`smoke: ${LABEL}`, () => {
     expect(fs.existsSync(SCAN_ROOT), `${SCAN_ROOT} not found`).toBe(true);
   });
 
-  test("no shortcode delimiter leaks across html pages (sample of 50)", () => {
+  test(`no shortcode delimiter leaks across html pages (${SAMPLE_LABEL})`, () => {
     if (!target.shouldRun("shortcodeLeaks")) {
       test.skip(true, "shortcodeLeaks check disabled in CONFIG");
     }
-    const htmlFiles = collectHtml(SCAN_ROOT, 50);
+    const htmlFiles = collectHtml(SCAN_ROOT, MAX_FILES);
     expect(htmlFiles.length, "no html pages found").toBeGreaterThan(0);
     const offenders: string[] = [];
     for (const f of htmlFiles) {
@@ -56,7 +59,7 @@ test.describe(`smoke: ${LABEL}`, () => {
     if (!target.shouldRun("copyAsMarkdown")) {
       test.skip(true, "copyAsMarkdown check disabled in CONFIG");
     }
-    const htmlFiles = collectHtml(SCAN_ROOT, 50);
+    const htmlFiles = collectHtml(SCAN_ROOT, MAX_FILES);
     const hasCopyMd = htmlFiles.some((f) => {
       const html = fs.readFileSync(f, "utf8");
       return /<script[^>]*type=["']text\/markdown["']/i.test(html);
@@ -65,10 +68,13 @@ test.describe(`smoke: ${LABEL}`, () => {
   });
 });
 
+// Walk `root` depth-first, collecting `*.html` files. `max === 0` means
+// unlimited — walk every file. Otherwise stop once `max` files are gathered.
 function collectHtml(root: string, max: number): string[] {
+  const unlimited = max === 0;
   const out: string[] = [];
   const stack = [root];
-  while (stack.length && out.length < max) {
+  while (stack.length && (unlimited || out.length < max)) {
     const dir = stack.pop()!;
     let entries: fs.Dirent[];
     try {
@@ -77,7 +83,7 @@ function collectHtml(root: string, max: number): string[] {
       continue;
     }
     for (const e of entries) {
-      if (out.length >= max) break;
+      if (!unlimited && out.length >= max) break;
       const p = path.join(dir, e.name);
       if (e.isDirectory()) stack.push(p);
       else if (e.isFile() && e.name.endsWith(".html")) out.push(p);

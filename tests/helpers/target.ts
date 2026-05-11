@@ -11,6 +11,7 @@ import {
   loadConfig,
   type Page,
   type Config,
+  type Smoke,
 } from "./config";
 
 class Target {
@@ -73,6 +74,10 @@ class Target {
 
   shouldRun(check: keyof Checks): boolean {
     return this.cfg().checks[check];
+  }
+
+  get smoke(): Smoke {
+    return this.cfg().smoke;
   }
 
   // Extract the version string from a URL using the configured regex.
