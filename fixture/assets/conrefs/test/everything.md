@@ -41,6 +41,7 @@ In the local override at `layouts/shortcodes/callout.html`, the `callout` shortc
 {{< cards >}}
 {{% version include-if="v2" %}}{{< card link="../rebased/" title="Companion view" description="The same content rendered through the alternate render path." icon="document-duplicate" >}}{{% /version %}}
 {{< card link="https://github.com/solo-io/docs" title="solo-io/docs" description="Source repository for the docs framework." icon="github" >}}
+{{< card link="https://hugo.imfing.com/" title="Hextra theme" description="Upstream theme this module overlays. Uses the `code` icon, which renders both as a Heroicon SVG (module) and as a Material Icon (docs) — present in both maps." icon="code" >}}
 {{< /cards >}}
 
 ## Checklist
