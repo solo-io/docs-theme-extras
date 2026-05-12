@@ -51,6 +51,33 @@ Shortcodes unique to this module (no Hextra counterpart): `alert`,
 `link-hextra`, `openapi`, `prism`, `readfile`, `rebase`, `render`, `reuse`,
 `reuse-image*`, `version`.
 
+## Debugging shadow resolution
+
+When a partial isn't behaving as expected, the first question is "which
+template did Hugo actually load?" Hugo's `templates.Current` action
+(available since v0.146.0) reports the resolved template's filename
+inline — useful when chasing override precedence between this module,
+upstream Hextra, and the consumer's `layouts/`.
+
+Drop a `warnf` into the partial you're debugging:
+
+```hugo
+{{ warnf "TEMPLATE %s resolved from %s" templates.Current.Name templates.Current.Filename }}
+```
+
+Run a build; the resolved path lands in stderr (e.g.
+`.build-oss.log`). Compare against what you expected:
+
+- A path under `/go/pkg/mod/github.com/imfing/hextra@.../` means
+  Hugo found the upstream Hextra version.
+- A path inside this module's working tree means the shadow won.
+- A path inside the consumer's `layouts/` means the consumer's
+  override won (highest precedence).
+
+Remove the `warnf` once you have your answer. It's a debug aid, not a
+logging hook to ship — every warning during a CI build counts against
+the `hugo-warnings` allowlist.
+
 ## Hextra upgrade workflow
 
 1. Bump `go.mod`: `hugo mod get github.com/imfing/hextra@vX.Y.Z`.

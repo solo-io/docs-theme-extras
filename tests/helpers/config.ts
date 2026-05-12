@@ -34,6 +34,7 @@ export type Checks = {
   shortcodeStructure: boolean;
   shortcodeArgs: boolean;
   includeForm: boolean;
+  cascadeType: boolean;
   crossBrowser: boolean;
 };
 
@@ -89,6 +90,7 @@ const DEFAULT_CHECKS: Checks = {
   shortcodeStructure: true,
   shortcodeArgs: true,
   includeForm: true,
+  cascadeType: true,
   crossBrowser: false,
 };
 

@@ -623,6 +623,18 @@ html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
   background-color: transparent !important;
 }
 
+/* ── Footnotes ───────────────────────────────────────────────────────── */
+/* Goldmark emits `<hr class="footnotes-sep">` immediately before a
+   footnotes section. The horizontal line clashes with our typography
+   (tables already have a bottom border, headings have spacing) and reads
+   as a visual artifact rather than a structural separator. Hide it; the
+   `<section class="footnotes">` heading already separates the block. */
+.footnotes-sep,
+hr.footnotes-sep,
+.footnotes > hr:first-child {
+  display: none;
+}
+
 /* ── Tables ──────────────────────────────────────────────────────────── */
 /* Match old table styling */
 .content .table-wrapper {
