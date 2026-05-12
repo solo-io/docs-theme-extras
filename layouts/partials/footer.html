@@ -3,32 +3,40 @@
 
   Two ways consumers fill the footer content, and they're independent:
 
-  1. params.footer.copyright — if set, gets rendered inside the styled
-     .solo-footer-inner wrapper (centered, Solo type styling). Use this
-     when you want the module-provided Solo look and only need to set a
-     short copyright string. Markdown is supported. No default: leave it
-     unset to skip this block entirely.
+  1. partials/custom/footer.html — Hextra's standard footer-content hook,
+     renders first inside the <footer>. Use this when you want full HTML
+     control (multiple paragraphs, custom classes, scripts, etc.). Hextra
+     ships an empty default at this path, so consumers without an override
+     see nothing here.
 
-  2. partials/custom/footer.html — Hextra's standard footer-content hook.
-     Renders inside the <footer> element after the copyright block. Use
-     this when you want full HTML control over your footer (multiple
-     paragraphs, custom classes, scripts, etc.). Hextra ships an empty
-     default at this path, so consumers without an override see nothing
-     extra.
+  2. Copyright line — rendered below the custom block in the styled
+     .solo-footer-inner wrapper. Resolution order:
+       a. Site.Params.footer.copyright (Solo-style explicit param)
+       b. i18n "copyright" translation (Hextra-native — what agw-oss uses)
+     If neither is set, the block is skipped.
 
-  Both can coexist (param renders first, custom hook after) but the
-  common shapes are: param-only for Solo consumers, custom-only for
-  third-party consumers like agw-oss.
+  Both can coexist. Common shapes:
+    - Solo consumers: param-only, no custom/footer.html → just the copyright.
+    - agw-oss: custom/footer.html (LF Projects block) + i18n copyright
+      (Solo.io line) → both blocks render.
 */ -}}
 {{- $copyright := .Site.Params.footer.copyright -}}
+{{- if not $copyright -}}
+  {{- $i18nCopy := T "copyright" -}}
+  {{- /* Hugo returns the key itself when no translation matches in older
+         versions, and "" in newer ones; guard against both. */ -}}
+  {{- if and $i18nCopy (ne $i18nCopy "copyright") -}}
+    {{- $copyright = $i18nCopy -}}
+  {{- end -}}
+{{- end -}}
 
 <footer class="solo-footer hx:print:hidden">
+  {{- partial "custom/footer.html" . -}}
   {{- with $copyright -}}
     <div class="solo-footer-inner">
       <p>{{ . | markdownify }}</p>
     </div>
   {{- end -}}
-  {{- partial "custom/footer.html" . -}}
 </footer>
 
 <button id="solo-back-to-top" type="button" aria-label="Back to top" class="hx:print:hidden" hidden>
