@@ -436,30 +436,12 @@ html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
   background-color: #2b303b !important;
 }
 
-/* ── Static figure images in dark mode ───────────────────────────────── */
-/* Wrap figure images in a white card so light-background screenshots stay
-   readable on the dark page. Mermaid diagrams use Mermaid's built-in dark
-   theme instead (see layouts/partials/scripts/mermaid.html). */
-.dark .content figure img {
-  background: #fff;
-  padding: 1rem;
-  border-radius: 6px;
-  max-width: 100%;
-}
-
-/* Skip the white-card wrapper for images that ARE the dark variant.
-   reuse-image and reuse-image-dark wrap their dark output in
-   `<div class="toggle-light">` (shown only in dark mode). Sibling sites
-   (e.g. agentgateway-oss-website) wrap theirs in `<figure class="dark-only">`
-   instead. Those images are already dark-themed, so the surrounding white
-   card both clashes visually and steals space from the SVG viewport
-   (cutting off labels like "MARKER_IMAGE_DARK"). */
-.dark .content .toggle-light img,
-.dark .content figure.dark-only img {
-  background: transparent;
-  padding: 0;
-  border-radius: 0;
-}
+/* ── Figure images in dark mode ──────────────────────────────────────────
+   No automatic white-card wrapper. Authors that need a dark-mode variant
+   of a screenshot use `reuse-image-dark` (wraps the dark image in
+   `<div class="toggle-light">`, shown only on dark pages). Images without
+   a dark variant render as-is on dark pages. Mermaid diagrams use
+   Mermaid's built-in dark theme; see layouts/partials/scripts/mermaid.html. */
 
 /* ── Solo footer ─────────────────────────────────────────────────────── */
 .solo-footer {
