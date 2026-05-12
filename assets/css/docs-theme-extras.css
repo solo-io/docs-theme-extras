@@ -449,11 +449,13 @@ html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
 
 /* Skip the white-card wrapper for images that ARE the dark variant.
    reuse-image and reuse-image-dark wrap their dark output in
-   `<div class="toggle-light">` (shown only in dark mode). Those images
-   are already dark-themed, so the surrounding white card both clashes
-   visually and steals space from the SVG viewport (cutting off labels
-   like "MARKER_IMAGE_DARK"). */
-.dark .content .toggle-light img {
+   `<div class="toggle-light">` (shown only in dark mode). Sibling sites
+   (e.g. agentgateway-oss-website) wrap theirs in `<figure class="dark-only">`
+   instead. Those images are already dark-themed, so the surrounding white
+   card both clashes visually and steals space from the SVG viewport
+   (cutting off labels like "MARKER_IMAGE_DARK"). */
+.dark .content .toggle-light img,
+.dark .content figure.dark-only img {
   background: transparent;
   padding: 0;
   border-radius: 0;
