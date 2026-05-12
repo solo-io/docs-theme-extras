@@ -24,7 +24,7 @@
   {{- with .Get "text" }}<div class="solo-alert-body">{{ . | markdownify }}</div>
   {{- else -}}
   {{- with .Inner -}}
-  <div class="solo-alert-body">{{ . }}</div>
+  <div class="solo-alert-body">{{ . | markdownify }}</div>
   {{- else -}}
   <div class="solo-alert-body"><p><em>Alert content not available</em></p></div>
   {{- end -}}
