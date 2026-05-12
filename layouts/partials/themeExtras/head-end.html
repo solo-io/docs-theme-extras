@@ -76,30 +76,34 @@ function toggleMobileTheme() {
      Strategy: disable the browser's default pre-paint scroll-to-hash
      (which fires before images / fonts / Mermaid have laid out, so the
      anchor's Y position is still drifting and the browser scrolls to
-     the wrong place). Hold at scrollTop=0 during load, then scroll to
-     the anchor at DOMContentLoaded and re-scroll once more at
-     window.load to catch any layout shifts that happened between.
+     the wrong place). Hold at scrollTop=0 during load, scroll to the
+     anchor at DOMContentLoaded, and re-scroll once more at window.load
+     to catch any layout shifts that happened between.
 
-     Trade-off: the user briefly sees the top of the page during
-     <head>-parse → DOMContentLoaded (typically a frame or two on a
-     fast connection). The prior "hide body until load" approach
-     eliminated that glimpse but at the cost of a blank screen during
-     the entire load. This swap trades blank-screen-time for
-     top-content-glimpse, which is the less alarming of the two on
-     slow connections. If the glimpse turns out to be perceptible
-     enough to bother readers, the fix is to make layout stable from
-     first paint (image dimensions, reserved space for Mermaid/Swagger)
-     rather than to re-introduce the body hide.
-
-     Hash-less loads are unaffected — the script returns immediately. */}}
+     To prevent the "top of page → anchor" flash, hash loads hide
+     <html> via opacity:0 synchronously during <head> parse, then
+     reveal after the first scroll completes. A 2s failsafe timer
+     reveals regardless so a JS error can't leave the page invisible.
+     Hash-less loads return immediately and skip the hide entirely. */}}
 <script>
 (function(){
   if (!window.location.hash) return;
+
+  var docEl = document.documentElement;
+  docEl.style.opacity = '0';
+  var revealed = false;
+  function reveal(){
+    if (revealed) return;
+    revealed = true;
+    docEl.style.opacity = '';
+  }
+  var failsafe = setTimeout(reveal, 2000);
+
   var id;
   try {
     id = decodeURIComponent(window.location.hash.slice(1));
-  } catch (e) { return; /* malformed hash */ }
-  if (!id) return;
+  } catch (e) { reveal(); return; }
+  if (!id) { reveal(); return; }
 
   if ('scrollRestoration' in history) {
     history.scrollRestoration = 'manual';
@@ -109,6 +113,8 @@ function toggleMobileTheme() {
   function scrollToHash(){
     var el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: 'instant', block: 'start' });
+    reveal();
+    clearTimeout(failsafe);
   }
 
   if (document.readyState === 'loading') {
