@@ -131,6 +131,43 @@ test.describe("no raw markdown table rows rendered as text", () => {
   }
 });
 
+test.describe("no raw markdown code fences rendered as text", () => {
+  for (const page of TEST_PAGES) {
+    test(`${page.name} has no leaked '\`\`\`lang' fences in prose`, () => {
+      const html = readFixture(page.filePath);
+      const visible = visibleHtml(html);
+      // A literal ```sh / ```bash / ```yaml / ```js / ```go / etc. fence
+      // appearing in visible HTML means a shortcode emitted block-level
+      // markdown that the goldmark renderer never ran. This is the signal
+      // for trailing-content bugs like the percent-form version block
+      // collapsing its body via RenderString(display:inline) and breaking
+      // the surrounding markdown stream. visibleHtml already strips <pre>
+      // and <code> so legitimately-rendered fences won't false-positive.
+      const fenceMatch = visible.match(
+        /```[ \t]*(sh|shell|bash|zsh|yaml|yml|json|js|ts|go|py|python|rust|toml|sql|hcl|tf|dockerfile|md|markdown|html|css|xml|proto|graphql)\b/i,
+      );
+      expect(
+        fenceMatch,
+        fenceMatch
+          ? `Found leaked code fence: ${JSON.stringify(fenceMatch[0])}`
+          : "no leaked code fence",
+      ).toBeNull();
+
+      // Also catch bare ``` fences on their own line (closing fences that
+      // leaked when their opener rendered correctly but the closing one
+      // escaped into prose — a common shape when shortcode boundaries
+      // bisect a code block).
+      const bareFenceMatch = visible.match(/^[ \t]*```[ \t]*$/m);
+      expect(
+        bareFenceMatch,
+        bareFenceMatch
+          ? `Found leaked bare \`\`\` fence: ${JSON.stringify(bareFenceMatch[0])}`
+          : "no leaked bare fence",
+      ).toBeNull();
+    });
+  }
+});
+
 test.describe("images have non-empty alt text", () => {
   for (const page of TEST_PAGES) {
     test(`${page.name} <img> tags all have alt`, () => {

@@ -67,6 +67,28 @@ function hasCascadeOrType(fm: string): boolean {
   return false;
 }
 
+// Pick the type value to suggest in the failure message. Hugo auto-assigns
+// `type: <section>` to pages under `content/<section>/`, so if the consumer
+// has a `layouts/<section>/` directory, that's almost certainly the right
+// value. Otherwise fall back to `default` with a caveat — the test only
+// enforces presence, not the value, but a bad suggestion sends authors
+// down the wrong path (literally).
+function suggestType(scanRoot: string): { value: string; caveat: string } {
+  const section = path.basename(scanRoot);
+  const layoutDir = path.join(target.configDir, "layouts", section);
+  if (fs.existsSync(layoutDir)) {
+    return {
+      value: section,
+      caveat: `(matches existing layouts/${section}/ in this repo)`,
+    };
+  }
+  return {
+    value: "default",
+    caveat:
+      "(no layouts/<section>/ found — confirm this matches your theme's docs layout key)",
+  };
+}
+
 test.describe("scanRoot _index.md sets type or cascade.type", () => {
   test.skip(!ENABLED, "cascadeType check disabled in CONFIG");
   test.skip(SCAN_ROOTS.length === 0, "no scanRoots configured in CONFIG");
@@ -85,10 +107,11 @@ test.describe("scanRoot _index.md sets type or cascade.type", () => {
         fm,
         `${reportName} has no YAML front matter — Hextra needs at least \`type\` to render the docs layout`,
       ).not.toBeNull();
+      const { value, caveat } = suggestType(root);
       expect(
         hasCascadeOrType(fm!),
         `${reportName} missing \`type:\` or \`cascade.type:\` — Hextra's docs layout (sidebar, breadcrumb, TOC) won't render for descendants. ` +
-          `Add to the front matter:\n\ncascade:\n  type: default\n`,
+          `Add to the front matter:\n\ncascade:\n  type: ${value}\n\n${caveat}`,
       ).toBe(true);
     });
   }
