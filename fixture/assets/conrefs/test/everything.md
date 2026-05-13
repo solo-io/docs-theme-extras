@@ -597,3 +597,19 @@ Comma-separated `include-if` lets one block match multiple versions (real docs c
 `keepVersion="true"` is consumed by the rebase pipeline — it converts the angle-bracket form to a percent form with the parent version injected, so nested reuse calls inherit the correct version context. Note that `keepVersion` is processed before the OSS-to-enterprise version remap, so the strings inside `include-if` use the enterprise form directly:
 
 {{< version include-if="v1,main" keepVersion="true" >}}MARKER_KEEP_VERSION. Renders on v1 or main; the keepVersion flag preserves the calling version for nested reuse calls when this block is read through the alternate render path.{{< /version >}}
+
+### Multi-block version inside a nested numbered list (ambient-ecs pattern)
+
+Reproduces the bug from solo-io/docs#2480. A version block wraps bullets and fenced code inside a level-2 numbered step, where list-item continuation sits at 6-space source indent. Without the dedent + structural-flatten in `version.html`, the bullets render as a literal `<pre><code>` (CommonMark's "4 spaces = code block" rule biting `RenderString` on the raw indented `.Inner`), and the rendered output's embedded newlines escape the surrounding `<ol>` and break out into the parent flow.
+
+1. Outer step.
+   1. Inner step that wraps a version block.
+      {{< version include-if="v2" >}}
+      * MARKER_VERSION_NESTED_BULLET_1. First bullet inside a version block.
+      * MARKER_VERSION_NESTED_BULLET_2. Second bullet.
+      * MARKER_VERSION_NESTED_BULLET_3. Third bullet.
+      ```sh
+      # MARKER_VERSION_NESTED_CODE
+      echo "fenced code inside a version block"
+      ```
+      {{< /version >}}

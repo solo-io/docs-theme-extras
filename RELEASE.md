@@ -39,6 +39,10 @@ The build must complete without Hugo errors or warnings. Revert the
 
 Open these pages in each built site and verify:
 
+- `gloo-mesh/latest/ambient/setup/sample-apps/ecs-integration/`
+
+Look for these issues:
+
 - Header / sidebar / footer render in the consumer's brand.
 - Light/dark toggle swaps correctly.
 - Cards grid is 1 / 2 / 3 columns responsive.
@@ -48,6 +52,7 @@ Open these pages in each built site and verify:
 - Refresh on a deep-linked URL (e.g. `…/everything/#cards`) lands at
   the anchor cleanly — no flash of top content, no late jump.
 - OpenAPI rendered region loads (if the consumer ships one).
+- Versioned and conditional sections rendering correctly.
 
 ## 4. Re-diff shadows on Hextra bumps
 

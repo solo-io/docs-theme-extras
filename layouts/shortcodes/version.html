@@ -8,6 +8,39 @@
 {{- $versions := .Site.Params.versions -}}
 {{- $condition := "" -}}
 
+{{- /* Dedent .Inner so block content (bullets, fenced code) at deep
+       list-item indentation doesn't trip CommonMark's "4 spaces = code
+       block" rule when RenderString processes the inner content in
+       isolation. Without this, a version block at the 6-space
+       continuation depth of a nested numbered list (the ambient-ecs
+       pattern in solo-io/docs#2480) would render its bullets as a
+       literal <pre><code> instead of as a <ul>. Computes the minimum
+       leading-space count across non-empty lines and strips that many
+       leading characters from every line. */ -}}
+{{- $inner := .Inner -}}
+{{- $lines := split $inner "\n" -}}
+{{- $minIndent := -1 -}}
+{{- range $lines -}}
+  {{- $trimmed := strings.TrimLeft " \t" . -}}
+  {{- if ne $trimmed "" -}}
+    {{- $thisIndent := sub (len .) (len $trimmed) -}}
+    {{- if or (eq $minIndent -1) (lt $thisIndent $minIndent) -}}
+      {{- $minIndent = $thisIndent -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- if gt $minIndent 0 -}}
+  {{- $dedented := slice -}}
+  {{- range $lines -}}
+    {{- if ge (len .) $minIndent -}}
+      {{- $dedented = $dedented | append (substr . $minIndent) -}}
+    {{- else -}}
+      {{- $dedented = $dedented | append . -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $inner = delimit $dedented "\n" -}}
+{{- end -}}
+
 {{- if $versions -}}
   {{- $version := .Page.FirstSection.RelPermalink -}}
   {{- $version_without_product := replace $version .Site.Params.folder "" -}}
@@ -48,12 +81,16 @@
            {{- end -}}
            {{- if isset $.Params "include-if" -}}
              {{- if and (in $include_if $versionToml) $productMatches (not $rendered) -}}
-                {{- $.Page.RenderString (dict "display" "inline") $.Inner -}}
+                {{- $rendered_html := $.Page.RenderString (dict "display" "inline") $inner -}}
+                {{- $flat := replaceRE ">[ \t]*\n[\\s]*<" "><" $rendered_html -}}
+                {{- replace $flat "\n" "&#10;" | safeHTML -}}
                 {{- $rendered = true -}}
              {{- end -}}
              {{- else if isset $.Params "exclude-if" -}}
                 {{- if and (not (in $exclude_if $versionToml)) $productMatches (not $rendered) -}}
-                   {{- $.Page.RenderString (dict "display" "inline") $.Inner -}}
+                   {{- $rendered_html := $.Page.RenderString (dict "display" "inline") $inner -}}
+                {{- $flat := replaceRE ">[ \t]*\n[\\s]*<" "><" $rendered_html -}}
+                {{- replace $flat "\n" "&#10;" | safeHTML -}}
                    {{- $rendered = true -}}
              {{- end -}}
            {{- end -}}
@@ -81,7 +118,9 @@
             {{- $versionToml := .version -}}
             {{- $productMatches := or (not $currentProduct) (eq .product $currentProduct) -}}
                {{- if and (in $include $versionToml) (in $include $versionAdjusted) $productMatches (not $rendered) -}}
-                      {{- $.Page.RenderString (dict "display" "inline") $.Inner -}}
+                      {{- $rendered_html := $.Page.RenderString (dict "display" "inline") $inner -}}
+                {{- $flat := replaceRE ">[ \t]*\n[\\s]*<" "><" $rendered_html -}}
+                {{- replace $flat "\n" "&#10;" | safeHTML -}}
                       {{- $rendered = true -}}
                {{- end -}}
         {{- end -}}
@@ -108,7 +147,9 @@
           {{- $versionToml := .version -}}
           {{- $productMatches := or (not $currentProduct) (eq .product $currentProduct) -}}
             {{- if and (not (or (in $exclude $versionToml) (in $exclude $versionAdjusted))) $productMatches (not $rendered) -}}
-                  {{- $.Page.RenderString (dict "display" "inline") $.Inner -}}
+                  {{- $rendered_html := $.Page.RenderString (dict "display" "inline") $inner -}}
+                {{- $flat := replaceRE ">[ \t]*\n[\\s]*<" "><" $rendered_html -}}
+                {{- replace $flat "\n" "&#10;" | safeHTML -}}
                   {{- $rendered = true -}}
             {{- end -}}
           {{- end -}}
