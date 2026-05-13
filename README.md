@@ -18,7 +18,7 @@ Two faces, one repo:
             ▼
     docs-theme-extras
        │   │   │
-       │   │   └── tests/         Playwright HTML-only harness (12 specs)
+       │   │   └── tests/         Playwright HTML-only harness (17 specs)
        │   │       helpers/       config loader, crawl, target, shortcodes
        │   │
        │   └── layouts/           shortcodes, partials, _markup hooks,
@@ -229,29 +229,30 @@ working examples today:
 
 **Pattern A — consumer ships Makefile targets that drive the harness
 from a sibling clone.** Recommended for repos where multiple developers
-will run tests regularly:
+will run tests regularly. Targets are prefixed `framework-test-*` so they
+don't collide with the `test-*` namespace some consumers reserve for doc
+tests (code blocks executed against a cluster):
 
 ```sh
 # One-time: clone docs-theme-extras as a sibling
 git clone https://github.com/solo-io/docs-theme-extras ../docs-theme-extras
 cd <consumer-repo>
-make test-install        # npm + Playwright browsers in the sibling
+make framework-test-install        # npm + Playwright browsers in the sibling
 
 # Build the test fixture / site, then run a project
-make test                # all projects (static, browser, cross-browser)
-make test-static         # fastest loop — ~2s after Hugo build
-make test-browser        # chromium only
-make test-cross-browser  # chromium + firefox + webkit
-make test-smoke PRODUCT=<name>     # multi-product hubs only
+make framework-test                # all projects (static, browser, cross-browser)
+make framework-test-static         # fastest loop — ~2s after Hugo build
+make framework-test-browser        # chromium only
+make framework-test-cross-browser  # chromium + firefox + webkit
+make framework-test-smoke PRODUCT=<name>   # multi-product hubs only
 
 # Override the sibling location if needed
-make test THEME_EXTRAS_DIR=/abs/path/to/docs-theme-extras
+make framework-test FRAMEWORK_EXTRAS_DIR=/abs/path/to/docs-theme-extras
 ```
 
-The sibling-clone pattern, the `THEME_EXTRAS_DIR` override variable, and
-the per-target signatures are conventions a Makefile-shipping consumer
-opts into. See `Makefile` examples in the consumer repos for the full
-template.
+The sibling-clone pattern, the `FRAMEWORK_EXTRAS_DIR` override variable,
+and the per-target signatures are conventions a Makefile-shipping consumer
+opts into. See `Makefile` examples in the consumer repos for the full template.
 
 **Pattern B — consumer invokes the harness directly.** Works for any
 consumer without Makefile scaffolding; useful as a starter or for
@@ -423,7 +424,7 @@ reload reuses the cached version.
 │   ├── docs/{single,list}.html     Doc page templates
 │   ├── partials/                   Navbar, sidebar, breadcrumb, copy-md, ...
 │   │   └── utils/page-context.html Dual-mode partial (url|siteParams)
-│   └── shortcodes/                 19 shortcodes (alert, callout, version, ...)
+│   └── shortcodes/                 21 shortcodes (alert, callout, version, ...)
 │
 ├── assets/                         Top-level CSS/JS shared by all builds
 │   ├── css/{docs-theme-extras,brand-oss,brand-enterprise,custom}.css
@@ -437,7 +438,7 @@ reload reuses the cached version.
 │   └── .docs-test-{oss,enterprise}.toml   Harness config per brand
 │
 ├── tests/                          Playwright specs
-│   ├── *.spec.ts                   12 specs (smoke, presence, versioning, ...)
+│   ├── *.spec.ts                   17 specs (smoke, presence, versioning, ...)
 │   └── helpers/                    config, target, crawl, shortcodes, ...
 │
 ├── static/test/readfile-sample.txt Top-level path for Hugo's readFile
