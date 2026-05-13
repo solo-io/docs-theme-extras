@@ -45,6 +45,29 @@ test.describe("nested version block renders bullets and code", () => {
       for (const marker of BULLETS) {
         const idx = html.indexOf(marker);
         expect(idx, `${marker} missing from ${page.name}`).toBeGreaterThan(-1);
+
+        // Tight check: the bullet's own <li> opening tag must sit
+        // immediately before the marker (whitespace-only between).
+        // The lastIndexOf("<li") heuristic below passes when the
+        // bullets leak as plain text inside the parent step's <li>,
+        // because that outer <li> still counts as "some preceding <li>".
+        const tail = html.slice(Math.max(0, idx - 100), idx);
+        expect(
+          tail,
+          `${marker} is not the leading content of its own <li> — ` +
+            `bullet rendered as plain text (likely "* ${marker}") ` +
+            `inside the parent step's <li>. Last 100 chars before marker: ${JSON.stringify(tail)}`,
+        ).toMatch(/<li[^>]*>\s*$/);
+
+        // Smoking-gun: the literal "* MARKER" prefix only survives if
+        // the bullet markdown wasn't parsed.
+        expect(
+          html,
+          `Literal "* ${marker}" found in ${page.name} — bullet markdown leaked as text`,
+        ).not.toContain(`* ${marker}`);
+
+        // Broader sanity: a <li> exists before, and comes after any
+        // surrounding <pre>/<code>.
         const liIdx = html.lastIndexOf("<li", idx);
         const preIdx = html.lastIndexOf("<pre", idx);
         const codeIdx = html.lastIndexOf("<code", idx);
@@ -68,6 +91,22 @@ test.describe("nested version block renders bullets and code", () => {
       const html = visibleHtml(page.filePath);
       const idx = html.indexOf(CODE);
       expect(idx, `${CODE} missing from ${page.name}`).toBeGreaterThan(-1);
+
+      // Tight check: the marker must sit inside an open <code> block at
+      // this point in the HTML. The lastIndexOf("<pre") heuristic below
+      // passes when the fence leaks as plain text, because unrelated
+      // earlier code blocks on the page satisfy "some chroma <pre>
+      // exists before the marker".
+      const before = html.slice(0, idx);
+      const codeOpens = (before.match(/<code[\s>]/g) || []).length;
+      const codeCloses = (before.match(/<\/code>/g) || []).length;
+      expect(
+        codeOpens,
+        `${CODE} is not inside any open <code> block — fence rendered ` +
+          `as plain text (likely literal \`\`\`sh ... \`\`\`)`,
+      ).toBeGreaterThan(codeCloses);
+
+      // Broader sanity: that <code> is inside a Chroma-highlighted <pre>.
       const preIdx = html.lastIndexOf("<pre", idx);
       expect(preIdx, `${CODE} has no preceding <pre>`).toBeGreaterThan(-1);
       const preTag = html.slice(preIdx, html.indexOf(">", preIdx) + 1);
