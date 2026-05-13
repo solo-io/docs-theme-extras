@@ -142,19 +142,26 @@
   }
 </style>
 
+{{- /* deepLinking hijacks window.location.hash for Swagger's own routing
+       (#/operations/... and #/components/schemas/...). On pages that also
+       have a Hextra TOC, clicking a TOC entry sets the hash to e.g. #cards,
+       then Swagger's hashchange listener rewrites it to #/cards — breaking
+       the page's normal anchor navigation. Off by default; pages that are
+       primarily API reference can re-enable via the `deepLinking=true`
+       shortcode arg.
+
+       Note: this is a Hugo template comment (stripped before Goldmark sees
+       the output) rather than a JS comment. A `//` line inside the <script>
+       body causes Goldmark to break out of the type-1 HTML block when this
+       shortcode's HTML is fed back through Page.RenderString (e.g. inside
+       conditional-text), wrapping the next indented line in <pre><code> and
+       producing invalid JS for the minifier. */ -}}
 <script>
   document.addEventListener('DOMContentLoaded', function() {
     var el = document.getElementById('swagger-ui');
     SwaggerUIBundle({
       url: el.dataset.specUrl,
       dom_id: '#swagger-ui',
-      // deepLinking hijacks window.location.hash for Swagger's own routing
-      // (#/operations/... and #/components/schemas/...). On pages that also
-      // have a Hextra TOC, clicking a TOC entry sets the hash to e.g.
-      // #cards, then Swagger's hashchange listener rewrites it to #/cards
-      // — breaking the page's normal anchor navigation. Off by default;
-      // pages that are primarily API reference can re-enable via the
-      // `deepLinking=true` shortcode arg.
       deepLinking: {{ eq (.Get "deepLinking" | default "false") "true" }},
       presets: [
         SwaggerUIBundle.presets.apis,
