@@ -43,14 +43,15 @@
 {{ end }}
 
 {{/* Emit light + dark variants in their respective toggle wrappers.
-     .toggle-dark is shown in light mode, .toggle-light in dark mode (see
-     docs-theme-extras.css). If $srcDark wasn't provided OR couldn't be
-     resolved, fall back to rendering the light image in the dark slot
-     too — better to show the light image in dark mode than nothing. */}}
+     .toggle-dark shows in light mode, .toggle-light in dark mode (see
+     docs-theme-extras.css). The .toggle-light slot is only emitted when
+     srcDark was provided AND resolved — without that guard, authors who
+     pair `reuse-image` with a sibling `reuse-image-dark` end up with two
+     dark images stacked in dark mode. Authors that want a dark variant
+     supply srcDark on this call, or use reuse-image-dark separately. */}}
 {{- with $image -}}
 <div style="text-align: center;" class="toggle-dark"><figure><img src="{{ .RelPermalink }}" width="{{ $width }}" alt="{{ $alt }}"/> <figcaption style="font-style:italic">{{ $caption }}</figcaption></figure></div>
 {{- end -}}
-{{- $darkRender := $imageDark | default $image -}}
-{{- with $darkRender -}}
+{{- with $imageDark -}}
 <div style="text-align: center;" class="toggle-light"><figure><img src="{{ .RelPermalink }}" width="{{ $width }}" alt="{{ $alt }}"/> <figcaption style="font-style:italic">{{ $caption }}</figcaption></figure></div>
 {{- end -}}
