@@ -123,14 +123,15 @@ test.describe("nested version block respects include-if gating", () => {
 const TRAILING_STEP = "MARKER_VERSION_TRAILING_STEP";
 const TRAILING_FENCE = "MARKER_VERSION_TRAILING_FENCE";
 
-// The trailing-step fixture lives in the shared conref so both the
-// reuse-rendered everything.md pages and the rebased.md pages exercise
-// the same pattern. The rebase pipeline converts percent shortcodes to
-// angle-bracket form before rendering, so rebased pages may not fail the
-// same way as reuse-rendered pages — but the marker assertions still
-// validate the rendered structure on both render paths.
-const TRAILING_STEP_V2 = V2_PAGES;
-const TRAILING_STEP_NON_V2 = NON_V2_PAGES;
+// The trailing-step fixture is its own page (not part of everything.md)
+// because the percent-form bug only manifests on the reuse-render path:
+// the rebase pipeline converts percent to angle-bracket before rendering,
+// so rebased pages render the section differently and would break the
+// reuse-vs-rebase equivalence assertion in versioning.spec.ts. Dedicated
+// trailing-step.md pages at v1/v2/main pull the same shared conref, and
+// the spec asserts behavior on those pages only.
+const TRAILING_STEP_V2 = ["v2/trailing-step"];
+const TRAILING_STEP_NON_V2 = ["v1/trailing-step", "main/trailing-step"];
 
 test.describe("trailing step after percent-form version renders as <li>", () => {
   for (const page of TEST_PAGES) {

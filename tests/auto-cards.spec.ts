@@ -33,6 +33,11 @@ const CHILD_TOPICS = [
     title: "Rebased",
     descriptionContains: "rendered through the rebase shortcode",
   },
+  {
+    slug: "trailing-step",
+    title: "Trailing step",
+    descriptionContains: "Regression page for the percent-form version",
+  },
 ];
 
 // Spec is fixture-specific: it asserts that every version's section index
