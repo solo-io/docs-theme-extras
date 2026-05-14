@@ -668,24 +668,25 @@ metadata:
 Reproduces the ambient-multi-ew-gateway.md pattern: a version shortcode opens OUTSIDE a fence, wraps prose plus an entire fenced yaml block, and closes on the same line as the closing backticks. The rendered HTML contains a pre block from Chroma — the flatten step's regex would collapse the per-line span boundaries onto one line and replace every `\` line-continuation with literal closing-span text. The pre flatten-bypass keeps the highlighted output intact.
 
 {{< version include-if="v2" >}}
-* **Versioned Helm install** (MARKER_VERSION_WRAPAROUND_BULLET): use the chart with the snippet below.
-  ```yaml
-  function MARKER_VERSION_WRAPAROUND_FN() {
-    context=${1:?context}
-    cluster=${2:?cluster}
-    helm upgrade -i fixture-chart oci://${HELM_REPO}/fixture \
-      --version ${IMAGE_TAG} \
-      --namespace fixture \
-      --kube-context ${context} \
-      -f - <<EOF
-  spec:
-    create: true
-    cluster: ${cluster}
-    # MARKER_VERSION_WRAPAROUND_COMMENT yaml comment inside the fence
-    network: ${cluster}
-  EOF
-  }
-  ```{{< /version >}}
+MARKER_VERSION_WRAPAROUND_BULLET: versioned Helm install — use the chart with the snippet below.
+
+```yaml
+function MARKER_VERSION_WRAPAROUND_FN() {
+  context=${1:?context}
+  cluster=${2:?cluster}
+  helm upgrade -i fixture-chart oci://${HELM_REPO}/fixture \
+    --version ${IMAGE_TAG} \
+    --namespace fixture \
+    --kube-context ${context} \
+    -f - <<EOF
+spec:
+  create: true
+  cluster: ${cluster}
+  # MARKER_VERSION_WRAPAROUND_COMMENT yaml comment inside the fence
+  network: ${cluster}
+EOF
+}
+```{{< /version >}}
 
 ## Shortcodes in rich markdown contexts
 
