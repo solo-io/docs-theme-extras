@@ -5,8 +5,28 @@
 {{- $ctx := partial "utils/page-context.html" . -}}
 {{- $condition := $ctx.condition -}}
 
+{{- /* No-markdown heuristic, mirrored from version.html. If .Inner has no
+       inline-formatting or list markers, RenderString would only damage it
+       (turning `#` into <h1>, "foo" into curly quotes, -- into &ndash;,
+       plain text into HTML-escaped angle text when the shortcode body
+       lands inside a fenced code block). Emit raw in that case. The
+       HTML-tag regex requires a lowercase tag name terminated by
+       space/`/`/`>` so yaml placeholders like <cluster2_region> and
+       <NAME> don't trigger a false positive. */ -}}
+{{- $hasMarkdown := false -}}
+{{- if findRE `\*\*|<(/?[a-z][a-z0-9]*[\s/>])` .Inner 1 -}}{{- $hasMarkdown = true -}}{{- end -}}
+{{- if not $hasMarkdown -}}
+  {{- if findRE "`" .Inner 1 -}}{{- $hasMarkdown = true -}}{{- end -}}
+{{- end -}}
+{{- if not $hasMarkdown -}}
+  {{- if findRE `(?m)^[ \t]{0,3}([*+\-][ \t]|[0-9]+\.[ \t])` .Inner 1 -}}{{- $hasMarkdown = true -}}{{- end -}}
+{{- end -}}
+{{- if not $hasMarkdown -}}
+  {{- if findRE `\[[^\]]*\]\(` .Inner 1 -}}{{- $hasMarkdown = true -}}{{- end -}}
+{{- end -}}
+
 {{- if ne $condition "" -}}
-    
+
     <!-- Get the parameters from the shortcode invocation and lowercase them.
     TODO: to enable multiple conditions, we could accept comma-separated lists and split them -->
     {{- $include := .Get "include-if" | default "" -}}
@@ -22,11 +42,15 @@
     {{- if isset $.Params "include-if" -}}
         <!-- WARNING substring matches are matches as well! That means, if include-if="foobar", and buildcondition is "foo", you have a match!-->
         {{- if in $include_if $condition -}}
+            {{- if not $hasMarkdown -}}
+{{ $.Inner }}
+            {{- else -}}
 <!-- Do not indent the next Inner line, because the inner becomes a blockquote if the conditional-text is nested in another shortcode  -->
 {{- $rendered := $.Page.RenderString (dict "display" "inline") $.Inner -}}
 {{- if hasPrefix $.Inner " " }}{{ " " | safeHTML }}{{ end -}}
 {{- $rendered | safeHTML -}}
 {{- if hasSuffix $.Inner " " }}{{ " " | safeHTML }}{{ end -}}
+            {{- end -}}
         {{- else -}}
         {{- end -}}
     {{- else -}}
@@ -35,11 +59,15 @@
             <!-- WARNING substring matches are matches as well! That means, if exclude-if="foobar", and buildcondition is "foo", you have a match!-->
             {{- if in $exclude_if $condition -}}
             {{- else -}}
+                {{- if not $hasMarkdown -}}
+{{ $.Inner }}
+                {{- else -}}
 <!-- Do not indent the next Inner line, because the inner becomes a blockquote if the conditional-text is nested in another shortcode  -->
 {{- $rendered := $.Page.RenderString (dict "display" "inline") $.Inner -}}
 {{- if hasPrefix $.Inner " " }}{{ " " | safeHTML }}{{ end -}}
 {{- $rendered | safeHTML -}}
 {{- if hasSuffix $.Inner " " }}{{ " " | safeHTML }}{{ end -}}
+                {{- end -}}
             {{- end -}}
         {{- end -}}
 

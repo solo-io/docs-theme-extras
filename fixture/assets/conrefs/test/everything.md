@@ -663,3 +663,181 @@ Reproduces the ambient-multi-ew-gateway.md pattern: a version shortcode opens OU
   }
   ```{{< /version >}}
 
+## Shortcodes in rich markdown contexts
+
+This block matrix exercises the `version` and `conditional-text` shortcodes inside the markdown structures that real product docs nest them in. Each subsection tests a different host context. The version markers are mostly v2-gated; the conditional markers all render under buildCondition `test`. The structural-context spec asserts each marker lands inside the expected container element rather than leaking out into the surrounding flow.
+
+### Inside callouts
+
+A version block inside an alert and a conditional-text block inside a callout — the shortcode bodies must survive the host shortcode's inner-render pass.
+
+{{< alert context="info" >}}Prefix text. {{< version include-if="v2" >}}MARKER_VERSION_IN_CALLOUT. v2-only sentence inside the alert.{{< /version >}}{{< /alert >}}
+
+{{% callout type="warning" %}}Prefix text. {{% conditional-text include-if="test" %}}COND_IN_CALLOUT. Build-gated sentence inside the callout.{{% /conditional-text %}}{{% /callout %}}
+
+### Inside a 3-level unordered list
+
+A version block and a conditional-text block at the deepest (level 3) bullet — the shortcode rendering must not collapse the list nesting or escape the bullet wrappers.
+
+- Outer bullet.
+  - Mid bullet.
+    - Deep bullet with {{< version include-if="v2" >}}MARKER_VERSION_IN_UL3 v2-only inline content{{< /version >}}.
+    - Deep bullet with {{% conditional-text include-if="test" %}}COND_IN_UL3 visible inline content{{% /conditional-text %}}.
+
+### Inside a 3-level ordered list (substep)
+
+A version block and a conditional-text block at a level-3 numbered substep. Real docs use this in "Apply the Helm config" multi-step procedures.
+
+1. Outer step.
+   1. Mid substep.
+      1. Deepest substep with {{< version include-if="v2" >}}MARKER_VERSION_IN_OL3 v2-only inline content{{< /version >}}.
+      1. Deepest substep with {{% conditional-text include-if="test" %}}COND_IN_OL3 visible inline content{{% /conditional-text %}}.
+
+### Inside table cells
+
+Version and conditional-text bodies inside markdown pipe-table cells. The shortcodes must emit their content inline within the `<td>`, not leak out and break the row.
+
+| Column header | Value cell |
+| ------------- | ---------- |
+| Version-gated row | {{< version include-if="v2" >}}MARKER_VERSION_IN_TABLE_CELL v2-only cell text{{< /version >}} |
+| Build-gated row | {{% conditional-text include-if="test" %}}COND_IN_TABLE_CELL visible cell text{{% /conditional-text %}} |
+
+### Inside tab bodies
+
+A version block in one tab and a conditional-text block in another. Tab bodies are processed as markdown via the percent-form tab shortcode, so the inner shortcodes route through the normal render pipeline.
+
+{{< tabs >}}
+{{% tab name="Version tab" %}}
+{{< version include-if="v2" >}}MARKER_VERSION_IN_TAB. v2-only sentence inside the Version tab body.{{< /version >}}
+{{% /tab %}}
+{{% tab name="Conditional tab" %}}
+{{% conditional-text include-if="test" %}}COND_IN_TAB. Build-gated sentence inside the Conditional tab body.{{% /conditional-text %}}
+{{% /tab %}}
+{{< /tabs >}}
+
+### Around inline code phrases
+
+Run the {{% version include-if="v2" %}}`MARKER_VERSION_IN_CODEPHRASE`{{% /version %}} command on v2.
+
+Run the {{% conditional-text include-if="test" %}}`COND_IN_CODEPHRASE`{{% /conditional-text %}} command when the build condition matches.
+
+### Around bold text
+
+The setting **{{% version include-if="v2" %}}MARKER_VERSION_IN_BOLD{{% /version %}}** is v2-only.
+
+The setting **{{% conditional-text include-if="test" %}}COND_IN_BOLD{{% /conditional-text %}}** is build-gated.
+
+### Around heading text
+
+Both shortcodes append a fragment to a heading line. On non-matching versions/builds, the heading still renders without the appended fragment.
+
+#### MARKER_VERSION_HEADING_HOST {{% version include-if="v2" %}}MARKER_VERSION_IN_HEADING suffix{{% /version %}}
+
+The H4 above keeps its prefix marker on every page; on v2 it also includes the version suffix.
+
+#### COND_HEADING_HOST {{% conditional-text include-if="test" %}}COND_IN_HEADING suffix{{% /conditional-text %}}
+
+The H4 above keeps its prefix marker on every page; the suffix only appears when buildCondition matches.
+
+### Multiple sequential version blocks
+
+A common pattern in version-spanning conrefs: one block per release, set in source order, on the same line. Only the matching block fires per page.
+
+Sequence: {{< version include-if="v1" >}}MARKER_VERSION_SEQ_V1 v1 segment.{{< /version >}}{{< version include-if="v2" >}}MARKER_VERSION_SEQ_V2 v2 segment.{{< /version >}}{{< version include-if="main" >}}MARKER_VERSION_SEQ_MAIN main segment.{{< /version >}} (one of these should appear)
+
+### Wrapping a markdown link's destination URL
+
+One version block per URL — each block renders only on its own version page so the anchor's `href` becomes version-specific. The `?v=marker-*` query tag is the per-version signature the test asserts against.
+
+See [MARKER_VERSION_LINK_DEST]({{< version include-if="v1" >}}../rebased/?v=marker-v1{{< /version >}}{{< version include-if="v2" >}}../rebased/?v=marker-v2{{< /version >}}{{< version include-if="main" >}}../rebased/?v=marker-main{{< /version >}}) for the version-specific destination.
+
+Same idea with conditional-text. The URL is build-condition-gated; the include-if branch fires on the `test` build, the exclude-if branch never does.
+
+See [COND_LINK_DEST]({{% conditional-text include-if="test" %}}../rebased/?build=test{{% /conditional-text %}}{{% conditional-text exclude-if="test" %}}../rebased/?build=other{{% /conditional-text %}}) for the build-condition-gated destination.
+
+### Wrapping a markdown link's text
+
+A version block wraps the entire `[text](url)` syntax — the no-markdown heuristic must detect the link-parentheses regex and route through RenderString so the link is parsed as a link, not emitted as raw `[…](…)`.
+
+{{< version include-if="v2" >}}[MARKER_VERSION_LINK_TEXT companion]({{< link path="rebased" >}}){{< /version >}}
+
+A conditional-text block wraps the entire markdown link:
+
+{{% conditional-text include-if="test" %}}[COND_LINK_TEXT companion]({{% link path="rebased" %}}){{% /conditional-text %}}
+
+### Conditional-text INSIDE a fenced code block
+
+Mirror of the inside-fence version patterns, but for conditional-text. A percent-form conditional-text shortcode opens at end of one yaml line and closes inside the fence. If conditional-text routes its inner content through RenderString in inline mode without a no-markdown heuristic, the leading hash on the inner comment line becomes an h1 and the gated string becomes smart-quoted — same pathology version had pre-fix. The reader sees literal escaped h1/p tags inside the highlighted yaml.
+
+```yaml
+env:
+  key: "marker-before"{{% conditional-text include-if="test" %}}
+  # COND_INFENCE_COMMENT
+  gated: "true"{{% /conditional-text %}}
+  trailing: after-conditional
+```
+
+### Conditional-text wrap-around fence
+
+Mirror of `MARKER_VERSION_WRAPAROUND_*`, but for conditional-text. A conditional-text block opens before a yaml fence, wraps prose and the fence, and closes on the same line as the closing backticks. The rendered HTML contains a `<pre>` from Chroma; without a flatten-bypass the per-line span boundaries would collapse and every `\` line-continuation would be replaced with literal `</span>` text.
+
+{{% conditional-text include-if="test" %}}
+* **Build-gated Helm install**: use the chart with the snippet below.
+  ```yaml
+  function COND_WRAPAROUND_FN() {
+    context=${1:?context}
+    cluster=${2:?cluster}
+    helm upgrade -i fixture-chart oci://${HELM_REPO}/fixture \
+      --version ${IMAGE_TAG} \
+      --namespace fixture \
+      --kube-context ${context} \
+      -f - <<EOF
+  spec:
+    cluster: ${cluster}
+    network: ${cluster}
+  EOF
+  }
+  ```
+{{% /conditional-text %}}
+
+### Shortcode immediately after a closing fence
+
+A version block and a conditional-text block both sit on the line directly after a closing fence, with no blank-line separator. Goldmark requires a blank line to terminate certain block contexts; without one, it could absorb the shortcode body into the preceding fence's content or treat the markers as plain text. The test confirms the markers land in their own paragraph element after the fence closes.
+
+```yaml
+key: above the adjacent shortcode tags
+```
+{{< version include-if="v2" >}}MARKER_FENCE_ADJ_AFTER_V2 v2 sentence immediately after the closing fence.{{< /version >}} {{% conditional-text include-if="test" %}}COND_FENCE_ADJ_AFTER build-gated sentence immediately after the closing fence.{{% /conditional-text %}}
+
+### Shortcode immediately before an opening fence
+
+Mirror of the previous pattern. A version block and a conditional-text block both close on the line directly before an opening fence, no blank-line separator. Same Goldmark fragility, just on the entry side of the fence.
+
+{{< version include-if="v2" >}}MARKER_FENCE_ADJ_BEFORE_V2 v2 sentence immediately before the opening fence.{{< /version >}} {{% conditional-text include-if="test" %}}COND_FENCE_ADJ_BEFORE build-gated sentence immediately before the opening fence.{{% /conditional-text %}}
+```yaml
+key: below the adjacent shortcode tags
+```
+
+### Opening fence on the same line as the opening shortcode tag
+
+A compactness variant of the wrap-around-fence pattern: the opening ```yaml sits directly after the opening shortcode tag on the same line, and the closing ``` sits directly before the closing shortcode tag on the same line. Real docs sometimes write this when an author tries to keep the fence "tight" against its gating shortcode. The heuristic detects the backtick character in `.Inner`, routes to RenderString, and Goldmark interprets the body as a normal fence — both versions of the pattern below render the marker as Chroma-highlighted yaml on the matching version/build, not as literal backtick text.
+
+{{< version include-if="v2" >}}```yaml
+key: MARKER_FENCE_SAMELINE_V2
+inner: value
+```{{< /version >}}
+
+{{% conditional-text include-if="test" %}}```yaml
+key: COND_FENCE_SAMELINE
+inner: value
+```{{% /conditional-text %}}
+
+### Cards whose link attribute is itself a shortcode call
+
+The card shortcode takes a `link` named argument. Embedding another shortcode invocation inside the quoted value tests whether Hugo's shortcode parser recursively expands inner calls before passing the resolved string to the outer shortcode. Title text carries the sentinel so the test can locate the rendered card; the test also asserts the rendered anchor's `href` matches the URL the nested `link` shortcode would resolve to (`/test/v2/rebased/`).
+
+{{< cards >}}
+{{% version include-if="v2" %}}{{< card link=`{{< link path="rebased" >}}` title="MARKER_NESTED_ARG_TITLE Nested link in card" subtitle="Card with a nested shortcode call as its link attribute." icon="document" >}}{{% /version %}}
+{{% conditional-text include-if="test" %}}{{< card link=`{{< link path="rebased" >}}` title="COND_NESTED_ARG_TITLE Nested link in card" subtitle="Build-gated card with a nested shortcode call as its link attribute." icon="document" >}}{{% /conditional-text %}}
+{{< /cards >}}
+

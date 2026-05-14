@@ -81,6 +81,34 @@ export const VERSION_MARKERS = {
   wrapAroundBullet: "MARKER_VERSION_WRAPAROUND_BULLET",
   wrapAroundFn: "MARKER_VERSION_WRAPAROUND_FN",
   wrapAroundComment: "MARKER_VERSION_WRAPAROUND_COMMENT",
+  // Rich-context matrix: version shortcode placed inside other markdown
+  // structures. Each marker below is v2-gated except the seq* group, which
+  // tests adjacent same-line version blocks one per version.
+  inCallout: "MARKER_VERSION_IN_CALLOUT",
+  inUL3: "MARKER_VERSION_IN_UL3",
+  inOL3: "MARKER_VERSION_IN_OL3",
+  inTableCell: "MARKER_VERSION_IN_TABLE_CELL",
+  inTabBody: "MARKER_VERSION_IN_TAB",
+  inCodePhrase: "MARKER_VERSION_IN_CODEPHRASE",
+  inBold: "MARKER_VERSION_IN_BOLD",
+  inHeading: "MARKER_VERSION_IN_HEADING",
+  seqV1: "MARKER_VERSION_SEQ_V1",
+  seqV2: "MARKER_VERSION_SEQ_V2",
+  seqMain: "MARKER_VERSION_SEQ_MAIN",
+  linkText: "MARKER_VERSION_LINK_TEXT",
+  linkDestText: "MARKER_VERSION_LINK_DEST",
+  // Fence-adjacency: version block on the line immediately following or
+  // preceding a fenced code block, with no blank-line separator. Goldmark
+  // could otherwise absorb the shortcode body into the fence's <pre>.
+  fenceAdjAfter: "MARKER_FENCE_ADJ_AFTER_V2",
+  fenceAdjBefore: "MARKER_FENCE_ADJ_BEFORE_V2",
+  // Opening fence on the same line as the opening shortcode tag, and
+  // closing fence on the same line as the closing tag. Compactness
+  // variant of the wrap-around-fence pattern.
+  fenceSameLine: "MARKER_FENCE_SAMELINE_V2",
+  // Version-gated card whose link= attribute is itself a nested shortcode
+  // call. Title text carries the marker so we can locate the rendered card.
+  nestedArgTitle: "MARKER_NESTED_ARG_TITLE",
 } as const;
 
 export const CONDITIONAL_MARKERS = {
@@ -90,4 +118,32 @@ export const CONDITIONAL_MARKERS = {
   bullet2: "COND_BULLET_2",
   bullet3: "COND_BULLET_3",
   codeInside: "COND_CODE_INSIDE_CONDITIONAL",
+  // Rich-context matrix: conditional-text placed inside other markdown
+  // structures. buildCondition is "test" in the fixture so all include-if
+  // markers render on every page; the matrix exercises structural placement
+  // rather than gating.
+  inCallout: "COND_IN_CALLOUT",
+  inUL3: "COND_IN_UL3",
+  inOL3: "COND_IN_OL3",
+  inTableCell: "COND_IN_TABLE_CELL",
+  inTabBody: "COND_IN_TAB",
+  inCodePhrase: "COND_IN_CODEPHRASE",
+  inBold: "COND_IN_BOLD",
+  inHeading: "COND_IN_HEADING",
+  inFenceComment: "COND_INFENCE_COMMENT",
+  wrapAroundFn: "COND_WRAPAROUND_FN",
+  linkText: "COND_LINK_TEXT",
+  linkDestText: "COND_LINK_DEST",
+  // Fence-adjacency: conditional-text on the line immediately following
+  // or preceding a fenced code block, with no blank-line separator.
+  // Goldmark could otherwise absorb the shortcode body into the fence.
+  fenceAdjAfter: "COND_FENCE_ADJ_AFTER",
+  fenceAdjBefore: "COND_FENCE_ADJ_BEFORE",
+  // Conditional mirror of the same-line opening fence + shortcode tag
+  // pattern. The body should render as a Chroma-highlighted yaml fence
+  // when buildCondition matches, not as plain backtick text.
+  fenceSameLine: "COND_FENCE_SAMELINE",
+  // Conditional-gated card whose link= attribute is itself a nested
+  // shortcode call. Title text carries the marker.
+  nestedArgTitle: "COND_NESTED_ARG_TITLE",
 } as const;
