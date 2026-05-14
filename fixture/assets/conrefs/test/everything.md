@@ -546,6 +546,30 @@ Final step in the procedure.
 
 {{% /steps %}}
 
+## Tabs with blank-line code fences
+
+Reproduces the percent-form double-markdownify bug. A `{{% tab %}}` (percent form)
+pre-renders its body through Markdown before `tab.html` runs. If `tabs.html` then calls
+`markdownify` on that already-rendered HTML, the CommonMark HTML-block parser (Goldmark)
+terminates `<pre>` at blank lines and injects `<p>` tags — breaking code blocks and the
+Hextra copy button. The fixture uses a multi-group shell session (blank lines between
+command groups) inside a percent-form tab: the exact pattern that broke real product
+pages in the ECS integration guide.
+
+{{< tabs >}}
+{{% tab name="Shell session" %}}
+MARKER_TAB_BLANKFENCE_PROSE. A percent-form tab body containing a code block with blank lines between command groups.
+
+```sh
+# MARKER_TAB_BLANKFENCE_BEFORE — first command group
+kubectl apply -f manifest.yaml
+
+# MARKER_TAB_BLANKFENCE_AFTER — second group after a blank line
+kubectl get pods -n example
+```
+{{% /tab %}}
+{{< /tabs >}}
+
 ## Hextra defaults
 
 Several shortcodes ship with Hextra and aren't overridden by the module. The fixture exercises a representative subset so the harness catches regressions when Hextra is upgraded.

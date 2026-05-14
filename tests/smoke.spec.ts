@@ -66,6 +66,34 @@ test.describe(`smoke: ${LABEL}`, () => {
     });
     expect(hasCopyMd, `no copy-as-md found in any sampled page`).toBe(true);
   });
+
+  test(`no <p> inside <pre> in any sampled page (${SAMPLE_LABEL})`, () => {
+    if (!target.shouldRun("shortcodeLeaks")) {
+      test.skip(true, "shortcodeLeaks check disabled in CONFIG");
+    }
+    // A <p> inside a <pre> is never valid HTML. It is the structural
+    // signature of the {{% tab %}} double-markdownify bug: markdownify called
+    // on already-rendered HTML causes the CommonMark parser to terminate <pre>
+    // at blank lines and inject <p> tags, breaking code blocks and copy buttons.
+    const htmlFiles = collectHtml(SCAN_ROOT, MAX_FILES);
+    const offenders: string[] = [];
+    for (const f of htmlFiles) {
+      const html = fs.readFileSync(f, "utf8");
+      const preRe = /<pre[^>]*>([\s\S]*?)<\/pre>/g;
+      let m: RegExpExecArray | null;
+      while ((m = preRe.exec(html)) !== null) {
+        if (/<p[\s>]/.test(m[1])) {
+          offenders.push(path.relative(SCAN_ROOT, f));
+          break;
+        }
+      }
+    }
+    expect(
+      offenders,
+      `pages where <p> is injected inside <pre> — likely markdownify called on ` +
+        `already-rendered HTML from a percent-form shortcode (e.g. {{% tab %}})`,
+    ).toEqual([]);
+  });
 });
 
 // Walk `root` depth-first, collecting `*.html` files. `max === 0` means
