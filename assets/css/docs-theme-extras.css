@@ -351,8 +351,14 @@
   color: #d1d5db;
 }
 
-/* Nested ordered lists: lowercase letters */
-#content > .content ol ol {
+/* Nested ordered lists: lowercase letters.
+   `:not([start])` so that an explicit `<ol start="N">` continues the
+   counter from the prior sibling nested ol — needed when a list-item's
+   content includes a block (HTML pre, etc.) that Goldmark renders
+   outside the parent <li>, splitting one logical list into two
+   sibling <ol>s. Without this, item 9 after the split would render
+   as "a" instead of "i". */
+#content > .content ol ol:not([start]) {
   counter-reset: sublistitem;
 }
 
@@ -365,7 +371,7 @@
 }
 
 /* Doubly-nested ordered lists: lowercase roman numerals */
-#content > .content ol ol ol {
+#content > .content ol ol ol:not([start]) {
   counter-reset: subsublistitem;
 }
 
