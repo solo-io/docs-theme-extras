@@ -548,7 +548,7 @@ Final step in the procedure.
 
 ## Tabs with blank-line code fences
 
-Reproduces the percent-form double-markdownify bug. A `{{% tab %}}` (percent form)
+Reproduces the percent-form double-markdownify bug. A percent-form tab shortcode
 pre-renders its body through Markdown before `tab.html` runs. If `tabs.html` then calls
 `markdownify` on that already-rendered HTML, the CommonMark HTML-block parser (Goldmark)
 terminates `<pre>` at blank lines and injects `<p>` tags — breaking code blocks and the

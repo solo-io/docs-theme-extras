@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { TEST_PAGES, readFixture } from "./helpers/fixture";
 
 // Behavior tests for the `github` shortcode at
-// layouts/shortcodes/github.html. The shortcode auto-detects file extension:
+// layouts/_shortcodes/github.html. The shortcode auto-detects file extension:
 // `.md` runs through the page's markdown renderer; everything else passes
 // through as raw text (callers wrap in a code fence). One test per branch.
 

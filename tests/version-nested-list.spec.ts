@@ -155,7 +155,7 @@ test.describe("nested version block respects include-if gating", () => {
 // render as raw markdown text rather than an <li>, because
 // Page.RenderString with display:inline drops block-level content
 // after the first element and breaks the parent <ol>'s continuity.
-// The fix in docs/layouts/shortcodes/version.html emits .Inner raw
+// The fix in docs/layouts/_shortcodes/version.html emits .Inner raw
 // so the surrounding markdown context handles the version body inline
 // with the rest of the list. This spec locks that behavior in.
 
