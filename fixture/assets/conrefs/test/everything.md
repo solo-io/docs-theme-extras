@@ -614,3 +614,52 @@ Reproduces the bug from solo-io/docs#2480. A version block wraps bullets and fen
       ```
       {{< /version >}}
 
+### Version shortcode INSIDE a fenced code block (yaml comment + key)
+
+Reproduces the ambient-manual-install-multi.md pattern: a version shortcode opens at the end of one yaml line and closes at the end of another, INSIDE a code fence. Without the no-markdown heuristic, RenderString mangles the inner yaml: the leading `#` becomes h1, `"true"` becomes curly quotes, and the rendered HTML appears as literal angle-bracket text inside the highlighted code. With the heuristic, the inner content has no markdown markers and is emitted raw, landing back inside the fence as plain text.
+
+```yaml
+env:
+  MARKER_VERSION_INFENCE_KEY: "marker-before"{{< version include-if="v2" >}}
+  # MARKER_VERSION_INFENCE_COMMENT
+  MARKER_VERSION_INFENCE_GATED: "true"{{< /version >}}
+  trailing: after-version
+```
+
+### Version shortcode INSIDE a fence with yaml placeholders
+
+Reproduces the ambient-multi-link.md pattern: a version shortcode inside a yaml fence wraps lines containing `<placeholder>` angle-bracket tokens. Without a precise HTML-tag regex, the placeholders look like HTML opens and the heuristic falsely routes to RenderString. With the lowercase-name-terminated-by-space/slash/`>` rule, yaml placeholders don't trip the detector.
+
+```yaml
+metadata:
+  labels:
+    network: cluster1{{< version include-if="v2" >}}
+    region: "<MARKER_VERSION_INFENCE_PLACEHOLDER_UPPER>"
+    zone: "<a_MARKER_VERSION_INFENCE_PLACEHOLDER_LOWER>"{{< /version >}}
+  name: marker-version-infence-placeholder
+```
+
+### Version shortcode wrap-around fence (prose + fence inside version block)
+
+Reproduces the ambient-multi-ew-gateway.md pattern: a version shortcode opens OUTSIDE a fence, wraps prose plus an entire fenced yaml block, and closes on the same line as the closing backticks. The rendered HTML contains a pre block from Chroma — the flatten step's regex would collapse the per-line span boundaries onto one line and replace every `\` line-continuation with literal closing-span text. The pre flatten-bypass keeps the highlighted output intact.
+
+{{< version include-if="v2" >}}
+* **Versioned Helm install** (MARKER_VERSION_WRAPAROUND_BULLET): use the chart with the snippet below.
+  ```yaml
+  function MARKER_VERSION_WRAPAROUND_FN() {
+    context=${1:?context}
+    cluster=${2:?cluster}
+    helm upgrade -i fixture-chart oci://${HELM_REPO}/fixture \
+      --version ${IMAGE_TAG} \
+      --namespace fixture \
+      --kube-context ${context} \
+      -f - <<EOF
+  spec:
+    create: true
+    cluster: ${cluster}
+    # MARKER_VERSION_WRAPAROUND_COMMENT yaml comment inside the fence
+    network: ${cluster}
+  EOF
+  }
+  ```{{< /version >}}
+

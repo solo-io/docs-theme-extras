@@ -41,6 +41,27 @@
   {{- $inner = delimit $dedented "\n" -}}
 {{- end -}}
 
+{{- /* Markdown-feature detection on $inner (post-dedent). If the inner
+       content has no inline-formatting or list markers, RenderString
+       would only damage it — turning `#` into <h1>, "foo" into curly
+       quotes, -- into &ndash;, plain text into HTML-escaped angle text
+       inside a fenced code block. Emit raw in that case. Detects
+       **bold**, lowercase HTML tags (terminated by space/`/`/`>` so
+       yaml placeholders like <cluster2_region> don't false-positive),
+       backticks, [text](url) links, and bullet/numbered list markers
+       at column 0-3. */ -}}
+{{- $hasMarkdown := false -}}
+{{- if findRE `\*\*|<(/?[a-z][a-z0-9]*[\s/>])` $inner 1 -}}{{- $hasMarkdown = true -}}{{- end -}}
+{{- if not $hasMarkdown -}}
+  {{- if findRE "`" $inner 1 -}}{{- $hasMarkdown = true -}}{{- end -}}
+{{- end -}}
+{{- if not $hasMarkdown -}}
+  {{- if findRE `(?m)^[ \t]{0,3}([*+\-][ \t]|[0-9]+\.[ \t])` $inner 1 -}}{{- $hasMarkdown = true -}}{{- end -}}
+{{- end -}}
+{{- if not $hasMarkdown -}}
+  {{- if findRE `\[[^\]]*\]\(` $inner 1 -}}{{- $hasMarkdown = true -}}{{- end -}}
+{{- end -}}
+
 {{- if $versions -}}
   {{- $version := .Page.FirstSection.RelPermalink -}}
   {{- $version_without_product := replace $version .Site.Params.folder "" -}}
@@ -81,16 +102,32 @@
            {{- end -}}
            {{- if isset $.Params "include-if" -}}
              {{- if and (in $include_if $versionToml) $productMatches (not $rendered) -}}
-                {{- $rendered_html := $.Page.RenderString (dict "display" "inline") $inner -}}
-                {{- $flat := replaceRE ">[ \t]*\n[\\s]*<" "><" $rendered_html -}}
-                {{- replace $flat "\n" "&#10;" | safeHTML -}}
+                {{- if not $hasMarkdown -}}
+{{ $.Inner }}
+                {{- else -}}
+                  {{- $rendered_html := $.Page.RenderString (dict "display" "inline") $inner -}}
+                  {{- if strings.Contains $rendered_html "<pre" -}}
+                    {{- $rendered_html | safeHTML -}}
+                  {{- else -}}
+                    {{- $flat := replaceRE ">[ \t]*\n[\\s]*<" "><" $rendered_html -}}
+                    {{- replace $flat "\n" "&#10;" | safeHTML -}}
+                  {{- end -}}
+                {{- end -}}
                 {{- $rendered = true -}}
              {{- end -}}
              {{- else if isset $.Params "exclude-if" -}}
                 {{- if and (not (in $exclude_if $versionToml)) $productMatches (not $rendered) -}}
-                   {{- $rendered_html := $.Page.RenderString (dict "display" "inline") $inner -}}
-                {{- $flat := replaceRE ">[ \t]*\n[\\s]*<" "><" $rendered_html -}}
-                {{- replace $flat "\n" "&#10;" | safeHTML -}}
+                   {{- if not $hasMarkdown -}}
+{{ $.Inner }}
+                {{- else -}}
+                  {{- $rendered_html := $.Page.RenderString (dict "display" "inline") $inner -}}
+                  {{- if strings.Contains $rendered_html "<pre" -}}
+                    {{- $rendered_html | safeHTML -}}
+                  {{- else -}}
+                    {{- $flat := replaceRE ">[ \t]*\n[\\s]*<" "><" $rendered_html -}}
+                    {{- replace $flat "\n" "&#10;" | safeHTML -}}
+                  {{- end -}}
+                {{- end -}}
                    {{- $rendered = true -}}
              {{- end -}}
            {{- end -}}
@@ -118,9 +155,17 @@
             {{- $versionToml := .version -}}
             {{- $productMatches := or (not $currentProduct) (eq .product $currentProduct) -}}
                {{- if and (in $include $versionToml) (in $include $versionAdjusted) $productMatches (not $rendered) -}}
-                      {{- $rendered_html := $.Page.RenderString (dict "display" "inline") $inner -}}
-                {{- $flat := replaceRE ">[ \t]*\n[\\s]*<" "><" $rendered_html -}}
-                {{- replace $flat "\n" "&#10;" | safeHTML -}}
+                      {{- if not $hasMarkdown -}}
+{{ $.Inner }}
+                {{- else -}}
+                  {{- $rendered_html := $.Page.RenderString (dict "display" "inline") $inner -}}
+                  {{- if strings.Contains $rendered_html "<pre" -}}
+                    {{- $rendered_html | safeHTML -}}
+                  {{- else -}}
+                    {{- $flat := replaceRE ">[ \t]*\n[\\s]*<" "><" $rendered_html -}}
+                    {{- replace $flat "\n" "&#10;" | safeHTML -}}
+                  {{- end -}}
+                {{- end -}}
                       {{- $rendered = true -}}
                {{- end -}}
         {{- end -}}
@@ -147,9 +192,17 @@
           {{- $versionToml := .version -}}
           {{- $productMatches := or (not $currentProduct) (eq .product $currentProduct) -}}
             {{- if and (not (or (in $exclude $versionToml) (in $exclude $versionAdjusted))) $productMatches (not $rendered) -}}
+                  {{- if not $hasMarkdown -}}
+{{ $.Inner }}
+                {{- else -}}
                   {{- $rendered_html := $.Page.RenderString (dict "display" "inline") $inner -}}
-                {{- $flat := replaceRE ">[ \t]*\n[\\s]*<" "><" $rendered_html -}}
-                {{- replace $flat "\n" "&#10;" | safeHTML -}}
+                  {{- if strings.Contains $rendered_html "<pre" -}}
+                    {{- $rendered_html | safeHTML -}}
+                  {{- else -}}
+                    {{- $flat := replaceRE ">[ \t]*\n[\\s]*<" "><" $rendered_html -}}
+                    {{- replace $flat "\n" "&#10;" | safeHTML -}}
+                  {{- end -}}
+                {{- end -}}
                   {{- $rendered = true -}}
             {{- end -}}
           {{- end -}}
