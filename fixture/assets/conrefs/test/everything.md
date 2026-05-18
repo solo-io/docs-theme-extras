@@ -390,6 +390,28 @@ Two-level reuse depth — `nested-snippet.md` itself reuses `snippet.md`:
 
 {{< reuse "conrefs/test/nested-snippet.md" >}}
 
+### Multi-block reuse inside a numbered list (list-break regression)
+
+Regression guard for solo-io/docs#TBD. When a reuse shortcode expands a
+snippet whose body spans multiple block elements (paragraph + code block +
+tabs), the expansion's first line lands at the list-item content column
+but newline-separated continuation lines land at column 0. Goldmark's
+list-continuation rule then closes the outer `<ol>` and `<li>` early,
+hoisting the trailing blocks out as `<ol start="N">` fragments with tabs
+and code appearing outside the parent list.
+
+The reuse template flattens its output to a single logical line
+(newlines replaced with the `&#10;` entity) so the inserted HTML stays
+contiguous at the source column. Locks that behavior in:
+
+1. MARKER_LISTBREAK_BEFORE. First step before the multi-block reuse.
+
+2. {{< reuse "conrefs/test/multi-block-snippet.md" >}}
+
+3. MARKER_LISTBREAK_AFTER. Third step after the multi-block reuse. If the
+   list broke, this step renders under `<ol start="3">` instead of as the
+   third `<li>` of the same `<ol>`.
+
 ## Reuse images (light and dark variants)
 
 ### Light and dark variants in one call
@@ -569,6 +591,39 @@ kubectl get pods -n example
 ```
 {{% /tab %}}
 {{< /tabs >}}
+
+## Code block with Setext-like separators (Setext H1 regression)
+
+Reproduces the bug where a no-language fenced code block containing
+intentional blank-line separators between sections plus `=== Section ===`
+underline-style lines could render its body as Setext H1 headings.
+
+Hugo renders a no-language fenced code block to
+`<div><pre><code>...</code></pre></div>`, wrapped by the theme's outer
+`<div class="hextra-code-block">`. CommonMark HTML block type 6 (started
+by the outer `<div>`) terminates at any blank line. So blank lines INSIDE
+the inner `<pre><code>` would close the outer `<div>` early, and Goldmark
+would reparse the rest of the code body as markdown — turning lines like
+`=== Cluster: cluster1 ===` into Setext H1 headings and turning the copy
+button's HTML attributes into visible text.
+
+The render-codeblock template replaces blank lines in the code-block
+output with `\n&#10;` so Goldmark sees no blank lines to terminate on,
+while the browser still renders LF inside `<pre>`:
+
+```
+MARKER_SETEXT_PROSE_HEAD
+=== Cluster: MARKER_SETEXT_CLUSTER_1 ===
+line one
+line two
+
+=== Cluster: MARKER_SETEXT_CLUSTER_2 ===
+line three
+line four
+
+------ done ------
+MARKER_SETEXT_PROSE_TAIL
+```
 
 ## Hextra defaults
 

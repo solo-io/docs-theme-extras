@@ -94,6 +94,128 @@ test.describe(`smoke: ${LABEL}`, () => {
         `already-rendered HTML from a percent-form shortcode (e.g. {{% tab %}})`,
     ).toEqual([]);
   });
+
+  test(`no <ol start="N"> list-break artifacts (${SAMPLE_LABEL})`, () => {
+    // `<ol start="N">` is almost always the signature of a list-continuation
+    // break: a shortcode or conref emitted multi-line HTML whose continuation
+    // lines landed at column 0, so Goldmark closed the enclosing <ol> early
+    // and restarted with `<ol start="N">` to keep the visible numbering. The
+    // side effects are loud — tabs hoisted out of their step, subsequent
+    // headings rendered as body text, tables missing borders.
+    //
+    // Legitimate manual starts (`5. step five`) are rare in technical docs
+    // and would still show as a single `<ol start="5">` not preceded by a
+    // sibling `</ol>`; report all occurrences and let the author either fix
+    // the source to a continuous list or allowlist a path if intentional.
+    const htmlFiles = collectHtml(SCAN_ROOT, MAX_FILES);
+    const offenders: { page: string; starts: string[] }[] = [];
+    for (const f of htmlFiles) {
+      const rel = path.relative(SCAN_ROOT, f);
+      // The fixture's `trailing-step` page intentionally reproduces the
+      // upstream version.html bug for the dedicated regression test in
+      // version-nested-list.spec.ts. Don't double-count it here.
+      if (/(^|\/)trailing-step\//.test(rel)) continue;
+      const html = fs.readFileSync(f, "utf8");
+      // Strip the Copy-as-Markdown <script> block so we only inspect
+      // rendered HTML, not the embedded markdown source.
+      const visible = html.replace(
+        /<script[^>]*type=["']text\/markdown["'][^>]*>[\s\S]*?<\/script>/gi,
+        "",
+      );
+      const matches = visible.match(/<ol\s+start="(\d+)"/g);
+      if (matches && matches.length > 0) {
+        const starts = matches.map((m) => m.match(/start="(\d+)"/)![1]);
+        offenders.push({ page: rel, starts });
+      }
+    }
+    expect(
+      offenders.map((o) => `${o.page} [start=${o.starts.join(",")}]`),
+      `pages with <ol start="N"> artifacts — almost always a list-continuation ` +
+        `break: a shortcode or conref emitted multi-line HTML inside a numbered ` +
+        `list item, and Goldmark closed the <ol> early. Symptoms: tabs hoisted ` +
+        `out of step, subsequent headings rendered as body text. Fix the source ` +
+        `(flatten the shortcode output, or move the multi-block content out of ` +
+        `the list item) or, if the start=N is intentional, allowlist the page.`,
+    ).toEqual([]);
+  });
+
+  test(`no Setext heading leaked from a no-language code block (${SAMPLE_LABEL})`, () => {
+    // A no-language fenced code block renders to <div><pre><code>...</code></pre></div>,
+    // wrapped by the theme's outer <div class="hextra-code-block">. CommonMark
+    // HTML block type 6 (started by the outer <div>) terminates at any blank
+    // line — so a blank line INSIDE the inner <pre><code> closes the outer
+    // <div> early, and Goldmark reparses the tail of the code body as markdown.
+    // Lines like `=== Cluster: cluster2 ===` become Setext H1 headings; copy
+    // button HTML attribute text leaks into prose.
+    //
+    // The signature is a <h1> or <h2> whose body is dominated by Setext-style
+    // decoration characters (=, -, *) with at least 3 in a row. Real prose
+    // headings never contain "=== === ===" runs.
+    const htmlFiles = collectHtml(SCAN_ROOT, MAX_FILES);
+    const offenders: { page: string; sample: string }[] = [];
+    for (const f of htmlFiles) {
+      const html = fs.readFileSync(f, "utf8");
+      const visible = html.replace(
+        /<script[^>]*type=["']text\/markdown["'][^>]*>[\s\S]*?<\/script>/gi,
+        "",
+      );
+      // <h1>...===...</h1> with the run of `=` not adjacent to a tag (so
+      // we don't match a legitimate "=== heading" that an author wrote
+      // intentionally — that would not have a CLUSTER-like infix).
+      const m = visible.match(/<h[12][^>]*>[^<]*={3,}[^<]*<\/h[12]>/);
+      if (m) {
+        offenders.push({ page: path.relative(SCAN_ROOT, f), sample: m[0] });
+      }
+    }
+    expect(
+      offenders.map((o) => `${o.page}: ${o.sample}`),
+      `pages where a no-language code block's body got reparsed as Setext ` +
+        `H1/H2 — the outer hextra-code-block <div> terminated early at a ` +
+        `blank line inside the code. The render-codeblock template should ` +
+        `replace blank lines inside the code output with \\n&#10; so ` +
+        `Goldmark sees no terminator.`,
+    ).toEqual([]);
+  });
+
+  test(`no visible HTML attribute text leakage outside tags (${SAMPLE_LABEL})`, () => {
+    // When an HTML block terminates early (the Setext-from-code-block bug
+    // and similar), the tail of the buffer can include attribute text from
+    // a tag whose opener landed in the now-orphaned region. E.g. the copy
+    // button's `class="hextra-code-copy-btn ..."` text appears as visible
+    // prose between elements instead of as a real attribute on a <button>.
+    //
+    // The signature: a `class="hextra-...` substring that is NOT inside a
+    // tag (no `<` before it within 200 chars on the same line) and IS
+    // immediately preceded by `\n` or `>`. This is a heuristic — but a
+    // tight one for this theme's class names.
+    const htmlFiles = collectHtml(SCAN_ROOT, MAX_FILES);
+    const offenders: { page: string; sample: string }[] = [];
+    for (const f of htmlFiles) {
+      const html = fs.readFileSync(f, "utf8");
+      const visible = html.replace(
+        /<script[^>]*type=["']text\/markdown["'][^>]*>[\s\S]*?<\/script>/gi,
+        "",
+      );
+      // Look for `class="hextra-` preceded by whitespace and a `>` (i.e.
+      // after a tag closes, before the next tag opens). Inside a real
+      // tag, `class="..."` is preceded by a tag name and space, never by
+      // ">". This catches the copy-button-attribute-leak shape.
+      const m = visible.match(/>\s+class="hextra-[a-z][a-z0-9-]*/);
+      if (m) {
+        offenders.push({
+          page: path.relative(SCAN_ROOT, f),
+          sample: m[0].slice(0, 80),
+        });
+      }
+    }
+    expect(
+      offenders.map((o) => `${o.page}: ${JSON.stringify(o.sample)}`),
+      `pages where HTML attribute text (class="hextra-...") leaked outside ` +
+        `tag context — usually the tail of a copy-button whose container ` +
+        `<div> was closed early by a CommonMark HTML-block terminator (blank ` +
+        `line inside <pre>, or a column-0 continuation inside a list item).`,
+    ).toEqual([]);
+  });
 });
 
 // Walk `root` depth-first, collecting `*.html` files. `max === 0` means

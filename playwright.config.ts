@@ -46,7 +46,7 @@ export default defineConfig({
     {
       name: "static",
       testMatch:
-        /static\.spec\.ts$|versioning\.spec\.ts$|version-nested-list\.spec\.ts$|version-inside-fence\.spec\.ts$|shortcode-contexts\.spec\.ts$|hugo-warnings\.spec\.ts$|auto-cards\.spec\.ts$|presence\.spec\.ts$|curl-quotes\.spec\.ts$|shortcode-args\.spec\.ts$|include-form\.spec\.ts$|cascade-type\.spec\.ts$|github-shortcode\.spec\.ts$/,
+        /static\.spec\.ts$|versioning\.spec\.ts$|version-nested-list\.spec\.ts$|version-inside-fence\.spec\.ts$|shortcode-contexts\.spec\.ts$|hugo-warnings\.spec\.ts$|auto-cards\.spec\.ts$|presence\.spec\.ts$|curl-quotes\.spec\.ts$|shortcode-args\.spec\.ts$|include-form\.spec\.ts$|cascade-type\.spec\.ts$|github-shortcode\.spec\.ts$|list-break-and-setext\.spec\.ts$/,
     },
     {
       name: "browser",
