@@ -1,0 +1,42 @@
+{{- /*
+  flatten-rendered — flatten rendered HTML to a single logical line so the
+  output doesn't break enclosing markdown structure (e.g. a numbered list)
+  when the calling shortcode lands inside a list item.
+
+  Input: the rendered HTML string from a Page.RenderString call (a shortcode
+         body or reuse'd snippet that's been turned into HTML).
+
+  Output: the same HTML with all newlines outside <script>/<style> blocks
+          replaced by the `&#10;` entity. The browser decodes the entity to
+          LF, so visible whitespace is preserved (and inside <pre>, LF still
+          renders as a line break). Goldmark, however, does not decode HTML
+          entities — so when this output is re-embedded in the surrounding
+          page markdown, no newline-based block rules trigger and the parent
+          list item's content continuation rule isn't violated.
+
+  Why <script>/<style> need special handling:
+    1. Their content is raw — browsers do NOT decode HTML entities inside
+       <script>/<style> bodies. An injected `&#10;` becomes literal text in
+       the JS/CSS source, and Hugo's `--minify` pipeline parses the body
+       and rejects it with "unexpected & in expression".
+    2. CommonMark HTML Block Type 1 only recognizes <script>/<style> when
+       the tag starts a line. After flatten, a mid-line <script> would get
+       parsed as inline-HTML-then-markdown — attribute values smart-quoted,
+       URLs auto-linked.
+
+  Fix: extract <script>/<style> blocks with placeholders, flatten the rest,
+  restore each block surrounded by real newlines so Goldmark sees them at
+  column 0 of their own logical line.
+*/ -}}
+{{- $rendered := printf "%s" . -}}
+{{- $protected := findRE `(?s)<(?:script|style)\b[^>]*>.*?</(?:script|style)>` $rendered -}}
+{{- range $i, $block := $protected -}}
+  {{- $placeholder := printf "__FLATTEN_PROTECT_%d__" $i -}}
+  {{- $rendered = replace $rendered $block $placeholder -}}
+{{- end -}}
+{{- $rendered = replace $rendered "\n" "&#10;" -}}
+{{- range $i, $block := $protected -}}
+  {{- $placeholder := printf "__FLATTEN_PROTECT_%d__" $i -}}
+  {{- $rendered = replace $rendered $placeholder (printf "\n%s\n" $block) -}}
+{{- end -}}
+{{- return $rendered -}}

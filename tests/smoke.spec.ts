@@ -177,6 +177,90 @@ test.describe(`smoke: ${LABEL}`, () => {
     ).toEqual([]);
   });
 
+  test(`no &#10; entity inside <script> bodies (${SAMPLE_LABEL})`, () => {
+    // <script> content is raw — browsers don't decode HTML entities inside
+    // script bodies. So an injected `&#10;` ends up as literal text in the
+    // JS source, and Hugo's `--minify` pipeline parses the body and rejects
+    // it with "unexpected & in expression". The CI preview deploys for
+    // gateway and gloo-mesh-gateway failed on this signature when the reuse
+    // template first flattened all newlines unconditionally. The fix is to
+    // protect <script>/<style> blocks during flatten and restore them with
+    // real newlines; this smoke check is the cross-product guard.
+    const htmlFiles = collectHtml(SCAN_ROOT, MAX_FILES);
+    const offenders: { page: string; sample: string }[] = [];
+    for (const f of htmlFiles) {
+      const html = fs.readFileSync(f, "utf8");
+      // Skip the Copy-as-Markdown <script type="text/markdown"> tag — it
+      // legitimately embeds the page's raw markdown source which may
+      // contain `&#10;` if the source mentions the entity.
+      const stripped = html.replace(
+        /<script[^>]*type=["']text\/markdown["'][^>]*>[\s\S]*?<\/script>/gi,
+        "",
+      );
+      const scriptRe = /<script[^>]*>([\s\S]*?)<\/script>/g;
+      let m: RegExpExecArray | null;
+      while ((m = scriptRe.exec(stripped)) !== null) {
+        if (m[1].includes("&#10;")) {
+          const sample = m[1].slice(0, 80).replace(/\s+/g, " ");
+          offenders.push({ page: path.relative(SCAN_ROOT, f), sample });
+          break;
+        }
+      }
+    }
+    expect(
+      offenders.map((o) => `${o.page}: ${JSON.stringify(o.sample)}`),
+      `pages where a <script> body contains the &#10; HTML entity. Hugo's ` +
+        `--minify pipeline will reject this with 'unexpected & in expression'. ` +
+        `Cause: a reuse-flatten replaced newlines inside the raw <script> ` +
+        `body with the entity. Fix: protect <script>/<style> blocks during ` +
+        `flatten (see docs-theme-extras/layouts/_shortcodes/reuse.html).`,
+    ).toEqual([]);
+  });
+
+  test(`no alert body rendered as <pre><code> (${SAMPLE_LABEL})`, () => {
+    // When `{{< alert >}}` appears in a deeply-indented context (e.g.
+    // nested sub-step at column 6), the alert .Inner reaches markdownify
+    // with 6 spaces of leading whitespace per line. Without dedent,
+    // CommonMark's "4 spaces = indented code block" rule fires and the
+    // entire alert body renders inside <pre><code>...</code></pre> with
+    // any inline HTML tags appearing as escaped &lt;code&gt; visible text.
+    // alert.html dedents .Inner before markdownify; this cross-product
+    // smoke check confirms the dedent is applied wherever an alert lands.
+    const htmlFiles = collectHtml(SCAN_ROOT, MAX_FILES);
+    const offenders: { page: string; sample: string }[] = [];
+    for (const f of htmlFiles) {
+      const html = fs.readFileSync(f, "utf8");
+      const stripped = html.replace(
+        /<script[^>]*type=["']text\/markdown["'][^>]*>[\s\S]*?<\/script>/gi,
+        "",
+      );
+      // Match alert bodies that open immediately with <pre> (with at most
+      // whitespace/`&#10;` between body div and the <pre>). The body
+      // legitimately wraps inline content or block elements like <p>, but
+      // a <pre> as the first child means the entire body got treated as
+      // a code block — the bug signature.
+      const re =
+        /<div class="solo-alert-body">(?:\s|&#10;)*<pre[\s>]/g;
+      const m = re.exec(stripped);
+      if (m) {
+        const idx = m.index;
+        offenders.push({
+          page: path.relative(SCAN_ROOT, f),
+          sample: stripped
+            .slice(idx, idx + 120)
+            .replace(/\s+/g, " "),
+        });
+      }
+    }
+    expect(
+      offenders.map((o) => `${o.page}: ${JSON.stringify(o.sample)}`),
+      `pages where an alert body renders inside <pre><code>. The alert's ` +
+        `.Inner was passed to markdownify with 4+ spaces of leading indent, ` +
+        `so CommonMark treated the body as an indented code block. Fix: ` +
+        `dedent .Inner before markdownify (see alert.html).`,
+    ).toEqual([]);
+  });
+
   test(`no visible HTML attribute text leakage outside tags (${SAMPLE_LABEL})`, () => {
     // When an HTML block terminates early (the Setext-from-code-block bug
     // and similar), the tail of the buffer can include attribute text from

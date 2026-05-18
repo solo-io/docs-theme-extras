@@ -16,6 +16,27 @@
 
 {{< alert context="success" >}}MARKER_ALERT_SUCCESS. Success alerts use the success context.{{< /alert >}}
 
+### Alert inside an indented list item (dedent regression)
+
+Regression guard for the alert-body-as-pre-code bug. When the alert
+shortcode appears in a deeply-indented context, like inside `4. ...` then
+a nested sub-step at column 6, .Inner has 6 spaces of leading whitespace
+per line. Without dedent, markdownify hits CommonMark's "4 spaces =
+indented code block" rule and renders the entire alert body inside
+`<pre><code>...</code></pre>`, with inline HTML tags appearing as escaped
+`&lt;code&gt;` visible text.
+
+1. First step.
+   1. Nested sub-step.
+      {{< alert >}}
+      MARKER_ALERT_INDENTED. The <code>installNamespace</code> setting
+      controls which namespace receives the operator. Explicit
+      <strong>MARKER_ALERT_INDENTED_HTML</strong> tags must render as
+      real HTML elements, not as escaped text inside a pre/code block.
+      {{< /alert >}}
+
+2. Second step after the alert.
+
 ## Callout
 
 In the local override at `layouts/shortcodes/callout.html`, the `callout` shortcode is implemented identically to `alert` — same context-to-class map, same icon set, same DOM. The two are aliases. The fixture exercises all four canonical types so a regression that drifts one shortcode away from the other surfaces immediately.
@@ -389,6 +410,24 @@ Inline reuse: {{< reuse "conrefs/test/snippet.md" >}}
 Two-level reuse depth — `nested-snippet.md` itself reuses `snippet.md`:
 
 {{< reuse "conrefs/test/nested-snippet.md" >}}
+
+### Reuse whose body emits `<script>` tags (minify + Type-1 HTML block regression)
+
+Regression guard for the preview-deploy failures on 2026-05-18. The reuse
+template flattens its rendered output (newlines → `&#10;`) so multi-line
+snippets don't break a parent numbered list. But `<script>` and `<style>`
+content is RAW — browsers don't decode entities inside script bodies, so
+an injected `&#10;` becomes literal text that Hugo's `--minify` pipeline
+parses as JS and rejects with "unexpected & in expression". And Goldmark
+only recognizes a `<script>` as a Type-1 HTML block when the tag starts a
+line, so a mid-line `<script>` after flatten gets parsed as inline HTML
+followed by markdown — the next line's attribute values get smart-quoted
+and URLs get auto-linked, producing invalid HTML.
+
+The reuse template protects `<script>`/`<style>` blocks during flatten and
+restores them surrounded by real newlines. Locks that behavior in:
+
+{{< reuse "conrefs/test/script-snippet.md" >}}
 
 ### Multi-block reuse inside a numbered list (list-break regression)
 

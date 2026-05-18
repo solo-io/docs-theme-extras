@@ -81,10 +81,16 @@ function extractH2s(html: string): string[] {
   // Hextra wraps H2 text in a span before an anchor link. Match any inline
   // children of h2 and strip tags. Real shape:
   //   <h2>Alerts<span ...></span><a ...></a></h2>
+  //
+  // The reuse template's flatten replaces newlines inside the rendered
+  // snippet (including between an H2's children) with `&#10;` entities.
+  // Decode those as whitespace so the extracted text matches the source
+  // heading.
   const out: string[] = [];
   for (const m of html.matchAll(/<h2[^>]*>([\s\S]*?)<\/h2>/g)) {
     const text = m[1]
       .replace(/<[^>]+>/g, " ")
+      .replace(/&#10;/g, " ")
       .replace(/&amp;/g, "&")
       .replace(/&#39;/g, "'")
       .replace(/&quot;/g, '"')

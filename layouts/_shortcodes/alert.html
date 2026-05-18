@@ -1,3 +1,21 @@
+{{- /* Alert shortcode. Emits the rendered HTML on ONE logical line so the
+       output doesn't break enclosing markdown structure (e.g. a numbered
+       list) when the alert is called from inside a list item. See
+       utils/flatten-rendered for the &#10;-encoding rationale.
+
+       .Inner is dedented before markdownify so CommonMark's "4 spaces =
+       code block" rule doesn't trigger when an alert appears inside a
+       deeply-indented list item, like:
+
+           4. ...
+              {{< alert >}}
+              The <code>foo</code> setting...
+              {{< /alert >}}
+
+       Without dedent, the body lands at 6+ spaces of indent and renders
+       inside <pre><code>...</code></pre>, with inline HTML tags appearing
+       as escaped &lt;code&gt; visible text. */ -}}
+
 {{- $icon_map := dict
   "info"    "info"
   "warning" "warning"
@@ -17,16 +35,44 @@
 {{- $context := .Get "context" | default "default" -}}
 {{- $colors := index $color_map $context | default "alert-default" -}}
 {{- $icon := index $icon_map $context | default "notifications" -}}
-<div class="solo-alert {{ $colors }}" role="alert">
-  <div class="solo-alert-icon">
-  {{- with .Get "icon" }}{{ . }}{{ else }}<i class="material-icons" aria-hidden="true">{{ $icon }}</i>{{ end -}}
-  </div>
-  {{- with .Get "text" }}<div class="solo-alert-body">{{ . | markdownify }}</div>
-  {{- else -}}
+{{- $iconHTML := "" -}}
+{{- with .Get "icon" -}}
+  {{- $iconHTML = . -}}
+{{- else -}}
+  {{- $iconHTML = printf `<i class="material-icons" aria-hidden="true">%s</i>` $icon -}}
+{{- end -}}
+{{- $bodyHTML := "" -}}
+{{- with .Get "text" -}}
+  {{- $bodyHTML = . | markdownify -}}
+{{- else -}}
   {{- with .Inner -}}
-  <div class="solo-alert-body">{{ . | markdownify }}</div>
+    {{- $inner := . -}}
+    {{- $lines := split $inner "\n" -}}
+    {{- $minIndent := -1 -}}
+    {{- range $lines -}}
+      {{- $trimmed := strings.TrimLeft " \t" . -}}
+      {{- if ne $trimmed "" -}}
+        {{- $thisIndent := sub (len .) (len $trimmed) -}}
+        {{- if or (eq $minIndent -1) (lt $thisIndent $minIndent) -}}
+          {{- $minIndent = $thisIndent -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+    {{- if gt $minIndent 0 -}}
+      {{- $dedented := slice -}}
+      {{- range $lines -}}
+        {{- if ge (len .) $minIndent -}}
+          {{- $dedented = $dedented | append (substr . $minIndent) -}}
+        {{- else -}}
+          {{- $dedented = $dedented | append . -}}
+        {{- end -}}
+      {{- end -}}
+      {{- $inner = delimit $dedented "\n" -}}
+    {{- end -}}
+    {{- $bodyHTML = $inner | markdownify -}}
   {{- else -}}
-  <div class="solo-alert-body"><p><em>Alert content not available</em></p></div>
+    {{- $bodyHTML = "<p><em>Alert content not available</em></p>" -}}
   {{- end -}}
-  {{- end -}}
-</div>
+{{- end -}}
+{{- $bodyHTML = replace (printf "%s" $bodyHTML) "\n" "&#10;" -}}
+<div class="solo-alert {{ $colors }}" role="alert"><div class="solo-alert-icon">{{ $iconHTML | safeHTML }}</div><div class="solo-alert-body">{{ $bodyHTML | safeHTML }}</div></div>

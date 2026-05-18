@@ -1,3 +1,24 @@
+{{- /* When {{< reuse "..." >}} is called inside a list item like
+       `7. {{< reuse "..." >}}`, Hugo substitutes the rendered HTML at the
+       call's source position. The first line lands at the list-item
+       content column (e.g., column 4 after `7. `), but subsequent
+       newline-separated lines land at column 0. Goldmark's list-item
+       continuation rule then terminates the list at the first column-0
+       line, closing </li>/</ol> early and producing <ol start="N">
+       fragments with the snippet's tail content (tabs, code blocks,
+       paragraphs) hoisted outside the list.
+
+       Keeping the entire reuse expansion on one line means there are no
+       column-0 continuation lines for Goldmark to break on. The browser
+       decodes &#10; to LF, and inside <pre> it still renders as a line
+       break. Goldmark, however, does not decode entities — it sees &#10;
+       as plain text, so no newline-based block rules trigger.
+
+       .Position.ColumnNumber was tried as an alternative (indent
+       continuation lines by ColumnNumber-1 spaces), but Hugo reports
+       col=0 or col=1 for most shortcode calls — it doesn't reflect the
+       source markdown column inside list items. */ -}}
+
 {{- /* Initialize */ -}}
 {{- $asset := "" -}}
 {{- $parentVersion := "" -}}
@@ -98,5 +119,10 @@
        into the middle of a code-block continuation line. RenderString wraps
        single-line content in a paragraph and emits a trailing newline. */ -}}
 {{- $rendered := $content | .Page.RenderString -}}
-{{- strings.TrimRight " \n\t" $rendered | safeHTML -}}
+{{- $rendered = strings.TrimRight " \n\t" $rendered -}}
 
+{{- /* Flatten rendered output via utils/flatten-rendered so the inserted HTML
+       doesn't break a parent numbered list. See that partial for the full
+       explanation of the &#10; encoding and <script>/<style> protection. */ -}}
+{{- $rendered = partial "utils/flatten-rendered.html" $rendered -}}
+{{- $rendered | safeHTML -}}
