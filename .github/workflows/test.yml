@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 env:
-  HUGO_VERSION: 0.160.1
+  HUGO_VERSION: 0.161.1
   NODE_VERSION: '20'
 
 jobs:

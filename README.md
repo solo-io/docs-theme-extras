@@ -183,7 +183,7 @@ jobs:
       - uses: actions/setup-go@v6
         with: { go-version: 'stable', cache: false }
       - uses: peaceiris/actions-hugo@v3
-        with: { hugo-version: '0.160.1', extended: true }
+        with: { hugo-version: '0.161.1', extended: true }
 
       - name: Resolve docs-theme-extras SHA from go.mod
         id: theme-sha
