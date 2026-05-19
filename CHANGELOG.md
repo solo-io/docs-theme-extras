@@ -15,7 +15,13 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
-## [1.0.0] — Initial release
+## [0.0.2]
+
+- Changed **Copy Codeblocks** button to only copy shell and bash codeblocks, rather than all codeblocks.
+
+
+
+## [0.0.1] — Initial release
 
 The module reaches feature parity with the per-repo overrides previously
 maintained inline in [solo-io/docs](https://github.com/solo-io/docs) and
