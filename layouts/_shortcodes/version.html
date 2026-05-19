@@ -51,7 +51,7 @@
        backticks, [text](url) links, and bullet/numbered list markers
        at column 0-3. */ -}}
 {{- $hasMarkdown := false -}}
-{{- if findRE `\*\*|<(/?[a-z][a-z0-9]*[\s/>])` $inner 1 -}}{{- $hasMarkdown = true -}}{{- end -}}
+{{- if findRE `\*\*` $inner 1 -}}{{- $hasMarkdown = true -}}{{- end -}}
 {{- if not $hasMarkdown -}}
   {{- if findRE "`" $inner 1 -}}{{- $hasMarkdown = true -}}{{- end -}}
 {{- end -}}

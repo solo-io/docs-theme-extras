@@ -857,12 +857,12 @@ key: COND_FENCE_SAMELINE
 inner: value
 ```{{% /conditional-text %}}
 
-### Cards whose link attribute is itself a shortcode call
+### Cards inside version and conditional-text blocks
 
-The card shortcode takes a `link` named argument. Embedding another shortcode invocation inside the quoted value tests whether Hugo's shortcode parser recursively expands inner calls before passing the resolved string to the outer shortcode. Title text carries the sentinel so the test can locate the rendered card; the test also asserts the rendered anchor's `href` matches the URL the nested `link` shortcode would resolve to (`/test/v2/rebased/`).
+Cards using the `path` attribute inside version and conditional-text wrappers. The card shortcode resolves `path` relative to the current section, so version-gated cards link to the correct version. Title text carries the sentinel; the test asserts the rendered anchor's `href` contains `/rebased/`.
 
 {{< cards >}}
-{{% version include-if="v2" %}}{{< card link=`{{< link path="rebased" >}}` title="MARKER_NESTED_ARG_TITLE Nested link in card" subtitle="Card with a nested shortcode call as its link attribute." icon="document" >}}{{% /version %}}
-{{% conditional-text include-if="test" %}}{{< card link=`{{< link path="rebased" >}}` title="COND_NESTED_ARG_TITLE Nested link in card" subtitle="Build-gated card with a nested shortcode call as its link attribute." icon="document" >}}{{% /conditional-text %}}
+{{% version include-if="v2" %}}{{< card path="rebased" title="MARKER_NESTED_ARG_TITLE Version-gated card with path resolution" subtitle="Card inside a version block, link resolved relative to the current section." icon="document" >}}{{% /version %}}
+{{% conditional-text include-if="test" %}}{{< card path="rebased" title="COND_NESTED_ARG_TITLE Conditional-gated card with path resolution" subtitle="Card inside a conditional-text block, link resolved relative to the current section." icon="document" >}}{{% /conditional-text %}}
 {{< /cards >}}
 

@@ -109,8 +109,8 @@ export const VERSION_MARKERS = {
   // closing fence on the same line as the closing tag. Compactness
   // variant of the wrap-around-fence pattern.
   fenceSameLine: "MARKER_FENCE_SAMELINE_V2",
-  // Version-gated card whose link= attribute is itself a nested shortcode
-  // call. Title text carries the marker so we can locate the rendered card.
+  // Version-gated card using path= inside a {{% version %}} wrapper.
+  // Title text carries the marker so we can locate the rendered card.
   nestedArgTitle: "MARKER_NESTED_ARG_TITLE",
 } as const;
 
@@ -146,7 +146,7 @@ export const CONDITIONAL_MARKERS = {
   // pattern. The body should render as a Chroma-highlighted yaml fence
   // when buildCondition matches, not as plain backtick text.
   fenceSameLine: "COND_FENCE_SAMELINE",
-  // Conditional-gated card whose link= attribute is itself a nested
-  // shortcode call. Title text carries the marker.
+  // Conditional-gated card using path= inside a {{% conditional-text %}}
+  // wrapper. Title text carries the marker.
   nestedArgTitle: "COND_NESTED_ARG_TITLE",
 } as const;

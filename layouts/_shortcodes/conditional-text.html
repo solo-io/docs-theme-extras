@@ -14,7 +14,7 @@
        space/`/`/`>` so yaml placeholders like <cluster2_region> and
        <NAME> don't trigger a false positive. */ -}}
 {{- $hasMarkdown := false -}}
-{{- if findRE `\*\*|<(/?[a-z][a-z0-9]*[\s/>])` .Inner 1 -}}{{- $hasMarkdown = true -}}{{- end -}}
+{{- if findRE `\*\*` .Inner 1 -}}{{- $hasMarkdown = true -}}{{- end -}}
 {{- if not $hasMarkdown -}}
   {{- if findRE "`" .Inner 1 -}}{{- $hasMarkdown = true -}}{{- end -}}
 {{- end -}}
