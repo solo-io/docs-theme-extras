@@ -300,6 +300,166 @@ test.describe(`smoke: ${LABEL}`, () => {
         `line inside <pre>, or a column-0 continuation inside a list item).`,
     ).toEqual([]);
   });
+
+  test(`no leaked Markdown table rows in rendered prose (${SAMPLE_LABEL})`, () => {
+    if (!target.shouldRun("shortcodeLeaks")) {
+      test.skip(true, "shortcodeLeaks check disabled in CONFIG");
+    }
+    // A separator row (`| --- | --- |`) or data row (`| col | col |`)
+    // appearing in visible HTML means Goldmark failed to parse the table.
+    // The most common cause: a shortcode call appended to the separator row
+    // (e.g. `|---|---|{{< conditional-text >}}`) makes CommonMark's
+    // separator check fail, and the whole table falls back to plain-text
+    // paragraphs. The separator pattern is the highest-signal check —
+    // two or more pipe-delimited dash cells at line-start almost never
+    // occur in legitimate rendered HTML outside of <pre>/<code> blocks.
+    // Data rows are checked as a secondary signal. Both strip
+    // <pre>/<code>/<style>/<svg> first to eliminate false positives from
+    // code blocks or SVG path data.
+    const htmlFiles = collectHtml(SCAN_ROOT, MAX_FILES);
+    const offenders: { page: string; sample: string }[] = [];
+    for (const f of htmlFiles) {
+      const html = fs.readFileSync(f, "utf8");
+      const visible = html
+        .replace(/<script[^>]*type=["']text\/markdown["'][^>]*>[\s\S]*?<\/script>/gi, "")
+        .replace(/<pre[\s\S]*?<\/pre>/gi, "")
+        .replace(/<code[\s\S]*?<\/code>/gi, "")
+        .replace(/<style[\s\S]*?<\/style>/gi, "")
+        .replace(/<svg[\s\S]*?<\/svg>/gi, "");
+      // Separator rows with 2+ cells: `| --- |`, `| :---: |`,
+      // `|-------|------------|`, `| :- | -: |` etc., at line-start
+      // with up to 3 leading spaces (CommonMark maximum before code-block).
+      const sep = visible.match(
+        /^[ \t]*\|[ \t]*:?-{2,}:?[ \t]*(?:\|[ \t]*:?-{2,}:?[ \t]*)+\|?[ \t]*$/m,
+      );
+      if (sep) {
+        offenders.push({ page: path.relative(SCAN_ROOT, f), sample: sep[0].trim() });
+        continue; // separator is definitive; skip the data-row check for this page
+      }
+      // Data rows: at least two non-empty, non-pipe cells on the same line.
+      const row = visible.match(/^[ \t]*\|[^|\n]+\|[^|\n]+\|[^\n]*$/m);
+      if (row) {
+        offenders.push({ page: path.relative(SCAN_ROOT, f), sample: row[0].trim() });
+      }
+    }
+    expect(
+      offenders.map((o) => `${o.page}: ${JSON.stringify(o.sample)}`),
+      `pages where a Markdown table rendered as plain text instead of <table>. ` +
+        `The most common cause is a shortcode call appended to the separator row ` +
+        `(e.g. \`|---|---|{{< conditional-text >}}\`) — CommonMark's separator ` +
+        `check fails and the whole table falls back to paragraphs. Fix: keep ` +
+        `the separator row clean; move any shortcode tag to a data row instead.`,
+    ).toEqual([]);
+  });
+
+  test(`no unformatted Markdown links in rendered prose (${SAMPLE_LABEL})`, () => {
+    if (!target.shouldRun("shortcodeLeaks")) {
+      test.skip(true, "shortcodeLeaks check disabled in CONFIG");
+    }
+    // A `[text](url)` pattern in visible HTML means Goldmark didn't convert
+    // the link to <a href="...">text</a>. This happens when Markdown content
+    // is inserted inside an HTML-block context where CommonMark has stopped
+    // processing Markdown syntax — e.g. a shortcode that emits <ul>…</ul>
+    // followed by a Markdown list item on the very next line (HTML block
+    // type 6 swallows the following line until a blank line appears).
+    // Covers relative (./  ../), absolute-path (/page/), and external
+    // (https?://) URL forms; fragment-only (#anchor) links are excluded
+    // because they are commonly inlined in HTML attribute values.
+    const htmlFiles = collectHtml(SCAN_ROOT, MAX_FILES);
+    const offenders: { page: string; sample: string }[] = [];
+    for (const f of htmlFiles) {
+      const html = fs.readFileSync(f, "utf8");
+      const visible = html
+        .replace(/<script[^>]*type=["']text\/markdown["'][^>]*>[\s\S]*?<\/script>/gi, "")
+        .replace(/<pre[\s\S]*?<\/pre>/gi, "")
+        .replace(/<code[\s\S]*?<\/code>/gi, "")
+        .replace(/<style[\s\S]*?<\/style>/gi, "")
+        .replace(/<svg[\s\S]*?<\/svg>/gi, "");
+      const m = visible.match(
+        /\][ \t]*\((?:\.\.?\/[^)]+|https?:\/\/[^)]+|\/[a-z][^)]*)\)/,
+      );
+      if (m) {
+        offenders.push({ page: path.relative(SCAN_ROOT, f), sample: m[0].slice(0, 80) });
+      }
+    }
+    expect(
+      offenders.map((o) => `${o.page}: ${JSON.stringify(o.sample)}`),
+      `pages where a Markdown link [text](url) appeared as raw text instead of ` +
+        `<a href="...">text</a>. This occurs when shortcode output containing ` +
+        `Markdown is inserted inside a CommonMark HTML block — syntax inside ` +
+        `an HTML block is not processed as Markdown. Fix: ensure the HTML block ` +
+        `is closed with a blank line before the Markdown link, or pre-render ` +
+        `links to <a> tags before inserting them into HTML context.`,
+    ).toEqual([]);
+  });
+
+  test(`no raw Markdown formatting in figure captions or image alt text (${SAMPLE_LABEL})`, () => {
+    if (!target.shouldRun("shortcodeLeaks")) {
+      test.skip(true, "shortcodeLeaks check disabled in CONFIG");
+    }
+    // Raw **bold**, *italic*, or _italic_ inside a <figcaption> or
+    // <img alt="..."> means the caption/alt string was assembled from
+    // Markdown source without being passed through a renderer — emphasis
+    // markers appear as literal asterisks or underscores to readers.
+    // Also catches [text](url) link syntax inside figcaptions, which
+    // appears when a shortcode returns a Markdown string used directly as
+    // caption content.
+    //
+    // Detection strategy:
+    //   <figcaption>: strip inner HTML tags, then check the text content
+    //     for ** / * / word-boundary _ / [text](url) patterns.
+    //   <img alt="...">: check the attribute value for ** and * only —
+    //     underscores are too common in technical identifiers (snake_case)
+    //     to flag reliably in alt strings.
+    //
+    // One offender per file is reported (first hit wins) to keep the
+    // output actionable without flooding the report with duplicates.
+    const htmlFiles = collectHtml(SCAN_ROOT, MAX_FILES);
+    const offenders: { page: string; sample: string }[] = [];
+    for (const f of htmlFiles) {
+      let found = false;
+      const html = fs.readFileSync(f, "utf8");
+      const rel = path.relative(SCAN_ROOT, f);
+
+      // --- figcaption checks ---
+      const figRe = /<figcaption[^>]*>([\s\S]*?)<\/figcaption>/gi;
+      let m: RegExpExecArray | null;
+      while (!found && (m = figRe.exec(html)) !== null) {
+        const text = m[1].replace(/<[^>]+>/g, "");
+        const hit =
+          text.match(/\*\*[^*\n]+\*\*/) ??                          // **bold**
+          text.match(/(?<!\*)\*[^*\n]+\*(?!\*)/) ??                 // *italic*
+          text.match(/(?<![a-z\d_])_[^_\n]+_(?![a-z\d_])/) ??      // _italic_
+          text.match(/\[[^\]\n]+\]\([^)\n]+\)/);                    // [text](url)
+        if (hit) {
+          offenders.push({ page: rel, sample: `figcaption: ${text.trim().slice(0, 80)}` });
+          found = true;
+        }
+      }
+
+      // --- alt attribute checks ---
+      const altRe = /<img(?:[^>"']|"[^"]*"|'[^']*')*?\balt="([^"]*)"/gi;
+      while (!found && (m = altRe.exec(html)) !== null) {
+        const alt = m[1];
+        const hit =
+          alt.match(/\*\*[^*\n]+\*\*/) ??           // **bold**
+          alt.match(/(?<!\*)\*[^*\n]+\*(?!\*)/);    // *italic*
+        if (hit) {
+          offenders.push({ page: rel, sample: `alt: ${alt.slice(0, 80)}` });
+          found = true;
+        }
+      }
+    }
+    expect(
+      offenders.map((o) => `${o.page}: ${JSON.stringify(o.sample)}`),
+      `pages where raw Markdown emphasis (**bold**, *italic*, _italic_) or link ` +
+        `syntax appeared inside a <figcaption> or <img alt="...">. Cause: the ` +
+        `caption or alt string was built from a Markdown source string without ` +
+        `passing it through a renderer. Fix: run captions through markdownify ` +
+        `(or Page.RenderString) before use; for alt text, strip emphasis markers ` +
+        `entirely — alt text should be plain text per WCAG guidelines.`,
+    ).toEqual([]);
+  });
 });
 
 // Walk `root` depth-first, collecting `*.html` files. `max === 0` means
