@@ -304,6 +304,7 @@ document.addEventListener('DOMContentLoaded', function(){
               var content = document.querySelector('.content');
               if (!content) return;
               var blocks = [];
+              var shellLangs = ['shell', 'bash', 'sh'];
               Array.from(content.querySelectorAll('pre code')).forEach(function(code) {
                 var lntd = code.closest('td.lntd');
                 if (lntd && !lntd.previousElementSibling) return;
@@ -311,8 +312,9 @@ document.addEventListener('DOMContentLoaded', function(){
                 code.classList.forEach(function(cls) {
                   if (cls.startsWith('language-')) { lang = cls.replace('language-', ''); }
                 });
+                if (shellLangs.indexOf(lang) === -1) return;
                 var text = code.textContent.replace(/\n$/, '');
-                blocks.push((lang ? '```' + lang : '```') + '\n' + text + '\n```');
+                blocks.push(text);
               });
               if (!blocks.length) return;
               navigator.clipboard.writeText(blocks.join('\n\n'));
