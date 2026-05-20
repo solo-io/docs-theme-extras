@@ -45,6 +45,11 @@ const expectations: Record<string, Expectation> = {
       VERSION_MARKERS.nestedArgTitle,
       VERSION_MARKERS.seqV2,
       VERSION_MARKERS.seqMain,
+      VERSION_MARKERS.blockH2,
+      VERSION_MARKERS.blockTable,
+      VERSION_MARKERS.blockCallout,
+      VERSION_MARKERS.pctBlockH2,
+      VERSION_MARKERS.pctBlockTable,
     ],
   },
   "v2/everything": {
@@ -75,6 +80,11 @@ const expectations: Record<string, Expectation> = {
       VERSION_MARKERS.fenceSameLine,
       VERSION_MARKERS.nestedArgTitle,
       VERSION_MARKERS.seqV2,
+      VERSION_MARKERS.blockH2,
+      VERSION_MARKERS.blockTable,
+      VERSION_MARKERS.blockCallout,
+      VERSION_MARKERS.pctBlockH2,
+      VERSION_MARKERS.pctBlockTable,
     ],
     exclude: [
       VERSION_MARKERS.v1,
@@ -120,6 +130,11 @@ const expectations: Record<string, Expectation> = {
       VERSION_MARKERS.nestedArgTitle,
       VERSION_MARKERS.seqV1,
       VERSION_MARKERS.seqV2,
+      VERSION_MARKERS.blockH2,
+      VERSION_MARKERS.blockTable,
+      VERSION_MARKERS.blockCallout,
+      VERSION_MARKERS.pctBlockH2,
+      VERSION_MARKERS.pctBlockTable,
     ],
   },
   // rebased.md lives at /v2/rebased/. The rebase shortcode rewrites the OSS
@@ -154,6 +169,11 @@ const expectations: Record<string, Expectation> = {
       VERSION_MARKERS.fenceSameLine,
       VERSION_MARKERS.nestedArgTitle,
       VERSION_MARKERS.seqV2,
+      VERSION_MARKERS.blockH2,
+      VERSION_MARKERS.blockTable,
+      VERSION_MARKERS.blockCallout,
+      VERSION_MARKERS.pctBlockH2,
+      VERSION_MARKERS.pctBlockTable,
     ],
     exclude: [
       VERSION_MARKERS.v1,
@@ -201,6 +221,11 @@ const expectations: Record<string, Expectation> = {
       VERSION_MARKERS.nestedArgTitle,
       VERSION_MARKERS.seqV2,
       VERSION_MARKERS.seqMain,
+      VERSION_MARKERS.blockH2,
+      VERSION_MARKERS.blockTable,
+      VERSION_MARKERS.blockCallout,
+      VERSION_MARKERS.pctBlockH2,
+      VERSION_MARKERS.pctBlockTable,
     ],
   },
   "main/rebased": {
@@ -238,6 +263,11 @@ const expectations: Record<string, Expectation> = {
       VERSION_MARKERS.nestedArgTitle,
       VERSION_MARKERS.seqV1,
       VERSION_MARKERS.seqV2,
+      VERSION_MARKERS.blockH2,
+      VERSION_MARKERS.blockTable,
+      VERSION_MARKERS.blockCallout,
+      VERSION_MARKERS.pctBlockH2,
+      VERSION_MARKERS.pctBlockTable,
     ],
   },
 };
@@ -383,6 +413,90 @@ test.describe("reuse and rebase pipelines produce equivalent content", () => {
           "processing on an included/embedded block (e.g., `{{< include >}}` " +
           "should be `{{% include %}}`).",
       ).toEqual({});
+    });
+  }
+});
+
+test.describe("version block wrapping block-level content renders as HTML", () => {
+  // Covers the pattern where a version block gates an entire subsection:
+  // heading, table, and nested shortcode. Two form variants are tested so
+  // both render paths through version.html are exercised:
+  //
+  // - Angle-bracket form ({{< >}}): nested shortcodes in .Inner are
+  //   pre-expanded to HTML, which sets $hasMarkdown=true and routes the
+  //   block through RenderString. The `code phrase` in the fixture prose
+  //   also supplies a markdown marker so the heuristic fires even without
+  //   the nested shortcode — matching the real-docs pattern (e.g.,
+  //   versions.md where **bold** text triggers the heuristic).
+  //
+  // - Percent-form ({{% %}}): .Inner is raw text with no markdown markers,
+  //   so the no-markdown heuristic fires and emits $.Inner raw. In
+  //   percent-form, the shortcode output flows back through the outer
+  //   markdown pass, which renders headings and tables without RenderString.
+  //
+  // Both paths must produce <h2> and <table> elements, not literal ## or
+  // pipe-table syntax. The negative assertions are as important as the
+  // positive ones: they catch the silent failure mode where block-level
+  // markdown lands as escaped text inside a <p> or <pre>.
+  //
+  // These tests run against both pipelines (everything = reuse,
+  // rebased = rebase) so a regression in either path is caught.
+
+  for (const pageName of ["v2/everything", "v2/rebased"]) {
+    test(`${pageName}: angle-bracket form — heading renders as <h2>`, () => {
+      const page = TEST_PAGES.find((p) => p.name === pageName);
+      test.skip(!page, "page not configured");
+      const html = readFixture(page!.filePath);
+      expect(
+        html,
+        "MARKER_VERSION_BLOCK_H2 must be inside an <h2> element",
+      ).toMatch(/<h2[^>]*>[^<]*MARKER_VERSION_BLOCK_H2/);
+      expect(
+        html,
+        "must not appear as literal ## markdown syntax",
+      ).not.toContain("## MARKER_VERSION_BLOCK_H2");
+    });
+
+    test(`${pageName}: angle-bracket form — table renders as <table>`, () => {
+      const page = TEST_PAGES.find((p) => p.name === pageName);
+      test.skip(!page, "page not configured");
+      const html = readFixture(page!.filePath);
+      expect(
+        html,
+        "MARKER_VERSION_BLOCK_TABLE must be inside a <table> element",
+      ).toMatch(/<table[\s\S]*?MARKER_VERSION_BLOCK_TABLE/);
+      expect(
+        html,
+        "must not appear as literal pipe-table syntax",
+      ).not.toContain("| MARKER_VERSION_BLOCK_TABLE |");
+    });
+
+    test(`${pageName}: percent-form — heading renders as <h2>`, () => {
+      const page = TEST_PAGES.find((p) => p.name === pageName);
+      test.skip(!page, "page not configured");
+      const html = readFixture(page!.filePath);
+      expect(
+        html,
+        "MARKER_VERSION_PCT_H2 must be inside an <h2> element",
+      ).toMatch(/<h2[^>]*>[^<]*MARKER_VERSION_PCT_H2/);
+      expect(
+        html,
+        "must not appear as literal ## markdown syntax",
+      ).not.toContain("## MARKER_VERSION_PCT_H2");
+    });
+
+    test(`${pageName}: percent-form — table renders as <table>`, () => {
+      const page = TEST_PAGES.find((p) => p.name === pageName);
+      test.skip(!page, "page not configured");
+      const html = readFixture(page!.filePath);
+      expect(
+        html,
+        "MARKER_VERSION_PCT_TABLE must be inside a <table> element",
+      ).toMatch(/<table[\s\S]*?MARKER_VERSION_PCT_TABLE/);
+      expect(
+        html,
+        "must not appear as literal pipe-table syntax",
+      ).not.toContain("| MARKER_VERSION_PCT_TABLE |");
     });
   }
 });

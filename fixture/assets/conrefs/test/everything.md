@@ -688,6 +688,40 @@ EOF
 }
 ```{{< /version >}}
 
+### Version block wrapping block-level content (heading, table, nested shortcode)
+
+Reproduces the pattern where a version block gates an entire subsection — heading, prose, table, and nested shortcode. Two form variants cover both paths through `version.html`.
+
+**Angle-bracket form** — `.Inner` has pre-expanded nested shortcodes as HTML, which triggers the `$hasMarkdown` heuristic. The block routes through `RenderString`. A `code phrase` in the prose also supplies a markdown marker so the heuristic fires even without the nested shortcode:
+
+{{< version include-if="v2" >}}
+
+## MARKER_VERSION_BLOCK_H2
+
+Prose with a `code phrase` so the markdown-detection heuristic fires and routes through `RenderString`. The heading and table below must render as proper HTML elements, not literal syntax.
+
+| Col A | Col B |
+| ----- | ----- |
+| MARKER_VERSION_BLOCK_TABLE | row data |
+
+{{< callout type="info" >}}MARKER_VERSION_BLOCK_CALLOUT. Nested callout inside the angle-bracket version block.{{< /callout >}}
+
+{{< /version >}}
+
+**Percent-form** — `.Inner` is raw text. No markdown markers are present, so the no-markdown heuristic fires and emits `$.Inner` raw. In percent-form, the shortcode output flows back through the outer markdown pass, which renders headings and tables without `RenderString`. No markdown markers needed:
+
+{{% version include-if="v2" %}}
+
+## MARKER_VERSION_PCT_H2
+
+Plain prose, no markdown markers. The no-markdown path emits raw text; the outer markdown pass then renders the heading and table as proper HTML.
+
+| Col A | Col B |
+| ----- | ----- |
+| MARKER_VERSION_PCT_TABLE | row data |
+
+{{% /version %}}
+
 ## Shortcodes in rich markdown contexts
 
 This block matrix exercises the `version` and `conditional-text` shortcodes inside the markdown structures that real product docs nest them in. Each subsection tests a different host context. The version markers are mostly v2-gated; the conditional markers all render under buildCondition `test`. The structural-context spec asserts each marker lands inside the expected container element rather than leaking out into the surrounding flow.

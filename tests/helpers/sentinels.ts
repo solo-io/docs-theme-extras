@@ -112,6 +112,15 @@ export const VERSION_MARKERS = {
   // Version-gated card using path= inside a {{% version %}} wrapper.
   // Title text carries the marker so we can locate the rendered card.
   nestedArgTitle: "MARKER_NESTED_ARG_TITLE",
+  // Block-level content inside a version block: heading, table, nested
+  // shortcode. Two form variants cover both paths through version.html:
+  // - angle-bracket ({{< >}}): RenderString path fires when $hasMarkdown=true
+  // - percent-form ({{% %}}): no-markdown path emits raw text → outer pass renders it
+  blockH2: "MARKER_VERSION_BLOCK_H2",
+  blockTable: "MARKER_VERSION_BLOCK_TABLE",
+  blockCallout: "MARKER_VERSION_BLOCK_CALLOUT",
+  pctBlockH2: "MARKER_VERSION_PCT_H2",
+  pctBlockTable: "MARKER_VERSION_PCT_TABLE",
 } as const;
 
 export const CONDITIONAL_MARKERS = {
