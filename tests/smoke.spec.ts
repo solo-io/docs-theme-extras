@@ -78,7 +78,16 @@ test.describe(`smoke: ${LABEL}`, () => {
     const htmlFiles = collectHtml(SCAN_ROOT, MAX_FILES);
     const offenders: string[] = [];
     for (const f of htmlFiles) {
-      const html = fs.readFileSync(f, "utf8");
+      // Strip <script>…</script> blocks before scanning. The Copy-as-Markdown
+      // feature embeds the page's raw markdown source inside
+      // <script type="text/markdown">, and that markdown can legitimately
+      // mention `<pre>` (as inline-code prose). Leaving the script content
+      // in the haystack causes the regex below to start a "<pre> block" at
+      // a text mention and run on until a real </pre> later in the file,
+      // sweeping up unrelated <p> tags as false positives.
+      const html = fs
+        .readFileSync(f, "utf8")
+        .replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "");
       const preRe = /<pre[^>]*>([\s\S]*?)<\/pre>/g;
       let m: RegExpExecArray | null;
       while ((m = preRe.exec(html)) !== null) {

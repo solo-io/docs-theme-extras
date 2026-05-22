@@ -87,7 +87,7 @@
     {{- $docsSection := $context.Site.GetPage $versionPrefix -}}
 
     {{- if $docsSection -}}
-      <aside class="sidebar-container hextra-sidebar-container sidebar-mobile-panel hx:order-first hx:w-64 hx:shrink-0 hx:hidden hx:xl:block hx:print:hidden hx:flex hx:flex-col">
+      <aside class="sidebar-container hextra-sidebar-container sidebar-mobile-panel hx:order-first hx:w-64 hx:shrink-0 hx:hidden hx:xl:block hx:print:hidden">
 
         {{- /* Mobile-only: section selector (only when >1 section) + version picker */ -}}
         <div class="sidebar-mobile-only sidebar-mobile-header">
@@ -171,7 +171,7 @@
     {{- if templates.Exists "partials/hextra/sidebar.html" -}}
       {{- partial "hextra/sidebar.html" (dict "context" $context) -}}
     {{- else -}}
-      <aside class="sidebar-container hextra-sidebar-container sidebar-mobile-panel hx:order-first hx:w-64 hx:shrink-0 hx:hidden hx:xl:block hx:print:hidden hx:flex hx:flex-col">
+      <aside class="sidebar-container hextra-sidebar-container sidebar-mobile-panel hx:order-first hx:w-64 hx:shrink-0 hx:hidden hx:xl:block hx:print:hidden">
         <div class="sidebar-nav-wrapper">
           <nav class="sidebar-nav">
             {{- template "render-sidebar-tree" (dict "page" $context "current" $context "versionPrefix" "" "depth" 0) -}}

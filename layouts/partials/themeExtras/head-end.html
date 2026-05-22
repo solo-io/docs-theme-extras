@@ -93,6 +93,21 @@ function closeMobileSidebar() {
   if (sidebar) sidebar.classList.remove('mobile-sidebar-open');
   if (overlay) overlay.classList.remove('active');
 }
+
+/* Wire the stock Hextra hamburger (.hextra-hamburger-menu) to our
+   mobile-sidebar toggle. Hextra's own menu.js toggles a different set of
+   classes (hx:max-md:[transform:...]) that don't match our .sidebar-mobile-panel
+   design, so we intercept the click here. Capture phase + stopImmediatePropagation
+   so Hextra's listener doesn't fight us by toggling its own classes back. */
+document.addEventListener('DOMContentLoaded', function () {
+  var hamburger = document.querySelector('.hextra-hamburger-menu');
+  if (!hamburger) return;
+  hamburger.addEventListener('click', function (e) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    toggleMobileSidebar();
+  }, true);
+});
 </script>
 
 {{/* Mark sidebar as not-ready synchronously during <head> parse, before the

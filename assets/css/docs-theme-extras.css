@@ -1409,8 +1409,13 @@ details[open].hextra-search-other-versions > summary::before {
    still be overridden in the consumer's custom.css. */
 
 /* Mobile slide-in panel (< xl). Hidden on desktop; rendered in same DOM
-   as the desktop aside, just promoted to position:fixed on mobile. */
-@media (max-width: 1279.99px) {
+   as the desktop aside, just promoted to position:fixed on mobile.
+
+   Bound uses 1279px (integer), not 1279.99px: Chromium rounds fractional
+   max-width comparisons in ways that can spuriously match at exactly
+   1280px viewport, which left the panel position:fixed + translateX(-100%)
+   on desktop and broke `await expect(sidebar).toBeVisible()` in Playwright. */
+@media (max-width: 1279px) {
   .sidebar-mobile-panel {
     position: fixed !important;
     top: 0 !important;

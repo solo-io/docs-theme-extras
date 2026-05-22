@@ -555,18 +555,18 @@ test.describe("manual cards block renders intact (card subtitle + shortcode arg 
 
   test("three cards declared → three rendered", () => {
     const html = readFixture(v2Everything);
-    // Cards are inside the `<div class="hextra-cards hextra-cards-grid">`
-    // wrapper. Extract that container and count `<a class="hextra-card`
-    // matches inside it; counting at document scope would also catch the
-    // .hextra-card style block etc.
+    // Cards are inside the `<div class="section-cards">` wrapper. Extract
+    // that container and count `<a class="section-card"` matches inside it;
+    // counting at document scope would also catch the .section-card style
+    // block etc.
     const containerMatch = html.match(
-      /<div class="hextra-cards hextra-cards-grid"[^>]*>([\s\S]*?)<\/div>/,
+      /<div class="section-cards"[^>]*>([\s\S]*?)<\/div>/,
     );
     expect(
       containerMatch,
       "cards container missing — `{{< cards >}}` shortcode didn't render",
     ).not.toBeNull();
-    const cards = (containerMatch![1].match(/<a class="hextra-card\b/g) ?? [])
+    const cards = (containerMatch![1].match(/<a class="section-card"/g) ?? [])
       .length;
     expect(
       cards,
@@ -576,18 +576,18 @@ test.describe("manual cards block renders intact (card subtitle + shortcode arg 
 
   test("card subtitle is not a <p> (would nest-break inside markdownify-wrapped cards)", () => {
     const html = readFixture(v2Everything);
-    // The card shortcode used to emit `<p class="card-subtitle">`. Inside
+    // The card shortcode used to emit `<p class="…subtitle">`. Inside
     // a `{{% version %}}` wrapper, Goldmark also emits a paragraph around
     // the card, and the nested <p> triggers HTML auto-close. The fix is
-    // to use a <span class="card-subtitle"> (display:block via CSS).
+    // to use a <span class="section-card-desc"> (display:block via CSS).
     expect(
       html,
-      "card subtitle should NOT be a <p>; use <span class=\"card-subtitle\"> so it nests safely inside a markdownify-wrapped card",
-    ).not.toMatch(/<p class="card-subtitle"/);
+      "card subtitle should NOT be a <p>; use <span class=\"section-card-desc\"> so it nests safely inside a markdownify-wrapped card",
+    ).not.toMatch(/<p class="(card-subtitle|section-card-desc)"/);
     // And confirm the span form IS present (positive assertion).
     expect(
       html,
-      "card subtitle <span class=\"card-subtitle\"> should be present on cards that have descriptions",
-    ).toMatch(/<span class="card-subtitle"/);
+      "card subtitle <span class=\"section-card-desc\"> should be present on cards that have descriptions",
+    ).toMatch(/<span class="section-card-desc"/);
   });
 });
