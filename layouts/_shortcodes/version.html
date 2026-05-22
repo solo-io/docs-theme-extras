@@ -66,6 +66,32 @@
   {{- $version := .Page.FirstSection.RelPermalink -}}
   {{- $version_without_product := replace $version .Site.Params.folder "" -}}
   {{- $condition = trim $version_without_product "/" -}}
+
+  {{- /* Path-segment fallback. The block above assumes URLs shaped like
+         /<folder>/<linkVersion>/... (solo docs, test fixture). Consumers
+         like kgw use /docs/<section>/<linkVersion>/... where FirstSection
+         is /docs/ and `folder` isn't set, so $condition lands on "docs"
+         and matches nothing. When the derived $condition contains no
+         known linkVersion, walk the URL segments and pick the first one
+         that matches a linkVersion. Only fires when the original logic
+         missed, so it can't break the solo / fixture paths. */ -}}
+  {{- $matched := false -}}
+  {{- range $versions -}}
+    {{- if and (ne .linkVersion "") (in $condition .linkVersion) -}}
+      {{- $matched = true -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if not $matched -}}
+    {{- $parts := split (trim .Page.RelPermalink "/") "/" -}}
+    {{- range $p := $parts -}}
+      {{- range $versions -}}
+        {{- if and (not $matched) (eq .linkVersion $p) -}}
+          {{- $condition = $p -}}
+          {{- $matched = true -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
 {{- else if .Site.Params.sections -}}
   {{- $versions = slice -}}
   {{- range $name, $data := .Site.Params.sections -}}
