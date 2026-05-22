@@ -55,12 +55,43 @@
   <link rel="stylesheet" href="{{ $brandCss.RelPermalink }}" />
 {{- end }}
 
+{{/* Glossary tooltip styles + behavior. Both come from extras so the
+     position:fixed tooltip logic that escapes overflow:auto ancestors
+     (notably the .table-wrapper from _markup/render-table.html) works
+     for every consumer without per-repo duplication. The {{< gloss >}}
+     shortcode in each repo reads from its own site.Data.glossary. */}}
+{{- $glossaryCss := resources.Get "css/glossary.css" -}}
+{{- if $glossaryCss }}
+  <link rel="stylesheet" href="{{ $glossaryCss.RelPermalink }}" />
+{{- end }}
+{{- $glossaryJs := resources.Get "js/glossary.js" -}}
+{{- if $glossaryJs }}
+  <script src="{{ $glossaryJs.RelPermalink }}" defer></script>
+{{- end }}
+
 <script>
 function toggleMobileTheme() {
   var current = localStorage.getItem('color-theme') || 'system';
   var next = current === 'dark' ? 'light' : 'dark';
   var btn = document.querySelector('.hextra-theme-toggle-options button[data-item="' + next + '"]');
   if (btn) btn.click();
+}
+
+/* Mobile sidebar open/close. Globals so consumers' nav templates can call
+   them inline (agw-oss's nav.html, kgw's breadcrumb mobile trigger, etc.). */
+function toggleMobileSidebar() {
+  var sidebar = document.querySelector('.sidebar-mobile-panel');
+  var overlay = document.querySelector('.sidebar-mobile-overlay');
+  if (sidebar && overlay) {
+    sidebar.classList.toggle('mobile-sidebar-open');
+    overlay.classList.toggle('active');
+  }
+}
+function closeMobileSidebar() {
+  var sidebar = document.querySelector('.sidebar-mobile-panel');
+  var overlay = document.querySelector('.sidebar-mobile-overlay');
+  if (sidebar) sidebar.classList.remove('mobile-sidebar-open');
+  if (overlay) overlay.classList.remove('active');
 }
 </script>
 
@@ -166,6 +197,59 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   });
 
+  /* ── Sidebar chevron toggle + localStorage persistence ──
+     The sidebar tree is rendered server-side with each branch's
+     `<li data-sidebar-item>` carrying a `data-expanded` flag the server
+     pre-set for ancestors of the current page. The chevron `<button>`
+     toggles expansion without firing the link's navigation; preferences
+     persist in localStorage keyed by branch href. */
+  (function(){
+    var STORAGE_KEY = 'solo-sidebar-expanded';
+    function loadState(){
+      try { var raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : {}; }
+      catch(_) { return {}; }
+    }
+    function saveState(state){
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+      catch(_) { /* private mode / quota — degrade silently */ }
+    }
+    function getKey(item){
+      var link = item.querySelector(':scope > .sidebar-link-wrapper > .sidebar-link');
+      return link ? link.getAttribute('href') : null;
+    }
+    function setExpanded(item, expanded){
+      item.setAttribute('data-expanded', expanded ? 'true' : 'false');
+      var btn = item.querySelector(':scope > .sidebar-link-wrapper > .sidebar-toggle');
+      if (btn) btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      var children = item.querySelector(':scope > .sidebar-children');
+      if (children) {
+        if (expanded) children.removeAttribute('hidden');
+        else children.setAttribute('hidden', '');
+      }
+    }
+    var state = loadState();
+    document.querySelectorAll('[data-sidebar-item]').forEach(function(item){
+      /* Branches containing the current page stay expanded regardless of
+         persisted state so the user always sees where they are. */
+      if (item.querySelector('a[aria-current="page"]')) return;
+      var key = getKey(item);
+      if (key && key in state) setExpanded(item, state[key]);
+    });
+    document.querySelectorAll('.sidebar-toggle').forEach(function(btn){
+      btn.addEventListener('click', function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        var item = btn.closest('[data-sidebar-item]');
+        if (!item) return;
+        var wasExpanded = item.getAttribute('data-expanded') === 'true';
+        var newExpanded = !wasExpanded;
+        setExpanded(item, newExpanded);
+        var key = getKey(item);
+        if (key) { state[key] = newExpanded; saveState(state); }
+      });
+    });
+  })();
+
   /* ── Mobile icons dropdown ── */
   var mobileIconsToggle = document.getElementById('mobile-icons-toggle');
   var mobileIconsMenu = document.getElementById('mobile-icons-menu');
@@ -176,7 +260,15 @@ document.addEventListener('DOMContentLoaded', function(){
       mobileIconsMenu.classList.toggle('hx:hidden');
       mobileIconsToggle.setAttribute('aria-expanded', String(!isOpen));
     });
-    document.addEventListener('click', function() {
+    /* Close the drawer on clicks anywhere EXCEPT inside the drawer itself
+       or on the toggle button. Without this guard, clicking the search
+       field, a link, or any other interactive element inside the drawer
+       would close it immediately because the document click handler fires
+       on every click (the toggle's `stopPropagation` only protects clicks
+       on the toggle itself). */
+    document.addEventListener('click', function(e) {
+      if (mobileIconsMenu.contains(e.target)) return;
+      if (mobileIconsToggle.contains(e.target)) return;
       mobileIconsMenu.classList.add('hx:hidden');
       mobileIconsToggle.setAttribute('aria-expanded', 'false');
     });

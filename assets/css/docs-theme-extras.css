@@ -27,47 +27,21 @@
 .dark .toggle-light { display: block; }
 .dark .toggle-dark  { display: none;  }
 
-/* ── Cards shortcode grid ────────────────────────────────────────────── */
-/* The module's `{{< cards >}}` shortcode emits
-     <div class="hextra-cards hextra-cards-grid" style="--hextra-cols: N;">
-   Hextra's bundled CSS styles `.hextra-cards` (grid-template-columns based
-   on `--hextra-cards-grid-cols`) but not `.hextra-cards-grid`, and our
-   shortcode uses the different `--hextra-cols` variable name. Without
-   these rules the container is just a regular block element and cards
-   stack full-width with no gap.
-   Mobile-first responsive: 1 col by default, 2 at sm, --hextra-cols (3
-   default) at lg. */
-.hextra-cards-grid {
-  display: grid;
-  gap: 1rem;
-  margin-top: 1rem;
-  grid-template-columns: 1fr;
-}
-@media (min-width: 640px) {
-  .hextra-cards-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-@media (min-width: 1024px) {
-  .hextra-cards-grid {
-    grid-template-columns: repeat(var(--hextra-cols, 3), minmax(0, 1fr));
-  }
-}
+/* ── Cards-shortcode grid wrapper handling ──────────────────────────────
+   Both the auto-card partial and the {{< cards >}} shortcode emit a
+   `.section-cards` container; the grid styling lives further down with
+   the rest of the .section-card* rules.
 
-/* When a card is wrapped by another element — most commonly Goldmark's
-   <p> around a card that itself lives inside a percent-form shortcode
-   like `{{% version %}}{{< card >}}{{% /version %}}` — the wrapper
-   becomes the direct grid child. CSS grid stretches the wrapper to the
-   row's height, but the <a> card inside doesn't fill the wrapper.
-   Result: a "short" card in an otherwise tall row.
-   Force any single-card wrapper to be a transparent flex column so the
-   card fills it. Scoped with :has() to single-child wrappers so plain
-   text content inside <cards> isn't affected. */
-.hextra-cards-grid > p:has(> .hextra-card:only-child) {
+   When a card is wrapped by Goldmark's <p> (e.g., a card inside a
+   percent-form shortcode like `{{%% version %%}}{{< card >}}{{%% /version %%}}`),
+   the <p> becomes the direct grid child. CSS grid stretches the <p>
+   to row height, but the <a> card inside doesn't fill the <p>. Force
+   any single-card-only <p> wrapper to flex so the card fills it. */
+.section-cards > p:has(> .section-card:only-child) {
   display: flex;
   margin: 0;
 }
-.hextra-cards-grid > p:has(> .hextra-card:only-child) > .hextra-card {
+.section-cards > p:has(> .section-card:only-child) > .section-card {
   flex: 1;
 }
 
@@ -424,6 +398,23 @@ html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
   color: #d1d5db !important;
 }
 
+/* Nested sidebar children: indent + left border so the parent/child
+   hierarchy reads visually. Matches the agw-oss sidebar design (0.75rem
+   indent on both margin and padding, hairline left border). Applied to
+   every <ul> inside another <ul> within .sidebar-container so the rule
+   covers kgateway's recursive sidebar template AND any consumer using
+   hextra's default sidebar — neither template needs to ship inline
+   margins for nested levels. */
+.sidebar-container ul ul {
+  margin-left: 0.75rem;
+  margin-top: 0.25rem;
+  padding-left: 0.75rem;
+  border-left: 1px solid #e5e7eb;
+}
+.dark .sidebar-container ul ul {
+  border-left-color: #374151;
+}
+
 /* Sidebar active item — matches old theme's grey instead of hextra's blue tint */
 .hextra-sidebar-container .hextra-sidebar-active-item {
   background-color: #e8eaed !important;
@@ -506,36 +497,123 @@ html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
   background: #3a4350;
 }
 
-/* TOC active item — matches sidebar active styling */
-.hextra-toc ul li {
-  margin-top: 0.25rem;
-  margin-bottom: 0.25rem;
+/* ── TOC (right-hand "On this page" nav) ────────────────────────────────
+   Rendered by layouts/_partials/toc.html. Class hooks are .solo-toc-*
+   (plus the outer hextra-toc wrapper that hextra owns). Centralized
+   from kgateway + agentgateway-oss inline styles so the right rail
+   matches across both sites. */
+
+.solo-toc-inner {
+  position: sticky;
+  top: 4rem;
+  overflow-y: auto;
+  padding-right: 1rem;
+  padding-top: 1.5rem;
+  font-size: 0.875rem;
+  hyphens: auto;
+  max-height: calc(100vh - var(--navbar-height) - env(safe-area-inset-bottom));
+  margin-right: -1rem;
 }
-.hextra-toc a,
-.hextra-toc a.toc-active {
-  padding: 2px 8px;
+.solo-toc-heading {
+  margin-bottom: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.solo-toc-sublist {
+  margin-left: 1rem;
+  margin-top: 0.25rem;
+}
+.solo-toc-item {
+  margin: 0.5rem 0;
+  scroll-margin-top: 1.5rem;
+  scroll-padding-top: 1.5rem;
+}
+.solo-toc-link {
+  display: inline-block;
+  width: 100%;
+  word-break: break-word;
+  color: #6b7280;
+  text-decoration: none;
+  font-size: 0.875rem;
   font-weight: 400 !important;
+  padding: 2px 8px;
   transition: none !important;
 }
-/* Don't change text color on hover — only the active state should look
-   different. Otherwise hovering one link while another is scroll-active
-   makes them look mismatched. */
-.hextra-toc a:hover {
+.dark .solo-toc-link {
+  color: #9ca3af;
+}
+.solo-toc-link:hover {
   color: inherit !important;
   background-color: #f5f6f8;
   border-radius: 6px;
 }
-.dark .hextra-toc a:hover {
+.dark .solo-toc-link:hover {
   background-color: #2b303b;
 }
-.hextra-toc a.toc-active {
+.solo-toc-link.toc-active {
   color: #111827 !important;
   background-color: #e8eaed;
   border-radius: 6px;
 }
-.dark .hextra-toc a.toc-active {
+.dark .solo-toc-link.toc-active {
   color: #f9fafb !important;
   background-color: #363c47;
+}
+
+/* Sticky footer of the TOC (back-to-top + future links). The white
+   background + negative shadow creates the fade-in effect as page
+   content scrolls behind it. */
+.solo-toc-bottom {
+  margin-top: 2rem;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  background: white;
+  box-shadow: 0 -12px 16px white;
+}
+.dark .solo-toc-bottom {
+  background: #030712;
+  box-shadow: 0 -12px 16px #030712;
+  border-top-color: #374151;
+}
+.solo-toc-back-to-top {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #6b7280;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: color 0.15s;
+}
+.solo-toc-back-to-top:hover {
+  color: #111827;
+}
+.dark .solo-toc-back-to-top {
+  color: #9ca3af;
+}
+.dark .solo-toc-back-to-top:hover {
+  color: #e5e7eb;
+}
+.solo-toc-back-to-top svg {
+  display: inline;
+  height: 0.875rem;
+  width: 0.875rem;
+  border: 1px solid #9ca3af;
+  border-radius: 9999px;
+  margin-left: 0.25rem;
+}
+.dark .solo-toc-back-to-top svg {
+  border-color: #6b7280;
 }
 
 /* ── Page description (subtitle under <h1>) ──────────────────────────── */
@@ -646,6 +724,32 @@ hr.footnotes-sep,
   margin: 0 2px;
 }
 
+/* Responsive table wrapper styling (the wrapper itself comes from
+   _markup/render-table.html, which inlines `overflow-x` for safety). These
+   rules add the cell padding/border treatment that the inline style alone
+   doesn't cover. */
+.table-wrapper {
+  margin: 1.5rem 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.table-wrapper table {
+  width: 100%;
+  table-layout: auto;
+  border-collapse: collapse;
+}
+.table-wrapper th,
+.table-wrapper td {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e5e7eb;
+  white-space: normal;
+  word-wrap: break-word;
+}
+.dark .table-wrapper th,
+.dark .table-wrapper td {
+  border-color: #374151;
+}
+
 /* ── Section cards (auto-generated on list pages) ────────────────────── */
 /* Replicates the docs-theme-lotus card grid on parent sections */
 .section-cards {
@@ -664,7 +768,10 @@ hr.footnotes-sep,
 
 @media (min-width: 1024px) {
   .section-cards {
-    grid-template-columns: repeat(3, 1fr);
+    /* --section-cards-cols is set inline by the {{< cards >}} shortcode
+       when an author passes a `cols=N` attribute. Auto-card grids leave
+       it unset and fall back to 3. */
+    grid-template-columns: repeat(var(--section-cards-cols, 3), 1fr);
     grid-auto-rows: 1fr;
   }
 }
@@ -686,21 +793,45 @@ hr.footnotes-sep,
   box-shadow: 0 2px 8px var(--theme-primary-tint);
 }
 
+/* Icons. Auto-cards emit <i class="material-icons section-card-icon">
+   (font icon, sized via font-size); the {{< card >}} shortcode emits an
+   inline <svg class="section-card-icon"> via utils/icon.html. Cover both. */
 .section-card-icon {
   font-size: 28px;
   color: var(--theme-primary);
   flex-shrink: 0;
   margin-top: 2px;
 }
-
-.section-card-body {
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+svg.section-card-icon {
+  width: 28px;
+  height: 28px;
+  margin-bottom: 0.25rem;
 }
 
+/* Optional leading image for manual cards ({{< card image="..." >}}). */
+.section-card-image {
+  max-height: 4rem;
+  width: auto;
+  object-fit: contain;
+  margin-bottom: 1rem;
+  align-self: flex-start;
+}
+
+/* The body wrapper is a <div> in auto-cards (block by default) and a
+   <span class="section-card-body"> in shortcode-rendered cards (to stay
+   valid HTML inside a Goldmark-added <p>). Force flex column on both. */
+.section-card-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+/* Title + desc are <p> in auto-cards and <span> in shortcode cards.
+   display: block makes the span behave like a block so the margins
+   below apply. */
 .section-card-title {
+  display: block;
   font-size: 1rem !important;
   font-weight: 600 !important;
   margin: 16px 0 4px !important;
@@ -708,10 +839,18 @@ hr.footnotes-sep,
 }
 
 .section-card-desc {
+  display: block;
   font-size: 0.75rem !important;
   color: #374151;
   margin: 0 !important;
   line-height: 1.5;
+}
+/* When the shortcode passes the subtitle through markdownify, Goldmark
+   may wrap the rendered prose in a <p> inside the .section-card-desc
+   <span>. That nested <p> picks up the default browser margins and
+   spaces the description awkwardly. Zero them. */
+.section-card-desc > p {
+  margin: 0 !important;
 }
 
 .section-card-badge {
@@ -1086,4 +1225,475 @@ details[open].hextra-search-other-versions > summary::before {
 
   /* Avoid breaking inside short blocks; don't force headings to next page */
   blockquote, figure, img { break-inside: avoid; }
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+ * Tailwind 4 hx: utility fallbacks.
+ *
+ * Hextra v0.12.3 ships a precompiled main.css generated from its own
+ * template scan. Utilities Hextra doesn't use internally aren't in the
+ * bundle — so any class extras' or a consumer's templates emit that
+ * Hextra doesn't happen to use silently no-ops.
+ *
+ * These rules fill the specific gaps extras' own templates introduce
+ * (currently the taller navbar height). They use Hextra's --hx-spacing
+ * token so they track the same scale.
+ * ────────────────────────────────────────────────────────────────────── */
+
+.hx\:h-20 { height: calc(var(--hx-spacing) * 20) }
+.hx\:h-24 { height: calc(var(--hx-spacing) * 24) }
+
+/* Navbar bottom border. Hextra's navbar template emits an arbitrary-value
+   shadow class — `hx:shadow-[0_2px_4px_rgba(0,0,0,.02),0_1px_0_rgba(0,0,0,.06)]`
+   — to paint a subtle bottom hairline + soft drop shadow. Hextra's
+   precompiled bundle does NOT include this class (the comma + bracket
+   form gets skipped by their template scanner), so the navbar renders
+   without any separation from content. The matching `dark:` and
+   `contrast-more:` variants are also missing. Rebuild them as direct
+   rules on .nav-container-blur. */
+.nav-container-blur {
+  box-shadow: 0 2px 4px rgba(0,0,0,.02), 0 1px 0 rgba(0,0,0,.06);
+}
+:where(.dark, .dark *) .nav-container-blur {
+  box-shadow: 0 -1px 0 rgba(255,255,255,.1) inset;
+}
+@media (prefers-contrast: more) {
+  .nav-container-blur { box-shadow: 0 0 0 1px #000; }
+  :where(.dark, .dark *) .nav-container-blur { box-shadow: 0 0 0 1px #fff; }
+}
+
+/* ── Breadcrumb ─────────────────────────────────────────────────────────
+   Rendered by layouts/_partials/breadcrumb.html. The partial emits plain
+   class hooks (no Tailwind utilities) so styling doesn't depend on
+   Hextra's precompiled bundle picking up the right variants. */
+.solo-breadcrumb {
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+  flex-wrap: wrap;
+}
+.solo-breadcrumb-home,
+.solo-breadcrumb-link {
+  color: #6b7280;
+  text-decoration: none;
+}
+.solo-breadcrumb-home {
+  display: flex;
+  align-items: center;
+}
+.solo-breadcrumb-link:hover,
+.solo-breadcrumb-home:hover {
+  color: #374151;
+}
+.solo-breadcrumb-sep {
+  color: #d1d5db;
+}
+.dark .solo-breadcrumb,
+.dark .solo-breadcrumb-home,
+.dark .solo-breadcrumb-link {
+  color: #9ca3af;
+}
+.dark .solo-breadcrumb-sep {
+  color: #4b5563;
+}
+.dark .solo-breadcrumb-link:hover,
+.dark .solo-breadcrumb-home:hover {
+  color: #e5e7eb;
+}
+
+/* ── Navbar dropdowns ────────────────────────────────────────────────────
+   Hover-based dropdowns in the top navbar (e.g. version switcher, "Docs"
+   sub-menu). Each `<div class="dropdown">` wraps a trigger element plus a
+   `<div|ul class="dropdown-content navbar-dropdown-content">` popover.
+   Hover on the parent shows the popover.
+
+   This used to live in kgateway's _partials/navbar.html and a near-
+   identical copy in agentgateway-oss-website's partials/nav.html. Moved
+   here so a single rule applies to both consumers (and any future ones).
+   Note: agw's local copy can be deleted on the next docs-theme-extras
+   release bump.
+
+   `font` is explicitly inherited on the trigger to defeat the user-agent
+   stylesheet's button defaults — without this, Safari ships a slightly
+   heavier weight on `<button>` triggers than on sibling `<a>` triggers,
+   making the version dropdown visually taller and bolder than the Docs
+   dropdown trigger right next to it. */
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+.dropdown-content {
+  display: none;
+  min-width: 160px;
+}
+.dropdown:hover .dropdown-content {
+  display: block;
+}
+/* Invisible hover bridge between the trigger and the popover so moving
+   the cursor across the 0.25rem gap doesn't close the menu. */
+.dropdown::before {
+  content: '';
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  height: 0.5rem;
+  z-index: 49;
+}
+
+.navbar-dropdown-content {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  right: 0;
+  background-color: white;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  z-index: 50;
+  padding-top: 0.25rem;
+}
+:where(.dark, .dark *) .navbar-dropdown-content {
+  background-color: rgb(17, 24, 39); /* gray-900 */
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Normalize trigger typography across <button> and <a> triggers. Tailwind
+   4's preflight already does `button { font: inherit }` but Safari is
+   inconsistent about applying the inherited weight; lock it in. */
+.nav-container .dropdown > button,
+.nav-container .dropdown > a {
+  font-family: inherit;
+  font-size: 0.875rem; /* text-sm — match other nav links */
+  font-weight: 400;
+  line-height: 1.25rem;
+  letter-spacing: inherit;
+}
+
+/* Popover items. Single source for color + sizing so the Docs dropdown
+   items and the version dropdown items render identically. */
+.navbar-dropdown-content a {
+  display: block;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: rgb(55, 65, 81); /* gray-700 */
+  white-space: nowrap;
+  text-decoration: none;
+}
+:where(.dark, .dark *) .navbar-dropdown-content a {
+  color: rgb(209, 213, 219); /* gray-300 */
+}
+.navbar-dropdown-content a:hover {
+  background-color: rgb(243, 244, 246); /* gray-100 */
+  color: rgb(17, 24, 39); /* gray-900 */
+}
+:where(.dark, .dark *) .navbar-dropdown-content a:hover {
+  background-color: rgb(31, 41, 55); /* gray-800 */
+  color: rgb(255, 255, 255);
+}
+
+
+/* ── Sidebar ─────────────────────────────────────────────────────────── */
+/* Centralized sidebar styling. The template lives in _partials/sidebar.html;
+   the chevron-toggle / mobile-panel JS lives in themeExtras/head-end.html.
+   These rules cover:
+     - Mobile slide-in panel + overlay (< xl)
+     - Mobile-only section/version chip rows
+     - Expand/collapse chevron button styling
+     - Sidebar link colors (light + dark)
+     - Tree indentation with left rule
+   Site-specific palettes (e.g. active link color, active background) can
+   still be overridden in the consumer's custom.css. */
+
+/* Mobile slide-in panel (< xl). Hidden on desktop; rendered in same DOM
+   as the desktop aside, just promoted to position:fixed on mobile. */
+@media (max-width: 1279.99px) {
+  .sidebar-mobile-panel {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    width: 280px !important;
+    z-index: 90 !important;
+    transform: translateX(-100%);
+    transition: transform 300ms ease-in-out;
+    background: white;
+    padding-top: 64px;
+    visibility: hidden;
+    overflow-y: auto;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  .dark .sidebar-mobile-panel {
+    background: rgb(17, 24, 39);
+  }
+  .sidebar-mobile-panel.mobile-sidebar-open {
+    transform: translateX(0);
+    visibility: visible;
+  }
+}
+.sidebar-mobile-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 89;
+}
+.sidebar-mobile-overlay.active {
+  display: block;
+}
+
+/* Hide mobile-only chrome on desktop. */
+@media (min-width: 1280px) {
+  .sidebar-mobile-only {
+    display: none !important;
+  }
+}
+
+/* Mobile section + version chip rows. */
+.sidebar-mobile-header {
+  border-bottom: 1px solid #e5e7eb;
+}
+.dark .sidebar-mobile-header {
+  border-bottom-color: #374151;
+}
+.sidebar-mobile-section-row {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+.sidebar-mobile-section-link {
+  flex: 1;
+  text-align: center;
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgb(75, 85, 99);
+  text-decoration: none;
+}
+.sidebar-mobile-section-link:hover {
+  background: rgb(243, 244, 246);
+}
+.dark .sidebar-mobile-section-link {
+  color: rgb(156, 163, 175);
+}
+.dark .sidebar-mobile-section-link:hover {
+  background: rgb(31, 41, 55);
+}
+.sidebar-mobile-section-active {
+  background: rgb(219, 234, 254);
+  color: rgb(30, 64, 175);
+}
+.dark .sidebar-mobile-section-active {
+  background: rgba(96, 165, 250, 0.1);
+  color: rgb(96, 165, 250);
+}
+.sidebar-mobile-version-row {
+  padding: 0 0.75rem 0.75rem;
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+.sidebar-mobile-version-link {
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: rgb(107, 114, 128);
+  text-decoration: none;
+}
+.sidebar-mobile-version-link:hover {
+  background: rgb(243, 244, 246);
+}
+.dark .sidebar-mobile-version-link {
+  color: rgb(156, 163, 175);
+}
+.dark .sidebar-mobile-version-link:hover {
+  background: rgb(31, 41, 55);
+}
+.sidebar-mobile-version-active {
+  background: rgb(229, 231, 235);
+  color: rgb(17, 24, 39);
+}
+.dark .sidebar-mobile-version-active {
+  background: rgb(55, 65, 81);
+  color: rgb(255, 255, 255);
+}
+
+/* Sidebar nav wrapper. No internal scroll: the sidebar grows with its tree
+   and scrolls with the page rather than getting an inner overflow bar. */
+.sidebar-nav-wrapper {
+  padding: 1rem;
+  flex-grow: 1;
+}
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+/* Tree lists. Depth 0 sits at the section root; deeper levels indent under
+   a thin left rule that mirrors the docs-theme-lotus pattern. */
+.sidebar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.sidebar-list-depth-0 {
+  margin-top: 0.5rem;
+}
+.sidebar-list:not(.sidebar-list-depth-0) {
+  margin-left: 0.75rem;
+  margin-top: 0.25rem;
+  padding-left: 0.75rem;
+  border-left: 1px solid #e5e7eb;
+}
+.dark .sidebar-list:not(.sidebar-list-depth-0) {
+  border-left-color: #374151;
+}
+.sidebar-list > li {
+  margin-top: 0.25rem;
+}
+
+/* Link row: link + chevron toggle button live in a flex wrapper so clicking
+   the chevron doesn't fire the link's navigation. */
+.sidebar-link-wrapper {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+.sidebar-link-wrapper .sidebar-link {
+  flex: 1;
+  min-width: 0;
+}
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  transition: color 0.15s;
+  text-decoration: none;
+  color: rgb(75, 85, 99);
+}
+.sidebar-link:hover {
+  color: rgb(17, 24, 39);
+  background: rgb(243, 244, 246);
+}
+.sidebar-link.sidebar-active-item {
+  color: rgb(30, 64, 175);
+  background: rgb(219, 234, 254);
+  font-weight: 600;
+}
+.dark .sidebar-link {
+  color: rgb(156, 163, 175);
+}
+.dark .sidebar-link:hover {
+  color: rgb(229, 231, 235);
+  background: rgba(255, 255, 255, 0.05);
+}
+.dark .sidebar-link.sidebar-active-item {
+  color: rgb(199, 210, 254);
+  background: rgba(99, 102, 241, 0.1);
+}
+
+/* Chevron toggle button — flips 0deg → 90deg on data-expanded="true". */
+.sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.5rem;
+  background: transparent;
+  border: 0;
+  border-radius: 0.25rem;
+  color: inherit;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.sidebar-toggle:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+.dark .sidebar-toggle:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.sidebar-toggle svg {
+  transition: transform 0.15s ease;
+  width: 1rem;
+  height: 1rem;
+}
+.sidebar-toggle[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+
+/* Sidebar mobile trigger — opens the docs sidebar slide-in panel.
+   Pure-text/icon style matching agw production: no border, no background,
+   just the colored hamburger icon with padding. The boxed look is reserved
+   for the global nav drawer trigger (which is a heavier UI element). */
+.solo-sidebar-mobile-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  margin-left: -0.5rem;
+  margin-right: 0.25rem;
+  background: transparent;
+  border: 0;
+  color: rgb(55, 65, 81);
+  cursor: pointer;
+}
+.solo-sidebar-mobile-trigger:hover {
+  color: rgb(17, 24, 39);
+}
+.dark .solo-sidebar-mobile-trigger {
+  color: rgb(209, 213, 219);
+}
+.dark .solo-sidebar-mobile-trigger:hover {
+  color: rgb(243, 244, 246);
+}
+@media (min-width: 1280px) {
+  .solo-sidebar-mobile-trigger {
+    display: none !important;
+  }
+}
+
+/* ── Mobile drawer "closed" state: visibility instead of display ─────────
+   Hextra v0.12.3's `en.search.js` defines:
+     function getActiveSearchElement() {
+       const inputs = Array.from(document.querySelectorAll('.hextra-search-wrapper'))
+         .filter(el => el.clientHeight > 0);
+       if (inputs.length === 1) { return {...}; }
+       // implicit undefined when 0 or 2+ visible
+     }
+   Its mousedown/keydown handlers destructure the result without a null
+   guard, so every event throws when no `.hextra-search-wrapper` has
+   `clientHeight > 0`. Crucially, that includes every keystroke INSIDE
+   the drawer's search input — typing crashes the search.
+
+   The drawer toggles `hx:hidden` (display: none) for its closed state.
+   `display: none` collapses descendants' clientHeight to 0, so when the
+   drawer holds the only search wrapper on mobile, "closed" means the
+   wrapper has clientHeight 0 → filter returns []. Worse, typing in the
+   open drawer still triggers keydown on the document, and Hextra's
+   handler queries again — if anything else collapses height between
+   keystrokes the same throw fires.
+
+   Fix: override `display: none` from `hx:hidden` with `visibility:
+   hidden` for `#mobile-icons-menu` specifically. visibility-hidden
+   elements stay in layout (descendants keep non-zero clientHeight) so
+   Hextra's filter still finds the wrapper. Pointer-events: none keeps
+   invisible content from blocking clicks. `position: absolute` is
+   already set on the drawer so it doesn't take normal-flow space.
+
+   ID selector (specificity 100) wins over `.hx\:hidden`'s class
+   selector (specificity 10) without needing !important. */
+#mobile-icons-menu.hx\:hidden {
+  display: block;
+  visibility: hidden;
+  pointer-events: none;
 }

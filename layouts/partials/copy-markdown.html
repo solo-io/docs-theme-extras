@@ -14,10 +14,16 @@
        otherwise transform.HTMLToMarkdown drops them entirely.
        Matches: <a class="hextra-card..."><span class="card-title">Title</span></a>
        Also:    <a class="hextra-card...">...<span class="hextra-card-icon...">Title</span>...</a> */ -}}
-{{- $html = $html | replaceRE `(?s)<a\s+class="hextra-card[^"]*"[^>]*href="([^"]*)"[^>]*>.*?<span[^>]*>([^<]+)</span>.*?</a>` "<p><a href=\"$1\">$2</a></p>" -}}
-{{- /* Remove card grid wrappers and their inline styles */ -}}
-{{- $html = $html | replaceRE `(?s)<div class="hextra-cards[^"]*"[^>]*>(.*?)</div>` "$1" -}}
-{{- $html = $html | replaceRE `(?s)<style>\s*\.hextra-card-styled[^<]*</style>` "" -}}
+{{- /* Manual {{< card >}} shortcode now emits <a class="section-card">
+       with the title in <span class="section-card-title">. Auto-cards in
+       parent _index.md pages use the same .section-card markup, so a
+       single regex collapses both into a plain link. */ -}}
+{{- $html = $html | replaceRE `(?s)<a\s+class="section-card"[^>]*href="([^"]*)"[^>]*>.*?<span\s+class="section-card-title"[^>]*>([^<]+)</span>.*?</a>` "<p><a href=\"$1\">$2</a></p>" -}}
+{{- /* Auto-card grid (<p class="section-card-title">) — separate pattern
+       because the title is a <p>, not a <span>. */ -}}
+{{- $html = $html | replaceRE `(?s)<a\s+class="section-card"[^>]*href="([^"]*)"[^>]*>.*?<p\s+class="section-card-title"[^>]*>([^<]+)(?:<[^>]*>[^<]*)*</p>.*?</a>` "<p><a href=\"$1\">$2</a></p>" -}}
+{{- /* Strip the .section-cards grid wrapper, leaving its children inline. */ -}}
+{{- $html = $html | replaceRE `(?s)<div class="section-cards"[^>]*>(.*?)</div>` "$1" -}}
 {{- /* Chroma linenos=table: replace the two-cell table with just the code-side <pre>.
        Otherwise HTMLToMarkdown serializes the line-number <td> as its own fenced block
        above the actual code, producing an orphan "1\n2\n..." block in the copy output. */ -}}
@@ -45,6 +51,10 @@
        emit .toggle-light. */ -}}
 {{- $html = $html | replaceRE `(?s)<div[^>]*class="toggle-light"[^>]*>.*?</div>` "" -}}
 {{- $md := printf "# %s\n\n%s" .Title ($html | transform.HTMLToMarkdown) -}}
+{{- /* transform.HTMLToMarkdown leaves HTML entities (`&gt;`, `&lt;`,
+       `&amp;`, `&quot;`, etc.) encoded. Decode them so the copied markdown
+       reads as markdown — `Gateway > ListenerSet`, not `Gateway &gt; ListenerSet`. */ -}}
+{{- $md = $md | htmlUnescape -}}
 {{- /* Strip empty heading-permalink anchors only — [](#id) → "".
        Preserve [text](#id) cross-section links so readers retain the reference. */ -}}
 {{- $md = $md | replaceRE `\[\]\(#[^)]+\)` "" -}}
@@ -257,7 +267,11 @@
     </div>
   </dialog>
   <script type="text/markdown" class="copy-md-source">
-{{- $md -}}
+{{- /* `safeHTML` so Hugo's html/template doesn't re-escape the markdown's
+       `<` and `>` (which would put `&amp;gt;` etc. into the user's clipboard).
+       Script-tag content is raw text — `<` / `>` characters are safe so long
+       as the markdown doesn't literally contain `</script>`. */ -}}
+{{- $md | safeHTML -}}
   </script>
 </div>
 {{- end -}}

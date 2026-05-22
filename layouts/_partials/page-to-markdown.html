@@ -1,0 +1,70 @@
+{{- /* Returns clean markdown from a page's rendered HTML content.
+       Usage: {{ $md := partial "page-to-markdown.html" . }}
+
+       Used by the `markdown` output format templates (page.markdown.md /
+       section.markdown.md) and mirrors the same cleanup pipeline as
+       the copy-markdown.html partial so users get the same content
+       whether they hit the .md URL or click "Copy as Markdown". */ -}}
+{{- $html := .Content -}}
+
+{{- /* Section cards → plain link list. The shortcode and the auto-card
+       partial both emit <a class="section-card"><span class="section-card-title"> /
+       <p class="section-card-title">; collapse either form to <p><a>. */ -}}
+{{- $html = $html | replaceRE `(?s)<a\s+class="section-card"[^>]*href="([^"]*)"[^>]*>.*?<span\s+class="section-card-title"[^>]*>([^<]+)</span>.*?</a>` "<p><a href=\"$1\">$2</a></p>" -}}
+{{- $html = $html | replaceRE `(?s)<a\s+class="section-card"[^>]*href="([^"]*)"[^>]*>.*?<p\s+class="section-card-title"[^>]*>([^<]+)(?:<[^>]*>[^<]*)*</p>.*?</a>` "<p><a href=\"$1\">$2</a></p>" -}}
+{{- $html = $html | replaceRE `(?s)<div class="section-cards"[^>]*>(.*?)</div>` "$1" -}}
+
+{{- /* Chroma linenos=table: keep code cell, drop line-number cell. */ -}}
+{{- $html = $html | replaceRE `(?s)<table class="lntable"><tr><td class="lntd">\s*<pre[^>]*><code><span class="lnt">.*?</td>\s*<td class="lntd">\s*(<pre[^>]*><code[^>]*>.*?</code></pre>)\s*</td>\s*</tr>\s*</table>` "$1" -}}
+
+{{- /* Tabs: strip button bar, unhide all panels, inject panel labels. */ -}}
+{{- $html = $html | replaceRE `(?s)<div[^>]*role="tablist"[^>]*>.*?</div>` "" -}}
+{{- $html = $html | replaceRE `aria-hidden="true"` "" -}}
+{{- $html = $html | replaceRE `<div class="hextra-tabs-panel[^"]*"[^>]*aria-labelledby="([^"]*)"[^>]*>` `<div style="display:block"><p><strong>Option: $1</strong></p>` -}}
+
+{{- $md := $html | transform.HTMLToMarkdown -}}
+
+{{- /* Remove empty heading-permalink anchors. */ -}}
+{{- $md = $md | replaceRE `\[\]\(#[^)]+\)` "" -}}
+
+{{- /* Normalize smart punctuation to ASCII so the markdown is
+       easier to diff and friendlier to non-Unicode-aware consumers. */ -}}
+{{- $md = $md | replaceRE `[""]` `"` -}}
+{{- $md = $md | replaceRE `['']` `'` -}}
+{{- $md = $md | replaceRE `…` `...` -}}
+{{- $md = $md | replaceRE `–` `-` -}}
+{{- $md = $md | replaceRE `—` `--` -}}
+
+{{- /* Resolve URLs to absolute. Host comes from utils/prod-host (explicit
+       themeExtras.prodHost > site.BaseURL host > empty). */ -}}
+{{- $baseURL := partial "utils/prod-host.html" . -}}
+{{- $pagePath := .Permalink | replaceRE `^(https?:)?//[^/]+` "" -}}
+{{- $pageAbs := printf "%s%s" $baseURL $pagePath | strings.TrimRight "/" -}}
+{{- $md = $md | replaceRE `(!\[[^\]]*\]\()//localhost:\d+/` (printf "${1}%s/" $baseURL) -}}
+{{- $md = $md | replaceRE `(!\[[^\]]*\]\()(/[^)]+)` (printf "${1}%s${2}" $baseURL) -}}
+{{- $md = $md | replaceRE `!\[\]\(([^)]*/)([^/)]+\.[a-zA-Z]+)\)` "![${2}](${1}${2})" -}}
+{{- $md = $md | replaceRE `(\[[^\]]+\]\()//localhost:\d+/` (printf "${1}%s/" $baseURL) -}}
+{{- $md = $md | replaceRE `(\[[^\]]+\]\()(/[^)#]+)` (printf "${1}%s${2}" $baseURL) -}}
+{{- $md = $md | replaceRE `(\[[^\]]+\]\()([a-zA-Z0-9_\-][^):]*)(\))` (printf "${1}%s/${2}${3}" $pageAbs) -}}
+
+{{- /* For api-ref pages with a kubespec widget, extract the simplified schema
+       markdown embedded between <!--ks-md-start--> / <!--ks-md-end-->
+       sentinels by the widget's render.go. */ -}}
+{{- if .Params.widgetHtml -}}
+  {{- range $i, $part := split .Params.widgetHtml "<!--ks-md-start" -}}
+    {{- if gt $i 0 -}}
+      {{- $schemaMd := index (split $part "ks-md-end-->") 0 | strings.TrimSpace -}}
+      {{- if $schemaMd -}}
+        {{- $md = printf "%s\n\n%s\n" $md $schemaMd -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* transform.HTMLToMarkdown preserves HTML entities (`&gt;`, `&lt;`,
+       `&amp;`, `&quot;`, etc.) verbatim instead of decoding them. That's
+       fine for HTML rendering but produces broken-looking markdown
+       ("Gateway &gt; ListenerSet" instead of "Gateway > ListenerSet").
+       Decode entities so the returned markdown reads like markdown. */ -}}
+{{- $md = $md | htmlUnescape -}}
+{{- return $md -}}
