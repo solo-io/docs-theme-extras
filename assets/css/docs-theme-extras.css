@@ -384,7 +384,7 @@ html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
 .sidebar-product-logo::after {
   content: "";
   display: block;
-  width: 90%;
+  width: 85%;
   height: 1px;
   margin: 0.75rem auto 0;
   background: #e5e7eb;
