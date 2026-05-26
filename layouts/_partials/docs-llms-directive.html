@@ -1,0 +1,17 @@
+{{- /* Screen-reader-only hint that points AI agents at the LLM-friendly
+       index (`/docs/llms.txt`) and the `.md` URL form of every docs page.
+       Renders only when both output formats are enabled in hugo.yaml so
+       the directive doesn't promise URLs that 404. */ -}}
+{{- $outputs := site.Params.themeExtras.outputs | default dict -}}
+{{- $hasLlms := $outputs.llms | default true -}}
+{{- $hasMd := $outputs.markdown | default true -}}
+{{- if or $hasLlms $hasMd -}}
+<p class="sr-only">
+  {{- if $hasLlms -}}
+    For the complete documentation index, see <a href="/docs/llms.txt">llms.txt</a>.
+  {{- end }}
+  {{- if $hasMd }}
+    Markdown versions of all docs pages are available by appending .md to any docs URL.
+  {{- end -}}
+</p>
+{{- end -}}

@@ -46,3 +46,17 @@ body {
 .content a:hover {
   color: #106a94;
 }
+
+/* ── Docs page top spacing ─────────────────────────────────────────────
+   Enterprise consumers use the centralized docs/list.html and
+   docs/single.html with a larger main pt-6 (24px) than OSS-brand sites,
+   which keep their own local templates at pt-2. Bring the sidebar and
+   TOC down to match the breadcrumb's new box top so all three columns
+   land at the same y. OSS brand keeps the tighter sidebar/TOC defaults
+   in docs-theme-extras.css. */
+.sidebar-nav-wrapper {
+  padding-top: 1.1875rem;
+}
+.solo-toc-inner {
+  padding-top: 1.5rem;
+}

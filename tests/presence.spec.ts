@@ -146,22 +146,23 @@ test.describe("page main content is non-trivially populated", () => {
 });
 
 test.describe("breadcrumb renders on every topic page", () => {
-  // Hextra's breadcrumb partial (layouts/_partials/breadcrumb.html) emits a
-  // div with these utility classes, containing a home material-icon and
-  // chevron-separated ancestor links ending in the current page title. The
-  // partial fires automatically for the docs layout (the cascading type set
-  // in _index.md) so every topic page should have one.
+  // docs-theme-extras's breadcrumb partial (layouts/_partials/breadcrumb.html)
+  // emits a <nav class="solo-breadcrumb"> containing a home link with an SVG
+  // icon and slash-separated ancestor links ending one level above the
+  // current page (current title omitted because it's already in the <h1>).
+  // The partial is invoked from docs/single.html and docs/list.html so every
+  // topic page should have one.
   for (const page of TOPIC_PAGES) {
     test(`${page.name} has the breadcrumb container and home icon`, () => {
       const html = readFixture(page.filePath);
       expect(
         html,
-        `${page.name}: missing breadcrumb outer container`,
-      ).toMatch(/class="[^"]*hx:mt-1\.5 hx:flex hx:items-center hx:gap-1[^"]*"/);
+        `${page.name}: missing breadcrumb outer container (<nav class="solo-breadcrumb">)`,
+      ).toMatch(/<nav [^>]*class="solo-breadcrumb"/);
       expect(
         html,
-        `${page.name}: missing home icon inside breadcrumb`,
-      ).toMatch(/<i class="material-icons"[^>]*>\s*home\s*<\/i>/);
+        `${page.name}: missing home link inside breadcrumb (<a class="solo-breadcrumb-home" href="…">)`,
+      ).toMatch(/<a [^>]*class="solo-breadcrumb-home"/);
     });
     test(`${page.name} breadcrumb links to its parent section`, () => {
       const html = readFixture(page.filePath);

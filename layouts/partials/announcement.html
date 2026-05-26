@@ -1,0 +1,35 @@
+{{- /*
+  Centralized announcement banner.
+
+  Two ways consumers populate the banner, checked in order:
+
+    1. site.Params.banner.message — Hextra's native banner config. Renders
+       the message through Page.RenderString so shortcodes and markdown
+       inside the param work.
+    2. site.Data.announcement[].visible — Solo-style data-file banner.
+       Renders the first entry with `visible: true`; the rest are skipped.
+
+  If neither is set, nothing renders. The wrapper styling matches the older
+  inline-on-dark Solo style used by both agw-oss and kgateway.dev.
+*/ -}}
+{{- if isset site.Params "banner" -}}
+  {{- if isset site.Params.banner "message" -}}
+    <div class="bg-[#151927] w-full font-secondary text-sm lg:text-base text-[#DDDFED] text-center inline-flex items-center justify-center leading-7 min-h-4">
+      <div class="p-4">
+        {{ site.Params.banner.message | .Page.RenderString }}
+      </div>
+    </div>
+  {{- end -}}
+{{- else -}}
+  {{- $announcements := site.Data.announcement -}}
+  {{- range $announcements -}}
+    {{- if .visible -}}
+      <div class="bg-[#151927] w-full font-secondary text-sm lg:text-base text-[#DDDFED] text-center inline-flex items-center justify-center leading-7 min-h-4">
+        <a class="p-4" href="{{ .link }}" target="_blank" rel="noreferrer" class="hover:underline">
+          {{ .title }}<span aria-hidden="true">&nbsp;{{ if .link }}&rarr;{{ end }}</span>
+        </a>
+      </div>
+      {{- break -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}

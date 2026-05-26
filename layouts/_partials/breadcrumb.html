@@ -1,0 +1,63 @@
+{{- /* Centralized breadcrumb partial.
+
+       Walks Hugo's $page.Ancestors so it works for any URL structure —
+       /docs/<product>/<version>/<path>/ (kgw, agw) and the flatter
+       fixture pattern /test/<version>/<page>/ alike. The previous
+       segment-based variant hardcoded /docs/<sub>/<version>/ and silently
+       no-opped on URLs that didn't match.
+
+       The current page is intentionally omitted (it's already in the <h1>).
+
+       Per-consumer styling lives in docs-theme-extras.css under the
+       .solo-breadcrumb-* class prefix so we don't depend on Tailwind
+       utility classes shipping in the precompiled bundle. */ -}}
+
+{{- $page := . -}}
+{{- if and (reflect.IsMap .) (isset . "page") -}}
+  {{- $page = .page -}}
+{{- end -}}
+
+{{- /* Collect non-home ancestors in root → current-parent order. */ -}}
+{{- $ancestors := slice -}}
+{{- range $page.Ancestors.Reverse -}}
+  {{- if not .IsHome -}}
+    {{- $ancestors = $ancestors | append . -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if gt (len $ancestors) 0 -}}
+  <nav class="solo-breadcrumb" aria-label="Breadcrumb">
+    {{- /* The mobile sidebar trigger that used to live here was moved to
+           each consumer's navbar (top-of-page, next to the logo) so it's
+           reachable without scrolling. kgw renders it from its local
+           _partials/navbar.html; agw renders one from its custom nav.html. */ -}}
+    <a href="{{ site.Home.RelPermalink }}" class="solo-breadcrumb-home" title="Home">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>
+    </a>
+    {{- range $ancestors -}}
+      {{- $label := partial "utils/title" . -}}
+      {{- if .Parent.IsHome -}}
+        {{- /* Enterprise (docs hub) builds put each product in its own Hugo
+               site with baseURL=/<product>/, so the top-level ancestor is
+               always a version directory (e.g. /kgateway/2.2.x/). The version
+               section's own title is verbose ("Solo Enterprise for kgateway
+               2.2.x"); collapse to the URL slug so the breadcrumb reads
+               Home / 2.2.x / Reference / … instead of repeating the product
+               name on every page. */ -}}
+        {{- if eq (site.Params.themeExtras.brand | default "") "enterprise" -}}
+          {{- $slug := path.Base (strings.TrimSuffix "/" .RelPermalink) -}}
+          {{- if $slug -}}{{ $label = $slug }}{{- end -}}
+        {{- else -}}
+          {{- /* For top-level sections whose title resolution returned a path
+                 (e.g. "kgateway/2.1.x"), strip the consumer's folder prefix so
+                 preview builds don't render "kgateway/2.1.x" in the crumb. */ -}}
+          {{- with site.Params.folder -}}
+            {{- $label = strings.TrimPrefix (printf "%s/" .) $label -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+      <span class="solo-breadcrumb-sep">/</span>
+      <a href="{{ .RelPermalink }}" class="solo-breadcrumb-link">{{ $label }}</a>
+    {{- end -}}
+  </nav>
+{{- end -}}

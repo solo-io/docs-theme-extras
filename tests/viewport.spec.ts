@@ -64,22 +64,27 @@ test.describe("viewport responsive layout", () => {
       test("sidebar visibility matches breakpoint", async ({ page }) => {
         await page.goto(REPRESENTATIVE_PAGE!);
         const sidebar = page.locator(".hextra-sidebar-container").first();
-        if (vp.width >= 768) {
+        // The partial uses hx:hidden hx:xl:block, so the desktop sidebar
+        // is in-viewport only at xl (>=1280). Below that the same element
+        // becomes the mobile slide-in panel: position:fixed, transformed
+        // off-screen to the left until the hamburger toggles
+        // .mobile-sidebar-open, which slides it back in.
+        if (vp.width >= 1280) {
           await expect(sidebar).toBeVisible();
-          // On desktop the sidebar should be inside the viewport (not
-          // translated off-screen).
           const box = await sidebar.boundingBox();
           expect(box, "sidebar has no bounding box").not.toBeNull();
+          expect(box!.x).toBeGreaterThanOrEqual(-1);
           expect(box!.y).toBeGreaterThanOrEqual(-1);
         } else {
-          // On mobile the sidebar exists in the DOM but slides off-screen
-          // (transform: translate3d(0,-100%,0)). Check by bounding box, not
-          // toBeHidden — Playwright considers translated elements visible.
+          // Below xl, the mobile-panel transform: translateX(-100%) shifts
+          // the element fully off the left edge. Check the x-axis bounding
+          // box, not toBeHidden — Playwright treats translated elements as
+          // visible.
           const box = await sidebar.boundingBox();
           if (box) {
             expect(
-              box.y + box.height,
-              "sidebar should be off-screen on mobile",
+              box.x + box.width,
+              "sidebar should be off-screen left on mobile/tablet",
             ).toBeLessThanOrEqual(0);
           }
         }
@@ -189,10 +194,11 @@ test.describe("mobile hamburger toggles the sidebar", () => {
     const sidebar = page.locator(".hextra-sidebar-container").first();
     const hamburger = page.locator(".hextra-hamburger-menu").first();
 
-    // Initial: sidebar offscreen.
+    // Initial: sidebar offscreen (transform: translateX(-100%) on the
+    // mobile-panel — slides off the LEFT edge, not the top).
     let box = await sidebar.boundingBox();
     if (box) {
-      expect(box.y + box.height).toBeLessThanOrEqual(0);
+      expect(box.x + box.width, "sidebar should start off-screen left").toBeLessThanOrEqual(0);
     }
 
     await hamburger.click();
@@ -200,6 +206,6 @@ test.describe("mobile hamburger toggles the sidebar", () => {
     await page.waitForTimeout(400);
     box = await sidebar.boundingBox();
     expect(box, "sidebar has no box after hamburger click").not.toBeNull();
-    expect(box!.y, "sidebar should slide into view").toBeGreaterThanOrEqual(-1);
+    expect(box!.x, "sidebar should slide into view from the left").toBeGreaterThanOrEqual(-1);
   });
 });

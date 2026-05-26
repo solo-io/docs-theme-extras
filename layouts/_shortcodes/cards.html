@@ -1,9 +1,13 @@
 {{- /*
   Shortcode: cards
-  Wraps inner card shortcodes in a responsive CSS grid container with a configurable number of columns.
+  Wraps inner card shortcodes in a responsive grid. Emits the same
+  .section-cards container the parent-section auto-card grid uses, so
+  manual {{< cards >}} blocks render identically to auto-generated
+  child-card grids.
 
   Parameters:
-    - cols: (optional) The number of grid columns; defaults to 3.
+    - cols: (optional) Number of grid columns at lg+ breakpoint.
+            Defaults to 3 (matches .section-cards' default).
 
   Example:
     {{< cards cols="2" >}}
@@ -11,6 +15,6 @@
       {{< card title="Second Card" link="/docs/second/" >}}
     {{< /cards >}}
 */ -}}
-<div class="hextra-cards hextra-cards-grid" style="--hextra-cols: {{ .Get "cols" | default 3 }};">
+<div class="section-cards"{{ with .Get "cols" }} style="--section-cards-cols: {{ . }};"{{ end }}>
   {{ .Inner }}
 </div>
