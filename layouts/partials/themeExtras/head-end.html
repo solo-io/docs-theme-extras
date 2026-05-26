@@ -243,6 +243,21 @@ document.addEventListener('DOMContentLoaded', function(){
       }
     }
     var state = loadState();
+    /* First pass: record every ancestor of the current page as expanded.
+       Without this, the server-rendered "current chain is open" expansion
+       is purely visual and collapses the moment the user navigates to a
+       sibling page. Saving it here means the expanded set GROWS as the
+       user moves through the docs, instead of resetting per page — so
+       previously-visited branches stay open. */
+    var stateDirty = false;
+    document.querySelectorAll('[data-sidebar-item]').forEach(function(item){
+      if (item.querySelector('a[aria-current="page"]')) {
+        var key = getKey(item);
+        if (key && state[key] !== true) { state[key] = true; stateDirty = true; }
+      }
+    });
+    if (stateDirty) saveState(state);
+    /* Second pass: apply the (now-augmented) state to non-current items. */
     document.querySelectorAll('[data-sidebar-item]').forEach(function(item){
       /* Branches containing the current page stay expanded regardless of
          persisted state so the user always sees where they are. */

@@ -374,8 +374,20 @@ html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
 
 /* Product logo in sidebar */
 .sidebar-product-logo {
-  padding: 0.5rem 0 1rem;
-  border-bottom: 1px solid #e5e7eb;
+  padding: 0.5rem 0 0.25rem;
+}
+
+/* Short, centered hairline beneath the logo. A full-width border-bottom
+   read as an unfinished frame edge (no matching rule on the right or
+   bottom to terminate it), so this inset rule reads as decoration
+   between sections instead. */
+.sidebar-product-logo::after {
+  content: "";
+  display: block;
+  width: 90%;
+  height: 1px;
+  margin: 0.75rem auto 0;
+  background: #e5e7eb;
 }
 
 .sidebar-product-logo img {
@@ -388,7 +400,7 @@ html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
 .sidebar-logo-dark { display: none; }
 .dark .sidebar-logo-light { display: none; }
 .dark .sidebar-logo-dark { display: block; }
-.dark .sidebar-product-logo { border-bottom-color: #374151; }
+.dark .sidebar-product-logo::after { background: #374151; }
 
 /* Darken sidebar link text */
 .hextra-sidebar-container .hextra-sidebar-item a {

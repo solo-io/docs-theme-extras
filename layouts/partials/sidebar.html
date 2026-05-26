@@ -53,16 +53,34 @@
 {{- if or $disableSidebar $isLandingPage -}}
   <aside class="hx:hidden"></aside>
 {{- else -}}
-  {{- /* Extract current section and version from /docs/<section>/<version>/… */ -}}
+  {{- /* Two URL shapes to support:
+           OSS (kgw, agw):     /docs/<section>/<version>/…
+           Enterprise (docs):  /<product>/<version>/…   (each product is its
+                               own Hugo site with baseURL=/<product>/, no
+                               /docs/ prefix; versions are a flat list under
+                               site.Params.versions, not nested under
+                               site.Params.sections.<x>.versions)
+         Detect via segments[1]: "docs" → OSS, anything else → enterprise. */ -}}
   {{- $segments := split $context.RelPermalink "/" -}}
   {{- $section := "" -}}
   {{- $currentVersion := "" -}}
   {{- $isVersionedDocs := false -}}
+  {{- /* $versionPrefix is the URL prefix used for link building and
+         render-sidebar-tree's hasPrefix check against page RelPermalinks.
+         $lookupPath is the path passed to site.GetPage to locate the
+         version section. In OSS these are the same; in enterprise they
+         diverge because each docs-hub product is its own Hugo site with
+         contentDir set to that product's subtree, so GetPage paths are
+         relative to that subtree (no /<product>/ prefix) even though
+         published URLs still include it. */ -}}
+  {{- $versionPrefix := "" -}}
+  {{- $lookupPath := "" -}}
+
   {{- if and (ge (len $segments) 4) (eq (index $segments 1) "docs") -}}
+    {{- /* OSS shape: /docs/<section>/<version>/… */ -}}
     {{- $section = index $segments 2 -}}
     {{- $candidate := index $segments 3 -}}
-    {{- /* Validate the candidate against the section's configured versions. */ -}}
-    {{- if and (isset site.Params.sections $section) -}}
+    {{- if and site.Params.sections (isset site.Params.sections $section) -}}
       {{- range (index site.Params.sections $section).versions -}}
         {{- if eq .linkVersion $candidate -}}
           {{- $currentVersion = $candidate -}}
@@ -70,12 +88,62 @@
         {{- end -}}
       {{- end -}}
     {{- end -}}
-    {{- /* Fallback: well-known version markers when config doesn't enumerate them. */ -}}
     {{- if not $isVersionedDocs -}}
       {{- if or (eq $candidate "latest") (eq $candidate "main") (findRE `^[0-9]+\.[0-9]+\.x$` $candidate) -}}
         {{- $currentVersion = $candidate -}}
         {{- $isVersionedDocs = true -}}
       {{- end -}}
+    {{- end -}}
+    {{- if $isVersionedDocs -}}
+      {{- $versionPrefix = printf "/docs/%s/%s/" $section $currentVersion -}}
+      {{- $lookupPath = $versionPrefix -}}
+    {{- end -}}
+  {{- else if and (ge (len $segments) 2) (ne (index $segments 1) "") -}}
+    {{- /* Enterprise shape, two layouts:
+             Production: /<product>/<version>/…   baseURL=https://host/<product>,
+                                                  so segments[1]=product, segments[2]=version.
+             Local dev:  /<version>/…              baseURL=/ (hugo server),
+                                                  so segments[1]=version directly.
+           Try segments[2] first (production); fall back to segments[1] (local).
+           The version match — against site.Params.versions[].linkVersion or a
+           well-known marker — is the disambiguator. */ -}}
+    {{- $matchedIdx := 0 -}}
+    {{- $candidatePositions := slice -}}
+    {{- if ge (len $segments) 3 -}}{{- $candidatePositions = $candidatePositions | append 2 -}}{{- end -}}
+    {{- $candidatePositions = $candidatePositions | append 1 -}}
+    {{- range $candidatePositions -}}
+      {{- $i := . -}}
+      {{- if not $isVersionedDocs -}}
+        {{- $candidate := index $segments $i -}}
+        {{- range site.Params.versions -}}
+          {{- if eq .linkVersion $candidate -}}
+            {{- $currentVersion = $candidate -}}
+            {{- $isVersionedDocs = true -}}
+            {{- $matchedIdx = $i -}}
+          {{- end -}}
+        {{- end -}}
+        {{- if not $isVersionedDocs -}}
+          {{- if or (eq $candidate "latest") (eq $candidate "main") (findRE `^[0-9]+\.[0-9]+\.x$` $candidate) -}}
+            {{- $currentVersion = $candidate -}}
+            {{- $isVersionedDocs = true -}}
+            {{- $matchedIdx = $i -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+    {{- if $isVersionedDocs -}}
+      {{- if eq $matchedIdx 2 -}}
+        {{- $section = index $segments 1 -}}
+        {{- $versionPrefix = printf "/%s/%s/" $section $currentVersion -}}
+      {{- else -}}
+        {{- /* Local dev: no product prefix in the URL. */ -}}
+        {{- $section = "" -}}
+        {{- $versionPrefix = printf "/%s/" $currentVersion -}}
+      {{- end -}}
+      {{- /* GetPage paths are relative to contentDir, which is set to the
+             product subtree, so the lookup never includes the product prefix
+             even in production. */ -}}
+      {{- $lookupPath = printf "/%s/" $currentVersion -}}
     {{- end -}}
   {{- end -}}
 
@@ -83,11 +151,25 @@
   <div class="sidebar-mobile-overlay" onclick="closeMobileSidebar()"></div>
 
   {{- if $isVersionedDocs -}}
-    {{- $versionPrefix := printf "/docs/%s/%s/" $section $currentVersion -}}
-    {{- $docsSection := $context.Site.GetPage $versionPrefix -}}
+    {{- $docsSection := $context.Site.GetPage $lookupPath -}}
 
     {{- if $docsSection -}}
       <aside class="sidebar-container hextra-sidebar-container sidebar-mobile-panel hx:order-first hx:w-64 hx:shrink-0 hx:hidden hx:xl:block hx:print:hidden">
+
+        {{- /* Desktop-only product logo. Hidden on mobile because the
+               navbar already shows the same logo via navbar-title.html.
+               Consumers opt in by setting site.Params.sidebar.logo.path
+               (with optional .dark for a dark-mode variant). */ -}}
+        {{- with site.Params.sidebar.logo -}}
+          <div class="sidebar-product-logo hx:mb-1 hx:max-md:hidden">
+            <a href="{{ site.Home.RelPermalink }}">
+              <img class="sidebar-logo-light" src="{{ relURL .path }}" alt="{{ site.Title }}" />
+              {{- with .dark -}}
+                <img class="sidebar-logo-dark" src="{{ relURL . }}" alt="{{ site.Title }}" />
+              {{- end -}}
+            </a>
+          </div>
+        {{- end -}}
 
         {{- /* Mobile-only: section selector (only when >1 section) + version picker */ -}}
         <div class="sidebar-mobile-only sidebar-mobile-header">
@@ -119,7 +201,7 @@
           {{- end -}}
 
           {{- $versions := slice -}}
-          {{- if and $section (isset site.Params.sections $section) -}}
+          {{- if and $section site.Params.sections (isset site.Params.sections $section) -}}
             {{- $versions = (index site.Params.sections $section).versions -}}
           {{- end -}}
           {{- /* Fall back to the site-wide `params.versions` list when the
@@ -172,6 +254,16 @@
       {{- partial "hextra/sidebar.html" (dict "context" $context) -}}
     {{- else -}}
       <aside class="sidebar-container hextra-sidebar-container sidebar-mobile-panel hx:order-first hx:w-64 hx:shrink-0 hx:hidden hx:xl:block hx:print:hidden">
+        {{- with site.Params.sidebar.logo -}}
+          <div class="sidebar-product-logo hx:mb-1 hx:max-md:hidden">
+            <a href="{{ site.Home.RelPermalink }}">
+              <img class="sidebar-logo-light" src="{{ relURL .path }}" alt="{{ site.Title }}" />
+              {{- with .dark -}}
+                <img class="sidebar-logo-dark" src="{{ relURL . }}" alt="{{ site.Title }}" />
+              {{- end -}}
+            </a>
+          </div>
+        {{- end -}}
         <div class="sidebar-nav-wrapper">
           <nav class="sidebar-nav">
             {{- template "render-sidebar-tree" (dict "page" $context "current" $context "versionPrefix" "" "depth" 0) -}}
