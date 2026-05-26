@@ -217,16 +217,20 @@ document.addEventListener('DOMContentLoaded', function(){
      `<li data-sidebar-item>` carrying a `data-expanded` flag the server
      pre-set for ancestors of the current page. The chevron `<button>`
      toggles expansion without firing the link's navigation; preferences
-     persist in localStorage keyed by branch href. */
+     persist in localStorage keyed by branch href.
+
+     Reload detection: a hard refresh clears saved state so the sidebar
+     resets to only the current page's ancestors (server-rendered). Normal
+     navigation between pages preserves manually expanded sections. */
   (function(){
     var STORAGE_KEY = 'solo-sidebar-expanded';
     function loadState(){
       try { var raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : {}; }
       catch(_) { return {}; }
     }
-    function saveState(state){
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-      catch(_) { /* private mode / quota — degrade silently */ }
+    function saveState(s){
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
+      catch(_) {}
     }
     function getKey(item){
       var link = item.querySelector(':scope > .sidebar-link-wrapper > .sidebar-link');
@@ -242,13 +246,18 @@ document.addEventListener('DOMContentLoaded', function(){
         else children.setAttribute('hidden', '');
       }
     }
-    var state = loadState();
-    /* First pass: record every ancestor of the current page as expanded.
-       Without this, the server-rendered "current chain is open" expansion
-       is purely visual and collapses the moment the user navigates to a
-       sibling page. Saving it here means the expanded set GROWS as the
-       user moves through the docs, instead of resetting per page — so
-       previously-visited branches stay open. */
+
+    /* Clear saved state on hard refresh so the sidebar starts clean. */
+    var navEntry = performance.getEntriesByType('navigation')[0];
+    var isReload = navEntry && navEntry.type === 'reload';
+    if (isReload) {
+      try { localStorage.removeItem(STORAGE_KEY); } catch(_) {}
+    }
+
+    var state = isReload ? {} : loadState();
+
+    /* Save ancestors of the current page so they stay expanded as the user
+       navigates to sibling pages within the same section. */
     var stateDirty = false;
     document.querySelectorAll('[data-sidebar-item]').forEach(function(item){
       if (item.querySelector('a[aria-current="page"]')) {
@@ -257,14 +266,14 @@ document.addEventListener('DOMContentLoaded', function(){
       }
     });
     if (stateDirty) saveState(state);
-    /* Second pass: apply the (now-augmented) state to non-current items. */
+
+    /* Apply saved state to sections not containing the current page. */
     document.querySelectorAll('[data-sidebar-item]').forEach(function(item){
-      /* Branches containing the current page stay expanded regardless of
-         persisted state so the user always sees where they are. */
       if (item.querySelector('a[aria-current="page"]')) return;
       var key = getKey(item);
       if (key && key in state) setExpanded(item, state[key]);
     });
+
     document.querySelectorAll('.sidebar-toggle').forEach(function(btn){
       btn.addEventListener('click', function(e){
         e.preventDefault();
@@ -278,11 +287,11 @@ document.addEventListener('DOMContentLoaded', function(){
         if (key) { state[key] = newExpanded; saveState(state); }
       });
     });
+
     /* Title clicks: expanded → collapse in place (no nav); collapsed → navigate
        to section index. State is written to localStorage before navigating so
        the new page renders the branch expanded without a client-side re-expand
-       step — eliminating the double-visual-change flash. Modifier clicks fall
-       through for new-tab etc. */
+       step. Modifier clicks fall through for new-tab etc. */
     document.querySelectorAll('[data-sidebar-item] > .sidebar-link-wrapper > .sidebar-link').forEach(function(link){
       link.addEventListener('click', function(e){
         if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
