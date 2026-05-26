@@ -520,13 +520,14 @@ html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
   top: 4rem;
   overflow-y: auto;
   padding-right: 1rem;
-  padding-top: 1.5rem;
+  padding-top: 0.5rem;
   font-size: 0.875rem;
   hyphens: auto;
   max-height: calc(100vh - var(--navbar-height) - env(safe-area-inset-bottom));
   margin-right: -1rem;
 }
 .solo-toc-heading {
+  margin-top: 0.1875rem;
   margin-bottom: 1rem;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -1279,6 +1280,7 @@ details[open].hextra-search-other-versions > summary::before {
    class hooks (no Tailwind utilities) so styling doesn't depend on
    Hextra's precompiled bundle picking up the right variants. */
 .solo-breadcrumb {
+  margin-top: 0.1875rem;
   margin-bottom: 1rem;
   display: flex;
   align-items: center;
@@ -1544,7 +1546,7 @@ details[open].hextra-search-other-versions > summary::before {
 /* Sidebar nav wrapper. No internal scroll: the sidebar grows with its tree
    and scrolls with the page rather than getting an inner overflow bar. */
 .sidebar-nav-wrapper {
-  padding: 1rem;
+  padding: 0 1rem 1rem;
   flex-grow: 1;
 }
 .sidebar-nav {
@@ -1562,7 +1564,7 @@ details[open].hextra-search-other-versions > summary::before {
   padding: 0;
 }
 .sidebar-list-depth-0 {
-  margin-top: 0.5rem;
+  margin-top: 0;
 }
 .sidebar-list:not(.sidebar-list-depth-0) {
   margin-left: 0.75rem;
@@ -1573,7 +1575,7 @@ details[open].hextra-search-other-versions > summary::before {
 .dark .sidebar-list:not(.sidebar-list-depth-0) {
   border-left-color: #374151;
 }
-.sidebar-list > li {
+.sidebar-list > li + li {
   margin-top: 0.25rem;
 }
 
