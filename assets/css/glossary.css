@@ -1,7 +1,7 @@
 /* Glossary tooltip styles */
 .glossary-term {
   position: relative;
-  display: inline-block;
+  display: inline;
   cursor: help;
   border-bottom: 1px dotted #666;
   color: inherit;
