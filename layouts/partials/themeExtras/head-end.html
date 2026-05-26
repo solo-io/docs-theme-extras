@@ -278,14 +278,11 @@ document.addEventListener('DOMContentLoaded', function(){
         if (key) { state[key] = newExpanded; saveState(state); }
       });
     });
-    /* Title click on an expanded section collapses it in place (no
-       nav). Title click on a collapsed section pre-expands the branch
-       client-side and then lets navigation proceed — without the
-       client-side expand, the user sees the OLD page's collapsed
-       state briefly before the destination page renders the branch
-       expanded server-side, which reads as a flash. Modifier-clicks
-       (cmd/ctrl/shift/middle) fall through to the browser so users
-       can still open the section index in a new tab. */
+    /* Title clicks: expanded → collapse in place (no nav); collapsed → navigate
+       to section index. State is written to localStorage before navigating so
+       the new page renders the branch expanded without a client-side re-expand
+       step — eliminating the double-visual-change flash. Modifier clicks fall
+       through for new-tab etc. */
     document.querySelectorAll('[data-sidebar-item] > .sidebar-link-wrapper > .sidebar-link').forEach(function(link){
       link.addEventListener('click', function(e){
         if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
@@ -298,12 +295,9 @@ document.addEventListener('DOMContentLoaded', function(){
           setExpanded(item, false);
           if (key) { state[key] = false; saveState(state); }
         } else {
-          setExpanded(item, true);
           if (key) { state[key] = true; saveState(state); }
-          /* If the active page already lives inside this branch, expand in
-             place — navigating would reload the same subtree and cause a flash. */
-          if (item.querySelector('a[aria-current="page"]')) e.preventDefault();
-          /* otherwise fall through — browser navigates to the section index */
+          /* fall through — browser navigates; new page reads localStorage and
+             renders the branch expanded without a client-side pre-expand */
         }
       });
     });
