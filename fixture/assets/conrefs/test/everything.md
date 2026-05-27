@@ -859,7 +859,7 @@ inner: value
 
 ### Cards whose link attribute is itself a shortcode call
 
-The card shortcode takes a `link` named argument. Embedding another shortcode invocation inside the quoted value tests whether Hugo's shortcode parser recursively expands inner calls before passing the resolved string to the outer shortcode. Title text carries the sentinel so the test can locate the rendered card; the test also asserts the rendered anchor's `href` matches the URL the nested `link` shortcode would resolve to (`/test/v2/rebased/`).
+The card shortcode takes a `link` named argument. Hugo treats backtick-quoted shortcode-argument values as literal strings — the inner `{{< link >}}` call is not expanded by Hugo's shortcode parser. The card shortcode detects nested shortcode syntax in its `link` parameter and resolves it via `RenderString` before using the result as the `href` value. The test asserts the rendered anchor's `href` matches the version-correct URL the inner `link` shortcode resolves to (for example `/test/v2/rebased/` on v2 pages).
 
 {{< cards >}}
 {{% version include-if="v2" %}}{{< card link=`{{< link path="rebased" >}}` title="MARKER_NESTED_ARG_TITLE Nested link in card" subtitle="Card with a nested shortcode call as its link attribute." icon="document" >}}{{% /version %}}

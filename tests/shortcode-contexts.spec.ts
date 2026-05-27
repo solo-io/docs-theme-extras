@@ -745,25 +745,29 @@ test.describe("opening fence on the same line as the opening shortcode tag", () 
 //
 //     Pattern: {{< card link=`{{< link path="rebased" >}}` ... >}}
 //
-//     Hugo treats shortcode-argument values as LITERAL strings. The
-//     inner `{{< link >}}` is NOT expanded — it gets passed verbatim to
-//     the outer card shortcode, which uses it directly as the URL. The
-//     final href ends up URL-encoded with the raw shortcode syntax in
-//     it, producing a broken anchor. This is a real fragility: the
-//     pattern looks correct but silently produces 404 links.
+//     Hugo treats backtick-quoted shortcode-argument values as LITERAL
+//     strings — the inner `{{< link >}}` is NOT expanded by Hugo's
+//     shortcode parser. The card shortcode works around this by detecting
+//     the `{{<` pattern in its `link` parameter and evaluating it via
+//     `$.Page.RenderString | plainify | strings.TrimSpace`, which lets
+//     the inner shortcode resolve to a real URL before it reaches the
+//     <a href="…"> attribute.
 //
-//     These tests document the observed behavior (so the regression
-//     guard fires if Hugo or the card shortcode ever start expanding
-//     inner shortcodes), but explicitly do NOT assert that the link
-//     "works" — because today it doesn't.
+//     These tests assert that the resolved href is the correct
+//     version-qualified path to the rebased companion page — NOT the
+//     URL-encoded raw shortcode syntax that appeared before the fix.
 // ──────────────────────────────────────────────────────────────────────
 
 test.describe("nested shortcode in another shortcode's attribute value", () => {
   for (const page of TEST_PAGES) {
     if (!ALL_TOPIC_PAGES.includes(page.name)) continue;
 
+    // Derive the expected URL from the page name (e.g. "v2/everything" → "/test/v2/rebased/").
+    const version = page.name.split("/")[0];
+    const expectedHref = `/test/${version}/rebased/`;
+
     if (V2_PAGES.includes(page.name)) {
-      test(`${page.name}: ${VERSION_MARKERS.nestedArgTitle} card renders with literal shortcode in href`, () => {
+      test(`${page.name}: ${VERSION_MARKERS.nestedArgTitle} card link resolves to the version-correct rebased URL`, () => {
         const html = visibleHtml(page.filePath);
         const idx = html.indexOf(VERSION_MARKERS.nestedArgTitle);
         expect(
@@ -771,33 +775,31 @@ test.describe("nested shortcode in another shortcode's attribute value", () => {
           `${VERSION_MARKERS.nestedArgTitle} missing`,
         ).toBeGreaterThan(-1);
 
-        // Card title sits inside an <a class="hextra-card …"> anchor.
+        // Card title sits inside an <a class="section-card"> anchor.
         const a = enclosingRegion(html, idx, "a");
         expect(a, `${VERSION_MARKERS.nestedArgTitle} not inside an <a>`).not.toBeNull();
         const openA = html.slice(a!.start, html.indexOf(">", a!.start) + 1);
 
-        // Hugo today leaves the nested shortcode unexpanded. Its raw
-        // syntax gets URL-encoded into the href. If this assertion ever
-        // flips, Hugo or the card template changed semantics — re-read
-        // and decide whether nested-shortcode-args now work and the
-        // limitation comment in the fixture should be updated.
+        // The card shortcode now evaluates nested shortcode calls in its
+        // link parameter via RenderString, so the href must be a real URL.
         expect(
           openA,
-          `${page.name}: href looks like a real URL — Hugo may have started ` +
-            `expanding nested shortcodes in attribute values. Update the test ` +
-            `and the fixture comment if so. openA: ${JSON.stringify(openA)}`,
-        ).toMatch(/href="[^"]*(%7b%7b|%7B%7B|\{\{)/);
+          `${page.name}: expected href="${expectedHref}" but got: ${JSON.stringify(openA)}`,
+        ).toContain(`href="${expectedHref}"`);
       });
     }
 
-    test(`${page.name}: ${CONDITIONAL_MARKERS.nestedArgTitle} card renders with literal shortcode in href`, () => {
+    test(`${page.name}: ${CONDITIONAL_MARKERS.nestedArgTitle} card link resolves to the version-correct rebased URL`, () => {
       const html = visibleHtml(page.filePath);
       const idx = html.indexOf(CONDITIONAL_MARKERS.nestedArgTitle);
       expect(idx).toBeGreaterThan(-1);
       const a = enclosingRegion(html, idx, "a");
       expect(a).not.toBeNull();
       const openA = html.slice(a!.start, html.indexOf(">", a!.start) + 1);
-      expect(openA).toMatch(/href="[^"]*(%7b%7b|%7B%7B|\{\{)/);
+      expect(
+        openA,
+        `${page.name}: expected href="${expectedHref}" but got: ${JSON.stringify(openA)}`,
+      ).toContain(`href="${expectedHref}"`);
     });
   }
 });
