@@ -73,5 +73,14 @@ export default defineConfig({
       name: "smoke",
       testMatch: /smoke\.spec\.ts$/,
     },
+    // Browser-based crawl: open every built page and assert no uncaught JS
+    // exceptions, console.error calls, or 4xx responses on JS/CSS resources.
+    // Distinct from the fixture-page-only "browser" project — this one crawls
+    // the entire build output (up to smoke.maxFiles pages).
+    {
+      name: "browser-smoke",
+      use: { ...devices["Desktop Chrome"] },
+      testMatch: /console-errors\.spec\.ts$/,
+    },
   ],
 });

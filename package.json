@@ -8,6 +8,7 @@
     "test:static": "playwright test --project=static",
     "test:browser": "playwright test --project=browser",
     "test:smoke": "playwright test --project=smoke",
+    "test:browser-smoke": "playwright test --project=browser-smoke",
     "report": "playwright show-report"
   },
   "devDependencies": {

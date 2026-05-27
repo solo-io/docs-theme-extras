@@ -36,12 +36,19 @@ export type Checks = {
   includeForm: boolean;
   cascadeType: boolean;
   crossBrowser: boolean;
+  // Browser-level crawl: open every built page in Chromium and fail on
+  // uncaught JS exceptions, console.error calls, or HTTP 4xx on JS/CSS assets.
+  consoleErrors: boolean;
 };
 
 export type Allowlists = {
   hugoWarnings: string[];
   curlQuotes: string[];
   shortcodes: string[];
+  // Regex patterns (strings) matched against each console error / pageerror
+  // message. Anything that matches is silently dropped — not a test failure.
+  // Useful for suppressing known third-party noise (analytics, CDN assets).
+  consoleErrors: string[];
 };
 
 // Per-spec knobs that don't fit the boolean [checks] table.
@@ -92,12 +99,14 @@ const DEFAULT_CHECKS: Checks = {
   includeForm: true,
   cascadeType: true,
   crossBrowser: false,
+  consoleErrors: true,
 };
 
 const DEFAULT_ALLOWLISTS: Allowlists = {
   hugoWarnings: [],
   curlQuotes: [],
   shortcodes: [],
+  consoleErrors: [],
 };
 
 const DEFAULT_SMOKE: Smoke = {
@@ -273,10 +282,11 @@ function mergeSmoke(raw: unknown, configPath: string): Smoke {
 }
 
 function mergeAllowlists(raw: unknown): Allowlists {
-  const out = {
+  const out: Allowlists = {
     hugoWarnings: [...DEFAULT_ALLOWLISTS.hugoWarnings],
     curlQuotes: [...DEFAULT_ALLOWLISTS.curlQuotes],
     shortcodes: [...DEFAULT_ALLOWLISTS.shortcodes],
+    consoleErrors: [...DEFAULT_ALLOWLISTS.consoleErrors],
   };
   if (!raw || typeof raw !== "object") return out;
   const obj = raw as Record<string, unknown>;

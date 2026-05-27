@@ -72,6 +72,13 @@ class Target {
     return this.cfg().allowlists.shortcodes;
   }
 
+  // Per-consumer regex patterns for console-errors.spec.ts. Strings from
+  // [allowlists].consoleErrors in the TOML are compiled to RegExp here so
+  // specs never have to know about the raw string form.
+  get consoleErrorsAllowlist(): RegExp[] {
+    return this.cfg().allowlists.consoleErrors.map((p) => new RegExp(p));
+  }
+
   shouldRun(check: keyof Checks): boolean {
     return this.cfg().checks[check];
   }
