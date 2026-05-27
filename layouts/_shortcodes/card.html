@@ -26,6 +26,14 @@
   Example: {{< card title="Get started" subtitle="Learn the basics" path="/getting-started/" icon="rocket" >}}
 */ -}}
 {{- $link := .Get "link" -}}
+{{- /* If the link argument contains a nested shortcode call (passed via
+       backtick quoting, e.g. link=`{{< link path="foo" >}}`), Hugo does not
+       automatically expand it — backtick-quoted args are raw strings. Detect
+       the pattern and evaluate it through RenderString so the inner shortcode
+       resolves to a URL before it reaches the href attribute. */ -}}
+{{- if strings.Contains $link "{{<" -}}
+  {{- $link = $.Page.RenderString $link | plainify | strings.TrimSpace -}}
+{{- end -}}
 {{- $path := .Get "path" -}}
 {{- if $path }}
   {{- $pathTrimmed := strings.TrimPrefix "/" $path -}}
