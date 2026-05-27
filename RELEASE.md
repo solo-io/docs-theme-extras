@@ -85,6 +85,28 @@ Look for these issues:
 - OpenAPI rendered region loads (if the consumer ships one).
 - Versioned and conditional sections rendering correctly.
 
+**Mobile — each navigation level above the version.**
+
+Use browser DevTools device emulation (375 px width, or a real device) and
+repeat all of the checks above at every navigation level that sits above the
+version segment. Test at least these levels before descending to a deep content page:
+
+- Site root / docs landing page
+- Product root
+- Version landing
+
+At each level, apply every item on the browser checklist above, plus confirm
+these mobile-specific behaviors:
+
+- Hamburger trigger opens the top-level nav and all items are reachable by
+  touch.
+- Mobile sidebar opens and closes without layout shift or scroll-position
+  jump.
+- Light/dark toggle is reachable from the mobile nav (not hidden behind
+  desktop-only controls).
+- No horizontal scroll at 375 px — no element bleeds past the viewport edge.
+- Version dropdown is tappable and dismisses correctly on outside tap.
+
 ## 4. Re-diff shadows on Hextra bumps
 
 If this release bumps the Hextra pin (`go.mod`), walk every file
