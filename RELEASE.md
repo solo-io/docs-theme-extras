@@ -21,6 +21,16 @@ hugo160 --config hugo-oss.toml      # oss brand
 hugo160 --config hugo-enterprise.toml # enterprise brand
 ```
 
+Check that the build log contains no new unallowlisted Hugo warnings.
+
+If you added or removed a shortcode since the last release, verify that `everything` fixture has been updated to call it. The `everything` page should exercise every current shortcode.
+
+Run cross-browser tests:
+
+```sh
+make test-cross-browser
+```
+
 ## 2. Consumer integration check (local replace)
 
 For **each** consumer repo, point its `go.mod` at the local module
@@ -35,9 +45,30 @@ make build
 The build must complete without Hugo errors or warnings. Revert the
 `replace` directive once verified — never ship a `replace` to main.
 
+Also run the consumer's framework tests against its built output to confirm
+Playwright specs pass:
+
+```sh
+make framework-test-static
+```
+
 ## 3. Visual smoke (light + dark, both consumers)
 
-Open these pages in each built site and verify:
+**Module fixture first.** Start the dev server for each brand and open
+`/test/v1/everything/` in a browser:
+
+```sh
+make server-oss         # http://localhost:1313/test/v1/everything/
+make server-enterprise  # http://localhost:1313/test/v1/everything/
+```
+
+Confirm the `everything` page renders correctly for
+both brand variants before moving on to consumer sites:
+— No raw shortcode delimiters
+- No broken layout
+- Components look right under both light and dark mode
+
+**Then open these pages in each consumer's built site and verify:**
 
 - `gloo-mesh/latest/ambient/setup/sample-apps/ecs-integration/`
 
@@ -97,3 +128,5 @@ also includes those changes).
 
 Hold the consumer PRs until the module tag is green; merge them in
 whatever order makes sense for the rollout.
+
+After the bump, verify the `go.mod` entry for `docs-theme-extras` shows the expected tag pseudo-version or SHA, not a stale commit from a previous `@main` resolution.
