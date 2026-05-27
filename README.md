@@ -447,6 +447,21 @@ reload reuses the cached version.
 └── .github/workflows/self-test.yml CI: runs make test-all on PRs
 ```
 
+## Release readiness checklist
+
+Before tagging a release or bumping the pin in a consumer repo, confirm each item:
+
+- [ ] Framework tests pass in this repo (`make test-all`).
+- [ ] No new unallowlisted Hugo build warnings.
+- [ ] The `everything` fixture page exercises all current shortcodes.
+- [ ] The `everything` fixture page looks correct under a visual test in this repo for both brand variants (`make server-oss` and `make server-enterprise`).
+- [ ] Dark mode looks correct in both brand variants.
+- [ ] Cross-browser tests pass (`make test-cross-browser`).
+- [ ] The change log is updated.
+- [ ] Framework tests pass in the consumer repo.
+- [ ] The `everything` fixture page looks correct under a visual test in the consumer repo.
+- [ ] The consumer `go.mod` reflects the intended SHA after bumping.
+
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE).
