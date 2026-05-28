@@ -168,6 +168,56 @@ test.describe("findMarkdownLeaks helper", () => {
     expect(findMarkdownLeaks(html)).toEqual([]);
   });
 
+  test("flags empty <li></li> (orphan list-marker leak)", () => {
+    // Canonical shape from the ambient-multi-link.md step 3→4 boundary:
+    // a percent-form `{{% version %}}` body ending with a bare `4. `
+    // marker that RenderString turned into `<ol start=4><li></li></ol>`.
+    const html = `
+      <p>Long preamble paragraph.</p>
+      <ol start=4><li></li></ol>Optional: Verify that the istiod...
+    `;
+    const leaks = findMarkdownLeaks(html);
+    const empty = leaks.filter((l) => l.kind === "empty-list-item");
+    expect(empty).toHaveLength(1);
+    expect(empty[0].match).toBe("<li></li>");
+  });
+
+  test("flags empty <li> with whitespace and attributes", () => {
+    const html = `<ol><li class="foo">
+    </li></ol>`;
+    const leaks = findMarkdownLeaks(html);
+    expect(leaks.some((l) => l.kind === "empty-list-item")).toBe(true);
+  });
+
+  test("flags leaked code-fence triple-backticks in body text", () => {
+    // ```sh that survived as literal backticks because the surrounding
+    // region was treated as a raw HTML block (post-RenderString reinsertion).
+    const html = `
+      <p>Optional: Verify that ...</p>
+      \`\`\`sh
+      istioctl proxy-status --context \${context1}
+      \`\`\`
+      <p>Example output:</p>
+    `;
+    const leaks = findMarkdownLeaks(html);
+    const fences = leaks.filter((l) => l.kind === "code-fence");
+    expect(fences.length).toBeGreaterThan(0);
+    expect(fences[0].match.startsWith("\`\`\`")).toBe(true);
+  });
+
+  test("does NOT flag triple-backticks inside <pre> or <code>", () => {
+    // Real fences become Chroma <pre><code> blocks; <pre>/<code> regions
+    // are stripped before the scan, so the backticks inside them are
+    // invisible to CODE_FENCE.
+    const html = `
+      <pre><code>\`\`\`sh
+echo hello
+\`\`\`</code></pre>
+      <p>Plain prose.</p>
+    `;
+    expect(findMarkdownLeaks(html)).toEqual([]);
+  });
+
   test("stripExpectedMarkdown preserves length (so offsets stay aligned)", () => {
     const html = `<p>before</p><code>[link](x)</code><p>after</p>`;
     const stripped = __test.stripExpectedMarkdown(html);

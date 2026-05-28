@@ -9,7 +9,12 @@
 // Used by markdown-leaks.spec.ts both as unit-testable functions and as
 // the engine of a built-HTML scan across all rendered pages.
 
-export type LeakKind = "markdown-link" | "table-pipe" | "shortcode-delim";
+export type LeakKind =
+  | "markdown-link"
+  | "table-pipe"
+  | "shortcode-delim"
+  | "empty-list-item"
+  | "code-fence";
 
 export type Leak = {
   kind: LeakKind;
@@ -99,6 +104,28 @@ const TABLE_PIPE = /(?:^|\n|>)[ \t]*\|[^|\n]{1,200}\|[^\n]*/g;
 const SHORTCODE_OPEN = /\{\{\s*[<%]/g;
 const SHORTCODE_CLOSE = /[%>]\s*\}\}/g;
 
+// Empty list item — `<li></li>` (or `<li>` with only whitespace) inside
+// an ordered/unordered list. Signals structural leak: a shortcode body
+// swallowed a list-marker tail like `4. ` with no content, which the
+// markdown parser then rendered as `<ol start=4><li></li></ol>`. The
+// badge sits over the start of the orphaned text that follows the
+// closing `</ol>`, and any indented code fence on the same continuation
+// becomes literal backticks. See the ambient-multi-link.md step 3→4
+// boundary as the canonical shape. The trailing `</li>` is required so
+// `<li>` with attributes (`<li class="x">…</li>`) and self-closing
+// edge cases don't false-positive against empty-by-design layouts.
+const EMPTY_LI = /<li\b[^>]*>\s*<\/li>/g;
+
+// Triple-backtick fence that survived into rendered HTML body text.
+// All real fences become Chroma `<pre><code>…</code></pre>` blocks,
+// which `stripExpectedMarkdown` removes before the scan. Leftover
+// `` ``` `` outside code/script/attribute regions means the fence was
+// emitted as literal characters — Goldmark treated the surrounding
+// region as a raw HTML block (e.g. after a percent-form shortcode whose
+// `RenderString` output ends with `</ol>` and no blank line before the
+// fence). Captures up to 120 chars after the opener for triage context.
+const CODE_FENCE = /```[^`\n]{0,120}/g;
+
 function clamp(s: string, n: number): string {
   if (s.length <= n) return s;
   return s.slice(0, n - 1) + "…";
@@ -142,6 +169,8 @@ export function findMarkdownLeaks(
   scan(TABLE_PIPE, "table-pipe");
   scan(SHORTCODE_OPEN, "shortcode-delim");
   scan(SHORTCODE_CLOSE, "shortcode-delim");
+  scan(EMPTY_LI, "empty-list-item");
+  scan(CODE_FENCE, "code-fence");
 
   return leaks;
 }
