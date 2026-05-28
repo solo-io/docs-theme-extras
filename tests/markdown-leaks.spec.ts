@@ -168,25 +168,43 @@ test.describe("findMarkdownLeaks helper", () => {
     expect(findMarkdownLeaks(html)).toEqual([]);
   });
 
-  test("flags empty <li></li> (orphan list-marker leak)", () => {
+  test("flags <ol start=N> with single empty <li> (orphan step-marker leak)", () => {
     // Canonical shape from the ambient-multi-link.md step 3→4 boundary:
     // a percent-form `{{% version %}}` body ending with a bare `4. `
     // marker that RenderString turned into `<ol start=4><li></li></ol>`.
-    const html = `
-      <p>Long preamble paragraph.</p>
-      <ol start=4><li></li></ol>Optional: Verify that the istiod...
-    `;
-    const leaks = findMarkdownLeaks(html);
-    const empty = leaks.filter((l) => l.kind === "empty-list-item");
-    expect(empty).toHaveLength(1);
-    expect(empty[0].match).toBe("<li></li>");
+    // Quoted and unquoted forms of the start attribute, with and without
+    // whitespace between tags.
+    const cases = [
+      `<ol start=4><li></li></ol>`,
+      `<ol start="4"><li></li></ol>`,
+      `<ol start=2>\n<li>\n</li>\n</ol>`,
+      `<ol start="7" class="x"><li class="y"></li></ol>`,
+    ];
+    for (const html of cases) {
+      const leaks = findMarkdownLeaks(html);
+      const empty = leaks.filter((l) => l.kind === "empty-list-item");
+      expect(empty.length, `case: ${html}`).toBeGreaterThan(0);
+    }
   });
 
-  test("flags empty <li> with whitespace and attributes", () => {
-    const html = `<ol><li class="foo">
-    </li></ol>`;
-    const leaks = findMarkdownLeaks(html);
-    expect(leaks.some((l) => l.kind === "empty-list-item")).toBe(true);
+  test("does NOT flag empty <li> in a plain <ol> or <ul>", () => {
+    // Legitimate empty-li sources that are NOT the orphan-marker bug:
+    // version-gated bullets that rendered empty for the current build,
+    // code-only items whose `<code>` content got stripped to whitespace
+    // by `stripExpectedMarkdown`, plain ordered lists starting at 1.
+    const cases = [
+      `<ol><li></li></ol>`,
+      `<ul><li></li><li>real</li></ul>`,
+      `<ol><li>                                         </li><li>real</li></ol>`,
+      `<ul><li class="foo"></li></ul>`,
+    ];
+    for (const html of cases) {
+      const leaks = findMarkdownLeaks(html);
+      expect(
+        leaks.filter((l) => l.kind === "empty-list-item"),
+        `case: ${html}`,
+      ).toEqual([]);
+    }
   });
 
   test("does NOT flag empty <li role='separator'> dropdown separators", () => {

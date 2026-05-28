@@ -114,16 +114,28 @@ const TABLE_PIPE = /(?:^|\n|>)[ \t]*\|[^|\n]{1,200}\|[^\n]*/g;
 const SHORTCODE_OPEN = /\{\{\s*[<%]/g;
 const SHORTCODE_CLOSE = /[%>]\s*\}\}/g;
 
-// Empty list item — `<li></li>` (or `<li>` with only whitespace) inside
-// an ordered/unordered list. Signals structural leak: a shortcode body
-// swallowed a list-marker tail like `4. ` with no content, which the
-// markdown parser then rendered as `<ol start=4><li></li></ol>`. The
-// badge sits over the start of the orphaned text that follows the
-// closing `</ol>`, and any indented code fence on the same continuation
-// becomes literal backticks. See the ambient-multi-link.md step 3→4
-// boundary as the canonical shape. Intentional empty `<li role=...>`
-// separators (copy-as-markdown dropdown) are pre-stripped above.
-const EMPTY_LI = /<li\b[^>]*>\s*<\/li>/g;
+// Orphan-step-marker leak: `<ol start=N>` containing a single empty `<li>`
+// and nothing else. This is the unique signature of a percent-form
+// shortcode (typically `{{% version %}}`) whose body ended with a bare
+// `N. ` list marker — `RenderString` parsed the trailing `N. ` as an
+// empty ordered list starting at N, and Hugo spliced that HTML back into
+// the parent stream, severing the surrounding list. The orphaned text
+// that followed the closing `</ol>` then renders outside any `<li>` and
+// the badge for "N" sits over the start of that text (the canonical
+// ambient-multi-link.md step 3→4 leak).
+//
+// Restricted to `<ol start=...>` with a single empty `<li>` because
+// generic empty `<li>` shapes have legitimate sources we don't want to
+// fail on: a version-gated bullet (`* {{< version >}}content{{< /version >}}`)
+// renders empty for non-matching builds; a code-only bullet
+// (`* `` `text` ``) appears empty after `<code>` stripping; the copy-as-
+// markdown dropdown uses `<li role="separator">`. The `start=...`
+// signature catches the actual structural break without those false
+// positives. Matches on `\bstart\b` (no `=`) so both unquoted `start=4`
+// (passes through the stripper untouched) and quoted `start="4"` (value
+// blanked to whitespace by the `="..."` stripper, leaving just the bare
+// attribute name) hit the same pattern.
+const EMPTY_LI = /<ol\b[^>]*\bstart\b[^>]*>\s*<li\b[^>]*>\s*<\/li>\s*<\/ol>/g;
 
 // Triple-backtick fence that survived into rendered HTML body text.
 // All real fences become Chroma `<pre><code>…</code></pre>` blocks,
