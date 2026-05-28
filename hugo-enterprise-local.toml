@@ -150,6 +150,19 @@ pageContextMode = "siteParams"
   product = "test"
   productName = "Docs framework test fixture"
 
+# Section-keyed versions used by tests/version-cards.spec.ts — kept in
+# sync with hugo-enterprise.toml so `make server-enterprise` matches the
+# test build.
+[[params.sections.demo.versions]]
+  version = "v2"
+  dropdown = "demo override: v2 only"
+  linkVersion = "v2"
+
+[[params.sections.demo.versions]]
+  version = "v1"
+  dropdown = "demo override: v1 only"
+  linkVersion = "v1"
+
 [[menu.main]]
   name = "Search"
   weight = 1

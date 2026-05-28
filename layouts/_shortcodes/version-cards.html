@@ -1,0 +1,68 @@
+{{- /*
+  Shortcode: version-cards
+  Renders a .section-cards grid mirroring the navbar version dropdown.
+  Designed for a section landing page; each card links to
+  <currentPagePath>/<linkVersion>/.
+
+  Reads versions from, in priority order:
+    1. site.Params.sections.<section>.versions  (per-section list)
+    2. site.Params.versions                     (top-level fallback)
+
+  Each version item is expected to expose `dropdown` (label) and
+  `linkVersion` (URL slug). Items whose `dropdown` is empty/whitespace
+  are skipped, matching navbar.html's visibility rule.
+
+  Parameters:
+    - section: (optional) Key under site.Params.sections. Defaults to
+               the last segment of the current page's URL — e.g. on
+               /docs/kubernetes/ the section is "kubernetes".
+    - desc:    (optional) Description rendered under each card title.
+               Supports Markdown.
+
+  Sets .Page.Store "hasManualCards" so the auto-section-cards partial
+  in docs/list.html does not also emit child-section cards.
+
+  Example:
+    {{< version-cards desc="Use product X in a Kubernetes environment." >}}
+*/ -}}
+{{- $section := .Get "section" -}}
+{{- if not $section -}}
+  {{- $segs := split (strings.Trim .Page.RelPermalink "/") "/" -}}
+  {{- if gt (len $segs) 0 -}}
+    {{- $section = index $segs (sub (len $segs) 1) -}}
+  {{- end -}}
+{{- end -}}
+{{- $desc := .Get "desc" -}}
+
+{{- $versions := slice -}}
+{{- if and $section (isset site.Params.sections $section) -}}
+  {{- with (index site.Params.sections $section).versions -}}
+    {{- $versions = . -}}
+  {{- end -}}
+{{- end -}}
+{{- if eq (len $versions) 0 -}}
+  {{- with site.Params.versions -}}
+    {{- $versions = . -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $base := strings.TrimRight "/" .Page.RelPermalink -}}
+{{- if gt (len $versions) 0 -}}
+  {{- $.Page.Store.Set "hasManualCards" true -}}
+  <div class="section-cards">
+    {{- range $versions -}}
+      {{- $label := .dropdown | default .version -}}
+      {{- if and $label (ne (strings.Trim $label " ") "") -}}
+        {{- $href := printf "%s/%s/" $base .linkVersion -}}
+        <a class="section-card" href="{{ $href }}">
+          <span class="section-card-body">
+            <span class="section-card-title">{{ $label }}</span>
+            {{- if $desc }}<span class="section-card-desc">{{ $desc | markdownify }}</span>{{ end -}}
+          </span>
+        </a>
+      {{- end -}}
+    {{- end -}}
+  </div>
+{{- else -}}
+  {{- warnf "version-cards: no versions found (tried sections.%q.versions and top-level versions) on %s" $section .Page.RelPermalink -}}
+{{- end -}}

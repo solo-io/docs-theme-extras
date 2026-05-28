@@ -8,8 +8,9 @@ import { target } from "./helpers/target";
 //   - desktop (>= 1280): TOC visible (right rail)
 //
 // Iterates a small representative sample of target.pages — landing pages
-// (where versionOf returns null) are skipped because Hugo emits them as
-// redirect stubs without the chrome these checks examine.
+// (where versionOf returns null) are skipped because they're section
+// landings without a version segment, and the responsive checks below
+// target version-page chrome (sidebar, TOC).
 
 const VIEWPORTS = [
   { name: "mobile", width: 375, height: 667 },

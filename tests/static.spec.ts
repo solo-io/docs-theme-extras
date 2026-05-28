@@ -35,10 +35,13 @@ test.describe("fixture build artifacts exist", () => {
       const html = readFixture(page.filePath);
       expect(html).toContain("<html");
       if (page.name === "landing") {
-        // The product landing is a Hugo-generated redirect stub to the
-        // default version. It should contain a refresh meta and a link
-        // pointing into a versioned subtree under BASE_URL.
-        expect(html).toMatch(/http-equiv=["']refresh["']/i);
+        // The product landing renders the section landing UX used by
+        // agentgateway-oss-website (/docs/kubernetes/) and kgateway.dev
+        // (/docs/envoy/): a real page with `version-cards` cards that
+        // link into a versioned subtree. tests/version-cards.spec.ts
+        // asserts the card contents directly — here we only assert that
+        // at least one card href lands inside a known version subtree,
+        // which is the cross-cutting structural invariant.
         const versionLinkRe = new RegExp(
           `${escapeRegex(BASE_URL)}/(${target.versions.join("|") || "[^/]+"})/`,
         );
@@ -186,7 +189,6 @@ test.describe("images have non-empty alt text", () => {
 
 test.describe("copy-as-markdown source is present and parseable", () => {
   for (const page of TEST_PAGES) {
-    if (page.name === "landing") continue; // landing intentionally has minimal body
     test(`${page.name} embeds copy-as-md script tag`, () => {
       const html = readFixture(page.filePath);
       const match = html.match(
@@ -195,10 +197,14 @@ test.describe("copy-as-markdown source is present and parseable", () => {
       expect(match, "<script type=text/markdown> not found").not.toBeNull();
       const md = match![1].trim();
       expect(md.length, "copy-as-md content empty").toBeGreaterThan(50);
-      // Should contain at least one absolute URL, not just relative paths.
-      expect(md, "copy-as-md should canonicalize to absolute URLs").toMatch(
-        /https?:\/\//,
-      );
+      if (page.name !== "landing") {
+        // Should contain at least one absolute URL, not just relative paths.
+        // Skipped on landing — the section landing only links into its own
+        // versioned subtree, so there's no external link to canonicalize.
+        expect(md, "copy-as-md should canonicalize to absolute URLs").toMatch(
+          /https?:\/\//,
+        );
+      }
     });
   }
 });

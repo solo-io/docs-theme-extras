@@ -154,6 +154,24 @@ pageContextMode = "siteParams"
   product = "test"
   productName = "Docs framework test fixture"
 
+# Section-keyed versions used by tests/version-cards.spec.ts. The shortcode
+# prefers params.sections.<X>.versions over the top-level list when the
+# `section=` argument matches; the fixture's section landing
+# (fixture/content/en/test/_index.md) invokes
+# {{< version-cards section="demo" >}} to exercise that lookup. linkVersion
+# values intentionally reuse v2/v1 so the rendered card hrefs land on real
+# fixture content and pass the internal-href resolution check in
+# static.spec.ts.
+[[params.sections.demo.versions]]
+  version = "v2"
+  dropdown = "demo override: v2 only"
+  linkVersion = "v2"
+
+[[params.sections.demo.versions]]
+  version = "v1"
+  dropdown = "demo override: v1 only"
+  linkVersion = "v1"
+
 [[menu.main]]
   name = "Search"
   weight = 1
