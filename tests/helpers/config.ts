@@ -49,6 +49,11 @@ export type Allowlists = {
   // message. Anything that matches is silently dropped — not a test failure.
   // Useful for suppressing known third-party noise (analytics, CDN assets).
   consoleErrors: string[];
+  // Regex patterns matched against each markdown-leak substring detected
+  // by markdown-leaks.spec.ts. A match silently drops the offender — for
+  // intentional uses of pipe-delimited prose or markdown-shaped strings
+  // that shouldn't fail the scan.
+  markdownLeaks: string[];
 };
 
 // Per-spec knobs that don't fit the boolean [checks] table.
@@ -107,6 +112,7 @@ const DEFAULT_ALLOWLISTS: Allowlists = {
   curlQuotes: [],
   shortcodes: [],
   consoleErrors: [],
+  markdownLeaks: [],
 };
 
 const DEFAULT_SMOKE: Smoke = {
@@ -287,6 +293,7 @@ function mergeAllowlists(raw: unknown): Allowlists {
     curlQuotes: [...DEFAULT_ALLOWLISTS.curlQuotes],
     shortcodes: [...DEFAULT_ALLOWLISTS.shortcodes],
     consoleErrors: [...DEFAULT_ALLOWLISTS.consoleErrors],
+    markdownLeaks: [...DEFAULT_ALLOWLISTS.markdownLeaks],
   };
   if (!raw || typeof raw !== "object") return out;
   const obj = raw as Record<string, unknown>;

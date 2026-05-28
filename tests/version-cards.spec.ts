@@ -10,61 +10,23 @@ import { target } from "./helpers/target";
 // lookup paths the shortcode supports:
 //
 //   {{< version-cards … >}}                 → section auto-detected from
-//                                             the URL ("test") is not in
+//                                             the URL is not in
 //                                             params.sections, so the
 //                                             shortcode falls back to the
 //                                             top-level params.versions
-//                                             list (v2, v1, main).
+//                                             list.
 //
 //   {{< version-cards section="demo" … >}}  → explicit section selects
-//                                             params.sections.demo.versions
-//                                             (x1, x2).
+//                                             params.sections.<key>.versions.
 //
-// Hrefs are built as <currentPagePath>/<linkVersion>/ regardless of which
-// list supplied the versions, so both blocks emit cards under /test/.
-// This mirrors how agentgateway-oss-website's /docs/kubernetes/ landing
-// page and kgateway.dev's /docs/envoy/ landing page use the shortcode.
+// Consumer landings (kgateway.dev, agentgateway-oss-website, solo-io/docs)
+// may invoke 0, 1, or 2+ times, with different version lists. The spec
+// validates STRUCTURAL invariants every emitted block should satisfy
+// (non-empty hrefs, non-empty titles, shared description per block,
+// hrefs all relative to the current page path) — no fixture-specific
+// content is hardcoded.
 
-const BASE_URL = "/" + target.baseURL.replace(/^\/+|\/+$/g, "");
 const LANDING_PATH = path.join(TEST_PRODUCT_ROOT, "index.html");
-
-type CardExpect = {
-  href: string;
-  title: string;
-};
-
-type BlockCase = {
-  label: string;
-  expectedCards: CardExpect[];
-  expectedDesc: string;
-};
-
-// Order matches the order of the shortcode invocations in
-// fixture/content/en/test/_index.md. The fallback block comes first,
-// the section-keyed block second.
-const blocks: BlockCase[] = [
-  {
-    label: "top-level fallback",
-    expectedDesc: "Use the framework in a fallback environment.",
-    expectedCards: [
-      { href: `${BASE_URL}/v2/`, title: "v2 (current)" },
-      { href: `${BASE_URL}/v1/`, title: "v1" },
-      { href: `${BASE_URL}/main/`, title: "main (dev)" },
-    ],
-  },
-  {
-    // Demo section reuses v2/v1 linkVersion values so hrefs land on real
-    // fixture content; the unique dropdown labels prove the shortcode is
-    // reading from params.sections.demo and not falling back to the
-    // top-level versions list (which would emit "v2 (current)" / "v1").
-    label: "section-keyed lookup",
-    expectedDesc: "Use the framework with the demo section config.",
-    expectedCards: [
-      { href: `${BASE_URL}/v2/`, title: "demo override: v2 only" },
-      { href: `${BASE_URL}/v1/`, title: "demo override: v1 only" },
-    ],
-  },
-];
 
 type Card = { href: string; title: string; description: string };
 
@@ -110,38 +72,120 @@ function extractCardsFromBlock(inner: string): Card[] {
   return out;
 }
 
-test.describe("version-cards on /test/ landing", () => {
+test.describe("version-cards on landing", () => {
   test("landing page exists in build output", () => {
     expect(
       fs.existsSync(LANDING_PATH),
-      `${LANDING_PATH} not found — fixture build did not emit the landing`,
+      `${LANDING_PATH} not found — landing not emitted`,
     ).toBe(true);
   });
 
-  test("emits exactly two .section-cards blocks (one per shortcode call)", () => {
-    // auto-section-cards in docs/list.html also looks at this page. The
-    // shortcode sets Page.Store "hasManualCards" so the auto partial
-    // skips. If both fired we would see a third block here.
-    const parsed = extractBlocks(readFixture(LANDING_PATH));
-    expect(
-      parsed.length,
-      "expected 2 .section-cards blocks (auto-section-cards should be suppressed)",
-    ).toBe(2);
-  });
-
-  for (let i = 0; i < blocks.length; i++) {
-    const b = blocks[i];
-
-    test(`block ${i + 1} (${b.label}): renders one card per configured version`, () => {
-      const parsed = extractBlocks(readFixture(LANDING_PATH));
-      const cards = parsed[i] ?? [];
+  test("every emitted block has at least one card", () => {
+    const blocks = extractBlocks(readFixture(LANDING_PATH));
+    if (blocks.length === 0) {
+      test.skip(true, "landing page has no version-cards blocks (consumer doesn't use the shortcode here)");
+    }
+    blocks.forEach((cards, i) => {
       expect(
         cards.length,
-        `expected ${b.expectedCards.length} cards in block ${i + 1}, got ${cards.length}`,
-      ).toBe(b.expectedCards.length);
+        `block ${i + 1} has 0 cards — version-cards rendered but produced an empty .section-cards`,
+      ).toBeGreaterThan(0);
     });
+  });
 
-    test(`block ${i + 1} (${b.label}): cards appear in config order with expected hrefs and titles`, () => {
+  test("every card has a non-empty href and title", () => {
+    const blocks = extractBlocks(readFixture(LANDING_PATH));
+    if (blocks.length === 0) {
+      test.skip(true, "landing page has no version-cards blocks");
+    }
+    blocks.forEach((cards, i) => {
+      cards.forEach((card, j) => {
+        expect(
+          card.href.length,
+          `block ${i + 1} card ${j + 1} has empty href`,
+        ).toBeGreaterThan(0);
+        expect(
+          card.title.length,
+          `block ${i + 1} card ${j + 1} (href=${card.href}) has empty title`,
+        ).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  test("cards within a block share the same description (shortcode's desc param)", () => {
+    // The shortcode applies the desc param uniformly to every card it
+    // emits. If a block has cards with mismatched descs, something has
+    // mangled the output — e.g. markdownify wrapping a multi-line desc.
+    const blocks = extractBlocks(readFixture(LANDING_PATH));
+    if (blocks.length === 0) {
+      test.skip(true, "landing page has no version-cards blocks");
+    }
+    blocks.forEach((cards, i) => {
+      if (cards.length < 2) return;
+      const descs = new Set(cards.map((c) => c.description));
+      expect(
+        descs.size,
+        `block ${i + 1} cards have inconsistent descriptions: ${[...descs].join(" / ")}`,
+      ).toBe(1);
+    });
+  });
+
+  test("hrefs share a common URL prefix within a block", () => {
+    // Cards in one shortcode invocation all target the same parent
+    // page, just at different version segments. A heterogeneous href
+    // set within a block means the shortcode's URL construction broke.
+    const blocks = extractBlocks(readFixture(LANDING_PATH));
+    if (blocks.length === 0) {
+      test.skip(true, "landing page has no version-cards blocks");
+    }
+    blocks.forEach((cards, i) => {
+      if (cards.length < 2) return;
+      const prefixes = cards.map((c) => c.href.replace(/\/[^/]+\/?$/, ""));
+      const unique = new Set(prefixes);
+      expect(
+        unique.size,
+        `block ${i + 1} hrefs don't share a parent path: ${cards.map((c) => c.href).join(", ")}`,
+      ).toBe(1);
+    });
+  });
+});
+
+// Fixture-specific shape check — gated on the extras fixture so the
+// strict per-version expectations don't leak into consumer reports.
+const IS_FIXTURE_TARGET = target.name.startsWith("docs-theme-extras-fixture");
+const FIXTURE_BASE = "/" + target.baseURL.replace(/^\/+|\/+$/g, "");
+const FIXTURE_BLOCKS = [
+  {
+    label: "top-level fallback",
+    expectedDesc: "Use the framework in a fallback environment.",
+    expectedCards: [
+      { href: `${FIXTURE_BASE}/v2/`, title: "v2 (current)" },
+      { href: `${FIXTURE_BASE}/v1/`, title: "v1" },
+      { href: `${FIXTURE_BASE}/main/`, title: "main (dev)" },
+    ],
+  },
+  {
+    label: "section-keyed lookup",
+    expectedDesc: "Use the framework with the demo section config.",
+    expectedCards: [
+      { href: `${FIXTURE_BASE}/v2/`, title: "demo override: v2 only" },
+      { href: `${FIXTURE_BASE}/v1/`, title: "demo override: v1 only" },
+    ],
+  },
+];
+
+test.describe("version-cards: fixture-specific landing shape", () => {
+  test.skip(!IS_FIXTURE_TARGET, "fixture-only shape check");
+
+  test("emits exactly two .section-cards blocks", () => {
+    const parsed = extractBlocks(readFixture(LANDING_PATH));
+    expect(parsed.length).toBe(2);
+  });
+
+  for (let i = 0; i < FIXTURE_BLOCKS.length; i++) {
+    const b = FIXTURE_BLOCKS[i];
+
+    test(`block ${i + 1} (${b.label}): cards match expected hrefs and titles`, () => {
       const parsed = extractBlocks(readFixture(LANDING_PATH));
       const actual = (parsed[i] ?? []).map(({ href, title }) => ({
         href,
@@ -154,10 +198,7 @@ test.describe("version-cards on /test/ landing", () => {
       const parsed = extractBlocks(readFixture(LANDING_PATH));
       const cards = parsed[i] ?? [];
       for (const card of cards) {
-        expect(
-          card.description,
-          `card ${card.href} missing desc text`,
-        ).toContain(b.expectedDesc);
+        expect(card.description).toContain(b.expectedDesc);
       }
     });
   }

@@ -172,6 +172,21 @@ first segment that matches a known version wins.
      rely on staying in angle form. */}}
 {{ $clean = replaceRE `\{\{<\s*(version\s+(?:include|exclude)-if="[^"]+"[^>]*?)\s*>}}(\s*\|[^\n]*?\|\s*)\{\{<\s*/version\s*>}}` "{{% $1 %}}$2{{% /version %}}" $clean }}
 
+{{/* List-item exception: a version block whose inner content starts with
+     a bullet or numbered list marker at column 0 needs the percent form
+     so the shortcode output re-enters the markdown stream as a real list
+     item. Angle form would emit the list marker as literal text inside
+     the surrounding placeholder context — when the version wraps a single
+     bullet adjacent to other bullets, Goldmark lazy-continues the prior
+     `<li>` and the `* [link](url)` survives as raw markdown (the `\[link]`
+     leak in `merging.md`, `bedrock.md`). Matches both same-line wraps
+     (`{{< version >}}* item{{< /version >}}`) and newline-prefixed multi-
+     item blocks (`{{< version >}}\n* a\n* b\n{{< /version >}}`). Content
+     must start at column 0 (no leading spaces before the marker) so we
+     don't trip deeply-indented version blocks whose .Inner the upstream
+     comment above protects from percent-form's 4-space-code-block rule. */}}
+{{ $clean = replaceRE `\{\{<\s*(version\s+(?:include|exclude)-if="[^"]+"[^>]*?)\s*>}}((?:\r?\n)?(?:[*+\-]|[0-9]+\.)[ \t][\s\S]*?)\{\{<\s*/version\s*>}}` "{{% $1 %}}$2{{% /version %}}" $clean }}
+
 {{/* ─── Stage 6: RENDER ─────────────────────────────────────────────── */}}
 
 {{ $clean | .Page.RenderString }}

@@ -41,6 +41,73 @@
   {{- $inner = delimit $dedented "\n" -}}
 {{- end -}}
 
+{{- /* Trailing-step detection. Fires when the FIRST non-blank line of
+       .Inner is a list-item marker (column 0-3) AND the body contains
+       no block-level markdown (no headings, no fenced code) that would
+       break raw emission. In that case the version block is continuing
+       a parent list, and the safe emission strategy is raw .Inner — the
+       surrounding markdown stream then sees real list markers and
+       merges them into the neighboring list. Used in tandem with the
+       list-item conversion in reuse.html / rebase.html, which rewrites
+       angle-form `{{< version >}}* item` wraps to percent form so this
+       raw emit reaches Goldmark via the reparse pass instead of as
+       opaque post-Goldmark substitution. RenderString-then-flatten
+       would otherwise emit `<ul><li>…</li></ul>`, and the resulting
+       type-7 HTML block absorbs any subsequent bare bullets (`* item`)
+       as literal text until the next blank line (the `jwt-about.md`
+       "Istio docs for [JWT tokens]" leak, the `release-notes.md`
+       Upgrade/Version leak). The fence/heading exclusion preserves the
+       solo-io/docs#2480 nested-list+fence regression guard, which
+       relies on RenderString-then-flatten so the inner `<ul>` and
+       `<pre>` reach Goldmark as a single HTML placeholder substitution
+       instead of as raw indented markdown that the parent <ol>'s
+       lazy-continuation rules would otherwise mangle. */ -}}
+{{- $isTrailingStep := false -}}
+{{- $firstNonBlank := "" -}}
+{{- range (split $inner "\n") -}}
+  {{- if and (eq $firstNonBlank "") (ne (trim . " \t") "") -}}
+    {{- $firstNonBlank = . -}}
+  {{- end -}}
+{{- end -}}
+{{- $hasBlockMarkdown := false -}}
+{{- if findRE "(?m)^[ \\t]{0,3}(#{1,6}\\s|`{3})" $inner 1 -}}
+  {{- $hasBlockMarkdown = true -}}
+{{- end -}}
+{{- if and (not $hasBlockMarkdown) (findRE `^[ \t]{0,3}([*+\-][ \t]|[0-9]+\.[ \t])` $firstNonBlank 1) -}}
+  {{- $isTrailingStep = true -}}
+{{- end -}}
+
+{{- /* Table-row content detection. Fires when every non-blank line of
+       .Inner is a pipe-delimited table row (starts and ends with `|`).
+       Without this, a percent-form version block whose inner is one or
+       more table rows with inline backticks/links — $hasMarkdown=true —
+       routes through RenderString(inline), which emits each row as a
+       `<p>…</p>` with literal pipes (the Solo docs hub istio
+       `pipeline-metrics.md` leak, where a multi-row `{{% version %}}` in
+       the middle of a backticked metrics table rendered as `<p>|<code>…
+       </code>|</p>` paragraphs that broke the parent `<table>`). Raw
+       emit lets the percent-form re-flow reinsert the rows verbatim, so
+       Goldmark sees them as siblings of the surrounding table rows and
+       parses them into the same `<tbody>`. Restricted to inputs where
+       every non-blank line is a row so prose with stray pipes or table
+       bodies mixed with prose don't accidentally route here. */ -}}
+{{- $isRowContent := false -}}
+{{- $hasAnyRow := false -}}
+{{- $allLinesAreRows := true -}}
+{{- range (split $inner "\n") -}}
+  {{- $t := trim . " \t" -}}
+  {{- if ne $t "" -}}
+    {{- if and (hasPrefix $t "|") (hasSuffix $t "|") -}}
+      {{- $hasAnyRow = true -}}
+    {{- else -}}
+      {{- $allLinesAreRows = false -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- if and $hasAnyRow $allLinesAreRows -}}
+  {{- $isRowContent = true -}}
+{{- end -}}
+
 {{- /* Markdown-feature detection on $inner (post-dedent). If the inner
        content has no inline-formatting or list markers, RenderString
        would only damage it — turning `#` into <h1>, "foo" into curly
@@ -128,7 +195,7 @@
            {{- end -}}
            {{- if isset $.Params "include-if" -}}
              {{- if and (in $include_if $versionToml) $productMatches (not $rendered) -}}
-                {{- if not $hasMarkdown -}}
+                {{- if or $isTrailingStep $isRowContent (not $hasMarkdown) -}}
 {{ $.Inner }}
                 {{- else -}}
                   {{- $rendered_html := $.Page.RenderString (dict "display" "inline") $inner -}}
@@ -143,7 +210,7 @@
              {{- end -}}
              {{- else if isset $.Params "exclude-if" -}}
                 {{- if and (not (in $exclude_if $versionToml)) $productMatches (not $rendered) -}}
-                   {{- if not $hasMarkdown -}}
+                   {{- if or $isTrailingStep $isRowContent (not $hasMarkdown) -}}
 {{ $.Inner }}
                 {{- else -}}
                   {{- $rendered_html := $.Page.RenderString (dict "display" "inline") $inner -}}
@@ -181,7 +248,7 @@
             {{- $versionToml := .version -}}
             {{- $productMatches := or (not $currentProduct) (eq .product $currentProduct) -}}
                {{- if and (in $include $versionToml) (in $include $versionAdjusted) $productMatches (not $rendered) -}}
-                      {{- if not $hasMarkdown -}}
+                      {{- if or $isTrailingStep $isRowContent (not $hasMarkdown) -}}
 {{ $.Inner }}
                 {{- else -}}
                   {{- $rendered_html := $.Page.RenderString (dict "display" "inline") $inner -}}
@@ -218,7 +285,7 @@
           {{- $versionToml := .version -}}
           {{- $productMatches := or (not $currentProduct) (eq .product $currentProduct) -}}
             {{- if and (not (or (in $exclude $versionToml) (in $exclude $versionAdjusted))) $productMatches (not $rendered) -}}
-                  {{- if not $hasMarkdown -}}
+                  {{- if or $isTrailingStep $isRowContent (not $hasMarkdown) -}}
 {{ $.Inner }}
                 {{- else -}}
                   {{- $rendered_html := $.Page.RenderString (dict "display" "inline") $inner -}}

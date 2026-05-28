@@ -585,15 +585,17 @@ test.describe("manual cards block renders intact (card subtitle + shortcode arg 
     // The card shortcode used to emit `<p class="…subtitle">`. Inside
     // a `{{% version %}}` wrapper, Goldmark also emits a paragraph around
     // the card, and the nested <p> triggers HTML auto-close. The fix is
-    // to use a <span class="section-card-desc"> (display:block via CSS).
+    // to use a <span> (display:block via CSS) — either class name is
+    // accepted: extras ships `section-card-desc`, the docs hub uses
+    // `card-subtitle` for its own CSS aliasing.
     expect(
       html,
-      "card subtitle should NOT be a <p>; use <span class=\"section-card-desc\"> so it nests safely inside a markdownify-wrapped card",
+      'card subtitle should NOT be a <p>; use <span class="section-card-desc"> (or "card-subtitle") so it nests safely inside a markdownify-wrapped card',
     ).not.toMatch(/<p class="(card-subtitle|section-card-desc)"/);
     // And confirm the span form IS present (positive assertion).
     expect(
       html,
-      "card subtitle <span class=\"section-card-desc\"> should be present on cards that have descriptions",
-    ).toMatch(/<span class="section-card-desc"/);
+      'card subtitle <span> (class "section-card-desc" or "card-subtitle") should be present on cards that have descriptions',
+    ).toMatch(/<span class="(section-card-desc|card-subtitle)"/);
   });
 });
