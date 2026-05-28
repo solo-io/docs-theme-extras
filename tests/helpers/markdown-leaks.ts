@@ -111,10 +111,10 @@ const SHORTCODE_CLOSE = /[%>]\s*\}\}/g;
 // badge sits over the start of the orphaned text that follows the
 // closing `</ol>`, and any indented code fence on the same continuation
 // becomes literal backticks. See the ambient-multi-link.md step 3→4
-// boundary as the canonical shape. The trailing `</li>` is required so
-// `<li>` with attributes (`<li class="x">…</li>`) and self-closing
-// edge cases don't false-positive against empty-by-design layouts.
-const EMPTY_LI = /<li\b[^>]*>\s*<\/li>/g;
+// boundary as the canonical shape. Excludes `role="separator"` items —
+// the copy-as-markdown dropdown intentionally renders empty <li> as
+// ARIA-flagged visual separators between menu items.
+const EMPTY_LI = /<li\b(?![^>]*\brole=["']?separator)[^>]*>\s*<\/li>/g;
 
 // Triple-backtick fence that survived into rendered HTML body text.
 // All real fences become Chroma `<pre><code>…</code></pre>` blocks,

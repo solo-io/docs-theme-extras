@@ -189,6 +189,20 @@ test.describe("findMarkdownLeaks helper", () => {
     expect(leaks.some((l) => l.kind === "empty-list-item")).toBe(true);
   });
 
+  test("does NOT flag empty <li role='separator'> dropdown separators", () => {
+    // The copy-as-markdown dropdown intentionally emits empty <li> tags
+    // with role="separator" between menu groups for visual + ARIA
+    // grouping. Both quoted and unquoted attribute forms.
+    const html = `
+      <ul>
+        <li class="copy-md-dropdown-sep" role="separator"></li>
+        <li role=separator></li>
+      </ul>
+    `;
+    const leaks = findMarkdownLeaks(html);
+    expect(leaks.filter((l) => l.kind === "empty-list-item")).toEqual([]);
+  });
+
   test("flags leaked code-fence triple-backticks in body text", () => {
     // ```sh that survived as literal backticks because the surrounding
     // region was treated as a raw HTML block (post-RenderString reinsertion).
