@@ -47,13 +47,29 @@
 {{- end -}}
 
 {{- $base := strings.TrimRight "/" .Page.RelPermalink -}}
+{{- $currentProduct := site.Params.currentProduct | default "" -}}
 {{- if gt (len $versions) 0 -}}
   {{- $.Page.Store.Set "hasManualCards" true -}}
   <div class="section-cards">
     {{- range $versions -}}
       {{- $label := .dropdown | default .version -}}
       {{- if and $label (ne (strings.Trim $label " ") "") -}}
-        {{- $href := printf "%s/%s/" $base .linkVersion -}}
+        {{- /* Same-product vs cross-product href, mirroring the navbar
+               version-dropdown logic in navbar.html. Same-product entries
+               (or builds without a `currentProduct` set) get the original
+               `<currentBase>/<linkVersion>/` so dev/preview baseURLs stay
+               relative. Cross-product entries (e.g., a docs-hub kgateway
+               config that lists pre-2.0 versions whose content lives under
+               /gateway/) take the explicit `url` field so the card points
+               at the correct product path instead of 404-ing under the
+               current product. */ -}}
+        {{- $sameProduct := or (not $currentProduct) (eq (.product | default "") $currentProduct) -}}
+        {{- $href := "" -}}
+        {{- if and (not $sameProduct) .url -}}
+          {{- $href = .url -}}
+        {{- else -}}
+          {{- $href = printf "%s/%s/" $base .linkVersion -}}
+        {{- end -}}
         <a class="section-card" href="{{ $href }}">
           <span class="section-card-body">
             <span class="section-card-title">{{ $label }}</span>
