@@ -161,6 +161,17 @@ first segment that matches a known version wins.
      runs, and indented inner content would get wrapped in <pre><code> by
      CommonMark's "4 spaces = code" rule before we ever see it. */}}
 
+{{/* Table-row exception: a single-line version block whose inner content
+     is a pipe-delimited row needs the percent form so the shortcode output
+     re-enters the markdown stream and the pipes get parsed as cell
+     delimiters by Goldmark. Angle form would emit opaque HTML inline and
+     Goldmark would treat the whole pipe-string as one <td>. The pattern
+     match requires the opening and closing tags on the same line as the
+     content, with the content starting and ending in `|` — narrow enough
+     that it doesn't trip the indented-list or fence-adjacent cases that
+     rely on staying in angle form. */}}
+{{ $clean = replaceRE `\{\{<\s*(version\s+(?:include|exclude)-if="[^"]+"[^>]*?)\s*>}}(\s*\|[^\n]*?\|\s*)\{\{<\s*/version\s*>}}` "{{% $1 %}}$2{{% /version %}}" $clean }}
+
 {{/* ─── Stage 6: RENDER ─────────────────────────────────────────────── */}}
 
 {{ $clean | .Page.RenderString }}

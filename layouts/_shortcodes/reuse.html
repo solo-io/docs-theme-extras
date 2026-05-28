@@ -93,6 +93,17 @@
 
 {{- end -}}
 
+{{- /* Table-row exception: an inline {{< version >}} that wraps a single
+       pipe-delimited row needs the percent form so the shortcode output
+       re-enters the markdown stream and the pipes get parsed as cell
+       delimiters. Angle form would emit opaque HTML inline and Goldmark
+       would treat the whole pipe-string as one <td>. The pattern is narrow
+       (opening tag, content with leading + trailing `|`, closing tag, all
+       on the same line), so it won't affect the indented-list or
+       fence-adjacent cases that rely on staying in angle form. Mirrors
+       the same conversion in rebase.html. */ -}}
+{{- $content = replaceRE `\{\{<\s*(version\s+(?:include|exclude)-if="[^"]+"[^>]*?)\s*>}}(\s*\|[^\n]*?\|\s*)\{\{<\s*/version\s*>}}` "{{% $1 %}}$2{{% /version %}}" $content -}}
+
 {{- /* Render content. Trim trailing whitespace/newlines so a reuse used inline
        (e.g. `--version {{< reuse "..." >}} \`) doesn't drop a stray newline
        into the middle of a code-block continuation line. RenderString wraps

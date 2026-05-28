@@ -454,6 +454,38 @@ Confirm the resource exists, then move on.
 | MARKER_TABLE_ROW1A | MARKER_TABLE_ROW1B | row 1 cell C |
 | row 2 cell A | row 2 cell B | row 2 cell C |
 
+### Version shortcode wrapping a table row
+
+Reproduces the kgateway k8sgwapi-exp.md pattern: a markdown table where authors try to gate an entire row with a version shortcode. Both forms are broken — the percent form spills the row outside the table as a paragraph, and the angle-bracket form wraps the whole pipe-string in a single `<td>` cell so the cell delimiters never get parsed. Tests pin both failure shapes as fail-pending so a future fix flips them green. A third table below shows the working pattern (per-cell conditionals with pipes outside the shortcode tags).
+
+Percent-form, inline (current behavior: gated row renders as `<p>| ... |</p>` outside the table):
+
+| Feature | Min version |
+| --- | --- |
+| MARKER_TABLE_VERSION_ROW_BASELINE_FEATURE | 1.0 |
+{{% version include-if="v2" %}}| MARKER_TABLE_VERSION_ROW_PERCENT_FEATURE | 2.0 |{{% /version %}}
+
+Angle-bracket form, inline (current behavior: gated row renders inside the table but the whole row is a single `<td>` with literal pipes as text):
+
+| Feature | Min version |
+| --- | --- |
+| MARKER_TABLE_VERSION_ROW_ANGLE_BASELINE | 1.0 |
+{{< version include-if="v2" >}}| MARKER_TABLE_VERSION_ROW_ANGLE_FEATURE | 2.0 |{{< /version >}}
+
+Angle-bracket form with `keepVersion="true"` — covers the case where the version arg needs to propagate into nested reuse calls within the cells. The table-row regex extends past the closing `"` of the include-if value to absorb any extra args before the closing `>}}`:
+
+| Feature | Min version |
+| --- | --- |
+| MARKER_TABLE_VERSION_ROW_KEEPVERSION_BASELINE | 1.0 |
+{{< version include-if="v2" keepVersion="true" >}}| MARKER_TABLE_VERSION_ROW_KEEPVERSION_FEATURE | 2.0 |{{< /version >}}
+
+Per-cell conditional (works today: pipes stay outside the shortcode, version gates only the cell content; on the excluded version the row is still emitted with empty cells, so this isn't a true "conditional row" but it is the only pattern that produces two real `<td>` cells):
+
+| Feature | Min version |
+| --- | --- |
+| MARKER_TABLE_VERSION_ROW_PERCELL_BASELINE | 1.0 |
+| {{< version include-if="v2" >}}MARKER_TABLE_VERSION_ROW_PERCELL_FEATURE{{< /version >}} | {{< version include-if="v2" >}}2.0{{< /version >}} |
+
 ## Tabs in both shortcode forms
 
 Tabs accept both forms. The outer tabs uses the angle-bracket form and the inner tab uses the percent form so its body renders as markdown.
