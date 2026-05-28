@@ -46,6 +46,16 @@ function stripExpectedMarkdown(html: string): string {
   // Script tags first (some may embed the raw markdown source).
   out = replaceWithBlanks(out, /<script[\s\S]*?<\/script>/gi);
   out = replaceWithBlanks(out, /<style[\s\S]*?<\/style>/gi);
+  // ARIA-role separator list items — the copy-as-markdown dropdown
+  // intentionally emits empty `<li role="separator">` between menu
+  // groups for visual + ARIA grouping. Strip BEFORE the generic
+  // attribute-value strip below, otherwise `role="separator"` becomes
+  // `role           ` and the EMPTY_LI scanner can no longer
+  // distinguish a real bug-shape empty <li> from an intentional one.
+  out = replaceWithBlanks(
+    out,
+    /<li\b[^>]*\brole=["']?separator["']?[^>]*>[\s\S]*?<\/li>/gi,
+  );
   // Code regions. <pre> matters before <code> because <pre><code> nests.
   out = replaceWithBlanks(out, /<pre[\s\S]*?<\/pre>/gi);
   out = replaceWithBlanks(out, /<code[\s\S]*?<\/code>/gi);
