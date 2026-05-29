@@ -65,6 +65,7 @@
   {{- $section := "" -}}
   {{- $currentVersion := "" -}}
   {{- $isVersionedDocs := false -}}
+  {{- $isOSSShape := false -}}
   {{- /* $versionPrefix is the URL prefix used for link building and
          render-sidebar-tree's hasPrefix check against page RelPermalinks.
          $lookupPath is the path passed to site.GetPage to locate the
@@ -78,6 +79,7 @@
 
   {{- if and (ge (len $segments) 4) (eq (index $segments 1) "docs") -}}
     {{- /* OSS shape: /docs/<section>/<version>/… */ -}}
+    {{- $isOSSShape = true -}}
     {{- $section = index $segments 2 -}}
     {{- $candidate := index $segments 3 -}}
     {{- if and site.Params.sections (isset site.Params.sections $section) -}}
@@ -174,7 +176,7 @@
         {{- /* Mobile-only: section selector (only when >1 section) + version picker */ -}}
         <div class="sidebar-mobile-only sidebar-mobile-header">
 
-          {{- if gt (len $sectionKeys) 1 -}}
+          {{- if and $isOSSShape (gt (len $sectionKeys) 1) -}}
             <div class="sidebar-mobile-section-row">
               {{- range $sectionKeys -}}
                 {{- $isCurrent := eq . $section -}}
@@ -213,6 +215,18 @@
           {{- if not $versions -}}
             {{- $versions = site.Params.versions -}}
           {{- end -}}
+          {{- /* Filter to current-product and visible (non-empty dropdown) entries only.
+               Mirrors navbar.html so mobile chips match the version dropdown. */ -}}
+          {{- $currentProduct := site.Params.currentProduct | default "" -}}
+          {{- $filteredVersions := slice -}}
+          {{- range $versions -}}
+            {{- $sameProduct := or (not $currentProduct) (eq (.product | default "") $currentProduct) -}}
+            {{- $visible := ne (trim (.dropdown | default .version) " ") "" -}}
+            {{- if and $sameProduct $visible -}}
+              {{- $filteredVersions = $filteredVersions | append . -}}
+            {{- end -}}
+          {{- end -}}
+          {{- $versions = $filteredVersions -}}
           {{- if $versions -}}
             <div class="sidebar-mobile-version-row">
               {{- $filtered := after 4 $segments -}}
