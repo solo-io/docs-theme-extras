@@ -898,3 +898,14 @@ The card shortcode takes a `link` named argument. Hugo treats backtick-quoted sh
 {{% conditional-text include-if="test" %}}{{< card link=`{{< link path="rebased" >}}` title="COND_NESTED_ARG_TITLE Nested link in card" subtitle="Build-gated card with a nested shortcode call as its link attribute." icon="document" >}}{{% /conditional-text %}}
 {{< /cards >}}
 
+### Cards whose image attribute uses the asset pipeline
+
+The card shortcode takes an optional `image` named argument. An author can write it three ways, and the rendered `src` must be correct for each. An asset-relative value (with or without a leading `assets/`) has to be resolved through Hugo's asset pipeline so the file is actually published — a bare `assets/img/x.svg` left untouched would render as a page-relative URL and 404. An external `http(s)://` value and a root-absolute `/` value are passed through verbatim. The test asserts the asset-relative cards point at a file that exists in the built output, and that the external and root-absolute cards keep their literal `src`.
+
+{{< cards >}}
+{{< card link="../rebased/" title="MARKER_CARD_IMAGE_ASSET Asset-relative with prefix" subtitle="image written as assets/img/test/light.svg; must resolve through the pipeline." image="assets/img/test/light.svg" >}}
+{{< card link="../rebased/" title="MARKER_CARD_IMAGE_NOPREFIX Asset-relative no prefix" subtitle="image written as img/test/light.svg; resources.Get is already assets-relative." image="img/test/light.svg" >}}
+{{< card link="../rebased/" title="MARKER_CARD_IMAGE_ROOTED Root-absolute static" subtitle="image is a published static path; passed through verbatim." image="/test/images/logos/logo-oss-test.svg" >}}
+{{< card link="../rebased/" title="MARKER_CARD_IMAGE_HTTP External URL" subtitle="image is an absolute external URL; passed through verbatim." image="https://raw.githubusercontent.com/solo-io/docs/main/does-not-need-to-exist.png" >}}
+{{< /cards >}}
+

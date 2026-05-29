@@ -117,6 +117,61 @@ test.describe("viewport responsive layout", () => {
         ).toBe(true);
       });
 
+      // Regression guard: the sidebar product logo must not overflow its
+      // container below the xl breakpoint. The bug (2026-05-29, docs iPad
+      // slide panel): `.sidebar-product-logo img { width: 108% }` made the
+      // logo 8% wider than the fixed 280px panel, crowding it against the
+      // right edge. The fix clamps the logo to 100% (with symmetric padding)
+      // under @media (max-width: 1279px), while the desktop sidebar keeps the
+      // intentional 108% overscan — so this check runs ONLY below 1280.
+      // Self-skips when the consumer didn't set site.Params.sidebar.logo
+      // (e.g. the OSS fixture leaves it unset on purpose); exercised by the
+      // enterprise fixture and by docs CI, which both configure a logo.
+      test("sidebar logo stays within its container below xl", async ({
+        page,
+      }) => {
+        if (vp.width >= 1280) {
+          test.skip(true, "desktop sidebar keeps the intentional logo overscan");
+        }
+        await page.goto(REPRESENTATIVE_PAGE!);
+        const logoImg = page.locator(".sidebar-product-logo img").first();
+        if (await logoImg.count() === 0) {
+          test.skip(true, "no sidebar product logo configured for this build");
+        }
+        // The logo lives in the off-screen slide panel at this width, but a
+        // translateX shifts both the img and its container together, so their
+        // RELATIVE edges are still meaningful — no panel-open needed. Compare
+        // edges, not widths: container padding can absorb a width overrun
+        // while the img still pokes past the container edge (which is exactly
+        // what crowds the panel). Both edges are measured relative to the same
+        // .sidebar-product-logo box.
+        const edges = await page.evaluate(() => {
+          const img = document.querySelector(
+            ".sidebar-product-logo img",
+          ) as HTMLElement | null;
+          const box = img?.closest(".sidebar-product-logo") as HTMLElement | null;
+          if (!img || !box) return null;
+          const i = img.getBoundingClientRect();
+          const b = box.getBoundingClientRect();
+          if (i.width === 0) return null; // display:none below md — nothing to check
+          return { imgLeft: i.left, imgRight: i.right, boxLeft: b.left, boxRight: b.right };
+        });
+        if (edges === null) {
+          test.skip(true, "sidebar logo not rendered/visible at this width");
+        }
+        expect(
+          edges!.imgRight,
+          `logo right edge (${edges!.imgRight}px) spills past its container ` +
+            `(${edges!.boxRight}px) at ${vp.width}px — the 108% overscan is ` +
+            `crowding the slide panel`,
+        ).toBeLessThanOrEqual(edges!.boxRight + 1);
+        expect(
+          edges!.imgLeft,
+          `logo left edge (${edges!.imgLeft}px) spills past its container ` +
+            `(${edges!.boxLeft}px) at ${vp.width}px`,
+        ).toBeGreaterThanOrEqual(edges!.boxLeft - 1);
+      });
+
       test("right-rail TOC visibility matches xl breakpoint", async ({ page }) => {
         await page.goto(REPRESENTATIVE_PAGE!);
         const toc = page.locator(".hextra-toc").first();

@@ -22,6 +22,14 @@ import { crawlBuiltRoot, type CrawledPage } from "./helpers/crawl";
 // suppressed by BUILTIN_NOISE below. Add per-consumer patterns under
 // [allowlists].consoleErrors in the .docs-test.toml — they are compiled
 // to RegExp and matched against every error message string.
+//
+// For uncaught exceptions (pageerror) the matched string includes the error
+// STACK as well as the message, so an allowlist pattern can target the
+// originating source file. That lets a consumer suppress a specific error
+// from a vendored bundle (e.g. Hextra's main.min.js, which dereferences the
+// sidebar on every page without a null guard) WITHOUT having to allowlist a
+// generic message like "...null (reading 'x')" site-wide — which would also
+// hide the same error coming from the consumer's or the theme's own code.
 
 const ENABLED = target.shouldRun("consoleErrors");
 const MAX = target.smoke.maxFiles;
@@ -40,6 +48,12 @@ const BUILTIN_NOISE: RegExp[] = [
   /fonts\.gstatic\.com/i,
   // Favicon is non-critical and commonly absent in fixture builds.
   /Failed to load resource.*\/favicon\./i,
+  // Hugo's dev-server LiveReload client (`hugo server` injects
+  // /livereload.js?…port=1313…) 404s when a dev build is served statically.
+  // That only means the wrong build was tested; dev-build.spec.ts reports it
+  // once with a clear "rebuild for production" message, so don't also flood
+  // the browser-smoke report with the same 404 on every page.
+  /\/livereload\.js/i,
 ];
 
 function isSuppressed(msg: string, extra: RegExp[]): boolean {
@@ -72,14 +86,25 @@ test.describe(`console errors: ${target.name}`, () => {
       // Uncaught JS exceptions — the primary target of this spec.
       // These are the red "Uncaught TypeError: ..." lines in DevTools.
       page.on("pageerror", (err) => {
-        const msg = `pageerror: ${err.message}`;
+        // Append the stack so allowlist patterns can scope to the originating
+        // source file (see header note). The stack is also useful in the
+        // failure report when an error is NOT allowlisted.
+        const msg = `pageerror: ${err.message}${err.stack ? `\n${err.stack}` : ""}`;
         if (!isSuppressed(msg, allowlist)) errors.push(msg);
       });
 
       // Explicit console.error() calls from theme JS or third-party scripts.
       page.on("console", (msg) => {
         if (msg.type() === "error") {
-          const txt = `console.error: ${msg.text()}`;
+          // Browser-generated messages like "Failed to load resource: … 404"
+          // carry NO URL in .text() — the failing resource is in
+          // .location().url. Append it so the failure report is actionable AND
+          // so URL-scoped patterns (allowlist or BUILTIN_NOISE, e.g.
+          // /livereload.js/) can match these messages, not just the parallel
+          // `response` 4xx channel.
+          const loc = msg.location();
+          const suffix = loc?.url ? ` (${loc.url})` : "";
+          const txt = `console.error: ${msg.text()}${suffix}`;
           if (!isSuppressed(txt, allowlist)) errors.push(txt);
         }
       });
