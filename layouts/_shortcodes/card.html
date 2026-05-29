@@ -57,10 +57,22 @@
 {{- $subtitle := .Get "subtitle" | default (.Get "description") -}}
 {{- $icon := .Get "icon" -}}
 {{- $image := .Get "image" -}}
+{{- $imageSrc := $image -}}
+{{- if and $image (not (or (strings.HasPrefix $image "http") (strings.HasPrefix $image "/"))) -}}
+  {{- /* Asset-relative path → resolve through Hugo's asset pipeline so files
+         under assets/ are published (a bare "assets/img/x.png" would otherwise
+         render as a page-relative URL and 404). resources.Get is relative to
+         the assets/ dir, so strip a leading "assets/" if the author wrote it. */ -}}
+  {{- with resources.Get (strings.TrimPrefix "assets/" $image) -}}
+    {{- $imageSrc = .RelPermalink -}}
+  {{- else -}}
+    {{- warnf "card.html: image %q not found under assets/ (resources.Get returned nil); leaving src as-is" $image -}}
+  {{- end -}}
+{{- end -}}
 {{- $alt := .Get "alt" | default $title -}}
 <a class="section-card" href="{{ $link }}">
   {{- if $image -}}
-    <img src="{{ $image }}" alt="{{ $alt }}" class="section-card-image" loading="lazy" />
+    <img src="{{ $imageSrc }}" alt="{{ $alt }}" class="section-card-image" loading="lazy" />
   {{- end -}}
   {{- if $icon -}}
     {{ partial "utils/icon.html" (dict "name" $icon "attributes" "class=\"section-card-icon\"") }}

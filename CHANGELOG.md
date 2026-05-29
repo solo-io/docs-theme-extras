@@ -34,6 +34,13 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 ### Card shortcode
 
 - **`{{< card link=… >}}` resolves nested shortcode calls passed in the `link` argument.** Backtick-quoted args are raw strings in Hugo, so a `link=`​`` `{{< link path="foo" >}}` ``​` value reached the `href` attribute unexpanded and rendered as literal text. `card.html` now detects the `{{<` pattern, evaluates the value through `RenderString`, and trims the result before assigning it to `href`. Plain string links (`link="/foo/"`) take the same fast path as before.
+- **`image` arg resolves `assets/`-relative paths through the asset pipeline.** A bare `image="assets/img/x.png"` was emitted as a page-relative `<img src>` and 404'd (Hugo doesn't publish `assets/` directly). `card.html` now runs non-URL image values through `resources.Get` (stripping a leading `assets/`) and uses the published `.RelPermalink`; external (`http…`) and absolute (`/img/…`, served from `static/`) values are unchanged.
+
+### Sidebar
+
+- **Tablet sidebar is reachable again (768–1279px, e.g. iPad Pro).** The theme navbar now renders its own `.solo-sidebar-mobile-trigger`, so consumers that use the theme navbar (the docs hub, the fixture) get a working sidebar opener in the tablet band. Previously only the wired `.hextra-hamburger-menu` toggled the sidebar, and it is `md:hidden` (gone at ≥ 768px) while the persistent sidebar doesn't return until `xl` (1280px) — leaving 768–1279px with no way to open the left nav. The trigger is rendered `hidden` and revealed by `themeExtras/head-end.html` only when a `.sidebar-mobile-panel` exists on the page, so landing / non-docs pages don't show a dead button; it is scoped to the tablet band (below 768px the hamburger still covers it, at/above 1280px the sidebar is visible). Consumers with their own navbar (kgw, agw) already render this trigger themselves and are unaffected.
+- New regression guard in `tests/viewport.spec.ts` asserts that below the 1280px breakpoint a visible sidebar opener (`.solo-sidebar-mobile-trigger` or `.hextra-hamburger-menu`) exists on version pages, so the tablet dead zone can't return silently.
+- **Product logo no longer overflows the mobile slide-in panel.** `.sidebar-product-logo img` uses `width: 108%` as a deliberate overscan in the desktop sidebar, but the slide-in panel is a fixed 280px, so the logo overflowed and crowded against the right edge. Below `xl` the logo is now constrained to the panel width with symmetric horizontal padding (centered with breathing room); the desktop sidebar keeps its overscan.
 
 ### Framework tests
 
