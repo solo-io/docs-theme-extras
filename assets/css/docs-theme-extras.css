@@ -840,6 +840,7 @@ svg.section-card-icon {
 /* Optional leading image for manual cards ({{< card image="..." >}}). */
 .section-card-image {
   max-height: 4rem;
+  max-width: 100%;
   width: auto;
   object-fit: contain;
   margin-bottom: 1rem;
