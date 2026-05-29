@@ -100,6 +100,15 @@ function closeMobileSidebar() {
    design, so we intercept the click here. Capture phase + stopImmediatePropagation
    so Hextra's listener doesn't fight us by toggling its own classes back. */
 document.addEventListener('DOMContentLoaded', function () {
+  /* Reveal the theme navbar's sidebar trigger only when this page actually
+     renders a sidebar (the `.sidebar-mobile-panel` aside is present). Keeps
+     landing / non-docs pages from showing a dead button. Consumer navbars
+     (kgw/agw) render their trigger without the `hidden` attribute, so this
+     query matches only the theme-navbar instance. */
+  var sbTrigger = document.querySelector('.solo-sidebar-mobile-trigger[hidden]');
+  if (sbTrigger && document.querySelector('.sidebar-mobile-panel')) {
+    sbTrigger.removeAttribute('hidden');
+  }
   var hamburger = document.querySelector('.hextra-hamburger-menu');
   if (!hamburger) return;
   hamburger.addEventListener('click', function (e) {

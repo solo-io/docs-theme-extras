@@ -91,6 +91,32 @@ test.describe("viewport responsive layout", () => {
         }
       });
 
+      // Dead-zone regression guard: below the xl (1280) breakpoint the
+      // persistent sidebar is off-screen, so SOME trigger must be reachable
+      // to open it. The original bug: the wired `.hextra-hamburger-menu` is
+      // `md:hidden` (gone >= 768) while the sidebar doesn't return until
+      // 1280, leaving 768–1279px (iPad Pro et al.) with no way to open the
+      // left nav. The theme navbar now also renders `.solo-sidebar-mobile-trigger`
+      // for the tablet band; consumer navbars (kgw/agw) render it across the
+      // whole < 1280 range. Either one satisfies this check.
+      test("sidebar opener is reachable below the desktop breakpoint", async ({
+        page,
+      }) => {
+        await page.goto(REPRESENTATIVE_PAGE!);
+        if (vp.width >= 1280) {
+          test.skip(true, "persistent sidebar is visible at xl; no opener needed");
+        }
+        const soloTrigger = page.locator(".solo-sidebar-mobile-trigger");
+        const hamburger = page.locator(".hextra-hamburger-menu");
+        const soloVisible = (await soloTrigger.count()) > 0 && (await soloTrigger.first().isVisible());
+        const hamburgerVisible = (await hamburger.count()) > 0 && (await hamburger.first().isVisible());
+        expect(
+          soloVisible || hamburgerVisible,
+          `${REPRESENTATIVE_PAGE} at ${vp.width}px: no visible sidebar opener ` +
+            `(.solo-sidebar-mobile-trigger or .hextra-hamburger-menu) — the left nav is unreachable`,
+        ).toBe(true);
+      });
+
       test("right-rail TOC visibility matches xl breakpoint", async ({ page }) => {
         await page.goto(REPRESENTATIVE_PAGE!);
         const toc = page.locator(".hextra-toc").first();

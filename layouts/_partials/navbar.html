@@ -17,6 +17,19 @@
   ></div>
 
   <nav class="hextra-max-navbar-width hx:mx-auto hx:flex hx:items-center hx:justify-end hx:gap-2 hx:h-24 hx:px-6">
+    {{- /* Sidebar mobile trigger for docs pages that render a sidebar. Sits at
+           the far left, before the logo. Rendered with `hidden`; the JS in
+           themeExtras/head-end.html reveals it only when a `.sidebar-mobile-panel`
+           exists on the page (so landing / non-docs pages don't show a dead
+           button). Scoped to the tablet band (768–1279px) via
+           `.solo-sidebar-trigger-tabletonly`: below 768 the wired
+           `.hextra-hamburger-menu` already toggles the sidebar, and at/above
+           1280 the persistent sidebar is visible. Consumers with their own
+           navbar (kgw, agw) render their own trigger and never reach this
+           template, so there is no double-render. */ -}}
+    <button type="button" class="solo-sidebar-mobile-trigger solo-sidebar-trigger-tabletonly hx:mr-1" aria-label="Open sidebar" onclick="toggleMobileSidebar()" hidden>
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h10M4 18h16"/></svg>
+    </button>
     <button type="button" aria-label="Toggle navigation" aria-expanded="false" class="hextra-hamburger-menu hx:md:hidden hx:cursor-pointer hx:rounded-sm hx:ml-3 hx:p-2 hx:active:bg-gray-400/20 hx:hextra-focus-visible-inset">
       <svg class="hx:h-5 hx:w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h10M4 18h16"/>

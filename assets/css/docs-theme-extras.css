@@ -402,6 +402,22 @@ html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
 .dark .sidebar-logo-dark { display: block; }
 .dark .sidebar-product-logo::after { background: #374151; }
 
+/* In the mobile slide-in panel the sidebar is a fixed 280px, so the desktop
+   logo overscan (width: 108% above) overflows the panel and crowds the logo
+   against the right edge. Below xl, fit the logo inside the panel and give it
+   symmetric horizontal padding so it sits centered with breathing room. The
+   desktop (>= 1280px) sidebar keeps its overscan. */
+@media (max-width: 1279px) {
+  .sidebar-product-logo {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  .sidebar-product-logo img {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
 /* Darken sidebar link text */
 .hextra-sidebar-container .hextra-sidebar-item a {
   color: #1f2937 !important;
@@ -1677,6 +1693,25 @@ details[open].hextra-search-other-versions > summary::before {
 }
 @media (min-width: 1280px) {
   .solo-sidebar-mobile-trigger {
+    display: none !important;
+  }
+}
+/* `hidden` attribute must win over the base `display: inline-flex` above (a
+   class selector otherwise beats the UA [hidden] rule). The theme navbar
+   renders its trigger with `hidden` and themeExtras/head-end.html removes it
+   only when a `.sidebar-mobile-panel` exists, so landing / non-docs pages
+   never show a dead button. Consumer navbars (kgw/agw) render the trigger
+   without `hidden`, so this rule does not affect them. */
+.solo-sidebar-mobile-trigger[hidden] {
+  display: none !important;
+}
+/* Tablet-band scope for the theme-navbar trigger only: below md the wired
+   `.hextra-hamburger-menu` already toggles the sidebar, so suppress the
+   second trigger there to avoid two hamburgers on mobile. (Combined with the
+   >= 1280 rule above, the trigger shows only across 768–1279px.) Consumer
+   triggers omit this class and stay visible across the full < 1280 range. */
+@media (max-width: 767px) {
+  .solo-sidebar-trigger-tabletonly {
     display: none !important;
   }
 }
