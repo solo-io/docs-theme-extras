@@ -815,6 +815,11 @@ hr.footnotes-sep,
   color: inherit;
   transition: border-color 0.2s, box-shadow 0.2s;
   height: 100%;
+  /* Prevent the grid cell from expanding to the image's intrinsic width.
+     Without this, a wide-aspect SVG with no explicit dimensions (only a
+     viewBox) can force all 1fr columns wider than the available space in
+     Firefox and WebKit. */
+  min-width: 0;
 }
 
 .section-card:hover {
