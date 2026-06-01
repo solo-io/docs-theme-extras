@@ -15,6 +15,14 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [Unreleased]
+
+### Sidebar
+
+- **Mobile version-switcher chips now generate correct URLs for enterprise products.** The cached v0.1.0 build on the Go module proxy contained an older version of `sidebar.html` in which the mobile version-row always emitted `/docs/<section>/<version>/` hrefs regardless of URL shape. For enterprise products whose `baseURL` is `/<product>/` (not `/docs/…`), this produced broken links such as `/docs/test/v2/` instead of `/test/v2/`. The template now branches on `$isOSSShape`: OSS products (`/docs/<section>/…` URLs) keep the existing `/docs/…` form; enterprise products emit `/<section>/<version>/…`; and local-dev builds (no product prefix) emit `/<version>/…`. 
+
+---
+
 ## [v0.1.0] — 2026-05-29
 
 ### Version cards (new)
