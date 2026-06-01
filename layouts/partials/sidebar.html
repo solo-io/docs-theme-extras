@@ -229,18 +229,41 @@
           {{- $versions = $filteredVersions -}}
           {{- if $versions -}}
             <div class="sidebar-mobile-version-row">
-              {{- $filtered := after 4 $segments -}}
+              {{- /* OSS URLs: /docs/<section>/<version>/… — strip 4 leading segments.
+                   Enterprise production URLs: /<section>/<version>/… — strip matchedIdx+1.
+                   Enterprise local dev URLs: /<version>/… — matchedIdx=1, strip 2. */ -}}
+              {{- $filteredAfter := cond $isOSSShape 4 (add $matchedIdx 1) -}}
+              {{- $filtered := after $filteredAfter $segments -}}
               {{- $newPath := printf "/%s" (delimit $filtered "/") -}}
               {{- range $versions -}}
                 {{- $isActive := eq $currentVersion .linkVersion -}}
-                {{- $href := printf "/docs/%s/%s%s" $section .linkVersion $newPath -}}
-                {{- /* Fallback to the section's not-in-version landing if the
+                {{- /* Build href and GetPage lookup path.
+                       GetPage paths are relative to contentDir (never include the product
+                       prefix), so enterprise lookup omits $section even when the href uses it. */ -}}
+                {{- $href := "" -}}
+                {{- $targetPath := "" -}}
+                {{- if $isOSSShape -}}
+                  {{- $href = printf "/docs/%s/%s%s" $section .linkVersion $newPath -}}
+                  {{- $targetPath = printf "/docs/%s/%s%s" $section .linkVersion $newPath -}}
+                {{- else if $section -}}
+                  {{- $href = printf "/%s/%s%s" $section .linkVersion $newPath -}}
+                  {{- $targetPath = printf "/%s%s" .linkVersion $newPath -}}
+                {{- else -}}
+                  {{- $href = printf "/%s%s" .linkVersion $newPath -}}
+                  {{- $targetPath = printf "/%s%s" .linkVersion $newPath -}}
+                {{- end -}}
+                {{- /* Fallback to the version's not-in-version landing when the
                        same-path page doesn't exist in the target version. */ -}}
-                {{- $targetPath := printf "/docs/%s/%s%s" $section .linkVersion $newPath -}}
                 {{- if not (site.GetPage $targetPath) -}}
-                  {{- $fallbackPath := printf "/docs/%s/%s/not-in-version" $section .linkVersion -}}
+                  {{- $fallbackPath := cond $isOSSShape (printf "/docs/%s/%s/not-in-version" $section .linkVersion) (printf "/%s/not-in-version" .linkVersion) -}}
                   {{- if site.GetPage $fallbackPath -}}
-                    {{- $href = printf "/docs/%s/%s/not-in-version/" $section .linkVersion -}}
+                    {{- if $isOSSShape -}}
+                      {{- $href = printf "/docs/%s/%s/not-in-version/" $section .linkVersion -}}
+                    {{- else if $section -}}
+                      {{- $href = printf "/%s/%s/not-in-version/" $section .linkVersion -}}
+                    {{- else -}}
+                      {{- $href = printf "/%s/not-in-version/" .linkVersion -}}
+                    {{- end -}}
                   {{- end -}}
                 {{- end -}}
                 <a href="{{ $href }}"
