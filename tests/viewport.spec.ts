@@ -183,20 +183,39 @@ test.describe("viewport responsive layout", () => {
         }
       });
 
-      test("version dropdown remains reachable", async ({ page }) => {
+      // A version switcher must be reachable at every breakpoint, but it
+      // lives in two different places: the navbar dropdown on desktop, and
+      // the slide-out version row below xl. The navbar dropdown is hidden
+      // below 1280px (on pages with a slide-out) so the switcher doesn't
+      // appear in two places at once — see the `body:has(.sidebar-mobile-panel)
+      // .version-dropdown` rule in docs-theme-extras.css.
+      test("version switcher is reachable for the breakpoint", async ({ page }) => {
         await page.goto(REPRESENTATIVE_PAGE!);
         const dropdown = page.locator(".version-dropdown-btn").first();
-        // The dropdown lives in the top nav. On mobile the top nav stays
-        // visible above the page; the button must still be in the layout.
-        await expect(dropdown).toBeAttached();
-        const box = await dropdown.boundingBox();
-        expect(box, "version dropdown has no box").not.toBeNull();
-        expect(box!.width, "version dropdown collapsed to zero width").toBeGreaterThan(0);
+        if (vp.width >= 1280) {
+          // Desktop: the navbar dropdown is the switcher and is visible.
+          await expect(dropdown).toBeVisible();
+          const box = await dropdown.boundingBox();
+          expect(box, "version dropdown has no box").not.toBeNull();
+          expect(box!.width, "version dropdown collapsed to zero width").toBeGreaterThan(0);
+        } else {
+          // Below xl the navbar dropdown is hidden; the slide-out version row
+          // is the single mobile switcher and must be present in the DOM
+          // (reachable by opening the slide-out).
+          await expect(dropdown).toBeHidden();
+          await expect(page.locator(".sidebar-mobile-version-row").first()).toBeAttached();
+          expect(
+            await page.locator(".sidebar-mobile-version-link").count(),
+            "no version links in the slide-out switcher below xl",
+          ).toBeGreaterThan(0);
+        }
       });
 
-      // PR 2394 regression guard: on mobile the version dropdown elided
-      // the product-name prefix so the button fits one line in the
-      // narrow nav. On tablet and up, the product name is visible again.
+      // The product-name prefix shows only when the navbar dropdown itself
+      // shows. PR 2394 elided it below 768px to keep the button narrow; the
+      // navbar dropdown is now hidden entirely below xl (1280px) because the
+      // slide-out provides the mobile switcher, so the product-name is only
+      // visible at >= 1280px.
       test("version dropdown product-name visibility matches breakpoint", async ({
         page,
       }) => {
@@ -210,16 +229,16 @@ test.describe("viewport responsive layout", () => {
             "no .version-product-name in this build (consumer didn't set product name)",
           );
         }
-        if (vp.width < 768) {
+        if (vp.width >= 1280) {
           await expect(
             productName,
-            "product-name should be hidden under 768px to keep the dropdown narrow",
-          ).toBeHidden();
+            "product-name should be visible at >=1280px where the navbar dropdown shows",
+          ).toBeVisible();
         } else {
           await expect(
             productName,
-            "product-name should be visible at >=768px",
-          ).toBeVisible();
+            "product-name should be hidden below 1280px where the navbar dropdown is hidden",
+          ).toBeHidden();
         }
       });
 
