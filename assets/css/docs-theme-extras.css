@@ -607,8 +607,8 @@ html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
   box-shadow: 0 -12px 16px white;
 }
 .dark .solo-toc-bottom {
-  background: #030712;
-  box-shadow: 0 -12px 16px #030712;
+  background: var(--hx-color-dark, #111);
+  box-shadow: 0 -12px 16px var(--hx-color-dark, #111);
   border-top-color: #374151;
 }
 .solo-toc-back-to-top {
