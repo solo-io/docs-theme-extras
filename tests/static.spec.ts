@@ -599,3 +599,48 @@ test.describe("manual cards block renders intact (card subtitle + shortcode arg 
     ).toMatch(/<span class="(section-card-desc|card-subtitle)"/);
   });
 });
+
+// The mobile slide-menu version chips (sidebar.html) and the desktop navbar
+// version dropdown (navbar.html) build version links independently. They must
+// land on the SAME destinations, or a reader switching versions on a phone
+// gets different (often broken) links than on a laptop. This guard extracts
+// the ordered href list from each on a versioned page and asserts equality, so
+// any future drift between the two link-builders fails the suite.
+test.describe("mobile version chips match the desktop version dropdown", () => {
+  // Hrefs in source order, scoped to the given container's <a> elements.
+  function hrefsIn(html: string, containerRe: RegExp, linkClass: string): string[] {
+    const container = html.match(containerRe);
+    if (!container) return [];
+    const linkRe = new RegExp(
+      `<a\\s+href="([^"]*)"[^>]*class="[^"]*\\b${linkClass}\\b`,
+      "g",
+    );
+    return [...container[0].matchAll(linkRe)].map((m) => m[1]);
+  }
+
+  for (const page of TEST_PAGES) {
+    test(`${page.name}: chip hrefs equal dropdown hrefs`, () => {
+      const html = readFixture(page.filePath);
+      const hasDropdown = html.includes("version-dropdown-menu");
+      const hasChips = html.includes("sidebar-mobile-version-row");
+      test.skip(
+        !hasDropdown || !hasChips,
+        "page has no version dropdown and/or mobile version row",
+      );
+      const dropdownHrefs = hrefsIn(
+        html,
+        /<ul class="version-dropdown-menu"[\s\S]*?<\/ul>/,
+        "version-dropdown-item",
+      );
+      const chipHrefs = hrefsIn(
+        html,
+        /<div class="sidebar-mobile-version-row">[\s\S]*?<\/div>/,
+        "sidebar-mobile-version-link",
+      );
+      expect(
+        chipHrefs,
+        "mobile version chips must point to the same destinations, in the same order, as the desktop version dropdown",
+      ).toEqual(dropdownHrefs);
+    });
+  }
+});

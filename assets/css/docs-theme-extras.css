@@ -1540,6 +1540,21 @@ details[open].hextra-search-other-versions > summary::before {
   gap: 0.25rem;
   flex-wrap: wrap;
 }
+.sidebar-mobile-version-group {
+  flex-basis: 100%;
+  margin-top: 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: rgb(107, 114, 128);
+}
+.sidebar-mobile-version-group:first-child {
+  margin-top: 0;
+}
+.dark .sidebar-mobile-version-group {
+  color: rgb(156, 163, 175);
+}
 .sidebar-mobile-version-link {
   padding: 0.375rem 0.75rem;
   border-radius: 0.375rem;

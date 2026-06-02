@@ -219,56 +219,86 @@
           {{- if not $versions -}}
             {{- $versions = site.Params.versions -}}
           {{- end -}}
-          {{- /* Filter to current-product and visible (non-empty dropdown) entries only.
-               Mirrors navbar.html so mobile chips match the version dropdown. */ -}}
+          {{- /* Keep every visible (non-empty dropdown) entry, including
+               cross-product ones, so the mobile chips list the SAME versions
+               and point to the SAME destinations as the desktop navbar version
+               dropdown (navbar.html). Same-product entries swap the version
+               into the current path; cross-product entries use the configured
+               `.url`, grouped under productName headers to disambiguate
+               same-labelled versions across products (e.g. gateway 1.20.x vs
+               edge 1.20.x). */ -}}
           {{- $currentProduct := site.Params.currentProduct | default "" -}}
           {{- $filteredVersions := slice -}}
           {{- range $versions -}}
-            {{- $sameProduct := or (not $currentProduct) (eq (.product | default "") $currentProduct) -}}
             {{- $visible := ne (trim (.dropdown | default .version) " ") "" -}}
-            {{- if and $sameProduct $visible -}}
+            {{- if $visible -}}
               {{- $filteredVersions = $filteredVersions | append . -}}
             {{- end -}}
           {{- end -}}
           {{- $versions = $filteredVersions -}}
           {{- if $versions -}}
+            {{- /* Decide whether to show productName group headers — only when
+                   more than one product is represented, mirroring navbar.html. */ -}}
+            {{- $productNames := slice -}}
+            {{- range $versions -}}
+              {{- $pn := .productName | default "" -}}
+              {{- if and $pn (not (in $productNames $pn)) -}}
+                {{- $productNames = $productNames | append $pn -}}
+              {{- end -}}
+            {{- end -}}
+            {{- $hasMultipleGroups := gt (len $productNames) 1 -}}
+            {{- $lastProductName := "" -}}
+            {{- /* OSS URLs: /docs/<section>/<version>/… — strip 4 leading segments.
+                 Enterprise production URLs: /<section>/<version>/… — strip matchedIdx+1.
+                 Enterprise local dev URLs: /<version>/… — matchedIdx=1, strip 2. */ -}}
+            {{- $filteredAfter := cond $isOSSShape 4 (add $matchedIdx 1) -}}
+            {{- $filtered := after $filteredAfter $segments -}}
+            {{- $newPath := printf "/%s" (delimit $filtered "/") -}}
             <div class="sidebar-mobile-version-row">
-              {{- /* OSS URLs: /docs/<section>/<version>/… — strip 4 leading segments.
-                   Enterprise production URLs: /<section>/<version>/… — strip matchedIdx+1.
-                   Enterprise local dev URLs: /<version>/… — matchedIdx=1, strip 2. */ -}}
-              {{- $filteredAfter := cond $isOSSShape 4 (add $matchedIdx 1) -}}
-              {{- $filtered := after $filteredAfter $segments -}}
-              {{- $newPath := printf "/%s" (delimit $filtered "/") -}}
               {{- range $versions -}}
-                {{- $isActive := eq $currentVersion .linkVersion -}}
-                {{- /* Build href and GetPage lookup path.
-                       GetPage paths are relative to contentDir (never include the product
-                       prefix), so enterprise lookup omits $section even when the href uses it. */ -}}
-                {{- $href := "" -}}
-                {{- $targetPath := "" -}}
-                {{- if $isOSSShape -}}
-                  {{- $href = printf "/docs/%s/%s%s" $section .linkVersion $newPath -}}
-                  {{- $targetPath = printf "/docs/%s/%s%s" $section .linkVersion $newPath -}}
-                {{- else if $section -}}
-                  {{- $href = printf "/%s/%s%s" $section .linkVersion $newPath -}}
-                  {{- $targetPath = printf "/%s%s" .linkVersion $newPath -}}
-                {{- else -}}
-                  {{- $href = printf "/%s%s" .linkVersion $newPath -}}
-                  {{- $targetPath = printf "/%s%s" .linkVersion $newPath -}}
+                {{- $isSameProduct := or (not $currentProduct) (eq (.product | default "") $currentProduct) -}}
+                {{- /* Only the current product's matching version is "active". */ -}}
+                {{- $isActive := and $isSameProduct (eq $currentVersion .linkVersion) -}}
+                {{- /* Insert a product group header when productName changes. */ -}}
+                {{- if $hasMultipleGroups -}}
+                  {{- $pn := .productName | default "" -}}
+                  {{- if and $pn (ne $pn $lastProductName) -}}
+                    <span class="sidebar-mobile-version-group">{{ $pn }}</span>
+                  {{- end -}}
+                  {{- $lastProductName = $pn -}}
                 {{- end -}}
-                {{- /* Fallback to the version's not-in-version landing when the
-                       same-path page doesn't exist in the target version. */ -}}
-                {{- if not (site.GetPage $targetPath) -}}
-                  {{- $fallbackPath := cond $isOSSShape (printf "/docs/%s/%s/not-in-version" $section .linkVersion) (printf "/%s/not-in-version" .linkVersion) -}}
-                  {{- if site.GetPage $fallbackPath -}}
-                    {{- if $isOSSShape -}}
-                      {{- $href = printf "/docs/%s/%s/not-in-version/" $section .linkVersion -}}
-                    {{- else if $section -}}
-                      {{- $href = printf "/%s/%s/not-in-version/" $section .linkVersion -}}
-                    {{- else -}}
-                      {{- $href = printf "/%s/not-in-version/" .linkVersion -}}
+                {{- /* Build href. Same-product: swap version into the current
+                       path (GetPage lookups are relative to contentDir, so the
+                       enterprise lookup omits $section even when the href uses
+                       it) with a not-in-version fallback. Cross-product: use the
+                       configured url, exactly like navbar.html. */ -}}
+                {{- $href := "" -}}
+                {{- if $isSameProduct -}}
+                  {{- $targetPath := "" -}}
+                  {{- if $isOSSShape -}}
+                    {{- $href = printf "/docs/%s/%s%s" $section .linkVersion $newPath -}}
+                    {{- $targetPath = printf "/docs/%s/%s%s" $section .linkVersion $newPath -}}
+                  {{- else if $section -}}
+                    {{- $href = printf "/%s/%s%s" $section .linkVersion $newPath -}}
+                    {{- $targetPath = printf "/%s%s" .linkVersion $newPath -}}
+                  {{- else -}}
+                    {{- $href = printf "/%s%s" .linkVersion $newPath -}}
+                    {{- $targetPath = printf "/%s%s" .linkVersion $newPath -}}
+                  {{- end -}}
+                  {{- if not (site.GetPage $targetPath) -}}
+                    {{- $fallbackPath := cond $isOSSShape (printf "/docs/%s/%s/not-in-version" $section .linkVersion) (printf "/%s/not-in-version" .linkVersion) -}}
+                    {{- if site.GetPage $fallbackPath -}}
+                      {{- if $isOSSShape -}}
+                        {{- $href = printf "/docs/%s/%s/not-in-version/" $section .linkVersion -}}
+                      {{- else if $section -}}
+                        {{- $href = printf "/%s/%s/not-in-version/" $section .linkVersion -}}
+                      {{- else -}}
+                        {{- $href = printf "/%s/not-in-version/" .linkVersion -}}
+                      {{- end -}}
                     {{- end -}}
                   {{- end -}}
+                {{- else -}}
+                  {{- $href = .url | default (printf "/%s%s" .linkVersion $newPath) -}}
                 {{- end -}}
                 <a href="{{ $href }}"
                    class="sidebar-mobile-version-link{{ if $isActive }} sidebar-mobile-version-active{{ end }}">
