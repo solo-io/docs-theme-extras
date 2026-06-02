@@ -15,7 +15,7 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
-## [Unreleased]
+## [v0.1.1] — 2026-06-02
 
 ### Table of contents (TOC)
 
@@ -30,6 +30,8 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 ### Navbar
 
 - **The navbar version dropdown is now hidden below 1280px on pages that have a mobile slide-out sidebar, so the version switcher no longer appears in two places at once on phones and tablets.** The `.version-dropdown` in `navbar.html` rendered at every width, while below `xl` (1280px) the slide-out sidebar already provides its own version switcher (`.sidebar-mobile-version-row`). A reader on a phone or tablet therefore saw the same control twice: once in the top nav, once in the left slide-out menu. A new `@media (max-width: 1279px)` rule scoped to `body:has(.sidebar-mobile-panel)` hides the navbar dropdown across that range, leaving the slide-out row as the single mobile switcher. The dropdown still shows on desktop (≥ 1280px), where there is no slide-out, and the `:has()` scope keeps it as the only switcher on landing / non-docs pages that have no slide-out panel. The 1279px bound matches the existing `.sidebar-mobile-panel` breakpoint. Only the docs hub renders the navbar `.version-dropdown` today, so kgateway (its own navbar, which renders no `.version-dropdown`) and agentgateway (a separate `nav.html`) are unaffected.
+- **Search is now reachable on mobile from the navbar drawer.** Hextra hides the navbar search below `md` (`nav .hextra-search-wrapper { display: none }`) because stock Hextra relocates search into its own mobile menu, which the centralized `navbar.html` does not use — so on phones there was no way to search from the top nav. `navbar.html` now renders the `search`-type menu entry once at the top of `#mobile-icons-menu` (wrapped in `.solo-mobile-drawer-search`), and the loop that fills the rest of the drawer skips `type "search"` so it is not emitted twice. A CSS rule re-shows it: `#mobile-icons-menu .hextra-search-wrapper { display: block }` — the ID selector (specificity 100) beats Hextra's `nav .hextra-search-wrapper` (11) without `!important`. At ≥ 768px the drawer's parent is `hx:md:hidden` (`display: none`), so the re-shown wrapper never produces a second *visible* search box on desktop, keeping exactly one for Hextra's `getActiveSearchElement()`. A `viewport.spec.ts` guard asserts mobile search is reachable and that exactly one active search wrapper results. (Enterprise products needed a follow-up fix where the wrapper resolved but rendered empty.)
+- **Mobile drawer items now show visible text labels, not icon-only controls.** The theme-toggle and social/link icons in `#mobile-icons-menu` previously rendered icon-only with an `hx:sr-only` (screen-reader-only) label, so a sighted reader on a phone saw a column of bare icons with no text. Each item is now a `hx:flex` row with the icon (`hx:shrink-0`) plus a visible `<span>` label; the drawer container switched from `hx:items-center` to `hx:items-stretch` so the rows fill its width. The theme-toggle gains a `toggleTheme` i18n string (falling back to "Toggle theme") used for both its `aria-label` and the visible label.
 
 ---
 
