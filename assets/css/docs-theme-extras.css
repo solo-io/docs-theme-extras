@@ -1785,3 +1785,22 @@ details[open].hextra-search-other-versions > summary::before {
   visibility: hidden;
   pointer-events: none;
 }
+
+/* ── Mobile drawer search ─────────────────────────────────────────────────
+   Hextra hides the navbar search below md via `nav .hextra-search-wrapper {
+   display: none }` (re-shown only at >= 48rem), because stock Hextra relocates
+   search into its own mobile menu. Our `#mobile-icons-menu` lives inside <nav>,
+   so the search we render there inherits that hide. Re-show it: the ID selector
+   (specificity 100) beats Hextra's `nav .hextra-search-wrapper` (11) without
+   !important, and at >= 768px the drawer's parent is `hx:md:hidden`
+   (display: none), so this never produces a second visible search wrapper on
+   desktop — keeping exactly one for Hextra's getActiveSearchElement(). */
+#mobile-icons-menu .hextra-search-wrapper {
+  display: block;
+  width: 100%;
+}
+.solo-mobile-drawer-search {
+  width: 16rem;
+  max-width: 80vw;
+  padding: 0.25rem 0.25rem 0.5rem;
+}
