@@ -589,9 +589,11 @@ html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
   background-color: #363c47;
 }
 
-/* Sticky footer of the TOC (back-to-top + future links). The white
-   background + negative shadow creates the fade-in effect as page
-   content scrolls behind it. */
+/* Sticky footer of the TOC (back-to-top + future links). Background is
+   transparent so it reveals whatever page/brand background is painted behind
+   it (kgw dark #111, agw-oss dark #030712, light-mode white) rather than
+   hardcoding one dark hex that only matches a single brand. Tradeoff: no
+   solid-fill fade for TOC links that scroll behind it. */
 .solo-toc-bottom {
   margin-top: 2rem;
   border-top: 1px solid #e5e7eb;
@@ -603,12 +605,9 @@ html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
   flex-direction: column;
   align-items: flex-start;
   gap: 0.5rem;
-  background: white;
-  box-shadow: 0 -12px 16px white;
+  background: transparent;
 }
 .dark .solo-toc-bottom {
-  background: var(--hx-color-dark, #111);
-  box-shadow: 0 -12px 16px var(--hx-color-dark, #111);
   border-top-color: #374151;
 }
 .solo-toc-back-to-top {

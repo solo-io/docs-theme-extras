@@ -19,7 +19,7 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ### Table of contents (TOC)
 
-- **Dark-mode "Scroll to top" footer now matches the page background.** The `.dark .solo-toc-bottom` rule hardcoded `#030712` (a slightly blue-tinted near-black) for both its `background` and its fade `box-shadow`, while the Hextra dark page background is `#111` (`--hx-color-dark`). The mismatch rendered a visible navy box behind the "Scroll to top" button on dark-mode pages. Both properties now use `var(--hx-color-dark, #111)`, the same theme variable kgateway's `custom.css` already relies on for its blog/resource page backgrounds, so the footer tracks the theme's dark shade automatically instead of drifting from it.
+- **"Scroll to top" footer background is now transparent so it matches every brand's page background.** The `.solo-toc-bottom` sticky footer hardcoded a fill color (`white` in light mode, `#030712` in dark) plus a matching `box-shadow` fade. That dark hex only matched agentgateway (whose dark background is `#030712`); on kgateway, whose dark background is Hextra's default `#111`, it rendered a visible blue-tinted box behind the "Scroll to top" button. Because the two brands use different dark backgrounds, no single hardcoded hex works. The footer now uses `background: transparent`, which reveals whatever each consumer paints behind it (kgw `#111`, agw-oss `#030712`, light-mode white). Tradeoff: the solid-fill fade for TOC links that scroll behind the sticky footer is gone; the `border-top` still separates it from the list.
 
 ### Sidebar
 
