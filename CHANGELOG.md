@@ -17,6 +17,10 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ## [Unreleased]
 
+### Table of contents (TOC)
+
+- **Dark-mode "Scroll to top" footer now matches the page background.** The `.dark .solo-toc-bottom` rule hardcoded `#030712` (a slightly blue-tinted near-black) for both its `background` and its fade `box-shadow`, while the Hextra dark page background is `#111` (`--hx-color-dark`). The mismatch rendered a visible navy box behind the "Scroll to top" button on dark-mode pages. Both properties now use `var(--hx-color-dark, #111)`, the same theme variable kgateway's `custom.css` already relies on for its blog/resource page backgrounds, so the footer tracks the theme's dark shade automatically instead of drifting from it.
+
 ### Sidebar
 
 - **Mobile version-switcher chips now generate correct URLs for enterprise products.** The cached v0.1.0 build on the Go module proxy contained an older version of `sidebar.html` in which the mobile version-row always emitted `/docs/<section>/<version>/` hrefs regardless of URL shape. For enterprise products whose `baseURL` is `/<product>/` (not `/docs/…`), this produced broken links such as `/docs/test/v2/` instead of `/test/v2/`. The template now branches on `$isOSSShape`: OSS products (`/docs/<section>/…` URLs) keep the existing `/docs/…` form; enterprise products emit `/<section>/<version>/…`; and local-dev builds (no product prefix) emit `/<version>/…`. 
