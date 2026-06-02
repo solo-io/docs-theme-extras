@@ -621,7 +621,9 @@ html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  transition: color 0.15s;
+  /* opacity transitions the hx:opacity-0 reveal/hide toggled by Hextra's
+     main.js on scroll; color handles hover. */
+  transition: color 0.15s, opacity 0.15s;
 }
 .solo-toc-back-to-top:hover {
   color: #111827;
