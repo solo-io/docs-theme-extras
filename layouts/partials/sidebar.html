@@ -66,6 +66,11 @@
   {{- $currentVersion := "" -}}
   {{- $isVersionedDocs := false -}}
   {{- $isOSSShape := false -}}
+  {{- /* Position of the matched version segment for enterprise shapes (2 in
+         production, 1 in local dev). Declared at top scope so the version-row
+         path-stripping at line ~235 can read it; the enterprise branch below
+         assigns it with `=`, not `:=`. */ -}}
+  {{- $matchedIdx := 0 -}}
   {{- /* $versionPrefix is the URL prefix used for link building and
          render-sidebar-tree's hasPrefix check against page RelPermalinks.
          $lookupPath is the path passed to site.GetPage to locate the
@@ -109,7 +114,6 @@
            Try segments[2] first (production); fall back to segments[1] (local).
            The version match — against site.Params.versions[].linkVersion or a
            well-known marker — is the disambiguator. */ -}}
-    {{- $matchedIdx := 0 -}}
     {{- $candidatePositions := slice -}}
     {{- if ge (len $segments) 3 -}}{{- $candidatePositions = $candidatePositions | append 2 -}}{{- end -}}
     {{- $candidatePositions = $candidatePositions | append 1 -}}
