@@ -27,7 +27,12 @@ export default defineConfig({
   testDir: "./tests",
   timeout: 30_000,
   fullyParallel: true,
-  retries: process.env.CI ? 1 : 0,
+  // One retry everywhere (not just CI). The webServer is a single `npx serve`
+  // process; under the concurrent load of the full crawl (~1k pages) it
+  // occasionally returns a transient 404 for a valid, on-disk page. That is
+  // infra noise, not a content bug — a fresh-page retry clears it, while a
+  // real error still fails both attempts.
+  retries: 1,
   workers: process.env.CI ? 4 : undefined,
   reporter: process.env.CI
     ? [["list"], ["html", { open: "never" }], ["github"]]

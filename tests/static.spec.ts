@@ -667,9 +667,18 @@ test.describe("Hextra hamburger toggle target exists on sidebar pages", () => {
   } catch {
     // builtRoot not present; the per-page guard below skips.
   }
-  const sidebarPages = crawled.filter((p) =>
-    readFixture(p.filePath).includes("hextra-sidebar-container"),
-  );
+  const sidebarPages = crawled.filter((p) => {
+    // This runs at collection time, where a throw aborts the whole worker
+    // (no test has started, so `retries` cannot rescue it). A file can vanish
+    // between the crawl and this read if the build tree is rewritten mid-run
+    // (e.g. a concurrent rebuild), so tolerate a read failure and skip the
+    // entry rather than crashing the entire suite.
+    try {
+      return readFixture(p.filePath).includes("hextra-sidebar-container");
+    } catch {
+      return false;
+    }
+  });
 
   test("at least one built page renders a sidebar (sanity: the scan found pages)", () => {
     test.skip(crawled.length === 0, "no built pages found (run the Hugo build first)");
