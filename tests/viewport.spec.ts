@@ -242,6 +242,41 @@ test.describe("viewport responsive layout", () => {
         }
       });
 
+      // Mobile search lives in the navbar drawer (#mobile-icons-menu) because
+      // Hextra hides the navbar search below md (`nav .hextra-search-wrapper
+      // {display:none}`). Two guards: (1) below md the drawer carries a usable
+      // search input; (2) at every width exactly one .hextra-search-wrapper has
+      // clientHeight > 0. Hextra's getActiveSearchElement() filters wrappers by
+      // clientHeight and throws on its keydown path unless exactly one matches,
+      // so this also guards the closed-drawer `visibility:hidden` workaround
+      // that keeps the mobile wrapper in layout.
+      test("mobile search is reachable and yields exactly one active search wrapper", async ({
+        page,
+      }) => {
+        await page.goto(REPRESENTATIVE_PAGE!);
+        const wrapperCount = await page.locator(".hextra-search-wrapper").count();
+        if (wrapperCount === 0) {
+          test.skip(true, "no search configured in this build");
+        }
+        if (vp.width < 768) {
+          await expect(
+            page.locator("#mobile-icons-menu .hextra-search-input").first(),
+            "below md the search input must live in the navbar drawer",
+          ).toBeAttached();
+        }
+        const activeWrappers = await page.evaluate(
+          () =>
+            Array.from(document.querySelectorAll(".hextra-search-wrapper")).filter(
+              (el) => (el as HTMLElement).clientHeight > 0,
+            ).length,
+        );
+        expect(
+          activeWrappers,
+          "exactly one .hextra-search-wrapper must have clientHeight > 0 " +
+            "(Hextra's getActiveSearchElement throws on 0 or 2+)",
+        ).toBe(1);
+      });
+
       // PR 2388 regression guard: on mobile, cards must stack (one per row)
       // and stay within the viewport width. The bug was a grid layout that
       // produced multi-column cards on narrow viewports, which overflowed.
