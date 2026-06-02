@@ -1030,6 +1030,18 @@ svg.section-card-icon {
   position: relative;
 }
 
+/* Below xl (1280px) the mobile slide-out sidebar renders its own version
+   selector (.sidebar-mobile-version-row), so hide the navbar version dropdown
+   there to avoid showing it in two places on mobile. Scoped to pages that
+   actually have a slide-out panel, so landing / non-docs pages keep the navbar
+   dropdown as their only selector. The 1279px bound matches the
+   .sidebar-mobile-panel breakpoint. The dropdown stays on desktop (>= 1280px). */
+@media (max-width: 1279px) {
+  body:has(.sidebar-mobile-panel) .version-dropdown {
+    display: none !important;
+  }
+}
+
 .version-product-name {
   display: none;
 }
