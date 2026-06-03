@@ -187,11 +187,34 @@
                 {{- $label := . | humanize -}}
                 {{- $cfg := index site.Params.sections . -}}
                 {{- with $cfg.title -}}{{- $label = . -}}{{- end -}}
+                {{- /* Resolve a version that actually exists in the target
+                       section. Version numbers don't always align across
+                       sections (e.g. agw's kubernetes has 1.1.x but standalone
+                       only ships latest/main), so reusing $currentVersion
+                       verbatim can point the chip at a non-existent landing.
+                       The current section always has the current version, so
+                       only the other sections need remapping: prefer an exact
+                       linkVersion match, then a `latest` entry, then the first
+                       configured version. */ -}}
+                {{- $targetVersion := $currentVersion -}}
+                {{- if not $isCurrent -}}
+                  {{- with $cfg.versions -}}
+                    {{- $match := false -}}
+                    {{- $hasLatest := false -}}
+                    {{- range . -}}
+                      {{- if eq .linkVersion $currentVersion -}}{{- $match = true -}}{{- end -}}
+                      {{- if eq .linkVersion "latest" -}}{{- $hasLatest = true -}}{{- end -}}
+                    {{- end -}}
+                    {{- if not $match -}}
+                      {{- $targetVersion = cond $hasLatest "latest" (index . 0).linkVersion -}}
+                    {{- end -}}
+                  {{- end -}}
+                {{- end -}}
                 {{- /* Consumers can set `externalURL` on a section to redirect
                        this chip off-site (e.g. kgw's `agentgateway` section,
                        which exists only to scope version dropdowns for shared
                        paths and has no internal landing page). */ -}}
-                {{- $href := printf "/docs/%s/%s/" . $currentVersion -}}
+                {{- $href := printf "/docs/%s/%s/" . $targetVersion -}}
                 {{- $isExternal := false -}}
                 {{- with $cfg.externalURL -}}
                   {{- $href = . -}}

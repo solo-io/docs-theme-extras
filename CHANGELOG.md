@@ -15,6 +15,14 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [v0.1.2] — 2026-06-03
+
+### Sidebar
+
+- **Mobile deployment/section-switcher chips now point at a version that exists in the target section, instead of blindly reusing the current page's version.** The `.sidebar-mobile-section-row` built every chip's href as `/docs/<section>/<currentVersion>/`, which assumes the same version number is published in every section. That holds when a site's sections share a version axis, but not when they diverge: agentgateway's `kubernetes` section ships `1.0.x`/`1.1.x`/`2.2.x`/`latest`/`main` while its `standalone` section ships only `latest`/`main`. So the "Standalone" chip on any `kubernetes/1.1.x` page produced `/docs/standalone/1.1.x/`, a 404. The chip for the *current* section is unchanged (the page it links to always exists); for *other* sections the template now resolves the target version from that section's own `versions` config: prefer an exact `linkVersion` match, then a `latest` entry, then the first configured version. So from `kubernetes/1.1.x` the Standalone chip now lands on `/docs/standalone/latest/`, while exact matches (`latest`↔`latest`, `main`↔`main`) are preserved in both directions. Sections with an `externalURL` are unaffected (their href is overridden after this resolution), and the row only renders for OSS-shape sites, so the enterprise hub is untouched.
+
+---
+
 ## [v0.1.1] — 2026-06-02
 
 ### Table of contents (TOC)
