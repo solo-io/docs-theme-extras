@@ -416,6 +416,22 @@ A version-gated image variant (only renders on v2 after remap) — uses `reuse-i
 
 {{< version include-if="v2" >}}{{< reuse-image src="img/test/light.svg" srcDark="img/test/dark.svg" alt="MARKER_VERSIONED_IMAGE. v2-only image." caption="Visible only on v2." width="160" >}}{{< /version >}}
 
+### Figure inside a conditional-text block (mixed block content)
+
+A build-gated section that mixes a code fence, a bullet, and a `reuse-image` figure inside one `conditional-text` block — the kgateway operations/debug "Debug your gateway setup" shape. `reuse-image` emits raw block HTML (a `div` wrapping a `figure` and `img`); this case pins that it renders as a real `figure` element on the matching build rather than leaking as escaped `&lt;div&gt;` text. The markdown-leaks scan's `escaped-html` rule fails the build if a figure here ever regresses to escaped tags.
+
+{{% conditional-text include-if="test" %}}
+Port-forward the proxy admin interface:
+
+```sh
+kubectl port-forward deploy/test -n marker-test 19000
+```
+
+* [http://localhost:19000/](http://localhost:19000/)
+
+{{< reuse-image src="img/test/light.svg" srcDark="img/test/dark.svg" alt="MARKER_FIGURE_IN_CONDITIONAL. Figure inside a conditional-text block." caption="A figure rendered inside a conditional-text block." width="160" >}}
+{{% /conditional-text %}}
+
 ## Steps
 
 The Hextra `steps` shortcode wraps an H3-headed sequence in a styled left-border container with CSS-counter step numbers. Tests can assert the `.hextra-steps` wrapper and that each step's heading and body are present.

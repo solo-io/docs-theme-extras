@@ -237,6 +237,59 @@ test.describe("findMarkdownLeaks helper", () => {
     expect(fences[0].match.startsWith("\`\`\`")).toBe(true);
   });
 
+  test("flags escaped block-HTML that leaked into body text", () => {
+    // The kgateway operations/debug figure leak: a `reuse-image` placed
+    // inside a `{{% conditional-text %}}` block renders through
+    // RenderString in inline mode, which HTML-escapes the emitted
+    // `<div><figure><img>` instead of passing it through. The reader sees
+    // literal escaped tags. Note the attribute quotes are also entity-
+    // escaped (`&quot;`), so the attribute-stripper leaves the tag intact.
+    const html = `
+      <p>&lt;div style=&quot;text-align: center;&quot; class=&quot;toggle-dark&quot;&gt;&lt;figure&gt;&lt;img src=&quot;/img/x.png&quot;/&gt; &lt;figcaption&gt;Figure: x.&lt;/figcaption&gt;&lt;/figure&gt;&lt;/div&gt;</p>
+    `;
+    const leaks = findMarkdownLeaks(html);
+    const escaped = leaks.filter((l) => l.kind === "escaped-html");
+    expect(escaped.length).toBeGreaterThan(0);
+    expect(escaped[0].match).toContain("&lt;div");
+  });
+
+  test("escaped-html flags both the opening and closing tag forms", () => {
+    const cases = [
+      `<p>&lt;figure&gt;</p>`,
+      `<p>&lt;/figure&gt;</p>`,
+      `<p>&lt;table class=&quot;x&quot;&gt;</p>`,
+      `<p>&lt;img src=&quot;/x.png&quot;/&gt;</p>`,
+    ];
+    for (const html of cases) {
+      const leaks = findMarkdownLeaks(html);
+      expect(
+        leaks.filter((l) => l.kind === "escaped-html").length,
+        `case: ${html}`,
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  test("does NOT flag escaped HTML inside <code> (authors documenting tags)", () => {
+    // Prose that documents an HTML tag uses a backtick span, which becomes
+    // <code> and is stripped before the scan. This is the common false-
+    // positive source the curated tag list + code-stripping guards against.
+    const html = `
+      <p>Wrap the image in a <code>&lt;div&gt;</code> with <code>&lt;figure&gt;</code> inside.</p>
+    `;
+    expect(findMarkdownLeaks(html)).toEqual([]);
+  });
+
+  test("does NOT flag escaped yaml/CLI placeholders like &lt;name&gt;", () => {
+    // `<name>` / `<namespace>` placeholders in shell snippets escape to
+    // `&lt;name&gt;` but render inside <pre><code> (stripped), and the
+    // names aren't in the curated structural-tag list anyway.
+    const html = `
+      <pre><code>kubectl get httproute &lt;name&gt; -n &lt;namespace&gt;</code></pre>
+      <p>Replace &lt;cluster_region&gt; with your region.</p>
+    `;
+    expect(findMarkdownLeaks(html)).toEqual([]);
+  });
+
   test("does NOT flag triple-backticks inside <pre> or <code>", () => {
     // Real fences become Chroma <pre><code> blocks; <pre>/<code> regions
     // are stripped before the scan, so the backticks inside them are

@@ -14,7 +14,8 @@ export type LeakKind =
   | "table-pipe"
   | "shortcode-delim"
   | "empty-list-item"
-  | "code-fence";
+  | "code-fence"
+  | "escaped-html";
 
 export type Leak = {
   kind: LeakKind;
@@ -147,6 +148,27 @@ const EMPTY_LI = /<ol\b[^>]*\bstart\b[^>]*>\s*<li\b[^>]*>\s*<\/li>\s*<\/ol>/g;
 // fence). Captures up to 120 chars after the opener for triage context.
 const CODE_FENCE = /```[^`\n]{0,120}/g;
 
+// Escaped block-HTML that survived into rendered body text. When a shortcode
+// emits raw HTML (e.g. `reuse-image` → `<div><figure><img>…`) and that output
+// is fed back through a markdown render in INLINE display mode, Goldmark
+// HTML-escapes the tags instead of passing them through — so the page shows
+// literal `&lt;div&gt;&lt;figure&gt;…` text where an image should be. The
+// canonical source is a `reuse-image` placed inside a `{{% conditional-text %}}`
+// block, whose `RenderString (dict "display" "inline")` escapes the block HTML
+// (the kgateway operations/debug "Debug your gateway setup" figure leak).
+//
+// Restricted to a curated set of structural/embed tag names that the theme's
+// own shortcodes emit (div, figure, img, svg, table parts, …) so a positive
+// match is almost always a real shortcode-output-escaping bug, not an author
+// legitimately writing about an HTML tag in prose. Matches both the opening
+// and closing (`&lt;/figure&gt;`) forms. The attributes inside the escaped tag
+// use `&quot;` rather than real `"`, so `stripExpectedMarkdown`'s `="..."`
+// attribute strip doesn't touch them — the escaped tag stays fully visible to
+// this scan. Tags an author would legitimately discuss in prose almost always
+// sit inside `<code>` (backtick spans), which the stripper removes first.
+const ESCAPED_HTML =
+  /&lt;\/?(?:div|figure|figcaption|img|svg|table|thead|tbody|tr|td|th|section|aside|details|summary|br)\b[^]{0,80}?&gt;/g;
+
 function clamp(s: string, n: number): string {
   if (s.length <= n) return s;
   return s.slice(0, n - 1) + "…";
@@ -192,6 +214,7 @@ export function findMarkdownLeaks(
   scan(SHORTCODE_CLOSE, "shortcode-delim");
   scan(EMPTY_LI, "empty-list-item");
   scan(CODE_FENCE, "code-fence");
+  scan(ESCAPED_HTML, "escaped-html");
 
   return leaks;
 }
