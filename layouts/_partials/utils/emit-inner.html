@@ -1,0 +1,33 @@
+{{- /* emit-inner — emit strategy for the version shortcode. Picks one of three
+       modes based on the shape flags from utils/inner-shape.
+
+       Input dict:
+         .page           — the Page (for RenderString)
+         .rawInner       — the original .Inner (template.HTML; emitted raw)
+         .inner          — the dedented inner (fed to RenderString)
+         .isTrailingStep, .isRowContent, .hasMarkdown, .isBlock — shape flags
+
+       Modes:
+         RAW    — when trailing-step / row-content / no-markdown: emit .rawInner
+                  unchanged (NOT safeHTML-wrapped) so the percent-form re-flow
+                  reaches Goldmark and merges into a parent list/table.
+         BLOCK  — when .isBlock: RenderString display:"block" (headings, fenced
+                  code, tables render correctly instead of escaping).
+         INLINE — otherwise: RenderString display:"inline".
+       BLOCK/INLINE output is flattened via utils/flatten-rendered and marked
+       safe. The raw-vs-safeHTML split is load-bearing — do not "simplify" it.
+
+       NOTE: this is version-only. The conditional-text shortcode deliberately
+       does NOT route through here — its body must render through RenderString
+       (raw-emitting a list/table body leaks as literal markdown on the rebase
+       re-render, which only rewrites version blocks to percent form, not
+       conditional-text). conditional-text shares only the detection regexes
+       (utils/has-markdown, utils/page-context), not this emit path. */ -}}
+{{- if or .isTrailingStep .isRowContent (not .hasMarkdown) -}}
+{{ .rawInner }}
+{{- else -}}
+  {{- $renderOpts := dict "display" "inline" -}}
+  {{- if .isBlock -}}{{- $renderOpts = dict "display" "block" -}}{{- end -}}
+  {{- $rendered_html := partial "utils/flatten-rendered.html" (.page.RenderString $renderOpts .inner) -}}
+  {{- $rendered_html | safeHTML -}}
+{{- end -}}

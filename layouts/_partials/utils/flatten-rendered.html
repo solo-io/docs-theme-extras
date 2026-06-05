@@ -1,0 +1,81 @@
+{{- /*
+  flatten-rendered — flatten rendered HTML to a single logical line so the
+  output doesn't break enclosing markdown structure (e.g. a numbered list)
+  when the calling shortcode lands inside a list item.
+
+  Input: the rendered HTML string from a Page.RenderString call (a shortcode
+         body or reuse'd snippet that's been turned into HTML).
+
+  Output: the same HTML with all newlines outside <script>/<style> blocks
+          replaced by the `&#10;` entity. The browser decodes the entity to
+          LF, so visible whitespace is preserved (and inside <pre>, LF still
+          renders as a line break). Goldmark, however, does not decode HTML
+          entities — so when this output is re-embedded in the surrounding
+          page markdown, no newline-based block rules trigger and the parent
+          list item's content continuation rule isn't violated.
+
+  Why <script>/<style> need special handling:
+    1. Their content is raw — browsers do NOT decode HTML entities inside
+       <script>/<style> bodies. An injected `&#10;` becomes literal text in
+       the JS/CSS source, and Hugo's `--minify` pipeline parses the body
+       and rejects it with "unexpected & in expression".
+    2. CommonMark HTML Block Type 1 only recognizes <script>/<style> when
+       the tag starts a line. After flatten, a mid-line <script> would get
+       parsed as inline-HTML-then-markdown — attribute values smart-quoted,
+       URLs auto-linked.
+
+  Fix: extract <script>/<style> blocks with placeholders, flatten the rest,
+  restore each block surrounded by real newlines so Goldmark sees them at
+  column 0 of their own logical line.
+
+  The partial emits its result directly (no `{{ return }}`) so callers
+  can pipe it through safeHTML in the conventional way.
+*/ -}}
+{{- $rendered := printf "%s" . -}}
+{{- /* Pre-collapse Hextra's <div class="hextra-code-copy-btn-container">…
+       </button></div> block to a single logical line before the global
+       \n → &#10; replace below. Hextra's codeblock-copy-button partial emits
+       multi-line HTML (one attribute per line); without this pre-pass the
+       global encoding turns each newline inside the opening <button> tag
+       into a &#10; entity between attributes. transform.HTMLToMarkdown (used
+       by docs-theme-extras copy-markdown.html to populate the page's
+       copy-md-source script) does not normalize those entities and falls
+       back to emitting the opening <button …> as raw text — visible as
+       garbled HTML in the Copy-as-Markdown / View as Markdown dialog.
+       Whitespace inside HTML tags is irrelevant to browsers, so collapsing
+       is safe. The strings.Contains guard skips the findRE scan when no
+       copy button is present (the common case). Same fix lives inline in
+       _shortcodes/tabs.html, which has its own \n → &#10; pass and doesn't
+       go through this partial. */ -}}
+{{- if strings.Contains $rendered "hextra-code-copy-btn-container" -}}
+  {{- range $btn := findRE `(?s)<div class="hextra-code-copy-btn-container[^"]*"[^>]*>.*?</button>\s*</div>` $rendered -}}
+    {{- $rendered = replace $rendered $btn (replaceRE `\s+` " " $btn) -}}
+  {{- end -}}
+{{- end -}}
+{{- /* Bypass the \n → &#10; replace below when the content contains a
+       Chroma-highlighted <pre> code block. Chroma emits a chain of
+       <span class="line">…</span>\n<span class="line">…</span> pairs;
+       smashing those newlines into &#10; entities turns the highlighted
+       code into an unreadable blob — and (worse) replaces every "\"
+       line-continuation marker with literal "</span>" text, because the
+       parent context's markdown parser then sees the now-inline `<pre>`
+       at a non-zero column, falls back to inline-HTML handling, and
+       applies CommonMark backslash-escape to `\<` inside the spans
+       (output: `&lt;`). Mirror the main-branch version.html bypass:
+       when <pre is present, emit the rendered HTML untouched (after the
+       copy-button collapse, which is safe for any context). */ -}}
+{{- if strings.Contains $rendered "<pre" -}}
+{{- $rendered | safeHTML -}}
+{{- else -}}
+{{- $protected := findRE `(?s)<(?:script|style)\b[^>]*>.*?</(?:script|style)>` $rendered -}}
+{{- range $i, $block := $protected -}}
+  {{- $placeholder := printf "__FLATTEN_PROTECT_%d__" $i -}}
+  {{- $rendered = replace $rendered $block $placeholder -}}
+{{- end -}}
+{{- $rendered = replace $rendered "\n" "&#10;" -}}
+{{- range $i, $block := $protected -}}
+  {{- $placeholder := printf "__FLATTEN_PROTECT_%d__" $i -}}
+  {{- $rendered = replace $rendered $placeholder (printf "\n%s\n" $block) -}}
+{{- end -}}
+{{- $rendered | safeHTML -}}
+{{- end -}}

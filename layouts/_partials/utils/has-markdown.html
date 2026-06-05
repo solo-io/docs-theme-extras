@@ -1,0 +1,26 @@
+{{- /* has-markdown — the inline-markdown heuristic shared by the version and
+       conditional-text shortcodes. Hugo doesn't expose whether a shortcode was
+       called in percent form (inner reparsed by Goldmark) or angle form (output
+       inserted opaquely), so both dispatch on whether .Inner carries markdown
+       that RenderString must process. Centralizing the regexes here keeps the
+       two shortcodes (and utils/inner-shape) from drifting.
+
+       Input:  the string to test (pass the raw .Inner or a dedented copy).
+       Output: bool — true when the string has **bold**, inline `code`, a
+               lowercase HTML tag, a bullet/numbered list marker at column 0-3,
+               or a [text](url) link. The HTML-tag branch requires a lowercase
+               tag name terminated by space / `/` / `>` so yaml placeholders
+               like <NAME> or <cluster2_region> don't read as markup. */ -}}
+{{- $s := . -}}
+{{- $hasMarkdown := false -}}
+{{- if findRE `\*\*|<(/?[a-z][a-z0-9]*[\s/>])` $s 1 -}}{{- $hasMarkdown = true -}}{{- end -}}
+{{- if not $hasMarkdown -}}
+  {{- if findRE "`" $s 1 -}}{{- $hasMarkdown = true -}}{{- end -}}
+{{- end -}}
+{{- if not $hasMarkdown -}}
+  {{- if findRE `(?m)^[ \t]{0,3}([*+\-][ \t]|[0-9]+\.[ \t])` $s 1 -}}{{- $hasMarkdown = true -}}{{- end -}}
+{{- end -}}
+{{- if not $hasMarkdown -}}
+  {{- if findRE `\[[^\]]*\]\(` $s 1 -}}{{- $hasMarkdown = true -}}{{- end -}}
+{{- end -}}
+{{- return $hasMarkdown -}}

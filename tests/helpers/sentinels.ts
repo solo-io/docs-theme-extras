@@ -149,4 +149,16 @@ export const CONDITIONAL_MARKERS = {
   // Conditional-gated card whose link= attribute is itself a nested
   // shortcode call. Title text carries the marker.
   nestedArgTitle: "COND_NESTED_ARG_TITLE",
+  // Direct-page block-content cases (test/v2/block-direct). A
+  // conditional-text body whose first line is a markdown heading can't be
+  // surfaced through reuse/rebase (Hugo's shortcode lexer fails extraction
+  // when the conref is re-rendered via RenderString), so these live on a
+  // page that drops the shortcode in directly. They pin that conditional-
+  // text renders block content (heading, table) and inline content, and
+  // honors the gate on the block path.
+  blockHeading: "COND_DIRECT_HEADING",
+  blockHeadingEmphasis: "COND_DIRECT_EMPHASIS",
+  blockTable: "COND_DIRECT_TABLE",
+  blockInline: "COND_DIRECT_INLINE",
+  blockExcluded: "COND_DIRECT_EXCLUDED",
 } as const;
