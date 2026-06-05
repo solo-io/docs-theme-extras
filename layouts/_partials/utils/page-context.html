@@ -1,0 +1,69 @@
+{{/*
+  page-context — return the rendering context for the current page.
+
+  Returns a dict with:
+    section   the section / product name (e.g. "kubernetes", "test")
+    version   the version slug for the page (e.g. "v2", "main")
+    condition the buildCondition string (drives `conditional-text`)
+    prefix    the URL prefix to prepend to relative paths in cards/links
+              (e.g. "/docs/kubernetes/v2", "/test/v2")
+
+  Dispatches on Site.Params.pageContextMode:
+
+    "siteParams" — derives from explicit Site.Params (folder, currentProduct,
+                   buildCondition, versions). Used by multi-product hubs:
+                   the host owns the "/<product>/" path prefix so it doesn't
+                   appear in Page.RelPermalink.
+
+    "url"        — parses Page.RelPermalink as /docs/<section>/<version>/...
+                   (fallback /docs/<version>/...). Used by single-site repos
+                   where the URL itself encodes section and version.
+
+  Auto-detection: if pageContextMode isn't set, the partial picks "siteParams"
+  when Site.Params.folder is set (signals multi-product hub config) and "url"
+  otherwise. Set the mode explicitly to override.
+*/}}
+{{- $mode := .Site.Params.pageContextMode -}}
+{{- if not $mode -}}
+  {{- if .Site.Params.folder -}}
+    {{- $mode = "siteParams" -}}
+  {{- else -}}
+    {{- $mode = "url" -}}
+  {{- end -}}
+{{- end -}}
+{{- $section := "" -}}
+{{- $version := "" -}}
+{{- $condition := "" -}}
+{{- $prefix := "" -}}
+
+{{- if eq $mode "siteParams" -}}
+  {{- $folder := .Site.Params.folder | default "" -}}
+  {{- $sectionUrl := .Page.FirstSection.RelPermalink -}}
+  {{- $version = trim (replace $sectionUrl (printf "/%s" $folder) "") "/" -}}
+  {{- $section = $folder -}}
+  {{- $condition = .Site.Params.buildCondition | default "" -}}
+  {{- if and $folder $version -}}
+    {{- $prefix = printf "/%s/%s" $folder $version -}}
+  {{- else if $folder -}}
+    {{- $prefix = printf "/%s" $folder -}}
+  {{- end -}}
+{{- else -}}
+  {{/* url mode */}}
+  {{- $rel := trim .Page.RelPermalink "/" -}}
+  {{- $parts := split $rel "/" -}}
+  {{- if and (ge (len $parts) 2) (eq (index $parts 0) "docs") -}}
+    {{/* known section list — extend in a follow-up if/when more sections exist */}}
+    {{- $known := slice "kubernetes" "standalone" "envoy" "agentgateway" -}}
+    {{- if and (ge (len $parts) 3) (in $known (index $parts 1)) -}}
+      {{- $section = index $parts 1 -}}
+      {{- $version = index $parts 2 -}}
+      {{- $condition = $section -}}
+      {{- $prefix = printf "/docs/%s/%s" $section $version -}}
+    {{- else -}}
+      {{- $version = index $parts 1 -}}
+      {{- $prefix = printf "/docs/%s" $version -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return dict "section" $section "version" $version "condition" $condition "prefix" $prefix -}}
