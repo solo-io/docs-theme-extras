@@ -33,6 +33,27 @@ test.describe("findMarkdownLeaks helper", () => {
     expect(leaks[0].match).toContain("[the docs](https://example.com)");
   });
 
+  test("flags the conditional-text-first-in-list ordering leak (release-notes shape)", () => {
+    // Regression guard for the reference/release-notes.md ordering trap.
+    // `conditional-text` renders its body inline-only, so a gated bullet
+    // placed AHEAD of the always-shown bullets in a list breaks the list and
+    // the gated `[Changelog](url)` survives as literal text instead of an <a>.
+    // The fix is ordering: keep the always-shown Upgrade-guide / Version-
+    // reference bullets first and the conditional-text bullet LAST. This test
+    // pins the scanner's ability to catch the leak if the ordering is undone.
+    // NOTE: this fires only because the leaked bullet carries a markdown link.
+    // A plain-text gated bullet placed first can break the list with no
+    // detectable leak — that case is not caught here (would need a source lint).
+    const html = `<ul>
+      <li>[Changelog](https://docs.solo.io/gloo-platform/main/reference/changelog/gloo-platform): A full list of changes.
+      <a href="/setup/upgrade/">Upgrade guide</a>: Steps to upgrade.</li>
+    </ul>`;
+    const leaks = findMarkdownLeaks(html);
+    const links = leaks.filter((l) => l.kind === "markdown-link");
+    expect(links.length).toBeGreaterThan(0);
+    expect(links[0].match).toContain("[Changelog]");
+  });
+
   test("does NOT flag markdown link inside <code> or <pre>", () => {
     const html = `
       <p>This works:</p>

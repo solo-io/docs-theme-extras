@@ -129,8 +129,8 @@ test.describe(`smoke: ${LABEL}`, () => {
   });
 
   test(`no <p> inside <pre> in any sampled page (${SAMPLE_LABEL})`, () => {
-    if (!target.shouldRun("shortcodeLeaks")) {
-      test.skip(true, "shortcodeLeaks check disabled in CONFIG");
+    if (!target.shouldRun("codeBlockIntegrity")) {
+      test.skip(true, "codeBlockIntegrity check disabled in CONFIG");
     }
     // A <p> inside a <pre> is never valid HTML. It is the structural
     // signature of the {{% tab %}} double-markdownify bug: markdownify called
@@ -166,8 +166,8 @@ test.describe(`smoke: ${LABEL}`, () => {
   });
 
   test(`no fragmented code block (orphaned hextra-code-block wrapper) in any sampled page (${SAMPLE_LABEL})`, () => {
-    if (!target.shouldRun("shortcodeLeaks")) {
-      test.skip(true, "shortcodeLeaks check disabled in CONFIG");
+    if (!target.shouldRun("codeBlockIntegrity")) {
+      test.skip(true, "codeBlockIntegrity check disabled in CONFIG");
     }
     // Structural signature of a fenced code block FRAGMENTING: the hextra
     // code-block wrapper `<div class="hextra-code-block …">` is immediately
