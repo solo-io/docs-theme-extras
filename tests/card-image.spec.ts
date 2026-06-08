@@ -20,7 +20,7 @@ import { target } from "./helpers/target";
 //   ASSET    image="assets/img/test/light.svg"  → pipeline, must publish
 //   NOPREFIX image="img/test/light.svg"         → pipeline, must publish
 //   ROOTED   image="/test/images/logos/..."     → verbatim, real static file
-//   HTTP     image="https://.../x.png"          → verbatim external URL
+//   HTTP     image="https://avatars.githubusercontent.com/..." → verbatim external URL
 //
 // This is a static spec: it reads the built HTML from disk and, for the
 // pipeline forms, asserts the resolved src maps to a file that actually
@@ -130,8 +130,11 @@ test.describe("card shortcode image attribute", () => {
       );
       expect(card, `no HTTP card in ${label}`).toBeDefined();
       // External URLs must NOT be sent through resources.Get — left as-is.
+      // Uses a real, public, stable image (the solo-io org avatar) so a manual
+      // visual scan of the fixture doesn't show a broken image and read as a
+      // defect; the spec itself only checks the literal src, never fetches it.
       expect(card!.imageSrc).toBe(
-        "https://raw.githubusercontent.com/solo-io/docs/main/does-not-need-to-exist.png",
+        "https://avatars.githubusercontent.com/u/26319377?v=4",
       );
     });
 
