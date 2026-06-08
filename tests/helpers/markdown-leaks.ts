@@ -15,7 +15,9 @@ export type LeakKind =
   | "shortcode-delim"
   | "empty-list-item"
   | "code-fence"
-  | "escaped-html";
+  | "escaped-html"
+  | "raw-bold"
+  | "shortcode-placeholder";
 
 export type Leak = {
   kind: LeakKind;
@@ -166,8 +168,31 @@ const CODE_FENCE = /```[^`\n]{0,120}/g;
 // attribute strip doesn't touch them — the escaped tag stays fully visible to
 // this scan. Tags an author would legitimately discuss in prose almost always
 // sit inside `<code>` (backtick spans), which the stripper removes first.
+// The tag set covers both the theme's emitted structural/embed tags (div,
+// figure, img, svg, table parts, …) and the inline/block tags that a nested
+// `{{< reuse >}}` renders (code, a, span, p, list tags, headings) — the
+// canonical case is a conditional-text block escaping a nested reuse's
+// `<code>`/`<a>` to `&lt;code&gt;`/`&lt;a&gt;` (the applyToRoutes / api-key
+// cell leak). Each tag name is `\b`-bounded so `&lt;path&gt;` / `&lt;article&gt;`
+// don't trip `p` / `a`. An author legitimately writing about a tag in prose
+// almost always wraps it in backticks (`<code>`), which the stripper removes.
 const ESCAPED_HTML =
-  /&lt;\/?(?:div|figure|figcaption|img|svg|table|thead|tbody|tr|td|th|section|aside|details|summary|br)\b[^]{0,80}?&gt;/g;
+  /&lt;\/?(?:div|span|p|ol|ul|li|blockquote|a|code|pre|figure|figcaption|img|svg|table|thead|tbody|tr|td|th|section|aside|details|summary|br|h[1-6])\b[^]{0,80}?&gt;/g;
+
+// Unrendered `**bold**` that survived into visible body text. The canonical
+// source is a list step whose content was emitted multi-line by a reuse/
+// shortcode (the `<pre>` flatten bypass), breaking the parent list so the
+// FOLLOWING step's `**Bold**` lead-in renders as literal text (the
+// fault-injection `**Abort**` and insights `**Dashboard**` leaks). First char
+// after `**` must be non-space/non-star so prose like "rate ** 2" isn't hit;
+// bounded to 60 inner chars to stay on one logical run.
+const RAW_BOLD = /\*\*[^\s*][^*\n]{0,60}\*\*/g;
+
+// Hugo's internal shortcode placeholder token. It only ever appears in output
+// when a shortcode failed to be replaced (a render/ordering bug), so any
+// occurrence in visible HTML is a real leak. Case-insensitive: Hugo has used
+// both upper- and lower-case forms across versions.
+const SHORTCODE_PLACEHOLDER = /hahahugoshortcode[a-z0-9]*/gi;
 
 function clamp(s: string, n: number): string {
   if (s.length <= n) return s;
@@ -212,9 +237,11 @@ export function findMarkdownLeaks(
   scan(TABLE_PIPE, "table-pipe");
   scan(SHORTCODE_OPEN, "shortcode-delim");
   scan(SHORTCODE_CLOSE, "shortcode-delim");
+  scan(SHORTCODE_PLACEHOLDER, "shortcode-placeholder");
   scan(EMPTY_LI, "empty-list-item");
   scan(CODE_FENCE, "code-fence");
   scan(ESCAPED_HTML, "escaped-html");
+  scan(RAW_BOLD, "raw-bold");
 
   return leaks;
 }

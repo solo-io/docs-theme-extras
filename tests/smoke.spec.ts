@@ -22,9 +22,14 @@ const PRODUCT = process.env.SMOKE_PRODUCT;
 const SCAN_ROOT = PRODUCT ? path.join(target.builtRoot, PRODUCT) : target.builtRoot;
 const LABEL = PRODUCT ?? target.name;
 const ENABLED = target.shouldRun("smoke");
-// 0 means unlimited — walks every HTML file under SCAN_ROOT.
-const MAX_FILES = target.smoke.maxFiles;
-const SAMPLE_LABEL = MAX_FILES === 0 ? "all pages" : `sample of ${MAX_FILES}`;
+// The checks below are all cheap file-read + regex scans, so they ALWAYS walk
+// every page (0 = unlimited in collectHtml). Sampling them would only create
+// coverage holes — a leak on an unsampled page would ship. The `smoke.maxFiles`
+// cap exists for the EXPENSIVE browser crawl (console-errors.spec.ts), not here;
+// these file scans are the single source of leak coverage across real product
+// content (this is the guard that replaced the standalone Python leak_scan.py).
+const MAX_FILES = 0;
+const SAMPLE_LABEL = "all pages";
 
 test.describe(`smoke: ${LABEL}`, () => {
   test.skip(!ENABLED, "smoke check disabled in CONFIG");
