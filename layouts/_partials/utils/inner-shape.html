@@ -1,0 +1,112 @@
+{{- /* inner-shape — shared shape detection for the version and conditional-text
+       shortcodes. Hugo doesn't expose whether a shortcode was called as
+       {{% %}} or {{< >}}, so both shortcodes dispatch on the SHAPE of .Inner
+       to pick an emit strategy. This partial centralizes that detection so the
+       regexes live in one place and can't drift between the two shortcodes.
+
+       Input:  the shortcode context (.) — only .Inner is read.
+       Output: a dict with
+         .isTrailingStep — first non-blank line is a list marker, OR last
+                           non-blank line is a bare orphan marker (raw-emit so
+                           the body re-flows into a parent list).
+         .inner          — .Inner, dedented for the non-trailing-step path
+                           (so deep list-item indentation doesn't trip
+                           CommonMark's 4-space code-block rule in RenderString).
+         .hasMarkdown    — has **, backticks, lowercase HTML tags, list
+                           markers, or [text](url) links.
+         .isBlock        — starts a heading / fenced code / table row at line
+                           start → needs display:"block" rendering.
+         .isRowContent   — every non-blank line is a pipe-delimited table row. */ -}}
+{{- $isTrailingStep := false -}}
+{{- $firstNonBlank := "" -}}
+{{- $lastNonBlank := "" -}}
+{{- range (split .Inner "\n") -}}
+  {{- if ne (trim . " \t") "" -}}
+    {{- if eq $firstNonBlank "" -}}
+      {{- $firstNonBlank = . -}}
+    {{- end -}}
+    {{- $lastNonBlank = . -}}
+  {{- end -}}
+{{- end -}}
+{{- /* Trailing-step detection — two independent triggers, matching the proven
+       docs-hub override (which gates NEITHER on the presence of a fence/heading).
+
+       1. FIRST-LINE marker: the body opens on a `N.` / `-` list marker, so it
+          continues a parent list and must raw-emit to re-flow into that list.
+       2. LAST-LINE bare-orphan marker: a trailing `3.` where the version closes
+          on the next step's marker (the docs-hub extauth-opa-sidecar.md shape:
+          para+bullets+fence handing off to the next list item).
+
+       NOTE: an earlier centralization pass gated trigger 1 on a "has heading /
+       fenced code" guard to fix the kgw session-persistence leak (an angle-form
+       {{< version >}} wrapping a list step + yaml fence that raw-emit leaked).
+       That guard REGRESSED the docs hub: a percent-form version block glued to a
+       closing fence (e.g. ` ```{{% version %}} ` in jwt-2x-provider-header.md,
+       and ~70 istio/gme pages) was forced to render-as-block, so its <ol> HTML
+       glued straight after the ` ``` ` with no newline and the fence never
+       closed — leaking ` ```<ol start="3"> ` into the code block. The guard was
+       a stand-in for "angle vs percent", a distinction Hugo doesn't expose here;
+       reuse.html/rebase.html already rewrite angle→percent for these shapes, so
+       the guard is removed to restore the override's behavior. Both consumers
+       (docs hub + kgw-oss) verified leak-free without it. */ -}}
+{{- if findRE `^[ \t]{0,3}([*+\-][ \t]|[0-9]+\.[ \t])` $firstNonBlank 1 -}}
+  {{- $isTrailingStep = true -}}
+{{- end -}}
+{{- if findRE `^[ \t]{0,3}([*+\-]|[0-9]+\.)[ \t]*$` $lastNonBlank 1 -}}
+  {{- $isTrailingStep = true -}}
+{{- end -}}
+
+{{- $inner := .Inner -}}
+{{- if not $isTrailingStep -}}
+  {{- $lines := split $inner "\n" -}}
+  {{- $minIndent := -1 -}}
+  {{- range $lines -}}
+    {{- $trimmed := strings.TrimLeft " \t" . -}}
+    {{- if ne $trimmed "" -}}
+      {{- $thisIndent := sub (len .) (len $trimmed) -}}
+      {{- if or (eq $minIndent -1) (lt $thisIndent $minIndent) -}}
+        {{- $minIndent = $thisIndent -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if gt $minIndent 0 -}}
+    {{- $dedented := slice -}}
+    {{- range $lines -}}
+      {{- if ge (len .) $minIndent -}}
+        {{- $dedented = $dedented | append (substr . $minIndent) -}}
+      {{- else -}}
+        {{- $dedented = $dedented | append . -}}
+      {{- end -}}
+    {{- end -}}
+    {{- $inner = delimit $dedented "\n" -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* hasMarkdown via the shared utils/has-markdown partial (same regexes the
+       conditional-text shortcode uses) so the heuristic can't drift. Computed
+       on the dedented $inner, matching the pre-refactor version.html. */ -}}
+{{- $hasMarkdown := partial "utils/has-markdown.html" $inner -}}
+
+{{- $isBlock := false -}}
+{{- if findRE "(?m)^[ \\t]{0,3}(#{1,6}\\s|`{3}|\\|[^\\n]*\\|)" $inner 1 -}}
+  {{- $isBlock = true -}}
+{{- end -}}
+
+{{- $isRowContent := false -}}
+{{- $hasAnyRow := false -}}
+{{- $allLinesAreRows := true -}}
+{{- range (split $inner "\n") -}}
+  {{- $t := trim . " \t" -}}
+  {{- if ne $t "" -}}
+    {{- if and (hasPrefix $t "|") (hasSuffix $t "|") -}}
+      {{- $hasAnyRow = true -}}
+    {{- else -}}
+      {{- $allLinesAreRows = false -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- if and $hasAnyRow $allLinesAreRows -}}
+  {{- $isRowContent = true -}}
+{{- end -}}
+
+{{- return (dict "isTrailingStep" $isTrailingStep "inner" $inner "hasMarkdown" $hasMarkdown "isBlock" $isBlock "isRowContent" $isRowContent) -}}

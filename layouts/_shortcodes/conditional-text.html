@@ -1,76 +1,147 @@
-{{- /* Use the shared page-context partial so this shortcode works for both
-       URL conventions: multi-product hubs (condition from Site.Params.buildCondition)
-       and single-site repos that encode the section in the URL (condition derived
-       from the URL section). */ -}}
+{{- /* conditional-text — include or exclude .Inner based on the page's build
+       condition (resolved via utils/page-context for both multi-product-hub
+       and single-site URL conventions).
+
+       Hugo doesn't expose whether a shortcode was called in percent form or
+       angle form, so this dispatches on the SHAPE of .Inner to pick an emit
+       strategy. This is a faithful port of the docs-hub local override (the
+       proven, leak-free behavior) — an earlier centralization pass dropped the
+       trailing-step / table-row / dedent paths below, which regressed the docs
+       hub's heavy "gme vs gmg" conditional content (conditional-text blocks
+       that span a numbered-list step boundary rendered through reuse, breaking
+       the surrounding list and leaking the following fenced code block as raw
+       ```text```). Strategies:
+
+       - TRAILING-STEP (numbered-list marker at column 0-3 of .Inner): the
+         block continues a parent ordered list. Emit .Inner raw so Hugo
+         re-flows it through the surrounding markdown stream. RenderString
+         would produce a self-contained block that breaks the parent <ol>.
+       - TABLE-ROW (FIRST non-blank line starts with `|`): the block IS a
+         table-row fragment spliced into a surrounding table. Emit `.Inner`
+         directly as template.HTML (same as the trailing-step path) so the row
+         re-enters the markdown stream and merges after the `|---|` separator.
+         Do NOT stringify it via printf/strings.*: that coerces the shortcode
+         output (with its nested reuse/shortcode placeholders) to a plain
+         string, and a nested {{< reuse >}} in the cell then has its rendered
+         inline HTML (<code>, <a>) escaped to &lt;code&gt; (the api-key /
+         applyToRoutes "applyToDestinations" cell leak). No leading newline is
+         needed (the call sits on its own line after the separator); adding one,
+         or piping through safeHTML, breaks the merge and the row falls out as a
+         literal `<p>| … |`.
+       - NO-MARKDOWN body (plain text / yaml / shell, e.g. inside a fenced code
+         block): emit raw so RenderString doesn't mangle it (`#`→heading,
+         "true"→smart quotes, --→en-dash) and escape it inside the fence.
+       - EVERYTHING ELSE (inline/block markdown): dedent + RenderString(inline)
+         + flatten, preserving a leading/trailing space for mid-sentence use.
+
+       Shares the no-markdown heuristic (utils/has-markdown) and condition
+       resolution (utils/page-context) with the version shortcode so the two
+       can't drift. Does NOT route through utils/emit-inner: conditional-text
+       has no display:"block" path and its raw-emit set differs from version's. */ -}}
+
 {{- $ctx := partial "utils/page-context.html" . -}}
 {{- $condition := $ctx.condition -}}
 
-{{- /* No-markdown heuristic, mirrored from version.html. If .Inner has no
-       inline-formatting or list markers, RenderString would only damage it
-       (turning `#` into <h1>, "foo" into curly quotes, -- into &ndash;,
-       plain text into HTML-escaped angle text when the shortcode body
-       lands inside a fenced code block). Emit raw in that case. The
-       HTML-tag regex requires a lowercase tag name terminated by
-       space/`/`/`>` so yaml placeholders like <cluster2_region> and
-       <NAME> don't trigger a false positive. */ -}}
-{{- $hasMarkdown := false -}}
-{{- if findRE `\*\*|<(/?[a-z][a-z0-9]*[\s/>])` .Inner 1 -}}{{- $hasMarkdown = true -}}{{- end -}}
-{{- if not $hasMarkdown -}}
-  {{- if findRE "`" .Inner 1 -}}{{- $hasMarkdown = true -}}{{- end -}}
+{{- /* Trailing-step: .Inner continues a parent ordered list. */ -}}
+{{- $isTrailingStep := false -}}
+{{- if findRE `(?m)^[ \t]{0,3}[0-9]+\.\s+` .Inner 1 -}}
+  {{- $isTrailingStep = true -}}
 {{- end -}}
-{{- if not $hasMarkdown -}}
-  {{- if findRE `(?m)^[ \t]{0,3}([*+\-][ \t]|[0-9]+\.[ \t])` .Inner 1 -}}{{- $hasMarkdown = true -}}{{- end -}}
+
+{{- /* Table-row: a body whose FIRST non-blank line is a `|`-delimited row, i.e.
+       the block IS a table-row fragment (a conditional cell/row spliced into a
+       surrounding table). Raw emit (with one leading newline) preserves the line
+       structure so Goldmark still recognizes the `|---|---|` separator and parses
+       the rows into the table.
+
+       Must anchor on the FIRST non-blank line, not "any line contains a pipe":
+       a numbered-list block whose steps happen to contain a markdown table (e.g.
+       a "Setting | Description" review table inside step 2) is a LIST, not a
+       table row. Letting isTableRow win there routes the whole list through the
+       printf table-row path, and a later {{< reuse >}} in that block then has its
+       rendered inline HTML (<code>, <a>) escaped to &lt;code&gt; — the
+       retry-timeout / mirror / rate-limit leak. Such a block is a trailing step
+       and must raw-emit the whole body via {{ .Inner }} instead. */ -}}
+{{- $firstNonBlank := "" -}}
+{{- range (split .Inner "\n") -}}
+  {{- if and (eq $firstNonBlank "") (ne (trim . " \t") "") -}}
+    {{- $firstNonBlank = . -}}
+  {{- end -}}
 {{- end -}}
-{{- if not $hasMarkdown -}}
-  {{- if findRE `\[[^\]]*\]\(` .Inner 1 -}}{{- $hasMarkdown = true -}}{{- end -}}
+{{- $isTableRow := false -}}
+{{- if findRE `^[ \t]{0,3}\|` $firstNonBlank 1 -}}
+  {{- $isTableRow = true -}}
 {{- end -}}
+
+{{- /* Dedent .Inner for the RenderString path so block content at deep
+       list-item indentation doesn't trip CommonMark's "4 spaces = code
+       block" rule. Skipped for the trailing-step raw path. */ -}}
+{{- $inner := .Inner -}}
+{{- if not $isTrailingStep -}}
+  {{- $lines := split $inner "\n" -}}
+  {{- $minIndent := -1 -}}
+  {{- range $lines -}}
+    {{- $trimmed := strings.TrimLeft " \t" . -}}
+    {{- if ne $trimmed "" -}}
+      {{- $thisIndent := sub (len .) (len $trimmed) -}}
+      {{- if or (eq $minIndent -1) (lt $thisIndent $minIndent) -}}
+        {{- $minIndent = $thisIndent -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if gt $minIndent 0 -}}
+    {{- $dedented := slice -}}
+    {{- range $lines -}}
+      {{- if ge (len .) $minIndent -}}
+        {{- $dedented = $dedented | append (substr . $minIndent) -}}
+      {{- else -}}
+        {{- $dedented = $dedented | append . -}}
+      {{- end -}}
+    {{- end -}}
+    {{- $inner = delimit $dedented "\n" -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* No-markdown heuristic on the dedented $inner (shared with version). */ -}}
+{{- $hasMarkdown := partial "utils/has-markdown.html" $inner -}}
 
 {{- if ne $condition "" -}}
+  {{- $include := .Get "include-if" | default "" -}}
+  {{- $include_if := split $include "," -}}
+  {{- $exclude := .Get "exclude-if" -}}
+  {{- $exclude_if := split $exclude "," -}}
 
-    <!-- Get the parameters from the shortcode invocation and lowercase them.
-    TODO: to enable multiple conditions, we could accept comma-separated lists and split them -->
-    {{- $include := .Get "include-if" | default "" -}}
-    {{- $include_if := split $include "," -}}
-    {{- $exclude := .Get "exclude-if" -}}
-    {{- $exclude_if := split $exclude "," -}}
+  {{- if and (in $include_if $condition) (in $exclude_if $condition) -}}
+    {{- errorf "Build condition %q appears in both include-if and exclude-if parameters of conditional-text shortcode on page %s" $condition .Position -}}
+  {{- end -}}
 
-    {{- if and (in $include_if $condition) (in $exclude_if $condition) -}}
-        <!-- condition appears in both parameters -->
-        {{- errorf "Build condition %q appears in both include-if and exclude-if parameters of conditional-txt shortcode on page %s" $condition .Position -}}
-    {{- end -}}
-
-    {{- if isset $.Params "include-if" -}}
-        <!-- WARNING substring matches are matches as well! That means, if include-if="foobar", and buildcondition is "foo", you have a match!-->
-        {{- if in $include_if $condition -}}
-            {{- if not $hasMarkdown -}}
+  {{- if isset $.Params "include-if" -}}
+    {{- if in $include_if $condition -}}
+      {{- if $isTableRow -}}
 {{ $.Inner }}
-            {{- else -}}
-<!-- Do not indent the next Inner line, because the inner becomes a blockquote if the conditional-text is nested in another shortcode  -->
-{{- $rendered := $.Page.RenderString (dict "display" "inline") $.Inner -}}
-{{- if hasPrefix $.Inner " " }}{{ " " | safeHTML }}{{ end -}}
-{{- $rendered | safeHTML -}}
-{{- if hasSuffix $.Inner " " }}{{ " " | safeHTML }}{{ end -}}
-            {{- end -}}
-        {{- else -}}
-        {{- end -}}
-    {{- else -}}
-
-        {{- if isset $.Params "exclude-if" -}}
-            <!-- WARNING substring matches are matches as well! That means, if exclude-if="foobar", and buildcondition is "foo", you have a match!-->
-            {{- if in $exclude_if $condition -}}
-            {{- else -}}
-                {{- if not $hasMarkdown -}}
+      {{- else if or $isTrailingStep (not $hasMarkdown) -}}
 {{ $.Inner }}
-                {{- else -}}
-<!-- Do not indent the next Inner line, because the inner becomes a blockquote if the conditional-text is nested in another shortcode  -->
-{{- $rendered := $.Page.RenderString (dict "display" "inline") $.Inner -}}
-{{- if hasPrefix $.Inner " " }}{{ " " | safeHTML }}{{ end -}}
-{{- $rendered | safeHTML -}}
-{{- if hasSuffix $.Inner " " }}{{ " " | safeHTML }}{{ end -}}
-                {{- end -}}
-            {{- end -}}
-        {{- end -}}
-
+      {{- else -}}
+        {{- $rendered_html := $.Page.RenderString (dict "display" "inline") $inner -}}
+        {{- $rendered_html = partial "utils/flatten-rendered.html" $rendered_html -}}
+        {{- if hasPrefix $.Inner " " }}{{ " " | safeHTML }}{{ end -}}
+        {{- $rendered_html | safeHTML -}}
+        {{- if hasSuffix $.Inner " " }}{{ " " | safeHTML }}{{ end -}}
+      {{- end -}}
     {{- end -}}
-
+  {{- else if isset $.Params "exclude-if" -}}
+    {{- if not (in $exclude_if $condition) -}}
+      {{- if $isTableRow -}}
+{{ $.Inner }}
+      {{- else if or $isTrailingStep (not $hasMarkdown) -}}
+{{ $.Inner }}
+      {{- else -}}
+        {{- $rendered_html := $.Page.RenderString (dict "display" "inline") $inner -}}
+        {{- $rendered_html = partial "utils/flatten-rendered.html" $rendered_html -}}
+        {{- if hasPrefix $.Inner " " }}{{ " " | safeHTML }}{{ end -}}
+        {{- $rendered_html | safeHTML -}}
+        {{- if hasSuffix $.Inner " " }}{{ " " | safeHTML }}{{ end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
 {{- end -}}

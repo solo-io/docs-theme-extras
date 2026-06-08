@@ -33,6 +33,27 @@ test.describe("findMarkdownLeaks helper", () => {
     expect(leaks[0].match).toContain("[the docs](https://example.com)");
   });
 
+  test("flags the conditional-text-first-in-list ordering leak (release-notes shape)", () => {
+    // Regression guard for the reference/release-notes.md ordering trap.
+    // `conditional-text` renders its body inline-only, so a gated bullet
+    // placed AHEAD of the always-shown bullets in a list breaks the list and
+    // the gated `[Changelog](url)` survives as literal text instead of an <a>.
+    // The fix is ordering: keep the always-shown Upgrade-guide / Version-
+    // reference bullets first and the conditional-text bullet LAST. This test
+    // pins the scanner's ability to catch the leak if the ordering is undone.
+    // NOTE: this fires only because the leaked bullet carries a markdown link.
+    // A plain-text gated bullet placed first can break the list with no
+    // detectable leak — that case is not caught here (would need a source lint).
+    const html = `<ul>
+      <li>[Changelog](https://docs.solo.io/gloo-platform/main/reference/changelog/gloo-platform): A full list of changes.
+      <a href="/setup/upgrade/">Upgrade guide</a>: Steps to upgrade.</li>
+    </ul>`;
+    const leaks = findMarkdownLeaks(html);
+    const links = leaks.filter((l) => l.kind === "markdown-link");
+    expect(links.length).toBeGreaterThan(0);
+    expect(links[0].match).toContain("[Changelog]");
+  });
+
   test("does NOT flag markdown link inside <code> or <pre>", () => {
     const html = `
       <p>This works:</p>
@@ -301,6 +322,54 @@ echo hello
       <p>Plain prose.</p>
     `;
     expect(findMarkdownLeaks(html)).toEqual([]);
+  });
+
+  test("flags unrendered **bold** that leaked into body text", () => {
+    // The fault-injection / insights shape: a broken parent list drops the
+    // following step's bold lead-in as literal text.
+    const html = `<p>4. Verify the result.</p><p>**Abort**: requests return 418.</p>`;
+    const leaks = findMarkdownLeaks(html);
+    const bold = leaks.filter((l) => l.kind === "raw-bold");
+    expect(bold).toHaveLength(1);
+    expect(bold[0].match).toBe("**Abort**");
+  });
+
+  test("does NOT flag **bold** inside <code> or a stray ** in prose", () => {
+    const html = `
+      <p>Set <code>replicas: **2**</code> in the chart.</p>
+      <p>The rate is ** per second (two asterisks, not bold).</p>
+    `;
+    expect(findMarkdownLeaks(html).filter((l) => l.kind === "raw-bold")).toEqual(
+      [],
+    );
+  });
+
+  test("flags a leaked Hugo shortcode placeholder", () => {
+    const html = `<p>See HAHAHUGOSHORTCODE-0-HBHB for the value.</p>`;
+    const leaks = findMarkdownLeaks(html);
+    const ph = leaks.filter((l) => l.kind === "shortcode-placeholder");
+    expect(ph.length).toBeGreaterThan(0);
+  });
+
+  test("escaped-html flags nested-reuse code/anchor escapes (broadened set)", () => {
+    // A conditional-text block escaping a nested {{< reuse >}}'s inline HTML:
+    // &lt;code&gt; / &lt;a&gt; in visible body. These tags were NOT in the
+    // original structural-only set; the broadened set catches them.
+    const html = `<td>Set &lt;code&gt;applyToRoutes&lt;/code&gt; and see &lt;a href=&quot;/x&quot;&gt;docs&lt;/a&gt;.</td>`;
+    const kinds = findMarkdownLeaks(html)
+      .filter((l) => l.kind === "escaped-html")
+      .map((l) => l.match);
+    expect(kinds.some((m) => m.includes("&lt;code"))).toBe(true);
+    expect(kinds.some((m) => m.includes("&lt;a"))).toBe(true);
+  });
+
+  test("does NOT flag escaped &lt;path&gt; / &lt;article&gt; (word-boundary guard)", () => {
+    // `p` and `a` are in the tag set, but \b keeps them from matching longer
+    // words that merely start with those letters.
+    const html = `<p>The &lt;path&gt; element and &lt;article&gt; tag are CSS examples.</p>`;
+    expect(
+      findMarkdownLeaks(html).filter((l) => l.kind === "escaped-html"),
+    ).toEqual([]);
   });
 
   test("stripExpectedMarkdown preserves length (so offsets stay aligned)", () => {

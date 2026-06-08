@@ -47,15 +47,33 @@ const CHILD_TOPICS = [
 // section-index file doesn't exist on disk. If all drop, the for-loop
 // below generates zero tests and the spec is effectively a no-op for that
 // consumer.
+// block-direct is a v2-only page (block-content patterns placed directly on
+// the page, no reuse/rebase). It renders a section card on the v2 index only,
+// so it's appended per-version rather than added to the shared CHILD_TOPICS.
+const V2_ONLY_TOPICS = [
+  {
+    slug: "block-direct",
+    title: "Block Direct",
+    descriptionContains: "placed directly on the page",
+  },
+  {
+    slug: "cond-reuse-table",
+    title: "Cond Reuse Table",
+    descriptionContains: "with a nested reuse",
+  },
+];
+
 const sectionPages: SectionCheck[] = target.versions
   .map((v) => ({
     name: `${v} section index`,
     filePath: path.join(TEST_PRODUCT_ROOT, v, "index.html"),
-    expected: CHILD_TOPICS.map((t) => ({
-      href: `${BASE_URL}/${v}/${t.slug}/`,
-      title: t.title,
-      descriptionContains: t.descriptionContains,
-    })),
+    expected: [...CHILD_TOPICS, ...(v === "v2" ? V2_ONLY_TOPICS : [])].map(
+      (t) => ({
+        href: `${BASE_URL}/${v}/${t.slug}/`,
+        title: t.title,
+        descriptionContains: t.descriptionContains,
+      }),
+    ),
   }))
   .filter((s) => fs.existsSync(s.filePath));
 

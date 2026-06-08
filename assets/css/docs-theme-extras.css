@@ -1310,6 +1310,53 @@ details[open].hextra-search-other-versions > summary::before {
   :where(.dark, .dark *) .nav-container-blur { box-shadow: 0 0 0 1px #fff; }
 }
 
+/* ── Hextra tab buttons ─────────────────────────────────────────────────
+   Hextra v0.12.3's native tabs style their <button> toggles entirely with
+   `hx:` utilities that land in @layer utilities. A consumer whose local
+   Tailwind build emits its own (unlayered) Preflight — `button{padding:0;
+   margin:0}` and `*{border-width:0}` — overrides those layered utilities,
+   because unlayered declarations beat layered ones in the cascade. The
+   result: the tab bar collapses to plain run-together text with no padding,
+   spacing, or underline.
+
+   Re-assert the toggle styling here as plain, unlayered class rules so it
+   survives any consumer Preflight. The selected/hover accent uses
+   var(--theme-primary*) so it tracks the active brand layer. The panels
+   themselves are <div>s (not hit by the button reset) so Hextra's own
+   show/hide utilities still work — only the buttons need rescuing. */
+.hextra-tabs-toggle {
+  cursor: pointer;
+  padding: 0.5rem;
+  margin-right: 0.5rem;
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  background: none;
+  color: #4b5563;
+  transition: color 0.15s, border-color 0.15s;
+}
+.hextra-tabs-toggle:hover {
+  color: #000;
+  border-bottom-color: #d1d5db;
+}
+.hextra-tabs-toggle[data-state="selected"] {
+  color: var(--theme-primary);
+  border-bottom-color: var(--theme-primary);
+}
+.dark .hextra-tabs-toggle {
+  color: #d1d5db;
+}
+.dark .hextra-tabs-toggle:hover {
+  color: #fff;
+  border-bottom-color: #4b5563;
+}
+.dark .hextra-tabs-toggle[data-state="selected"] {
+  color: var(--theme-primary);
+  border-bottom-color: var(--theme-primary);
+}
+
 /* ── Breadcrumb ─────────────────────────────────────────────────────────
    Rendered by layouts/_partials/breadcrumb.html. The partial emits plain
    class hooks (no Tailwind utilities) so styling doesn't depend on

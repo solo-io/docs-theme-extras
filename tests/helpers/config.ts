@@ -32,6 +32,15 @@ export type Checks = {
   viewport: boolean;
   versioning: boolean;
   shortcodeStructure: boolean;
+  // Code-block integrity through the render pipeline: the smoke spec's
+  // "<p> inside <pre>" and "fragmented code block" checks. These catch the
+  // double-markdown-render corruption that the rebase/reuse/{{% tab %}} chain
+  // causes when a fenced block (or a fence containing `*`/blank lines, e.g.
+  // curl -v output) is rendered more than once. Separated from shortcodeLeaks
+  // so a consumer with a known architectural backlog of these can disable just
+  // these two checks while keeping the (docs-fixable) shortcode/markdown leak
+  // checks fatal.
+  codeBlockIntegrity: boolean;
   shortcodeArgs: boolean;
   includeForm: boolean;
   cascadeType: boolean;
@@ -100,6 +109,7 @@ const DEFAULT_CHECKS: Checks = {
   viewport: true,
   versioning: true,
   shortcodeStructure: true,
+  codeBlockIntegrity: true,
   shortcodeArgs: true,
   includeForm: true,
   cascadeType: true,
