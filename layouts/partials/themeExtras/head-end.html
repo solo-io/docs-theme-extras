@@ -226,19 +226,21 @@ document.addEventListener('DOMContentLoaded', function(){
      `<li data-sidebar-item>` carrying a `data-expanded` flag the server
      pre-set for ancestors of the current page. The chevron `<button>`
      toggles expansion without firing the link's navigation; preferences
-     persist in localStorage keyed by branch href.
+     persist in sessionStorage keyed by branch href.
 
-     Reload detection: a hard refresh clears saved state so the sidebar
-     resets to only the current page's ancestors (server-rendered). Normal
-     navigation between pages preserves manually expanded sections. */
+     sessionStorage (not localStorage) scopes the expanded set to a single
+     tab: a new tab starts clean and the state can't bleed across tabs. A
+     hard refresh additionally clears it so the sidebar resets to only the
+     current page's ancestors (server-rendered). Normal navigation between
+     pages within the same tab preserves manually expanded sections. */
   (function(){
     var STORAGE_KEY = 'solo-sidebar-expanded';
     function loadState(){
-      try { var raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : {}; }
+      try { var raw = sessionStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : {}; }
       catch(_) { return {}; }
     }
     function saveState(s){
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
+      try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
       catch(_) {}
     }
     function getKey(item){
@@ -260,7 +262,7 @@ document.addEventListener('DOMContentLoaded', function(){
     var navEntry = performance.getEntriesByType('navigation')[0];
     var isReload = navEntry && navEntry.type === 'reload';
     if (isReload) {
-      try { localStorage.removeItem(STORAGE_KEY); } catch(_) {}
+      try { sessionStorage.removeItem(STORAGE_KEY); } catch(_) {}
     }
 
     var state = isReload ? {} : loadState();
