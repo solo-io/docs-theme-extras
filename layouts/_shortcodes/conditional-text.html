@@ -73,6 +73,28 @@
   {{- $isTableRow = true -}}
 {{- end -}}
 
+{{- /* Full-table: a table-row body that ALSO contains a `|---|---|` delimiter
+       line is a SELF-CONTAINED table (header + delimiter + rows), not a bare
+       row fragment spliced into a table declared outside the block. The two
+       need opposite emit strategies:
+
+       - A row fragment must raw-emit (below) so it joins the surrounding
+         table's markdown stream.
+       - A self-contained table must be rendered to HTML here and emitted via
+         safeHTML. Raw-emitting it breaks in two ways: angle form ({{< >}})
+         bypasses markdown entirely, so the raw table never renders and leaks
+         as literal `| … |` text; and percent form ({{% %}}) nested inside
+         another RenderString (a reuse'd conref) reparses the raw table in a
+         context that escapes inline HTML in cells, so `<ul><li>` cells leak as
+         `&lt;ul&gt;`. Rendering here with display:block honors unsafe=true and
+         flatten-rendered keeps it on one logical line, so the table always
+         renders and cell HTML stays intact. Guards solo-io/docs about-databases
+         #byo-local and the angle-form portal/about table. */ -}}
+{{- $isFullTable := false -}}
+{{- if and $isTableRow (findRE `(?m)^[ \t]{0,3}\|?[ \t]*:?-+:?[ \t]*(\|[ \t]*:?-+:?[ \t]*)+\|?[ \t]*$` .Inner 1) -}}
+  {{- $isFullTable = true -}}
+{{- end -}}
+
 {{- /* Dedent .Inner for the RenderString path so block content at deep
        list-item indentation doesn't trip CommonMark's "4 spaces = code
        block" rule. Skipped for the trailing-step raw path. */ -}}
@@ -117,7 +139,15 @@
 
   {{- if isset $.Params "include-if" -}}
     {{- if in $include_if $condition -}}
-      {{- if $isTableRow -}}
+      {{- if $isFullTable -}}
+        {{- /* Self-contained table: render to HTML (display:block keeps cell
+               HTML, since unsafe=true) and flatten so angle form emits it
+               directly and percent form re-renders it as a single HTML block
+               instead of re-escaping the cells. */ -}}
+        {{- $rendered_html := $.Page.RenderString (dict "display" "block") $inner -}}
+        {{- $rendered_html = partial "utils/flatten-rendered.html" $rendered_html -}}
+        {{- $rendered_html | safeHTML -}}
+      {{- else if $isTableRow -}}
 {{ $.Inner }}
       {{- else if or $isTrailingStep (not $hasMarkdown) -}}
 {{ $.Inner }}
@@ -131,7 +161,15 @@
     {{- end -}}
   {{- else if isset $.Params "exclude-if" -}}
     {{- if not (in $exclude_if $condition) -}}
-      {{- if $isTableRow -}}
+      {{- if $isFullTable -}}
+        {{- /* Self-contained table: render to HTML (display:block keeps cell
+               HTML, since unsafe=true) and flatten so angle form emits it
+               directly and percent form re-renders it as a single HTML block
+               instead of re-escaping the cells. */ -}}
+        {{- $rendered_html := $.Page.RenderString (dict "display" "block") $inner -}}
+        {{- $rendered_html = partial "utils/flatten-rendered.html" $rendered_html -}}
+        {{- $rendered_html | safeHTML -}}
+      {{- else if $isTableRow -}}
 {{ $.Inner }}
       {{- else if or $isTrailingStep (not $hasMarkdown) -}}
 {{ $.Inner }}

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import fs from "node:fs";
 import path from "node:path";
 import { TEST_PRODUCT_ROOT, readFixture } from "./helpers/fixture";
 import { target } from "./helpers/target";
@@ -64,4 +65,77 @@ test.describe("conditional-text with a table + nested reuse (no inline-HTML esca
     // The `selector` cell must live inside a table cell.
     expect(html, "no <table> rendered on the page").toContain("<table");
   });
+});
+
+// ---------------------------------------------------------------------------
+// Regression guard for the docs-hub FULL-TABLE escaping bug
+// (gloo-mesh-enterprise about-databases #byo-local, solo-io/docs#2726 follow-up).
+//
+// A conditional-text block that wraps a WHOLE markdown table (header +
+// `|---|---|` delimiter + rows) — as opposed to a single appended row — must
+// keep inline HTML in its cells intact and render a real <table>. Two failure
+// modes existed in the docs LOCAL conditional-text override:
+//   - Case 3 (percent form, table reused via a conref): the raw-emitted table
+//     was reparsed in the nested reuse RenderString and `<ul><li>` sizing lists
+//     in cells leaked as escaped `&lt;ul&gt;` text.
+//   - Case 4 (angle form): angle output bypasses markdown, so a raw-emitted
+//     table never rendered at all — the whole table leaked as literal text and
+//     its cell `<ul>` escaped.
+// Fix: conditional-text detects a self-contained table ($isFullTable) and
+// renders it with RenderString(display:block) + flatten-rendered, so cell HTML
+// is preserved and the table always renders. The extras conditional-text emits
+// the table-row body as bare `{{ .Inner }}` and already renders these cleanly;
+// these cases guard BOTH the extras template and any consumer's local override.
+//
+// Unlike the Case 1/2 block above (which is extras-fixture-only because its
+// list/row shapes render differently under a consumer's local override), these
+// cases must hold on EVERY build that ships the fixture — that is the whole
+// point of guarding a consumer's override. They self-skip when the build
+// predates the fixture (markers absent) or on products that have no fixture.
+test.describe("conditional-text wrapping a full table (no HTML-list / table leak)", () => {
+  const pageExists = fs.existsSync(PAGE);
+  const html = pageExists ? visibleHtml() : "";
+
+  // Return the HTML of the section that starts at the <h2> preceding `marker`
+  // and ends at the next <h2> (or end of document), so a leak elsewhere on the
+  // page can't mask or falsely trip a per-case assertion.
+  function sectionFor(marker: string): string | null {
+    const i = html.indexOf(marker);
+    if (i < 0) return null;
+    const start = html.lastIndexOf("<h2", i);
+    const next = html.indexOf("<h2", i);
+    return html.slice(start < 0 ? 0 : start, next < 0 ? html.length : next);
+  }
+
+  for (const { name, marker, form } of [
+    { name: "Case 3 — percent form, table reused via conref", marker: "MARKER_HTMLLIST_CPU", form: "{{% %}}" },
+    { name: "Case 4 — angle form, table inline", marker: "MARKER_ANGLETABLE", form: "{{< >}}" },
+  ]) {
+    test(`${name}: cell <ul> stays real HTML and the table renders`, () => {
+      test.skip(!pageExists, "cond-reuse-table fixture not present in this build");
+      const section = sectionFor(marker);
+      test.skip(section === null, `fixture predates the full-table cases (${marker} absent)`);
+
+      // Leak symptom 1: the cell's <ul>/<li> escaped to literal &lt;ul&gt; text.
+      expect(
+        section,
+        `${form} conditional-text full table escaped a cell list to &lt;ul&gt; (inline HTML leaked as text)`,
+      ).not.toContain("&lt;ul&gt;");
+      expect(
+        section,
+        `${form} conditional-text full table dropped its cell <ul> (list did not render)`,
+      ).toContain("<ul>");
+
+      // Leak symptom 2: the whole markdown table leaked as literal pipes
+      // instead of rendering (angle-form failure mode).
+      expect(
+        section,
+        `${form} conditional-text full table did not render as a <table>`,
+      ).toContain("<table");
+      expect(
+        section,
+        `${form} conditional-text full table leaked as a literal \`| … |\` paragraph`,
+      ).not.toMatch(/<p>\s*\|/);
+    });
+  }
 });

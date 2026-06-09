@@ -27,3 +27,16 @@ text, and the table must still render.
 | ------- | ----------- |
 {{% conditional-text include-if="test" %}}| `selector` | {{< reuse "conrefs/test/cond-reuse-code.md" >}} |{{% /conditional-text %}}
 | `other` | A plain row. |
+
+## Case 3 reused conditional-text wrapping a full table with HTML list cells
+
+{{< reuse "conrefs/test/cond-table-htmllist.md" >}}
+
+## Case 4 angle-form conditional-text wrapping a full table
+
+{{< conditional-text include-if="test" >}}
+| Tier | MARKER_ANGLETABLE Notes |
+| --- | --- |
+| Small | Needs:<ul><li>one CPU</li><li>two GB</li></ul> |
+| Large | Plenty of capacity. |
+{{< /conditional-text >}}
