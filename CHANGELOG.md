@@ -15,6 +15,18 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [Unreleased]
+
+### Alerts
+
+- **Alert body text now renders at one size regardless of how the body was authored.** The global `.content p` and `#content > .content li` rules size block children to `1rem`, but a bare inline text node inside an alert fell back to the `.solo-alert` `0.9rem`, so the same alert looked like a different size depending on its body shape (markdown bullets vs literal `<ul>/<li>` HTML, vs a single inline sentence). The most visible case is two back-to-back alerts where the second one contains a list: the list-bearing alert rendered smaller than its plain neighbor. A new `.solo-alert-body, .solo-alert-body :where(p, ul, ol, li)` rule pins the body and its `p`/`ul`/`ol`/`li` children to `1rem`/`1.7` line-height so every alert matches. Example of the broken pattern (two consecutive alerts, list in the second): [Gloo Mesh Enterprise — LoadBalancerPolicy reference](https://docs.solo.io/gloo-mesh-enterprise/latest/reference/api/load_balancer_policy/#loadbalancerpolicyspec-config-consistenthashlb).
+
+### Conditional text
+
+- **`conditional-text` now keeps inline HTML intact when the block wraps a whole markdown table.** A `conditional-text` body that is a self-contained table (header + `|---|---|` delimiter + rows), as opposed to a single appended row, needs the opposite emit strategy from a row fragment: a row fragment must raw-emit so it joins the surrounding table's markdown stream, but a self-contained table must be rendered to HTML here and emitted via `safeHTML`. Raw-emitting a full table broke in two ways — angle form (`{{< >}}`) bypasses markdown entirely so the raw table never rendered and leaked as literal `| … |` text, and percent form (`{{% %}}`) nested inside another `RenderString` (a reuse'd conref) reparsed the table in a context that escapes inline HTML in cells, so `<ul><li>` sizing-list cells leaked as `&lt;ul&gt;`. A new `$isFullTable` check (a table-row body that *also* contains a delimiter line) routes these through `RenderString(display:"block")` + `flatten-rendered.html`, so the table always renders and cell HTML survives. New `fixture/assets/conrefs/test/cond-table-htmllist.md` fixture plus Case 3 (percent-form reused table) and Case 4 (angle-form table) in `cond-reuse-table.spec.ts` guard both the extras template and any consumer's local override. Example of the broken pattern (table cells with `<ul><li>` lists): [Gloo Mesh Enterprise — BYO external databases](https://docs.solo.io/gloo-mesh-enterprise/latest/setup/prod/databases/about-databases/#byo-external).
+
+---
+
 ## [v0.1.3] — 2026-06-08
 
 ### Version and conditional-text shortcodes (centralized)
