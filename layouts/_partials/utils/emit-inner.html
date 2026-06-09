@@ -5,12 +5,17 @@
          .page           — the Page (for RenderString)
          .rawInner       — the original .Inner (template.HTML; emitted raw)
          .inner          — the dedented inner (fed to RenderString)
-         .isTrailingStep, .isRowContent, .hasMarkdown, .isBlock — shape flags
+         .isTrailingStep, .isFencedBlock, .isRowContent, .hasMarkdown, .isBlock — shape flags
 
        Modes:
-         RAW    — when trailing-step / row-content / no-markdown: emit .rawInner
-                  unchanged (NOT safeHTML-wrapped) so the percent-form re-flow
-                  reaches Goldmark and merges into a parent list/table.
+         RAW    — when trailing-step / fenced-block / row-content / no-markdown:
+                  emit .rawInner unchanged (NOT safeHTML-wrapped) so the
+                  percent-form re-flow reaches Goldmark and merges into a parent
+                  list/table. A body-leading fenced code block (.isFencedBlock)
+                  raw-emits for the same reason it must in conditional-text: the
+                  BLOCK path renders it to hextra-code-block HTML that fragments
+                  when re-parsed inside a reused list item. See inner-shape for
+                  the angle-form safety note.
          BLOCK  — when .isBlock: RenderString display:"block" (headings, fenced
                   code, tables render correctly instead of escaping).
          INLINE — otherwise: RenderString display:"inline".
@@ -23,7 +28,7 @@
        re-render, which only rewrites version blocks to percent form, not
        conditional-text). conditional-text shares only the detection regexes
        (utils/has-markdown, utils/page-context), not this emit path. */ -}}
-{{- if or .isTrailingStep .isRowContent (not .hasMarkdown) -}}
+{{- if or .isTrailingStep .isFencedBlock .isRowContent (not .hasMarkdown) -}}
 {{ .rawInner }}
 {{- else -}}
   {{- $renderOpts := dict "display" "inline" -}}

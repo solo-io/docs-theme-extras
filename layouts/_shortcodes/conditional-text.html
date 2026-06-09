@@ -73,6 +73,27 @@
   {{- $isTableRow = true -}}
 {{- end -}}
 
+{{- /* Fenced-code-block: a body whose FIRST non-blank line opens a fenced
+       code block (``` or ~~~, indented 0-3 spaces). Raw-emit it (like the
+       trailing-step path) so the fence re-enters the surrounding markdown
+       stream and is rendered exactly ONCE by the page/reuse RenderString.
+       The RenderString-then-flatten path (the else branch) renders the fence
+       to a `<div class="hextra-code-block">…<pre>` block HERE, and when that
+       HTML lands inside a reused list item it's re-parsed as a CommonMark
+       HTML block — the parent closes the `<li>`/`<ol>` and re-wraps the code
+       guts in a `<p>`, fragmenting the code block (the ext-auth-rate-limit
+       deployer "To change the defaults" / "Disable the deployer" steps, and
+       any `{{%% conditional-text %%}}`-gated fence inside a numbered step).
+       Raw emit keeps the fence as markdown, so the single outer pass builds
+       a well-formed `<li>…<pre></li>`. Indentation is preserved (dedent is
+       skipped below) so a 3-space-indented fence stays inside its list item.
+       Anchors on the FIRST line so prose that merely mentions a fence later
+       still takes the RenderString path. */ -}}
+{{- $isFencedBlock := false -}}
+{{- if findRE "^(```|~~~|\\{\\{[<%][^}]*prism)" (strings.TrimLeft " \t" $firstNonBlank) 1 -}}
+  {{- $isFencedBlock = true -}}
+{{- end -}}
+
 {{- /* Full-table: a table-row body that ALSO contains a `|---|---|` delimiter
        line is a SELF-CONTAINED table (header + delimiter + rows), not a bare
        row fragment spliced into a table declared outside the block. The two
@@ -99,7 +120,7 @@
        list-item indentation doesn't trip CommonMark's "4 spaces = code
        block" rule. Skipped for the trailing-step raw path. */ -}}
 {{- $inner := .Inner -}}
-{{- if not $isTrailingStep -}}
+{{- if not (or $isTrailingStep $isFencedBlock) -}}
   {{- $lines := split $inner "\n" -}}
   {{- $minIndent := -1 -}}
   {{- range $lines -}}
@@ -149,7 +170,7 @@
         {{- $rendered_html | safeHTML -}}
       {{- else if $isTableRow -}}
 {{ $.Inner }}
-      {{- else if or $isTrailingStep (not $hasMarkdown) -}}
+      {{- else if or $isTrailingStep $isFencedBlock (not $hasMarkdown) -}}
 {{ $.Inner }}
       {{- else -}}
         {{- $rendered_html := $.Page.RenderString (dict "display" "inline") $inner -}}
@@ -171,7 +192,7 @@
         {{- $rendered_html | safeHTML -}}
       {{- else if $isTableRow -}}
 {{ $.Inner }}
-      {{- else if or $isTrailingStep (not $hasMarkdown) -}}
+      {{- else if or $isTrailingStep $isFencedBlock (not $hasMarkdown) -}}
 {{ $.Inner }}
       {{- else -}}
         {{- $rendered_html := $.Page.RenderString (dict "display" "inline") $inner -}}

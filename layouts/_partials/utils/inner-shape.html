@@ -56,8 +56,44 @@
   {{- $isTrailingStep = true -}}
 {{- end -}}
 
+{{- /* Fenced-code-block: the body OPENS on a fenced code block (``` or ~~~,
+       indented 0-3 spaces). Like trailing-step, this must raw-emit so the
+       fence re-enters the surrounding markdown stream and is rendered exactly
+       ONCE by the page/reuse RenderString. The RenderString-then-flatten path
+       renders the fence to a `<div class="hextra-code-block">…<pre>` block
+       HERE; when that HTML lands inside a reused list item it's re-parsed as a
+       CommonMark HTML block — the parent closes the `<li>`/`<ol>` and re-wraps
+       the code guts in a `<p>`, fragmenting the block (the kgw jwt-provider
+       RBAC step, the gme/gmg opa-sidecar / opa-byo / mirror steps: a
+       `{{%% version %%}}`-gated yaml fence inside a numbered step). Raw emit
+       keeps the fence as markdown so the single outer pass builds a well-formed
+       `<li>…<pre></li>`. Distinct from the no-markdown path (a version block
+       INSIDE a fence, whose body is bare yaml/shell): there the fence delimiters
+       live OUTSIDE the block, so $firstNonBlank is yaml, not ```; here the
+       block WRAPS the fence, so $firstNonBlank IS the ``` opener. Indentation is
+       preserved (emit-inner raw-emits .rawInner, never the dedented copy).
+
+       SAFETY (angle form): an angle-form `{{< version >}}` wrapping a bare fence
+       would leak the literal ```` ```lang ```` as text if raw-emitted, since
+       angle output bypasses markdown. reuse.html/rebase.html rewrite such
+       angle blocks to percent form before this partial runs (the same
+       angle→percent pass that already covers the list-marker shapes), so by the
+       time we see a fence-leading body it is percent form (or authored directly
+       on a page, where a single render needs no raw-emit and doesn't fragment). */ -}}
+{{- /* Matches a literal fence (``` / ~~~) OR a leading `prism` shortcode
+       ({{< prism >}} / {{% prism %}}), which emits a highlighted <pre> just
+       like a fence and fragments the same way when block-rendered inside a
+       reused list item. Checked on the LEADING-TRIMMED first line so it catches
+       fences at any list-continuation indent — a 2-digit step (`13. `) indents
+       its continuation 4 spaces, which a `{0,3}` class would miss. raw-emit
+       preserves the original indent via .rawInner, so detection can ignore it. */ -}}
+{{- $isFencedBlock := false -}}
+{{- if findRE "^(```|~~~|\\{\\{[<%][^}]*prism)" (strings.TrimLeft " \t" $firstNonBlank) 1 -}}
+  {{- $isFencedBlock = true -}}
+{{- end -}}
+
 {{- $inner := .Inner -}}
-{{- if not $isTrailingStep -}}
+{{- if not (or $isTrailingStep $isFencedBlock) -}}
   {{- $lines := split $inner "\n" -}}
   {{- $minIndent := -1 -}}
   {{- range $lines -}}
@@ -109,4 +145,4 @@
   {{- $isRowContent = true -}}
 {{- end -}}
 
-{{- return (dict "isTrailingStep" $isTrailingStep "inner" $inner "hasMarkdown" $hasMarkdown "isBlock" $isBlock "isRowContent" $isRowContent) -}}
+{{- return (dict "isTrailingStep" $isTrailingStep "isFencedBlock" $isFencedBlock "inner" $inner "hasMarkdown" $hasMarkdown "isBlock" $isBlock "isRowContent" $isRowContent) -}}

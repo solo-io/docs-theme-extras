@@ -55,6 +55,7 @@
        centralized in utils/inner-shape so it stays in sync with conditional-text. */ -}}
 {{- $shape := partial "utils/inner-shape.html" . -}}
 {{- $isTrailingStep := $shape.isTrailingStep -}}
+{{- $isFencedBlock := $shape.isFencedBlock -}}
 {{- $inner := $shape.inner -}}
 {{- $hasMarkdown := $shape.hasMarkdown -}}
 {{- $isBlock := $shape.isBlock -}}
@@ -126,12 +127,12 @@
        {{- end -}}
        {{- if isset $.Params "include-if" -}}
          {{- if and (in $include_if $versionToml) $productMatches (not $rendered) -}}
-           {{- partial "utils/emit-inner.html" (dict "page" $.Page "rawInner" $.Inner "inner" $inner "isTrailingStep" $isTrailingStep "isRowContent" $isRowContent "hasMarkdown" $hasMarkdown "isBlock" $isBlock) -}}
+           {{- partial "utils/emit-inner.html" (dict "page" $.Page "rawInner" $.Inner "inner" $inner "isTrailingStep" $isTrailingStep "isFencedBlock" $isFencedBlock "isRowContent" $isRowContent "hasMarkdown" $hasMarkdown "isBlock" $isBlock) -}}
            {{- $rendered = true -}}
          {{- end -}}
        {{- else if isset $.Params "exclude-if" -}}
          {{- if and (not (in $exclude_if $versionToml)) $productMatches (not $rendered) -}}
-           {{- partial "utils/emit-inner.html" (dict "page" $.Page "rawInner" $.Inner "inner" $inner "isTrailingStep" $isTrailingStep "isRowContent" $isRowContent "hasMarkdown" $hasMarkdown "isBlock" $isBlock) -}}
+           {{- partial "utils/emit-inner.html" (dict "page" $.Page "rawInner" $.Inner "inner" $inner "isTrailingStep" $isTrailingStep "isFencedBlock" $isFencedBlock "isRowContent" $isRowContent "hasMarkdown" $hasMarkdown "isBlock" $isBlock) -}}
            {{- $rendered = true -}}
          {{- end -}}
        {{- end -}}
@@ -159,7 +160,7 @@
       {{- $versionToml := .version -}}
       {{- $productMatches := or (not $currentProduct) (eq .product $currentProduct) -}}
       {{- if and (in $include $versionToml) (in $include $versionAdjusted) $productMatches (not $rendered) -}}
-        {{- partial "utils/emit-inner.html" (dict "page" $.Page "rawInner" $.Inner "inner" $inner "isTrailingStep" $isTrailingStep "isRowContent" $isRowContent "hasMarkdown" $hasMarkdown "isBlock" $isBlock) -}}
+        {{- partial "utils/emit-inner.html" (dict "page" $.Page "rawInner" $.Inner "inner" $inner "isTrailingStep" $isTrailingStep "isFencedBlock" $isFencedBlock "isRowContent" $isRowContent "hasMarkdown" $hasMarkdown "isBlock" $isBlock) -}}
         {{- $rendered = true -}}
       {{- end -}}
     {{- end -}}
@@ -186,7 +187,7 @@
       {{- $versionToml := .version -}}
       {{- $productMatches := or (not $currentProduct) (eq .product $currentProduct) -}}
       {{- if and (not (or (in $exclude $versionToml) (in $exclude $versionAdjusted))) $productMatches (not $rendered) -}}
-        {{- partial "utils/emit-inner.html" (dict "page" $.Page "rawInner" $.Inner "inner" $inner "isTrailingStep" $isTrailingStep "isRowContent" $isRowContent "hasMarkdown" $hasMarkdown "isBlock" $isBlock) -}}
+        {{- partial "utils/emit-inner.html" (dict "page" $.Page "rawInner" $.Inner "inner" $inner "isTrailingStep" $isTrailingStep "isFencedBlock" $isFencedBlock "isRowContent" $isRowContent "hasMarkdown" $hasMarkdown "isBlock" $isBlock) -}}
         {{- $rendered = true -}}
       {{- end -}}
     {{- end -}}
