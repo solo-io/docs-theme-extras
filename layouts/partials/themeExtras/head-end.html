@@ -321,6 +321,31 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   })();
 
+  /* ── Preserve the sidebar scroll position across navigations ──
+     The site is static: every nav link is a plain <a href>, so the sidebar
+     re-renders fresh on each load and its desktop scroll region
+     (.sidebar-nav-wrapper) would otherwise snap back to the top. Save its
+     scrollTop on the way out and restore it here so the scrollbar stays put
+     while the (brand-new) content pane lands at the top. sessionStorage
+     scopes it to the tab. This runs after the expand/collapse state above so
+     the tree is at full height before we set scrollTop, and before the rAF
+     above removes .sidebar-loading — so the wrapper (hidden by the
+     html.sidebar-loading rule in CSS) is revealed already at the right
+     offset, no top-then-jump flash. Back/forward via bfcache restores scroll
+     natively and skips this. */
+  (function(){
+    var KEY = 'solo-sidebar-scrolltop';
+    var nav = document.querySelector('.sidebar-nav-wrapper');
+    if (!nav) return;
+    try {
+      var saved = parseInt(sessionStorage.getItem(KEY), 10);
+      if (saved > 0) nav.scrollTop = saved;
+    } catch (_) {}
+    window.addEventListener('pagehide', function(){
+      try { sessionStorage.setItem(KEY, String(nav.scrollTop)); } catch (_) {}
+    });
+  })();
+
   /* ── Mobile icons dropdown ── */
   var mobileIconsToggle = document.getElementById('mobile-icons-toggle');
   var mobileIconsMenu = document.getElementById('mobile-icons-menu');

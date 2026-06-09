@@ -379,8 +379,12 @@
    visible "scrolled to top → jump to active item" flash. Hextra's
    sidebar.js sets scrollTop on DOMContentLoaded; head-end.html adds the
    .sidebar-loading class during <head> parse and removes it via rAF
-   after DCL, so the sidebar reveals at the correct scroll position. */
-html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
+   after DCL, so the sidebar reveals at the correct scroll position.
+   The second selector covers our centralized sidebar, whose scroll region is
+   .sidebar-nav-wrapper (not a .hextra-scrollbar child); head-end.html
+   restores its saved scrollTop in the same DCL window before the rAF reveal. */
+html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar,
+html.sidebar-loading .sidebar-nav-wrapper {
   visibility: hidden;
 }
 
@@ -537,6 +541,18 @@ html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
   background: #3a4350;
 }
 
+/* Sticky offset for the side rails (left sidebar + right TOC). It must equal
+   the height of Hextra's sticky `.hextra-nav-container`, which is the navbar
+   PLUS any announcement banner (`--navbar-height` + `--hextra-banner-height`,
+   e.g. 4rem + 2rem = 6rem on the docs hub). Hardcoding `4rem` (navbar only)
+   left both rails 1 banner-height too high, so they drifted up — and slid
+   under the navbar — as the page scrolled, instead of staying pinned. The
+   `0rem` fallback keeps it at the navbar height on any consumer that doesn't
+   define the banner variable. */
+:root {
+  --solo-rail-top: calc(var(--navbar-height, 4rem) + var(--hextra-banner-height, 0rem));
+}
+
 /* ── TOC (right-hand "On this page" nav) ────────────────────────────────
    Rendered by layouts/_partials/toc.html. Class hooks are .solo-toc-*
    (plus the outer hextra-toc wrapper that hextra owns). Centralized
@@ -545,7 +561,7 @@ html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
 
 .solo-toc-inner {
   position: sticky;
-  top: 4rem;
+  top: var(--solo-rail-top);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -553,7 +569,7 @@ html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
   padding-top: 0.5rem;
   font-size: 0.875rem;
   hyphens: auto;
-  max-height: calc(100vh - var(--navbar-height) - env(safe-area-inset-bottom));
+  max-height: calc(100vh - var(--solo-rail-top) - env(safe-area-inset-bottom));
   margin-right: -1rem;
 }
 .solo-toc-heading {
@@ -1665,8 +1681,9 @@ details[open].hextra-search-other-versions > summary::before {
   color: rgb(255, 255, 255);
 }
 
-/* Sidebar nav wrapper. No internal scroll: the sidebar grows with its tree
-   and scrolls with the page rather than getting an inner overflow bar. */
+/* Sidebar nav wrapper. On desktop the nav tree is the scroll region (see the
+   min-width:1280px block below); on mobile the slide-in panel scrolls the
+   whole aside, so flex-grow lets the wrapper fill the panel. */
 .sidebar-nav-wrapper {
   padding: 0 1rem 1rem;
   flex-grow: 1;
@@ -1676,6 +1693,36 @@ details[open].hextra-search-other-versions > summary::before {
   flex-direction: column;
   gap: 0.5rem;
   font-size: 0.875rem;
+}
+
+/* Desktop: pin the sidebar in the viewport with its own scroll region,
+   mirroring the right-hand TOC. The product logo stays pinned as a fixed
+   flex row while the nav tree scrolls inside .sidebar-nav-wrapper, so the
+   sidebar no longer scrolls with the article. Loaded after Hextra's CSS, so
+   `display: flex` here wins over the aside's `hx:xl:block` at equal
+   specificity. Below xl the mobile slide-in panel rules above own the
+   layout. */
+@media (min-width: 1280px) {
+  .sidebar-container {
+    position: sticky;
+    top: var(--solo-rail-top);
+    max-height: calc(100vh - var(--solo-rail-top) - env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .sidebar-product-logo {
+    flex-shrink: 0;
+  }
+  .sidebar-nav-wrapper {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    /* Match the right TOC's thin scrollbar (Hextra's .hextra-scrollbar). */
+    scrollbar-width: thin;
+    scrollbar-color: oklch(55.55% 0 0 / 0.4) transparent;
+    scrollbar-gutter: stable;
+  }
 }
 
 /* Tree lists. Depth 0 sits at the section root; deeper levels indent under
