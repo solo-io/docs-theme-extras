@@ -546,7 +546,9 @@ html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
 .solo-toc-inner {
   position: sticky;
   top: 4rem;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding-right: 1rem;
   padding-top: 0.5rem;
   font-size: 0.875rem;
@@ -559,6 +561,18 @@ html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
   margin-bottom: 1rem;
   font-weight: 600;
   letter-spacing: -0.01em;
+  flex-shrink: 0;
+}
+/* The top-level heading list is the only scroll region; the "On this page"
+   heading and the back-to-top footer stay pinned as fixed flex rows. This
+   keeps TOC links from ever scrolling behind the footer (the prior
+   sticky-footer layout let long lists bleed through its transparent
+   background). min-height:0 lets the flex child actually scroll. It inherits
+   the thin scrollbar from hextra's `.hextra-scrollbar *` rule. */
+.solo-toc-inner > .solo-toc-sublist {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 .solo-toc-sublist {
   margin-left: 1rem;
@@ -601,18 +615,17 @@ html.sidebar-loading .hextra-sidebar-container .hextra-scrollbar {
   background-color: #363c47;
 }
 
-/* Sticky footer of the TOC (back-to-top + future links). Background is
-   transparent so it reveals whatever page/brand background is painted behind
-   it (kgw dark #111, agw-oss dark #030712, light-mode white) rather than
-   hardcoding one dark hex that only matches a single brand. Tradeoff: no
-   solid-fill fade for TOC links that scroll behind it. */
+/* Footer of the TOC (back-to-top + future links). Pinned as a fixed flex
+   row at the bottom of .solo-toc-inner rather than sticky-overlaid, so the
+   heading list scrolls above it instead of behind it. Background stays
+   transparent (no brand hex to hardcode) because nothing scrolls behind it
+   anymore. */
 .solo-toc-bottom {
   margin-top: 2rem;
   border-top: 1px solid #e5e7eb;
   padding-top: 2rem;
   padding-bottom: 2rem;
-  position: sticky;
-  bottom: 0;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-start;

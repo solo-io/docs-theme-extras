@@ -533,14 +533,11 @@ document.addEventListener('DOMContentLoaded', function(){
     });
     if (!targets.length) return;
 
-    var tocScroller = toc.querySelector('.hextra-scrollbar') || toc;
-    // The TOC has a sticky "Scroll to top" footer that overlays the bottom
-    // of the scroll area. Reserve its height so we don't scroll the active
-    // link behind it.
-    function getStickyFooterHeight(){
-      var footer = tocScroller.querySelector(':scope > div:last-child');
-      return footer ? footer.offsetHeight : 0;
-    }
+    // The heading list scrolls inside .solo-toc-inner while the "On this
+    // page" heading and the back-to-top footer stay pinned as fixed flex
+    // rows, so the active link can never scroll behind the footer.
+    var tocScroller = toc.querySelector('.solo-toc-inner > .solo-toc-sublist')
+      || toc.querySelector('.hextra-scrollbar') || toc;
     var lastActive = null;
     function setActive(el){
       if (!el || !idToLink[el.id]) return;
@@ -552,11 +549,10 @@ document.addEventListener('DOMContentLoaded', function(){
       // paint frames, producing a perceived color/bg stagger.
       var linkRect = link.getBoundingClientRect();
       var scrollerRect = tocScroller.getBoundingClientRect();
-      var footerHeight = getStickyFooterHeight();
       if (linkRect.top < scrollerRect.top){
         tocScroller.scrollTop += linkRect.top - scrollerRect.top - 8;
-      } else if (linkRect.bottom > scrollerRect.bottom - footerHeight){
-        tocScroller.scrollTop += linkRect.bottom - (scrollerRect.bottom - footerHeight) + 8;
+      } else if (linkRect.bottom > scrollerRect.bottom){
+        tocScroller.scrollTop += linkRect.bottom - scrollerRect.bottom + 8;
       }
       // Now swap the highlight in one tick so color and bg paint together.
       // Use inline style for text color so it wins over Tailwind's layered CSS.
