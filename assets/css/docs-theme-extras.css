@@ -96,6 +96,18 @@
   min-width: 0;
 }
 
+/* Render alert body text at one size whether the markdown produced a
+   <p>/<li> block or a bare inline text node. The global `.content p` and
+   `#content > .content li` rules size block children to 1rem, but bare text
+   would otherwise fall back to the `.solo-alert` 0.9rem, so the same alert
+   looked like a different size depending on how its body was authored
+   (markdown bullets vs literal <ul>/<li> HTML, or a single inline sentence). */
+.solo-alert-body,
+.solo-alert-body :where(p, ul, ol, li) {
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
 .solo-alert-body p {
   margin: 0 !important;
 }
