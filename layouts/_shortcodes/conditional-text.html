@@ -89,8 +89,13 @@
        skipped below) so a 3-space-indented fence stays inside its list item.
        Anchors on the FIRST line so prose that merely mentions a fence later
        still takes the RenderString path. */ -}}
+{{- /* INDENTED fence/prism as a list-item continuation (marker on the
+       preceding line) — raw-emit so it renders once instead of fragmenting in
+       a reused list item. The leading-whitespace requirement EXCLUDES a
+       column-0 / same-line-glued fence (e.g. `{{%% conditional-text %%}}` +
+       `` ```yaml `` on one line), which must keep the RenderString path. */ -}}
 {{- $isFencedBlock := false -}}
-{{- if findRE "^(```|~~~|\\{\\{[<%][^}]*prism)" (strings.TrimLeft " \t" $firstNonBlank) 1 -}}
+{{- if findRE "^[ \t]+(```|~~~|\\{\\{[<%][^}]*prism)" $firstNonBlank 1 -}}
   {{- $isFencedBlock = true -}}
 {{- end -}}
 

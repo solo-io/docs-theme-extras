@@ -56,8 +56,8 @@
   {{- $isTrailingStep = true -}}
 {{- end -}}
 
-{{- /* Fenced-code-block: the body OPENS on a fenced code block (``` or ~~~,
-       indented 0-3 spaces). Like trailing-step, this must raw-emit so the
+{{- /* Fenced-code-block: the body OPENS on an INDENTED fenced code block
+       (``` or ~~~, as a list-item continuation). Like trailing-step, this must raw-emit so the
        fence re-enters the surrounding markdown stream and is rendered exactly
        ONCE by the page/reuse RenderString. The RenderString-then-flatten path
        renders the fence to a `<div class="hextra-code-block">…<pre>` block
@@ -80,15 +80,21 @@
        angle→percent pass that already covers the list-marker shapes), so by the
        time we see a fence-leading body it is percent form (or authored directly
        on a page, where a single render needs no raw-emit and doesn't fragment). */ -}}
-{{- /* Matches a literal fence (``` / ~~~) OR a leading `prism` shortcode
-       ({{< prism >}} / {{% prism %}}), which emits a highlighted <pre> just
-       like a fence and fragments the same way when block-rendered inside a
-       reused list item. Checked on the LEADING-TRIMMED first line so it catches
-       fences at any list-continuation indent — a 2-digit step (`13. `) indents
-       its continuation 4 spaces, which a `{0,3}` class would miss. raw-emit
-       preserves the original indent via .rawInner, so detection can ignore it. */ -}}
+{{- /* Matches an INDENTED fence (``` / ~~~) OR an indented leading `prism`
+       shortcode — a fenced/highlighted block sitting as a list-item
+       continuation (the marker is OUTSIDE this block, on the preceding line),
+       which fragments when block-rendered inside a reused list item. The
+       leading-whitespace requirement (`[ \t]+`) is load-bearing: it scopes
+       raw-emit to list-continuation fences and EXCLUDES a column-0 fence — a
+       fence glued to the shortcode tag (` {{< version >}}```yaml `) or a
+       top-level gated fence. Those must keep the RenderString path: raw-emitting
+       a column-0 fence from an ANGLE block (not rewritten to percent because it
+       isn't a list-marker shape) leaks the literal ```` ```lang ```` as text.
+       Any list-continuation indent works (`1. `=3, `13. `=4 spaces); raw-emit
+       preserves it via .rawInner. Distinct from the no-markdown path (a block
+       INSIDE a fence, body = bare yaml/shell, fence delimiters outside). */ -}}
 {{- $isFencedBlock := false -}}
-{{- if findRE "^(```|~~~|\\{\\{[<%][^}]*prism)" (strings.TrimLeft " \t" $firstNonBlank) 1 -}}
+{{- if findRE "^[ \t]+(```|~~~|\\{\\{[<%][^}]*prism)" $firstNonBlank 1 -}}
   {{- $isFencedBlock = true -}}
 {{- end -}}
 

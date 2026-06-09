@@ -1,4 +1,14 @@
-{{- /* Stub for the prism shortcode from docs-theme-lotus.
+{{- /* DEPRECATED — REMOVE IN A FUTURE RELEASE.
+     This is a lotus-legacy compatibility stub. It is equivalent to a fenced
+     code block ( ```lang {hl_lines=[...]} ), which is what consumers should
+     use instead. Beyond being redundant, `prism` emits already-rendered
+     <pre> HTML, so a `prism` block inside a reused list item breaks list
+     continuation (the "<p> inside <pre>" / fragmented-code-block failure that
+     a native fenced block does not have). No consumer still references it
+     (solo-io/docs migrated all usages to fenced blocks); once that is true of
+     every consumer, delete this file. See the CHANGELOG "Code blocks" entry.
+
+     Stub for the prism shortcode from docs-theme-lotus.
      Maps to Hugo's built-in Chroma highlighting.
      Supports: lang (positional or named), line (highlight lines). */ -}}
 {{- $lang := .Get "lang" | default (.Get 0) | default "" -}}
