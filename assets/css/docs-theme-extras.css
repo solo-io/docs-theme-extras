@@ -482,7 +482,20 @@ html.sidebar-loading .sidebar-nav-wrapper {
    of a screenshot use `reuse-image-dark` (wraps the dark image in
    `<div class="toggle-light">`, shown only on dark pages). Images without
    a dark variant render as-is on dark pages. Mermaid diagrams use
-   Mermaid's built-in dark theme; see layouts/partials/scripts/mermaid.html. */
+   Mermaid's built-in dark theme; see layouts/_partials/scripts/mermaid.html. */
+
+/* ── Mermaid: hide the raw graph source until it is rendered ──────────────
+   Mermaid replaces a <pre class="mermaid"> source block with an <svg> and
+   marks it data-processed. Until then the literal graph code (`graph LR …`)
+   is visible. The loader deliberately defers the first render until the tab
+   is painted (so the diagram isn't measured with a zero bounding box and
+   collapsed), which widens that window into a visible flash of code. Hiding
+   the unprocessed source removes the flash; the element keeps its box, so
+   the SVG simply replaces an empty space. Mermaid here requires JS, so a
+   never-processed block staying hidden is acceptable. */
+pre.mermaid:not([data-processed]) {
+  visibility: hidden;
+}
 
 /* ── Solo footer ─────────────────────────────────────────────────────── */
 .solo-footer {
