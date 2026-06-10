@@ -406,10 +406,19 @@ html.sidebar-loading .sidebar-nav-wrapper {
   background: #e5e7eb;
 }
 
+/* Size product logos by a capped height so the wordmark reads at a consistent
+   optical size across products, and cap width at 100% so the logo can never
+   exceed the sidebar column. Sizing by width (the previous `width: 108%`
+   overscan) bled the widest logo (Solo Enterprise for agentgateway, ~5.7:1)
+   past the column into the content gutter, while making each product's
+   wordmark a different size. width:auto lets the widest logo bind on
+   max-width and narrower ones bind on max-height. */
 .sidebar-product-logo img {
-  width: 108%;
-  max-width: 108%;
+  display: block;
+  width: auto;
+  max-width: 100%;
   height: auto;
+  max-height: 2.5rem;
 }
 
 .sidebar-logo-light { display: block; }
@@ -418,19 +427,14 @@ html.sidebar-loading .sidebar-nav-wrapper {
 .dark .sidebar-logo-dark { display: block; }
 .dark .sidebar-product-logo::after { background: #374151; }
 
-/* In the mobile slide-in panel the sidebar is a fixed 280px, so the desktop
-   logo overscan (width: 108% above) overflows the panel and crowds the logo
-   against the right edge. Below xl, fit the logo inside the panel and give it
-   symmetric horizontal padding so it sits centered with breathing room. The
-   desktop (>= 1280px) sidebar keeps its overscan. */
+/* In the mobile slide-in panel the sidebar is a fixed 280px. Give the logo
+   symmetric horizontal padding so it sits with breathing room from the panel
+   edges. Sizing is handled by the base rule above (max-width:100% +
+   max-height), so no width override is needed here. */
 @media (max-width: 1279px) {
   .sidebar-product-logo {
     padding-left: 1rem;
     padding-right: 1rem;
-  }
-  .sidebar-product-logo img {
-    width: 100%;
-    max-width: 100%;
   }
 }
 

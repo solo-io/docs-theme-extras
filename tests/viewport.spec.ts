@@ -118,21 +118,22 @@ test.describe("viewport responsive layout", () => {
       });
 
       // Regression guard: the sidebar product logo must not overflow its
-      // container below the xl breakpoint. The bug (2026-05-29, docs iPad
-      // slide panel): `.sidebar-product-logo img { width: 108% }` made the
-      // logo 8% wider than the fixed 280px panel, crowding it against the
-      // right edge. The fix clamps the logo to 100% (with symmetric padding)
-      // under @media (max-width: 1279px), while the desktop sidebar keeps the
-      // intentional 108% overscan — so this check runs ONLY below 1280.
-      // Self-skips when the consumer didn't set site.Params.sidebar.logo
+      // container at ANY width. Two bugs motivate this:
+      //   - 2026-05-29 (docs iPad slide panel): `width: 108%` made the logo 8%
+      //     wider than the fixed 280px mobile panel, crowding the right edge.
+      //   - desktop: the same 108% overscan drove the widest logo (Solo
+      //     Enterprise for agentgateway, ~5.7:1) off the sidebar background and
+      //     into the content gutter. The earlier version of this guard skipped
+      //     >= 1280 because the desktop sidebar was thought to "keep" the
+      //     intentional overscan — so it never caught the desktop bleed.
+      // The fix sizes the logo by capped height with `max-width: 100%`, so it
+      // can't exceed the column at any width. This guard now runs at every
+      // viewport. Self-skips when the consumer didn't set site.Params.sidebar.logo
       // (e.g. the OSS fixture leaves it unset on purpose); exercised by the
       // enterprise fixture and by docs CI, which both configure a logo.
-      test("sidebar logo stays within its container below xl", async ({
+      test("sidebar logo stays within its container", async ({
         page,
       }) => {
-        if (vp.width >= 1280) {
-          test.skip(true, "desktop sidebar keeps the intentional logo overscan");
-        }
         await page.goto(REPRESENTATIVE_PAGE!);
         const logoImg = page.locator(".sidebar-product-logo img").first();
         if (await logoImg.count() === 0) {
@@ -162,8 +163,8 @@ test.describe("viewport responsive layout", () => {
         expect(
           edges!.imgRight,
           `logo right edge (${edges!.imgRight}px) spills past its container ` +
-            `(${edges!.boxRight}px) at ${vp.width}px — the 108% overscan is ` +
-            `crowding the slide panel`,
+            `(${edges!.boxRight}px) at ${vp.width}px — the logo is bleeding ` +
+            `out of the sidebar`,
         ).toBeLessThanOrEqual(edges!.boxRight + 1);
         expect(
           edges!.imgLeft,
