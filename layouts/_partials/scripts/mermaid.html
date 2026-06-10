@@ -1,0 +1,159 @@
+{{- /* Mermaid */ -}}
+
+{{- $mermaidBase := "" -}}
+{{- $useDefaultCdn := true -}}
+{{- with site.Params.mermaid.base -}}
+  {{- $mermaidBase = . -}}
+  {{- $useDefaultCdn = false -}}
+{{- end -}}
+
+{{- $mermaidJsAsset := "" -}}
+{{- with site.Params.mermaid.js -}}
+  {{- $mermaidJsAsset = . -}}
+{{- end -}}
+
+{{- /* If only js is set without base, use local asset loading */ -}}
+{{- if and $useDefaultCdn (ne $mermaidJsAsset "") -}}
+  {{- $useDefaultCdn = false -}}
+{{- end -}}
+
+{{- /* Set default CDN base if needed. Pin the version: `@latest` is non-deterministic
+       across visitors and CDN edges, which made a render regression impossible to
+       reproduce. 11.15.0 is verified to render the OSS/enterprise diagrams correctly.
+       Override per site with `params.mermaid.base`. */ -}}
+{{- if $useDefaultCdn -}}
+  {{- $mermaidBase = "https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist" -}}
+{{- end -}}
+
+{{- $isRemoteBase := or (strings.HasPrefix $mermaidBase "http://") (strings.HasPrefix $mermaidBase "https://") -}}
+{{- $minSuffix := cond hugo.IsProduction ".min" "" -}}
+
+{{- /* JS retrieval: get raw JS from either local asset or remote, then process */ -}}
+{{- if $isRemoteBase -}}
+  {{- $jsPath := cond (ne $mermaidJsAsset "") $mermaidJsAsset (printf "mermaid%s.js" $minSuffix) -}}
+  {{- $mermaidJsUrl := urls.JoinPath $mermaidBase $jsPath -}}
+  {{- with try (resources.GetRemote $mermaidJsUrl) -}}
+    {{- with .Err -}}
+      {{- errorf "Could not retrieve Mermaid js file from %s. Reason: %s." $mermaidJsUrl . -}}
+    {{- else with .Value -}}
+      {{- with resources.Copy (printf "js/mermaid%s.js" $minSuffix) . -}}
+        {{- $mermaidJs := . | fingerprint -}}
+        <script defer src="{{ $mermaidJs.RelPermalink }}" integrity="{{ $mermaidJs.Data.Integrity }}" crossorigin="anonymous"></script>
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- else if $mermaidJsAsset -}}
+  {{- with resources.Get $mermaidJsAsset -}}
+    {{- $mermaidJs := . | fingerprint -}}
+    <script defer src="{{ $mermaidJs.RelPermalink }}" integrity="{{ $mermaidJs.Data.Integrity }}" crossorigin="anonymous"></script>
+  {{- else -}}
+    {{- errorf "Mermaid js asset not found at %q" $mermaidJsAsset -}}
+  {{- end -}}
+{{- end -}}
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const nodes = Array.from(document.querySelectorAll(".mermaid"));
+    if (!nodes.length) return;
+
+    // Store the original diagram source before anything processes it. With
+    // startOnLoad disabled (below) nothing renders until we ask it to, so this
+    // capture is always the raw graph source, never an already-rendered SVG.
+    nodes.forEach((el) => {
+      el.dataset.original = el.innerHTML;
+    });
+
+    // Mermaid's built-in "dark" theme leaves sequenceDiagram actor text and
+    // actor background the same near-black color, making participant labels
+    // unreadable. Override the actor/note/label colors so they stay legible.
+    const darkThemeVariables = {
+      actorBkg: "#2a2a2a",
+      actorBorder: "#888888",
+      actorTextColor: "#ffffff",
+      actorLineColor: "#888888",
+      signalColor: "#cccccc",
+      signalTextColor: "#dddddd",
+      labelBoxBkgColor: "#2a2a2a",
+      labelBoxBorderColor: "#888888",
+      labelTextColor: "#ffffff",
+      noteBkgColor: "#3a3a3a",
+      noteTextColor: "#ffffff",
+      noteBorderColor: "#888888",
+      activationBkgColor: "#3a3a3a",
+      activationBorderColor: "#888888",
+    };
+
+    const isDark = () => document.documentElement.classList.contains("dark");
+
+    // startOnLoad:false is deliberate. Mermaid sizes a diagram from the text
+    // bounding box measured at render time; if it renders while the element is
+    // not laid out (an inactive/background browser tab, a hidden container),
+    // getBBox() returns 0 and Mermaid bakes a permanent max-width:16px / 16x16
+    // viewBox into the SVG, which shows as a tiny diagram stuck in the corner of
+    // an empty box and never recovers once the tab is focused. We instead render
+    // each diagram only once it is actually visible and laid out.
+    const configure = () => {
+      const theme = isDark() ? "dark" : "default";
+      const config = { startOnLoad: false, theme: theme };
+      if (theme === "dark") config.themeVariables = darkThemeVariables;
+      mermaid.initialize(config);
+    };
+
+    const rendered = new WeakSet();
+    const fontsReady = (document.fonts && document.fonts.ready) || Promise.resolve();
+    const renderEl = (el) => {
+      if (rendered.has(el)) return;
+      rendered.add(el);
+      // Wait for web fonts so text is measured at its final width, then render.
+      fontsReady
+        .then(() => mermaid.run({ nodes: [el] }))
+        .catch((e) => {
+          rendered.delete(el);
+          console.error("Mermaid render failed", e);
+        });
+    };
+
+    // An IntersectionObserver callback only fires while the page is actually
+    // being painted, so a diagram in a background tab waits until the tab is
+    // foregrounded, by which point it is laid out and measures correctly.
+    const io = new IntersectionObserver(
+      (entries, obs) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            obs.unobserve(entry.target);
+            renderEl(entry.target);
+          }
+        });
+      },
+      { rootMargin: "200px" },
+    );
+
+    configure();
+    nodes.forEach((el) => io.observe(el));
+
+    // Lazy rendering means diagrams below the fold are not yet drawn. Force any
+    // remaining ones to render before printing / "Save as PDF" so they appear in
+    // the output (best effort: rendering is async and may not finish in time on
+    // very large pages).
+    window.addEventListener("beforeprint", () => nodes.forEach(renderEl));
+
+    // Re-render on dark/light toggle: reset each diagram to its source and let
+    // the observer re-render whatever is in view (and the rest when scrolled to).
+    let timeout;
+    new MutationObserver(() => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        configure();
+        nodes.forEach((el) => {
+          el.innerHTML = el.dataset.original;
+          el.removeAttribute("data-processed");
+          rendered.delete(el);
+          io.observe(el);
+        });
+      }, 150);
+    }).observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+  });
+</script>
