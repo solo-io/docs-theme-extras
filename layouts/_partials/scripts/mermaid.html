@@ -85,13 +85,6 @@
 
     const isDark = () => document.documentElement.classList.contains("dark");
 
-    // startOnLoad:false is deliberate. Mermaid sizes a diagram from the text
-    // bounding box it measures at render time; if it renders while the page is
-    // not being painted (an inactive/background browser tab), getBBox() returns
-    // 0 and Mermaid bakes a permanent max-width:16px / 16x16 viewBox into the
-    // SVG, which shows as a tiny diagram stuck in the corner of an empty box and
-    // never recovers once the tab is focused. We render explicitly instead (see
-    // renderAll), gated on the tab actually being painted.
     const configure = () => {
       const theme = isDark() ? "dark" : "default";
       const config = { startOnLoad: false, theme: theme };
@@ -99,20 +92,48 @@
       mermaid.initialize(config);
     };
 
+    // Repair Mermaid's inflated viewBox. In Blink (Chrome) and Gecko (Firefox),
+    // getBBox() counts a <foreignObject>'s declared width, so when Mermaid sizes
+    // the SVG during init while a temporary text-measurement foreignObject still
+    // carries an oversized sentinel width, it bakes a viewBox (and matching
+    // max-width) up to ~16x the real content — shrinking the diagram into a speck
+    // in the top-left corner of a huge empty canvas. WebKit (Safari) excludes the
+    // foreignObject width, so it is unaffected, and a clean headless Chromium
+    // renders correctly too, which makes this per-machine intermittent. After
+    // render the temporary elements are gone, so getBBox() returns the true
+    // bounds; recompute the viewBox/max-width from them. Guarded to act only when
+    // the declared viewBox is clearly larger than real content, so correct
+    // renders are left untouched. See solo-io/docs#2762.
+    const reframe = () => {
+      document.querySelectorAll(".mermaid[data-processed] svg").forEach((svg) => {
+        let bb;
+        try { bb = svg.getBBox(); } catch (e) { return; }
+        if (!bb || bb.width < 1 || bb.height < 1) return;
+        const vb = svg.viewBox && svg.viewBox.baseVal;
+        if (!vb || vb.width <= bb.width * 1.5) return;
+        const p = 8;
+        svg.setAttribute("viewBox", `${bb.x - p} ${bb.y - p} ${bb.width + p * 2} ${bb.height + p * 2}`);
+        svg.style.maxWidth = `${bb.width + p * 2}px`;
+      });
+    };
+
     const fontsReady = (document.fonts && document.fonts.ready) || Promise.resolve();
     const renderAll = () => {
-      // Wait for web fonts so text is measured at its final width, then render
-      // every not-yet-processed diagram in one pass.
+      // Wait for web fonts so text is measured at its final width, render every
+      // not-yet-processed diagram, then repair any inflated viewBox a frame later
+      // (once the temporary measurement foreignObjects have been cleaned up).
       fontsReady
         .then(() => mermaid.run({ querySelector: ".mermaid:not([data-processed])" }))
+        .then(() => requestAnimationFrame(reframe))
         .catch((e) => console.error("Mermaid render failed", e));
     };
 
     // Defer the first render until the tab is actually being painted.
     // requestAnimationFrame callbacks are paused in inactive/background tabs, so
     // a diagram opened in a background tab waits until the tab is foregrounded
-    // and laid out before it is measured, avoiding the zero-bounding-box
-    // collapse. If the tab loads hidden, render on the first visibility change.
+    // and laid out before it is measured (a zero bounding box there would
+    // otherwise collapse it, and reframe could not recover a 0-width render).
+    // If the tab loads hidden, render on the first visibility change.
     const scheduleRender = () => {
       if (document.visibilityState === "hidden") {
         document.addEventListener("visibilitychange", function onVisible() {
@@ -130,7 +151,7 @@
     scheduleRender();
 
     // Re-render on dark/light toggle: reset each diagram to its source so
-    // mermaid.run redraws it with the new theme.
+    // mermaid.run redraws it with the new theme, then repair the viewBox again.
     let timeout;
     new MutationObserver(() => {
       clearTimeout(timeout);
@@ -142,6 +163,7 @@
         });
         mermaid
           .run({ querySelector: ".mermaid" })
+          .then(() => requestAnimationFrame(reframe))
           .catch((e) => console.error("Mermaid render failed", e));
       }, 150);
     }).observe(document.documentElement, {
