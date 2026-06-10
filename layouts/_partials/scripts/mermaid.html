@@ -86,12 +86,12 @@
     const isDark = () => document.documentElement.classList.contains("dark");
 
     // startOnLoad:false is deliberate. Mermaid sizes a diagram from the text
-    // bounding box measured at render time; if it renders while the element is
-    // not laid out (an inactive/background browser tab, a hidden container),
-    // getBBox() returns 0 and Mermaid bakes a permanent max-width:16px / 16x16
-    // viewBox into the SVG, which shows as a tiny diagram stuck in the corner of
-    // an empty box and never recovers once the tab is focused. We instead render
-    // each diagram only once it is actually visible and laid out.
+    // bounding box it measures at render time; if it renders while the page is
+    // not being painted (an inactive/background browser tab), getBBox() returns
+    // 0 and Mermaid bakes a permanent max-width:16px / 16x16 viewBox into the
+    // SVG, which shows as a tiny diagram stuck in the corner of an empty box and
+    // never recovers once the tab is focused. We render explicitly instead (see
+    // renderAll), gated on the tab actually being painted.
     const configure = () => {
       const theme = isDark() ? "dark" : "default";
       const config = { startOnLoad: false, theme: theme };
@@ -99,46 +99,38 @@
       mermaid.initialize(config);
     };
 
-    const rendered = new WeakSet();
     const fontsReady = (document.fonts && document.fonts.ready) || Promise.resolve();
-    const renderEl = (el) => {
-      if (rendered.has(el)) return;
-      rendered.add(el);
-      // Wait for web fonts so text is measured at its final width, then render.
+    const renderAll = () => {
+      // Wait for web fonts so text is measured at its final width, then render
+      // every not-yet-processed diagram in one pass.
       fontsReady
-        .then(() => mermaid.run({ nodes: [el] }))
-        .catch((e) => {
-          rendered.delete(el);
-          console.error("Mermaid render failed", e);
-        });
+        .then(() => mermaid.run({ querySelector: ".mermaid:not([data-processed])" }))
+        .catch((e) => console.error("Mermaid render failed", e));
     };
 
-    // An IntersectionObserver callback only fires while the page is actually
-    // being painted, so a diagram in a background tab waits until the tab is
-    // foregrounded, by which point it is laid out and measures correctly.
-    const io = new IntersectionObserver(
-      (entries, obs) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            obs.unobserve(entry.target);
-            renderEl(entry.target);
+    // Defer the first render until the tab is actually being painted.
+    // requestAnimationFrame callbacks are paused in inactive/background tabs, so
+    // a diagram opened in a background tab waits until the tab is foregrounded
+    // and laid out before it is measured, avoiding the zero-bounding-box
+    // collapse. If the tab loads hidden, render on the first visibility change.
+    const scheduleRender = () => {
+      if (document.visibilityState === "hidden") {
+        document.addEventListener("visibilitychange", function onVisible() {
+          if (document.visibilityState !== "hidden") {
+            document.removeEventListener("visibilitychange", onVisible);
+            requestAnimationFrame(renderAll);
           }
         });
-      },
-      { rootMargin: "200px" },
-    );
+      } else {
+        requestAnimationFrame(renderAll);
+      }
+    };
 
     configure();
-    nodes.forEach((el) => io.observe(el));
+    scheduleRender();
 
-    // Lazy rendering means diagrams below the fold are not yet drawn. Force any
-    // remaining ones to render before printing / "Save as PDF" so they appear in
-    // the output (best effort: rendering is async and may not finish in time on
-    // very large pages).
-    window.addEventListener("beforeprint", () => nodes.forEach(renderEl));
-
-    // Re-render on dark/light toggle: reset each diagram to its source and let
-    // the observer re-render whatever is in view (and the rest when scrolled to).
+    // Re-render on dark/light toggle: reset each diagram to its source so
+    // mermaid.run redraws it with the new theme.
     let timeout;
     new MutationObserver(() => {
       clearTimeout(timeout);
@@ -147,9 +139,10 @@
         nodes.forEach((el) => {
           el.innerHTML = el.dataset.original;
           el.removeAttribute("data-processed");
-          rendered.delete(el);
-          io.observe(el);
         });
+        mermaid
+          .run({ querySelector: ".mermaid" })
+          .catch((e) => console.error("Mermaid render failed", e));
       }, 150);
     }).observe(document.documentElement, {
       attributes: true,
