@@ -390,7 +390,22 @@ html.sidebar-loading .sidebar-nav-wrapper {
 
 /* Product logo in sidebar */
 .sidebar-product-logo {
-  padding: 0.5rem 0 0.25rem;
+  padding: 0.75rem 0;
+}
+
+/* The logo's `<a>` wrapper defaults to `display: inline`, so its line box
+   (line-height ~21px) rendered the anchor ~40px taller than the image and
+   left a band of phantom whitespace below the logo — the logo hugged the top
+   of its block and the hairline dropped well below it. `display: block` makes
+   the anchor wrap the (block) image tightly with no line box, so the logo
+   height equals the image height; the symmetric vertical padding on
+   `.sidebar-product-logo` above then leaves equal space over and under the
+   logo (and the hairline's matching `0.75rem` top margin keeps it balanced),
+   centering the logo in its band. Flexing the anchor instead would re-trigger
+   the replaced-element `min-width: auto` quirk and let the image overflow the
+   column. */
+.sidebar-product-logo a {
+  display: block;
 }
 
 /* Short, centered hairline beneath the logo. A full-width border-bottom
@@ -412,13 +427,22 @@ html.sidebar-loading .sidebar-nav-wrapper {
    overscan) bled the widest logo (Solo Enterprise for agentgateway, ~5.7:1)
    past the column into the content gutter, while making each product's
    wordmark a different size. width:auto lets the widest logo bind on
-   max-width and narrower ones bind on max-height. */
+   max-width and narrower ones bind on max-height. `margin-inline: auto`
+   centers the narrower logos in the column (the widest fills it exactly, so
+   the margins collapse to zero) — matching the centered hairline below.
+   Do NOT set `display` here: a `.sidebar-product-logo img` rule (specificity
+   0,1,1) outranks the `.sidebar-logo-dark { display: none }` toggle (0,1,0)
+   and would force BOTH the light and dark variants visible — the dark logo is
+   light-on-light so it reads as invisible but still occupies a row, stacking
+   an empty logo's worth of height below the visible one. The light/dark
+   toggle rules below own `display`; `margin-inline: auto` still centers the
+   one visible (block) variant. */
 .sidebar-product-logo img {
-  display: block;
   width: auto;
   max-width: 100%;
   height: auto;
   max-height: 2.5rem;
+  margin-inline: auto;
 }
 
 .sidebar-logo-light { display: block; }

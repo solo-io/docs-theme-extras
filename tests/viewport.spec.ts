@@ -173,6 +173,45 @@ test.describe("viewport responsive layout", () => {
         ).toBeGreaterThanOrEqual(edges!.boxLeft - 1);
       });
 
+      // Regression guard: exactly one logo variant (light OR dark) is visible
+      // at a time. When a consumer configures both `path` and `dark`, the
+      // sidebar renders two stacked <img> (`.sidebar-logo-light` /
+      // `.sidebar-logo-dark`) and the `.dark`-scoped toggle rules flip which
+      // one is `display: none`. The bug: a bare `.sidebar-product-logo img`
+      // rule that sets `display` (specificity 0,1,1) outranks the
+      // `.sidebar-logo-dark { display: none }` toggle (0,1,0), forcing BOTH
+      // variants visible — the off-theme one reads as invisible (light-on-light)
+      // but still occupies a logo-height row, stacking dead space below the
+      // real logo and dropping the hairline. Sizing rules on the img must not
+      // set `display`. Self-skips when no logo is configured or the logo is
+      // hidden at this width (e.g. below md, where the whole block is hidden).
+      test("sidebar shows exactly one logo variant", async ({ page }) => {
+        await page.goto(REPRESENTATIVE_PAGE!);
+        if ((await page.locator(".sidebar-product-logo img").count()) === 0) {
+          test.skip(true, "no sidebar product logo configured for this build");
+        }
+        const visibleCount = await page.evaluate(() => {
+          const imgs = Array.from(
+            document.querySelectorAll(".sidebar-product-logo img"),
+          ) as HTMLElement[];
+          // An off-theme/hidden variant has a zero-height box; the whole block
+          // is also display:none below md. Count only imgs that actually paint.
+          return imgs.filter((img) => {
+            const r = img.getBoundingClientRect();
+            return r.height > 0 && r.width > 0;
+          }).length;
+        });
+        if (visibleCount === 0) {
+          test.skip(true, "sidebar logo not rendered/visible at this width");
+        }
+        expect(
+          visibleCount,
+          `${visibleCount} logo variants are visible at ${vp.width}px — exactly ` +
+            `one (light or dark) should paint; a sizing rule on the img is ` +
+            `likely overriding the .sidebar-logo-dark display toggle`,
+        ).toBe(1);
+      });
+
       test("right-rail TOC visibility matches xl breakpoint", async ({ page }) => {
         await page.goto(REPRESENTATIVE_PAGE!);
         const toc = page.locator(".hextra-toc").first();
