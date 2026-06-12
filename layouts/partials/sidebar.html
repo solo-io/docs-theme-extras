@@ -409,11 +409,11 @@
             <a href="{{ .RelPermalink }}"
                class="sidebar-link {{ if $childIsActive }}sidebar-active-item{{ end }}"
                {{ if $childIsActive }}aria-current="page"{{ end }}>
-              <span class="hx:flex-1">{{ .Title | default .File.LogicalName }}</span>
+              <span class="hx:flex-1">{{ .LinkTitle | default .File.LogicalName }}</span>
             </a>
             {{- if $hasChildren -}}
               <button type="button" class="sidebar-toggle"
-                      aria-label="Toggle {{ .Title | default .File.LogicalName }} subsection"
+                      aria-label="Toggle {{ .LinkTitle | default .File.LogicalName }} subsection"
                       aria-expanded="{{ $childIsExpanded }}">
                 <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
