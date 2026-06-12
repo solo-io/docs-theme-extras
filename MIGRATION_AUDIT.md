@@ -179,7 +179,7 @@ agw-oss never enters the `if currentProduct` branch, so the simple file-fetch be
 These are docs-framework-relevant but not exercised by the fixture. Defer to phase 2 follow-up if fixture coverage expands:
 - `doc-test.html` — test wrapper for embedded YAML; investigate if useful generally
 - `gloss.html` — glossary shortcode
-- `redirect.html` — utility
+- ~~`redirect.html` — utility~~ — DONE: centralized into extras (`layouts/_shortcodes/redirect.html`), `path=` resolution moved onto `utils/page-context.html`; covered by `tests/redirect.spec.ts` + the `v2/redirect` fixture page. See the Redirect entry in CHANGELOG.
 - `reuse-append.html` — variant of reuse
 - `github-yaml.html` — variant of github
 

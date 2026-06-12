@@ -1,0 +1,45 @@
+{{- /*
+    Shortcode: redirect
+    Emits a client-side redirect to another URL: a <script> that sets
+    window.location, a <noscript> meta-refresh fallback, and a visible
+    "Redirecting to …" link for users (and crawlers) who don't follow
+    either. Use it on a stub page that has moved, to bounce readers to the
+    canonical location.
+
+    Parameters:
+      - 0 / url:  A URL to redirect to (used as-is).
+      - path:     A section-relative path resolved to the current docs
+                  section (e.g. "/tutorials/basic/"). Resolution goes through
+                  utils/page-context.html, the same prefix card.html and the
+                  link shortcodes use, so it works for every section layout
+                  the partial knows about (kubernetes, standalone, envoy,
+                  agentgateway, …) without hardcoding a regex here. Falls back
+                  to FirstSection.RelPermalink for pages outside the
+                  /docs/<section>/<version>/ shape.
+
+    Examples:
+      {{< redirect "/some/url" >}}
+      {{< redirect url="/some/url" >}}
+      {{< redirect path="/tutorials/basic/" >}}
+*/ -}}
+{{- $url := .Get 0 | default (.Get "url") | default "" -}}
+{{- $path := .Get "path" -}}
+{{- if $path -}}
+  {{- $pathTrimmed := strings.TrimPrefix "/" $path -}}
+  {{- $ctx := partial "utils/page-context.html" . -}}
+  {{- $section := $ctx.prefix -}}
+  {{- if not $section }}{{ $section = strings.TrimSuffix "/" .Page.FirstSection.RelPermalink }}{{ end -}}
+  {{- $section = replaceRE `^https?://[^/]+` "" $section -}}
+  {{- $section = replaceRE `^/localhost:[^/]+` "" $section -}}
+  {{- if not (hasPrefix $section "/") }}{{ $section = printf "/%s" $section }}{{ end -}}
+  {{- $url = printf "%s/%s" $section $pathTrimmed -}}
+  {{- if not (strings.HasSuffix $url "/") }}{{ $url = printf "%s/" $url }}{{ end -}}
+  {{- range (seq 10) }}{{ $url = replace $url "//" "/" }}{{ end -}}
+{{- end -}}
+<script>
+  window.location.href = "{{ $url }}";
+</script>
+<noscript>
+  <meta http-equiv="refresh" content="0; url={{ $url }}">
+</noscript>
+<p>Redirecting to <a href="{{ $url }}">{{ $url }}</a>...</p>
