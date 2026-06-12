@@ -1,10 +1,18 @@
 {{- /* Render a version-specific banner if configured in [[params.versions]].
-       Matches the current page's URL path against linkVersion entries. */ -}}
+       Matches the current page's URL path against linkVersion entries.
+
+       When a version entry sets `bannerID`, look up a per-language translation
+       via i18n and fall back to the literal `banner` string when no translation
+       exists for the current language (e.g. English, which has no i18n table). */ -}}
 {{- $versionPath := trim .FirstSection.RelPermalink "/" -}}
 {{- $bannerText := "" -}}
 {{- range .Site.Params.versions -}}
   {{- if and (not $bannerText) .banner $versionPath (in $versionPath .linkVersion) -}}
     {{- $bannerText = .banner -}}
+    {{- with .bannerID -}}
+      {{- $translated := i18n . -}}
+      {{- if $translated -}}{{- $bannerText = $translated -}}{{- end -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
 {{- with $bannerText }}

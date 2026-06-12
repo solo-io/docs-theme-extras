@@ -15,7 +15,7 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
-## [Unreleased]
+## [v0.1.4] — 2026-06-12
 
 ### Redirect
 
@@ -24,6 +24,10 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 ### Language switcher
 
 - **The language switcher now only appears on pages that actually have a translation.** Hextra's `language-switch.html` gates the switcher on `hugo.IsMultilingual`, which is true site-wide the moment a consumer's config defines more than one language. On the `docs` hub that means the switcher renders on every product and version even though only the `latest` trees are translated (currently agentgateway/agentregistry enterprise into Japanese), so clicking it on an untranslated page dead-ends on the default-language fallback. A centralized override at `layouts/_partials/language-switch.html` tightens the guard to `and (hugo.IsMultilingual) ($page.IsTranslated)`, so the button renders only when the current page has a real counterpart in another language — Hugo pairs the `content/{en,ja}/<product>/<version>/…` trees as translations automatically. Single-language consumers are unaffected (`IsMultilingual` is false for them, short-circuiting the `if`). The override is a near-verbatim copy of the `hextra@v0.12.3` partial with the one-line guard change, and lives in `_partials/` so it wins over Hextra the same way the centralized sidebar/TOC do; re-sync it on a Hextra bump. Example of the broken pattern (the switcher rendering on an untranslated older version, where it has no Japanese target): [Solo Enterprise for agentgateway — 2.1.x](https://docs.solo.io/agentgateway/2.1.x/).
+
+### Version banner
+
+- **The version banner can now be translated per language instead of always rendering its English `[[params.versions]]` string.** `version-banner.html` read the `banner` field straight off the matched `[[params.versions]]` entry and `markdownify`'d it. Because that `versions` array lives under the shared, language-agnostic `[params]` table — and Hugo's per-language param merge replaces arrays wholesale rather than element-wise — there was no practical way to localize a single banner string, so a translated page (e.g. the Japanese `latest` trees for agentgateway/agentregistry enterprise) showed the English banner. The partial now reads an optional `bannerID` from the matched entry and, when present, looks up `i18n .bannerID`; a non-empty result replaces the banner text, and an empty one (the default language, which has no i18n table, or any key a consumer hasn't translated) falls back to the literal `banner` string. This is behavior-preserving for every entry that sets no `bannerID` and for every single-language consumer: with no key the lookup is skipped and the English `banner` renders exactly as before. The consumer side is two additions: a `bannerID` on each translatable `[[params.versions]]` entry and the matching strings in `i18n/ja.yaml` (the version banner keys, looked up by ID and shared where the English text is identical). Example of the broken pattern (a Japanese `latest` page whose "newest features / no long-term support" banner is still rendered in English): [Solo Enterprise for agentgateway — 日本語 latest](https://docs.solo.io/agentgateway/ja/latest/).
 
 ### Sidebar
 
