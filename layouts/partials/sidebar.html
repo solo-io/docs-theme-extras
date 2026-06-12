@@ -404,16 +404,31 @@
         {{- end -}}
         {{- $hasChildren := gt (len $grandchildren) 0 -}}
 
+        {{- /* Per-page sidebar adornments, driven by front matter and mirroring
+               the in-page badges in docs/single.html:
+                 - `icon`: a Material Symbols glyph name (e.g. `sailing`)
+                 - `enterprise: true` / `oss: true`: nav badges
+               Both the .material-icons/.sidebar-icon and .sidebar-badge* classes
+               are styled in docs-theme-extras.css. The Open Source variant is
+               currently unused by any content but kept for parity with the
+               page-header badges. */ -}}
+        {{- $navLabel := .LinkTitle | default .File.LogicalName -}}
+        {{- $icon := .Params.icon | default "" -}}
+
         <li class="hx:relative"{{ if $hasChildren }} data-sidebar-item data-expanded="{{ $childIsExpanded }}"{{ end }}>
           <div class="sidebar-link-wrapper">
             <a href="{{ .RelPermalink }}"
                class="sidebar-link {{ if $childIsActive }}sidebar-active-item{{ end }}"
                {{ if $childIsActive }}aria-current="page"{{ end }}>
-              <span class="hx:flex-1">{{ .LinkTitle | default .File.LogicalName }}</span>
+              {{- with $icon }}<i class="material-icons sidebar-icon" aria-hidden="true">{{ . }}</i>{{ end -}}
+              <span class="hx:flex-1">{{ $navLabel }}
+                {{- if .Params.enterprise }} <span class="sidebar-badge sidebar-badge-enterprise">Enterprise</span>{{ end -}}
+                {{- if .Params.oss }} <span class="sidebar-badge sidebar-badge-oss">Open Source</span>{{ end -}}
+              </span>
             </a>
             {{- if $hasChildren -}}
               <button type="button" class="sidebar-toggle"
-                      aria-label="Toggle {{ .LinkTitle | default .File.LogicalName }} subsection"
+                      aria-label="Toggle {{ $navLabel }} subsection"
                       aria-expanded="{{ $childIsExpanded }}">
                 <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
