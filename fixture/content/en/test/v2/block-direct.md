@@ -30,6 +30,30 @@ A conditional body that is a standalone pipe table. It must render as a real `<t
 
 An inline conditional body in the middle of a sentence must still render inline, with no surrounding block element and the leading/trailing space preserved: start {{% conditional-text include-if="test" %}}COND_DIRECT_INLINE inline body{{% /conditional-text %}} end.
 
+## Fenced code block as a conditional-text list-step continuation
+
+A `conditional-text` block whose body's first non-blank line is an INDENTED
+fenced code block (a list-item continuation; the `2.` marker is on the
+preceding line, outside the block). If the shortcode `RenderString`s the fence
+it emits a `<div class="hextra-code-block"><pre>` into the page's markdown
+stream; the page parser then treats that block-level `<div>` as a CommonMark
+HTML block, closes the enclosing `<li>`/`<ol>` early, and the code block
+fragments — an empty `hextra-code-block` orphans outside the list, or
+`</li></ol>` sweeps inside the `<pre>` and the following step leaks as raw
+`3. …` text. The `isFencedBlock` check (inline in `conditional-text.html`)
+raw-emits the indented fence instead, so the single outer render builds a
+well-formed `<li>…<pre></li>` and the list stays intact.
+
+1. First step before the conditional fence.
+2. Apply the manifest:
+{{% conditional-text include-if="test" %}}
+   ```sh
+   # COND_FENCEBLOCK_CODE
+   echo "fenced code inside a conditional-text list step"
+   ```
+{{% /conditional-text %}}
+3. COND_FENCEBLOCK_AFTER. Final step, which must continue the same `<ol>` rather than leak as raw text.
+
 ## Excluded heading (negative control)
 
 The same heading shape under an `exclude-if` that matches the build condition. It must produce no output at all.

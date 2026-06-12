@@ -16,6 +16,21 @@
 
 {{< alert context="success" >}}MARKER_ALERT_SUCCESS. Success alerts use the success context.{{< /alert >}}
 
+### With a list
+
+A percent-form alert whose body is a markdown list. This is the case behind the
+"alert body renders at one size" fix: a bare-inline-text alert (above) and a
+list-bearing alert (here) must render their body text at the SAME size. Before
+the fix the list-bearing one fell back to the smaller `.solo-alert` font-size,
+so two consecutive alerts looked different.
+
+{{% callout type="info" %}}
+MARKER_ALERT_LIST_BODY. This alert contains a list:
+
+- MARKER_ALERT_LIST_ITEM1 first item
+- MARKER_ALERT_LIST_ITEM2 second item
+{{% /callout %}}
+
 ## Callout
 
 In the local override at `layouts/shortcodes/callout.html`, the `callout` shortcode is implemented identically to `alert` — same context-to-class map, same icon set, same DOM. The two are aliases. The fixture exercises all four canonical types so a regression that drifts one shortcode away from the other surfaces immediately.

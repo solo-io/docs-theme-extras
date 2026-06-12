@@ -1,5 +1,19 @@
 import { test, expect } from "@playwright/test";
-import { TEST_PAGES, readFixture } from "./helpers/fixture";
+import path from "node:path";
+import { TEST_PAGES, TEST_PRODUCT_ROOT, readFixture } from "./helpers/fixture";
+import { target } from "./helpers/target";
+
+// The trailing-step pages are fixture-only (they exist solely in the extras
+// fixture build, not in consumer sites) and are intentionally NOT in the
+// [[pages]] list — static.spec.ts would treat them as comprehensive topic
+// pages and fail the "all markers present" check. Resolve them by direct
+// path and gate on the fixture target, the same pattern conditional-block /
+// version-cards use.
+const IS_FIXTURE_TARGET = target.name.startsWith("docs-theme-extras-fixture");
+const trailingPage = (name: string) => ({
+  name,
+  filePath: path.join(TEST_PRODUCT_ROOT, name, "index.html"),
+});
 
 // Regression guard for solo-io/docs#2480. A version block that wraps
 // bullets and fenced code inside a nested numbered list (continuation at
@@ -169,44 +183,44 @@ const TRAILING_FENCE = "MARKER_VERSION_TRAILING_FENCE";
 // reuse-vs-rebase equivalence assertion in versioning.spec.ts. Dedicated
 // trailing-step.md pages at v1/v2/main pull the same shared conref, and
 // the spec asserts behavior on those pages only.
-const TRAILING_STEP_V2 = ["v2/trailing-step"];
-const TRAILING_STEP_NON_V2 = ["v1/trailing-step", "main/trailing-step"];
+const TRAILING_STEP_V2 = [trailingPage("v2/trailing-step")];
+const TRAILING_STEP_NON_V2 = [
+  trailingPage("v1/trailing-step"),
+  trailingPage("main/trailing-step"),
+];
 
 test.describe("trailing step after percent-form version renders as <li>", () => {
-  for (const page of TEST_PAGES) {
-    if (!TRAILING_STEP_V2.includes(page.name)) continue;
+  test.skip(!IS_FIXTURE_TARGET, "fixture-only: trailing-step pages exist only in the extras fixture build");
+  for (const page of TRAILING_STEP_V2) {
 
-    // Marked as fail-pending because the upstream version.html still uses
-    // Page.RenderString with display:inline, which collapses block content
-    // into a self-contained HTML block and breaks the parent list. The
-    // docs hub ships a local override (docs/layouts/shortcodes/version.html)
-    // that emits .Inner raw and fixes this for percent-bracket callers. The
-    // upstream fix needs to handle both percent- and angle-bracket call
-    // forms; until that lands, this test documents the bug and would pass
-    // automatically once upstream is patched. Remove `.fail` after upstream
-    // is fixed.
-    test.fail(
-      `${page.name}: trailing step is wrapped in <li>, not raw text`,
-      () => {
-        const html = visibleHtml(page.filePath);
-        const idx = html.indexOf(TRAILING_STEP);
-        expect(
-          idx,
-          `${TRAILING_STEP} missing from ${page.name}`,
-        ).toBeGreaterThan(-1);
+    // Previously fail-pending: the upstream version.html used
+    // Page.RenderString with display:inline, which collapsed block content
+    // into a self-contained HTML block and broke the parent list, so the
+    // trailing step leaked as raw text. docs-theme-extras now ships the
+    // raw-emit fix in version.html / utils/inner-shape.html (the
+    // isTrailingStep + isFencedBlock raw-emit paths), so the trailing step
+    // renders as a real <li> on the reuse path. Now a hard guard — flipped
+    // from test.fail when the fix landed (and the trailing-step pages were
+    // wired into the fixture [[pages]] list so this actually runs).
+    test(`${page.name}: trailing step is wrapped in <li>, not raw text`, () => {
+      const html = visibleHtml(page.filePath);
+      const idx = html.indexOf(TRAILING_STEP);
+      expect(
+        idx,
+        `${TRAILING_STEP} missing from ${page.name}`,
+      ).toBeGreaterThan(-1);
 
-        const liIdx = html.lastIndexOf("<li", idx);
-        const liCloseIdx = html.lastIndexOf("</li>", idx);
-        expect(
-          liIdx,
-          `${TRAILING_STEP} has no preceding <li> — version shortcode broke parent list continuity`,
-        ).toBeGreaterThan(-1);
-        expect(
-          liIdx,
-          `${TRAILING_STEP} sits after a closed </li> — the trailing step rendered outside the parent <ol>`,
-        ).toBeGreaterThan(liCloseIdx);
-      },
-    );
+      const liIdx = html.lastIndexOf("<li", idx);
+      const liCloseIdx = html.lastIndexOf("</li>", idx);
+      expect(
+        liIdx,
+        `${TRAILING_STEP} has no preceding <li> — version shortcode broke parent list continuity`,
+      ).toBeGreaterThan(-1);
+      expect(
+        liIdx,
+        `${TRAILING_STEP} sits after a closed </li> — the trailing step rendered outside the parent <ol>`,
+      ).toBeGreaterThan(liCloseIdx);
+    });
 
     test(`${page.name}: trailing step is NOT preceded by raw "1." or "2." text`, () => {
       // Strip whitespace and tags; if the markdown leaked, we'd see
@@ -241,12 +255,51 @@ test.describe("trailing step after percent-form version renders as <li>", () => 
         `${TRAILING_FENCE}'s enclosing <pre> has no Chroma class — fence wasn't highlighted`,
       ).toMatch(/class="[^"]*chroma/);
     });
+
+    // The specific symptoms of the fenced-block-in-reused-list bug fixed by
+    // the isFencedBlock raw-emit (extras commit "Fenced codeblock fix"): when
+    // the version body's fence was RenderString'd, the already-rendered
+    // <div class="hextra-code-block"> was re-parsed as a CommonMark HTML
+    // block on the reuse pass, which closed the <li>/<ol> early. The damage
+    // showed two ways: (a) an empty hextra-code-block wrapper orphaned
+    // OUTSIDE the list (a dead copy button), or (b) </li></ol> swept INSIDE
+    // the <pre> (literal closing tags visible in the rendered code). Guard
+    // both between the inner step and the trailing step.
+    test(`${page.name}: fenced block is emitted once, not fragmented`, () => {
+      const html = visibleHtml(page.filePath);
+      const innerStepIdx = html.indexOf("MARKER_VERSION_INNER_STEP");
+      const trailingIdx = html.indexOf(TRAILING_STEP);
+      expect(
+        innerStepIdx,
+        `MARKER_VERSION_INNER_STEP missing from ${page.name}`,
+      ).toBeGreaterThan(-1);
+      expect(trailingIdx, `${TRAILING_STEP} missing`).toBeGreaterThan(innerStepIdx);
+      const region = html.slice(innerStepIdx, trailingIdx);
+
+      // (a) No empty hextra-code-block wrapper (orphaned, dead copy button).
+      expect(
+        region,
+        `An empty hextra-code-block wrapper appears in the version step — the ` +
+          `fence fragmented into an orphaned shell outside the <li>.`,
+      ).not.toMatch(/hextra-code-block[^"]*"[^>]*>\s*<\/div>/);
+
+      // (b) No </li> or </ol> swept inside a <pre> (literal closing tags in
+      //     the rendered code). Scan each <pre>…</pre> in the region.
+      const pres = region.match(/<pre[\s\S]*?<\/pre>/g) || [];
+      for (const pre of pres) {
+        expect(
+          pre,
+          `A </li> or </ol> tag was swept inside a <pre> in the version step — ` +
+            `the reuse re-parse closed the list inside the code block.`,
+        ).not.toMatch(/<\/(?:li|ol)>/);
+      }
+    });
   }
 });
 
 test.describe("trailing step gated by include-if", () => {
-  for (const page of TEST_PAGES) {
-    if (!TRAILING_STEP_NON_V2.includes(page.name)) continue;
+  test.skip(!IS_FIXTURE_TARGET, "fixture-only: trailing-step pages exist only in the extras fixture build");
+  for (const page of TRAILING_STEP_NON_V2) {
     test(`${page.name}: trailing-step fence marker is absent`, () => {
       const html = visibleHtml(page.filePath);
       // The trailing-step <li> itself stays in the source (it's outside

@@ -161,4 +161,12 @@ export const CONDITIONAL_MARKERS = {
   blockTable: "COND_DIRECT_TABLE",
   blockInline: "COND_DIRECT_INLINE",
   blockExcluded: "COND_DIRECT_EXCLUDED",
+  // Fenced code block as a conditional-text list-step continuation (the
+  // body's first non-blank line is an INDENTED fence). The isFencedBlock
+  // raw-emit must keep the fence a single in-list <pre> instead of
+  // fragmenting the surrounding <ol>. fenceBlockCode is gated (include-if);
+  // fenceBlockAfter is the following ungated step, used to assert the list
+  // stayed intact (it must render as its own <li>, not leak as raw "3." text).
+  fenceBlockCode: "COND_FENCEBLOCK_CODE",
+  fenceBlockAfter: "COND_FENCEBLOCK_AFTER",
 } as const;

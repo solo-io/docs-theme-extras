@@ -61,6 +61,14 @@ const V2_ONLY_TOPICS = [
     title: "Cond Reuse Table",
     descriptionContains: "with a nested reuse",
   },
+  // nav-group is a child-bearing SECTION added so the left nav renders a
+  // collapsible branch (data-sidebar-item) for sidebar-rail.spec.ts. It still
+  // shows as a section card on the v2 index like any other child topic.
+  {
+    slug: "nav-group",
+    title: "Nav group",
+    descriptionContains: "collapsible branch",
+  },
 ];
 
 const sectionPages: SectionCheck[] = target.versions

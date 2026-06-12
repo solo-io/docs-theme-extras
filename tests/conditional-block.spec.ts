@@ -92,6 +92,80 @@ test.describe("conditional-text block content (direct page)", () => {
     ).toContain(`start ${CONDITIONAL_MARKERS.blockInline} inline body end.`);
   });
 
+  // Direct-path render of a conditional-text body whose first non-blank line
+  // is an INDENTED fence (a list-step continuation). NOTE: on the direct page
+  // a single RenderString does NOT fragment the list whether or not the
+  // isFencedBlock raw-emit fires — the fragmentation the fix targets only
+  // shows up on the SECOND render (reuse/rebase re-parse), which conditional-
+  // text can't be driven through here (Hugo's shortcode lexer rejects a
+  // list-spanning percent block on the reuse path). So this is a render +
+  // gating smoke for the direct block path, not a discriminating guard for
+  // the isFencedBlock fix itself — that shared logic is guarded through the
+  // version reuse path in version-nested-list.spec.ts (trailing-step).
+  test("fenced code block in a list step renders as an in-list code block", () => {
+    const html = visibleHtml();
+    const code = CONDITIONAL_MARKERS.fenceBlockCode;
+    const after = CONDITIONAL_MARKERS.fenceBlockAfter;
+
+    const codeIdx = html.indexOf(code);
+    const afterIdx = html.indexOf(after);
+    expect(codeIdx, `${code} missing from block-direct`).toBeGreaterThan(-1);
+    expect(afterIdx, `${after} missing from block-direct`).toBeGreaterThan(-1);
+
+    // 1) The fence rendered as a real Chroma-highlighted code block, not as
+    //    literal ```sh text. The marker is a yaml/sh comment INSIDE the <code>.
+    const preIdx = html.lastIndexOf("<pre", codeIdx);
+    expect(preIdx, `${code} has no preceding <pre> — fence not parsed`).toBeGreaterThan(-1);
+    const preTag = html.slice(preIdx, html.indexOf(">", preIdx) + 1);
+    expect(
+      preTag,
+      `${code}'s enclosing <pre> has no Chroma class — the indented fence ` +
+        `was not raw-emitted into the list and rendered as a code block.`,
+    ).toMatch(/class="[^"]*chroma/);
+
+    // 2) The fence sits inside an open <code> at the marker position (not a
+    //    closed earlier block). codeOpens > codeCloses before the marker.
+    const before = html.slice(0, codeIdx);
+    const codeOpens = (before.match(/<code[\s>]/g) || []).length;
+    const codeCloses = (before.match(/<\/code>/g) || []).length;
+    expect(
+      codeOpens,
+      `${code} is not inside an open <code> block — fence leaked as plain text.`,
+    ).toBeGreaterThan(codeCloses);
+
+    // 3) No fragmentation between the fence and the following step: the
+    //    parent <ol> must NOT close early (the symptom that drops the next
+    //    step out of the list and leaks it as raw "3." text). Assert no
+    //    </ol> appears between the rendered fence and the trailing step.
+    const region = html.slice(codeIdx, afterIdx);
+    expect(
+      (region.match(/<\/ol>/g) || []).length,
+      `An </ol> closes between ${code} and ${after} — the conditional-text ` +
+        `fence broke the surrounding list on the direct render path.`,
+    ).toBe(0);
+
+    // 4) No empty hextra-code-block wrapper orphaned by the fragmentation.
+    expect(
+      region,
+      `An empty hextra-code-block wrapper appears after the fence — the ` +
+        `block fragmented (a dead copy-button shell outside the list).`,
+    ).not.toMatch(/hextra-code-block[^"]*"[^>]*>\s*<\/div>/);
+
+    // 5) The trailing step continues the list as its own <li>, with no
+    //    closed </ol> immediately before it.
+    const liIdx = html.lastIndexOf("<li", afterIdx);
+    const olCloseIdx = html.lastIndexOf("</ol>", afterIdx);
+    expect(
+      liIdx,
+      `${after} has no preceding <li> — the trailing step left the list.`,
+    ).toBeGreaterThan(-1);
+    expect(
+      liIdx,
+      `${after} sits after a closed </ol> — the trailing step rendered ` +
+        `outside the parent list (leaked as raw "3." text).`,
+    ).toBeGreaterThan(olCloseIdx);
+  });
+
   test("excluded block heading produces no output", () => {
     const html = visibleHtml();
     expect(

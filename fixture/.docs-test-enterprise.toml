@@ -50,6 +50,14 @@ url = "/test/main/everything/"
 [[pages]]
 url = "/test/main/rebased/"
 
+# NOTE: the trailing-step fixture pages (test/{v1,v2,main}/trailing-step) are
+# deliberately NOT listed here. static.spec.ts treats every non-landing
+# [[pages]] entry as a comprehensive "all shortcode markers present" topic
+# page; trailing-step is a focused regression page and would fail that. The
+# version-nested-list spec resolves those pages by direct path instead
+# (gated on IS_FIXTURE_TARGET), the same pattern conditional-block / version-
+# cards use for fixture-only pages.
+
 # Version segment is /v1/, /v2/, or /main/ at the start of the URL (after
 # baseURL is stripped by target.versionOf).
 [versioning]
