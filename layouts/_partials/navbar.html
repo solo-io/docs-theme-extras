@@ -54,17 +54,29 @@
         {{- end -}}
       {{- end -}}
 
+      {{- /* For a non-default language, the URL carries a language segment after
+             the folder (e.g. /<folder>/ja/<version>/<rest>). Capture it so version
+             detection skips past it and the swapped URLs keep the /ja/ prefix
+             instead of dropping it (which sent every dropdown entry to a 404).
+             site.LanguagePrefix is "" for the default language and "/ja" (or "ja")
+             otherwise; TrimPrefix normalizes either shape to a bare "ja". */ -}}
+      {{- $langSeg := strings.TrimPrefix "/" site.LanguagePrefix -}}
+      {{- $langPath := "" -}}
+      {{- if $langSeg -}}{{- $langPath = printf "/%s" $langSeg -}}{{- end -}}
+
       {{- /* Extract the version segment from the URL itself.
              .Page.FirstSection only returns the first section (e.g. "/gloo-mesh/"),
              which doesn't include the version. Splitting the full URL is the only
-             reliable way to find the version segment after the folder.
-                Prod URL: /<folder>/<version>/<rest>  → version is segment[1]
-                Dev URL:  /<version>/<rest>           → version is segment[0] */ -}}
+             reliable way to find the version segment after the folder (and language).
+                Prod URL: /<folder>/<version>/<rest>      → version is segment[1]
+                Prod+lang: /<folder>/ja/<version>/<rest>  → version is segment[2]
+                Dev URL:  /<version>/<rest>               → version is segment[0] */ -}}
       {{- $segments := split (trim $.Page.RelPermalink "/") "/" -}}
       {{- $urlVersion := "" -}}
       {{- $pathAfterVersion := "" -}}
       {{- $skip := 1 -}}
       {{- if $includeFolder -}}{{- $skip = 2 -}}{{- end -}}
+      {{- if $langSeg -}}{{- $skip = add $skip 1 -}}{{- end -}}
       {{- if ge (len $segments) $skip -}}
         {{- $urlVersion = index $segments (sub $skip 1) -}}
         {{- $pathAfterVersion = delimit (after $skip $segments) "/" -}}
@@ -156,9 +168,9 @@
               {{- $isSameProduct := or (not $currentProduct) (eq (.product | default "") $currentProduct) -}}
               {{- if $isSameProduct -}}
                 {{- if $includeFolder -}}
-                  {{- $versionUrl = printf "/%s/%s/%s" $folder .linkVersion $pathAfterVersion -}}
+                  {{- $versionUrl = printf "/%s%s/%s/%s" $folder $langPath .linkVersion $pathAfterVersion -}}
                 {{- else -}}
-                  {{- $versionUrl = printf "/%s/%s" .linkVersion $pathAfterVersion -}}
+                  {{- $versionUrl = printf "%s/%s/%s" $langPath .linkVersion $pathAfterVersion -}}
                 {{- end -}}
                 {{- /* If the same-path page does not exist in the target version, route
                        to that version's not-in-version fallback page (if one exists), so
@@ -171,9 +183,9 @@
                   {{- $fallbackLookupPath := printf "/%s/not-in-version" .linkVersion -}}
                   {{- if site.GetPage $fallbackLookupPath -}}
                     {{- if $includeFolder -}}
-                      {{- $versionUrl = printf "/%s/%s/not-in-version/" $folder .linkVersion -}}
+                      {{- $versionUrl = printf "/%s%s/%s/not-in-version/" $folder $langPath .linkVersion -}}
                     {{- else -}}
-                      {{- $versionUrl = printf "/%s/not-in-version/" .linkVersion -}}
+                      {{- $versionUrl = printf "%s/%s/not-in-version/" $langPath .linkVersion -}}
                     {{- end -}}
                   {{- end -}}
                 {{- end -}}
