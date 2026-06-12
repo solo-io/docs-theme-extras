@@ -106,16 +106,22 @@
       {{- $lookupPath = $versionPrefix -}}
     {{- end -}}
   {{- else if and (ge (len $segments) 2) (ne (index $segments 1) "") -}}
-    {{- /* Enterprise shape, two layouts:
-             Production: /<product>/<version>/…   baseURL=https://host/<product>,
+    {{- /* Enterprise shape, three layouts:
+             Production:            /<product>/<version>/…   baseURL=https://host/<product>,
                                                   so segments[1]=product, segments[2]=version.
-             Local dev:  /<version>/…              baseURL=/ (hugo server),
+             Production + language: /<product>/<lang>/<version>/…   non-default languages
+                                                  (defaultContentLanguageInSubdir=false) gain a
+                                                  /<lang>/ segment after the product, so the
+                                                  version lands at segments[3]. The default
+                                                  language (en) has no prefix and stays at [2].
+             Local dev:             /<version>/…   baseURL=/ (hugo server),
                                                   so segments[1]=version directly.
-           Try segments[2] first (production); fall back to segments[1] (local).
-           The version match — against site.Params.versions[].linkVersion or a
-           well-known marker — is the disambiguator. */ -}}
+           Try segments[2] first (production), then [3] (production + language),
+           then [1] (local). The version match — against site.Params.versions[].linkVersion
+           or a well-known marker — is the disambiguator. */ -}}
     {{- $candidatePositions := slice -}}
     {{- if ge (len $segments) 3 -}}{{- $candidatePositions = $candidatePositions | append 2 -}}{{- end -}}
+    {{- if ge (len $segments) 4 -}}{{- $candidatePositions = $candidatePositions | append 3 -}}{{- end -}}
     {{- $candidatePositions = $candidatePositions | append 1 -}}
     {{- range $candidatePositions -}}
       {{- $i := . -}}
@@ -138,17 +144,25 @@
       {{- end -}}
     {{- end -}}
     {{- if $isVersionedDocs -}}
+      {{- /* $versionPrefix is the published-URL prefix through and including the
+             version segment, so render-sidebar-tree's hasPrefix check matches the
+             page RelPermalinks. Build it from the matched segments rather than
+             reassembling from $section/$currentVersion, so any product and
+             language (/<lang>/) segments that precede the version are carried
+             along — multilingual URLs (/<product>/<lang>/<version>/…) would
+             otherwise filter to nothing and leave an empty sidebar. */ -}}
+      {{- $versionPrefix = printf "%s/" (delimit (first (add $matchedIdx 1) $segments) "/") -}}
+      {{- /* $section is the product segment, used by the mobile version row.
+             Only the production shape (version at [2], product at [1]) exposes
+             one; the local-dev and language-prefixed shapes leave it empty. */ -}}
       {{- if eq $matchedIdx 2 -}}
         {{- $section = index $segments 1 -}}
-        {{- $versionPrefix = printf "/%s/%s/" $section $currentVersion -}}
       {{- else -}}
-        {{- /* Local dev: no product prefix in the URL. */ -}}
         {{- $section = "" -}}
-        {{- $versionPrefix = printf "/%s/" $currentVersion -}}
       {{- end -}}
       {{- /* GetPage paths are relative to contentDir, which is set to the
-             product subtree, so the lookup never includes the product prefix
-             even in production. */ -}}
+             product subtree (and is per-language: content/<lang>/<product>),
+             so the lookup never includes the product or language prefix. */ -}}
       {{- $lookupPath = printf "/%s/" $currentVersion -}}
     {{- end -}}
   {{- end -}}
