@@ -421,15 +421,23 @@ html.sidebar-loading .sidebar-nav-wrapper {
   background: #e5e7eb;
 }
 
-/* Size product logos by a capped height so the wordmark reads at a consistent
-   optical size across products, and cap width at 100% so the logo can never
-   exceed the sidebar column. Sizing by width (the previous `width: 108%`
-   overscan) bled the widest logo (Solo Enterprise for agentgateway, ~5.7:1)
-   past the column into the content gutter, while making each product's
-   wordmark a different size. width:auto lets the widest logo bind on
-   max-width and narrower ones bind on max-height. `margin-inline: auto`
-   centers the narrower logos in the column (the widest fills it exactly, so
-   the margins collapse to zero) — matching the centered hairline below.
+/* Size product logos so each wordmark fills the sidebar column and reads as a
+   substantial header, while never exceeding the column. The "Solo Enterprise
+   for <product>" lockups all share the same glyph height but differ in width
+   by name length, so their aspect ratios range from ~5.7:1 (agentgateway, the
+   longest name) down to ~3.2:1 (gloo-mesh, the shortest). With width:auto +
+   max-width:100%, the widest logo binds on max-width and fills the column
+   exactly (~45px tall); the shorter-named ones bind on max-height instead.
+   The earlier 2.5rem cap held every logo to the same glyph height, but that
+   left the shorter names filling only ~50% of the column so they read as
+   tiny next to agentgateway — raising the cap to 3.5rem lets the shorter
+   logos grow to fill 70–95% of the column. The trade-off: short-named
+   products now render at a slightly larger glyph size than the widest one,
+   which is the intended prominence boost. Sizing by width directly (the
+   original `width: 108%` overscan) instead bled agentgateway past the column
+   into the content gutter, so keep width:auto and tune the cap. `margin-inline:
+   auto` centers the narrower logos in the column (the widest fills it exactly,
+   so the margins collapse to zero) — matching the centered hairline below.
    Do NOT set `display` here: a `.sidebar-product-logo img` rule (specificity
    0,1,1) outranks the `.sidebar-logo-dark { display: none }` toggle (0,1,0)
    and would force BOTH the light and dark variants visible — the dark logo is
@@ -441,7 +449,7 @@ html.sidebar-loading .sidebar-nav-wrapper {
   width: auto;
   max-width: 100%;
   height: auto;
-  max-height: 2.5rem;
+  max-height: 3.5rem;
   margin-inline: auto;
 }
 
