@@ -15,7 +15,7 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
-## [Unreleased] — 2026-06-16
+## [v0.1.5] — 2026-06-16
 
 ### Copy as Markdown
 
