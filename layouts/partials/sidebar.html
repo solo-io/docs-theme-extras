@@ -63,6 +63,12 @@
          Detect via segments[1]: "docs" → OSS, anything else → enterprise. */ -}}
   {{- $segments := split $context.RelPermalink "/" -}}
   {{- $section := "" -}}
+  {{- /* $versionBase is the full published-URL prefix that precedes the version
+         segment (all segments before the version), so the mobile version row can
+         rebuild hrefs that keep every product and language (/<lang>/) prefix.
+         $section only holds the single product segment, which drops the language
+         prefix for multilingual URLs; $versionBase carries both. */ -}}
+  {{- $versionBase := "" -}}
   {{- $currentVersion := "" -}}
   {{- $isVersionedDocs := false -}}
   {{- $isOSSShape := false -}}
@@ -152,14 +158,19 @@
              along — multilingual URLs (/<product>/<lang>/<version>/…) would
              otherwise filter to nothing and leave an empty sidebar. */ -}}
       {{- $versionPrefix = printf "%s/" (delimit (first (add $matchedIdx 1) $segments) "/") -}}
-      {{- /* $section is the product segment, used by the mobile version row.
-             Only the production shape (version at [2], product at [1]) exposes
-             one; the local-dev and language-prefixed shapes leave it empty. */ -}}
+      {{- /* $section is the product segment, used to look up per-section version
+             lists. Only the production shape (version at [2], product at [1])
+             exposes one; the local-dev and language-prefixed shapes leave it
+             empty. The mobile version row builds hrefs from $versionBase instead,
+             which keeps the language prefix the language-prefixed shape drops. */ -}}
       {{- if eq $matchedIdx 2 -}}
         {{- $section = index $segments 1 -}}
       {{- else -}}
         {{- $section = "" -}}
       {{- end -}}
+      {{- /* Everything before the version segment: "" (local dev),
+             "/<product>" (production), or "/<product>/<lang>" (multilingual). */ -}}
+      {{- $versionBase = delimit (first $matchedIdx $segments) "/" -}}
       {{- /* GetPage paths are relative to contentDir, which is set to the
              product subtree (and is per-language: content/<lang>/<product>),
              so the lookup never includes the product or language prefix. */ -}}
@@ -315,11 +326,10 @@
                   {{- if $isOSSShape -}}
                     {{- $href = printf "/docs/%s/%s%s" $section .linkVersion $newPath -}}
                     {{- $targetPath = printf "/docs/%s/%s%s" $section .linkVersion $newPath -}}
-                  {{- else if $section -}}
-                    {{- $href = printf "/%s/%s%s" $section .linkVersion $newPath -}}
-                    {{- $targetPath = printf "/%s%s" .linkVersion $newPath -}}
                   {{- else -}}
-                    {{- $href = printf "/%s%s" .linkVersion $newPath -}}
+                    {{- /* $versionBase carries the product and (for multilingual
+                           URLs) the language prefix; "" in local dev. */ -}}
+                    {{- $href = printf "%s/%s%s" $versionBase .linkVersion $newPath -}}
                     {{- $targetPath = printf "/%s%s" .linkVersion $newPath -}}
                   {{- end -}}
                   {{- if not (site.GetPage $targetPath) -}}
@@ -327,10 +337,8 @@
                     {{- if site.GetPage $fallbackPath -}}
                       {{- if $isOSSShape -}}
                         {{- $href = printf "/docs/%s/%s/not-in-version/" $section .linkVersion -}}
-                      {{- else if $section -}}
-                        {{- $href = printf "/%s/%s/not-in-version/" $section .linkVersion -}}
                       {{- else -}}
-                        {{- $href = printf "/%s/not-in-version/" .linkVersion -}}
+                        {{- $href = printf "%s/%s/not-in-version/" $versionBase .linkVersion -}}
                       {{- end -}}
                     {{- end -}}
                   {{- end -}}

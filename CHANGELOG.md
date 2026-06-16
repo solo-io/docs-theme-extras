@@ -15,6 +15,14 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [v0.1.5] — 2026-06-16
+
+### Sidebar
+
+- **The mobile version chip now keeps the product and language prefix on translated pages, so tapping the current-version chip no longer 404s.** The empty-sidebar fix in v0.1.4 taught the enterprise URL-shape detector to find the version at `segments[3]` for the multilingual `/<product>/<lang>/<version>/…` shape, but the mobile version row (`sidebar-mobile-version-row`) still built its hrefs from `$section`, which holds only the single product segment and is deliberately left empty for any non-production shape (the version-at-`segments[3]` language case and local dev). With `$section` empty, the href fell through to `printf "/%s%s" .linkVersion $newPath` and emitted a root-relative `/latest/…` link that dropped the whole `/<product>/<lang>` prefix — on `solo-io/docs` every Japanese agentregistry page carried one broken self-link (87 link-checker errors, one per page), and the equivalent agentgateway JA pages the same. The row now builds hrefs from a new `$versionBase` — the joined run of URL segments *before* the version (`delimit (first $matchedIdx $segments) "/"`), i.e. `""` in local dev, `/<product>` in production, `/<product>/<lang>` for a translated page — so the prefix that precedes the version is always carried through, for both the swapped-version href and the `not-in-version` fallback. This sits alongside the navbar's "Version dropdown" fix (which uses `site.LanguagePrefix`); the sidebar's mobile row is a separate code path that the earlier fix didn't cover. Behavior is byte-identical for the default language and every single-language consumer: their version still matches at `segments[2]`/`segments[1]`, where `$versionBase` rebuilds to the same `/<product>` (or `""`) prefix the old `$section` branch produced; the multi-section OSS shape keeps its own `/docs/<section>/<version>/…` branch unchanged. Verified against an agentregistry build — EN version chip unchanged at `/agentregistry/latest/…`, JA chip now `/agentregistry/ja/latest/…` where it was `/latest/…` before, and the JA tree's 87 "File not found" link-checker errors drop to zero. Example of the broken pattern (open the mobile nav and tap the version chip — it 404s today): [Solo Enterprise for agentregistry — 日本語 arctl CLI](https://docs.solo.io/agentregistry/ja/latest/reference/cli/arctl/).
+
+---
+
 ## [v0.1.4] — 2026-06-12
 
 ### Redirect
