@@ -10,6 +10,17 @@
 {{- /* Section cards → plain link list. The shortcode and the auto-card
        partial both emit <a class="section-card"><span class="section-card-title"> /
        <p class="section-card-title">; collapse either form to <p><a>. */ -}}
+{{- /* Keep the card description — do NOT collapse a card to a bare title link.
+       Two passes per markup variant: a desc-REQUIRED pattern first (an optional
+       desc group followed by a lazy `.*?</a>` tail gets SKIPPED by the regex
+       engine, so the desc must be its own required match), then a title-only
+       pattern for cards that genuinely have no description. Variants: version /
+       section cards use a <span> title + <span> desc; auto-card grids use <p>. */ -}}
+{{- /* span variant, WITH description */ -}}
+{{- $html = $html | replaceRE `(?s)<a\s+class="section-card"[^>]*href="([^"]*)"[^>]*>.*?<span\s+class="section-card-title"[^>]*>([^<]+)</span>.*?<span\s+class="section-card-desc"[^>]*>([\s\S]*?)</span>.*?</a>` "<p><a href=\"$1\">$2</a></p><p>$3</p>" -}}
+{{- /* auto-card <p> variant, WITH description */ -}}
+{{- $html = $html | replaceRE `(?s)<a\s+class="section-card"[^>]*href="([^"]*)"[^>]*>.*?<p\s+class="section-card-title"[^>]*>([^<]+)(?:<[^>]*>[^<]*)*</p>.*?<p\s+class="section-card-desc"[^>]*>([\s\S]*?)</p>.*?</a>` "<p><a href=\"$1\">$2</a></p><p>$3</p>" -}}
+{{- /* remaining cards with NO description — title link only */ -}}
 {{- $html = $html | replaceRE `(?s)<a\s+class="section-card"[^>]*href="([^"]*)"[^>]*>.*?<span\s+class="section-card-title"[^>]*>([^<]+)</span>.*?</a>` "<p><a href=\"$1\">$2</a></p>" -}}
 {{- $html = $html | replaceRE `(?s)<a\s+class="section-card"[^>]*href="([^"]*)"[^>]*>.*?<p\s+class="section-card-title"[^>]*>([^<]+)(?:<[^>]*>[^<]*)*</p>.*?</a>` "<p><a href=\"$1\">$2</a></p>" -}}
 {{- $html = $html | replaceRE `(?s)<div class="section-cards"[^>]*>(.*?)</div>` "$1" -}}
@@ -22,7 +33,39 @@
 {{- $html = $html | replaceRE `aria-hidden="true"` "" -}}
 {{- $html = $html | replaceRE `<div class="hextra-tabs-panel[^"]*"[^>]*aria-labelledby="([^"]*)"[^>]*>` `<div style="display:block"><p><strong>Option: $1</strong></p>` -}}
 
+{{- /* Pre-convert data tables to GFM. transform.HTMLToMarkdown flattens some
+       tables (e.g. github-table schema tables) to pipe-less text, so we build
+       the GFM ourselves and swap each table for an inert placeholder that
+       survives the conversion untouched, then restore it below. (Chroma's
+       lntable code tables were already stripped above, so every remaining
+       <table> is a data table.) */ -}}
+{{- $tables := slice -}}
+{{- range $i, $tbl := findRE `(?s)<table\b[^>]*>.*?</table>` $html -}}
+  {{- $tables = $tables | append (partial "utils/html-table-to-gfm.html" $tbl) -}}
+  {{- $html = replace $html $tbl (printf "\n\nXGFMTABLEPLACEHOLDER%dX\n\n" $i) 1 -}}
+{{- end -}}
+
+{{- /* Mermaid: <pre class="mermaid"> holds the raw (HTML-escaped) diagram.
+       transform.HTMLToMarkdown would emit a language-less ``` fence, dropping
+       the mermaid tag so it won't render when re-used. Extract, protect with a
+       placeholder, and re-fence as ```mermaid below. */ -}}
+{{- $mermaids := slice -}}
+{{- range $i, $blk := findRE `(?s)<pre[^>]*class="[^"]*\bmermaid\b[^"]*"[^>]*>.*?</pre>` $html -}}
+  {{- $code := $blk | replaceRE `(?s)^<pre[^>]*>` "" | replaceRE `(?s)</pre>\s*$` "" | htmlUnescape | strings.TrimSpace -}}
+  {{- $mermaids = $mermaids | append $code -}}
+  {{- $html = replace $html $blk (printf "\n\nXMERMAIDPLACEHOLDER%dX\n\n" $i) 1 -}}
+{{- end -}}
+
 {{- $md := $html | transform.HTMLToMarkdown -}}
+
+{{- /* Restore GFM tables before the link/punctuation passes below so table-cell
+       links get absolutized like any other link. */ -}}
+{{- range $i, $gfm := $tables -}}
+  {{- $md = replace $md (printf "XGFMTABLEPLACEHOLDER%dX" $i) $gfm 1 -}}
+{{- end -}}
+{{- range $i, $code := $mermaids -}}
+  {{- $md = replace $md (printf "XMERMAIDPLACEHOLDER%dX" $i) (printf "```mermaid\n%s\n```" $code) 1 -}}
+{{- end -}}
 
 {{- /* Remove empty heading-permalink anchors. */ -}}
 {{- $md = $md | replaceRE `\[\]\(#[^)]+\)` "" -}}

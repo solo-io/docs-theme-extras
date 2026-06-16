@@ -54,6 +54,32 @@ test.describe("findMarkdownLeaks helper", () => {
     expect(links[0].match).toContain("[Changelog]");
   });
 
+  test("flags an unclosed HTML comment (content-swallowing release-notes leak)", () => {
+    // The kgateway release-notes "Known issues" leak: a commented-out block
+    // with blank lines inside whose lone `-->` line was rewritten by the
+    // typographer (`--` → en-dash), so the `<!--` never closed and swallowed
+    // the Resiliency/Observability/v23 headings after it — invisible to readers
+    // and to the link checker (anchors inside a comment node aren't found).
+    const html = `<h2>New features</h2>
+      <!-- TODO idk if we have any of these gathered currently?
+      ## Known issues
+      <p>Some known issues prose.</p>
+      <p>&ndash;&gt;</p>
+      <h3>Resiliency<span id="resiliency"></span></h3>`;
+    const leaks = findMarkdownLeaks(html);
+    const c = leaks.filter((l) => l.kind === "unclosed-comment");
+    expect(c).toHaveLength(1);
+    expect(c[0].match).toBe("<!--");
+  });
+
+  test("does NOT flag a well-formed HTML comment (or markdown inside it)", () => {
+    const html = `<p>before</p><!-- a commented-out [link](url) TODO note --><p>after</p>`;
+    const leaks = findMarkdownLeaks(html);
+    expect(leaks.filter((l) => l.kind === "unclosed-comment")).toHaveLength(0);
+    // the commented-out markdown link must stay suppressed too
+    expect(leaks.filter((l) => l.kind === "markdown-link")).toHaveLength(0);
+  });
+
   test("does NOT flag markdown link inside <code> or <pre>", () => {
     const html = `
       <p>This works:</p>

@@ -1,0 +1,41 @@
+{{- /* Convert one rendered HTML <table> into a GFM markdown table.
+       Usage: {{ $gfm := partial "utils/html-table-to-gfm.html" $tableHTML }}
+
+       Why this exists: transform.HTMLToMarkdown does NOT emit GFM tables — it
+       flattens some tables (notably the {{% github-table %}} schema tables) to
+       pipe-less concatenated cell text with a blank line per row. Callers
+       pre-convert tables with this partial and protect the result from
+       transform.HTMLToMarkdown via a placeholder, then restore it afterward.
+
+       Approach: rows are every <tr> in document order (thead/tbody wrappers are
+       ignored). The first row is the header; the delimiter row follows it. Each
+       cell's inner HTML is converted with transform.HTMLToMarkdown so inline
+       code / links / bold survive, then flattened to a single line (GFM cells
+       can't span lines) with literal pipes escaped.
+
+       Limitations (rare in docs, acceptable): colspan/rowspan are ignored;
+       block content inside a cell (lists, multiple paragraphs) is flattened to
+       one line. */ -}}
+{{- $t := printf "%s" . -}}
+{{- $rows := findRE `(?s)<tr\b[^>]*>.*?</tr>` $t -}}
+{{- $lines := slice -}}
+{{- range $ri, $row := $rows -}}
+  {{- $cells := findRE `(?s)<t[hd]\b[^>]*>.*?</t[hd]>` $row -}}
+  {{- if $cells -}}
+    {{- $vals := slice -}}
+    {{- range $cell := $cells -}}
+      {{- $inner := $cell | replaceRE `(?s)^<t[hd]\b[^>]*>` "" | replaceRE `(?s)</t[hd]>\s*$` "" -}}
+      {{- $cm := $inner | transform.HTMLToMarkdown | htmlUnescape -}}
+      {{- $cm = $cm | replaceRE `\s*\n\s*` " " | strings.TrimSpace -}}
+      {{- $cm = $cm | replaceRE `\|` `\|` -}}
+      {{- $vals = $vals | append $cm -}}
+    {{- end -}}
+    {{- $lines = $lines | append (printf "| %s |" (delimit $vals " | ")) -}}
+    {{- if eq $ri 0 -}}
+      {{- $seps := slice -}}
+      {{- range seq (len $vals) -}}{{- $seps = $seps | append "---" -}}{{- end -}}
+      {{- $lines = $lines | append (printf "| %s |" (delimit $seps " | ")) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- return (delimit $lines "\n") -}}

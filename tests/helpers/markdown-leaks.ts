@@ -17,7 +17,8 @@ export type LeakKind =
   | "code-fence"
   | "escaped-html"
   | "raw-bold"
-  | "shortcode-placeholder";
+  | "shortcode-placeholder"
+  | "unclosed-comment";
 
 export type Leak = {
   kind: LeakKind;
@@ -194,6 +195,20 @@ const RAW_BOLD = /\*\*[^\s*][^*\n]{0,60}\*\*/g;
 // both upper- and lower-case forms across versions.
 const SHORTCODE_PLACEHOLDER = /hahahugoshortcode[a-z0-9]*/gi;
 
+// Unclosed HTML comment opener. `stripExpectedMarkdown` removes every
+// well-formed `<!-- ... -->` above, so a `<!--` still present in the cleaned
+// output never matched a closing `-->`: the comment runs to the next stray
+// `-->` or to end-of-document, swallowing every heading, anchor, and link in
+// between. That content then vanishes from the rendered page (invisible to
+// readers) AND from the link checker (an `id=` inside a comment node isn't
+// found, so same-page anchors to it report "Cannot find fragment"). The
+// canonical trigger is a commented-out block with blank lines inside it whose
+// lone `-->` line gets rewritten by Hugo's typographer (`--` → en-dash, so the
+// close renders as `–>` / `&ndash;&gt;`), leaving the `<!--` open — the
+// kgateway release-notes "Known issues" leak. Any residual opener is a
+// content-hiding bug, so a single match fails the scan.
+const UNCLOSED_COMMENT = /<!--/g;
+
 function clamp(s: string, n: number): string {
   if (s.length <= n) return s;
   return s.slice(0, n - 1) + "…";
@@ -242,6 +257,7 @@ export function findMarkdownLeaks(
   scan(CODE_FENCE, "code-fence");
   scan(ESCAPED_HTML, "escaped-html");
   scan(RAW_BOLD, "raw-bold");
+  scan(UNCLOSED_COMMENT, "unclosed-comment");
 
   return leaks;
 }

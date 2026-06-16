@@ -18,9 +18,17 @@
        with the title in <span class="section-card-title">. Auto-cards in
        parent _index.md pages use the same .section-card markup, so a
        single regex collapses both into a plain link. */ -}}
+{{- /* Keep the card description — do NOT collapse a card to a bare title link.
+       Two passes per variant: desc-REQUIRED first (an optional desc group + lazy
+       `.*?</a>` tail gets skipped by the engine), then title-only for cards with
+       no description. Version/section cards use <span> title+desc; auto-card
+       grids use <p>. */ -}}
+{{- /* span variant, WITH description */ -}}
+{{- $html = $html | replaceRE `(?s)<a\s+class="section-card"[^>]*href="([^"]*)"[^>]*>.*?<span\s+class="section-card-title"[^>]*>([^<]+)</span>.*?<span\s+class="section-card-desc"[^>]*>([\s\S]*?)</span>.*?</a>` "<p><a href=\"$1\">$2</a></p><p>$3</p>" -}}
+{{- /* auto-card <p> variant, WITH description */ -}}
+{{- $html = $html | replaceRE `(?s)<a\s+class="section-card"[^>]*href="([^"]*)"[^>]*>.*?<p\s+class="section-card-title"[^>]*>([^<]+)(?:<[^>]*>[^<]*)*</p>.*?<p\s+class="section-card-desc"[^>]*>([\s\S]*?)</p>.*?</a>` "<p><a href=\"$1\">$2</a></p><p>$3</p>" -}}
+{{- /* remaining cards with NO description — title link only */ -}}
 {{- $html = $html | replaceRE `(?s)<a\s+class="section-card"[^>]*href="([^"]*)"[^>]*>.*?<span\s+class="section-card-title"[^>]*>([^<]+)</span>.*?</a>` "<p><a href=\"$1\">$2</a></p>" -}}
-{{- /* Auto-card grid (<p class="section-card-title">) — separate pattern
-       because the title is a <p>, not a <span>. */ -}}
 {{- $html = $html | replaceRE `(?s)<a\s+class="section-card"[^>]*href="([^"]*)"[^>]*>.*?<p\s+class="section-card-title"[^>]*>([^<]+)(?:<[^>]*>[^<]*)*</p>.*?</a>` "<p><a href=\"$1\">$2</a></p>" -}}
 {{- /* Strip the .section-cards grid wrapper, leaving its children inline. */ -}}
 {{- $html = $html | replaceRE `(?s)<div class="section-cards"[^>]*>(.*?)</div>` "$1" -}}
@@ -50,7 +58,32 @@
        ![](path) entries. No-op for consumers whose reuse-image-dark doesn't
        emit .toggle-light. */ -}}
 {{- $html = $html | replaceRE `(?s)<div[^>]*class="toggle-light"[^>]*>.*?</div>` "" -}}
+{{- /* Pre-convert data tables to GFM. transform.HTMLToMarkdown flattens some
+       tables (e.g. github-table schema tables) to pipe-less text, so we build
+       the GFM ourselves and swap each table for an inert placeholder that
+       survives the conversion, then restore it below. (Chroma lntable code
+       tables were already stripped above.) */ -}}
+{{- $tables := slice -}}
+{{- range $i, $tbl := findRE `(?s)<table\b[^>]*>.*?</table>` $html -}}
+  {{- $tables = $tables | append (partial "utils/html-table-to-gfm.html" $tbl) -}}
+  {{- $html = replace $html $tbl (printf "\n\nXGFMTABLEPLACEHOLDER%dX\n\n" $i) 1 -}}
+{{- end -}}
+{{- /* Mermaid: re-fence <pre class="mermaid"> as ```mermaid (transform.HTMLToMarkdown
+       would drop the language tag). Extract → placeholder → re-fence below. */ -}}
+{{- $mermaids := slice -}}
+{{- range $i, $blk := findRE `(?s)<pre[^>]*class="[^"]*\bmermaid\b[^"]*"[^>]*>.*?</pre>` $html -}}
+  {{- $code := $blk | replaceRE `(?s)^<pre[^>]*>` "" | replaceRE `(?s)</pre>\s*$` "" | htmlUnescape | strings.TrimSpace -}}
+  {{- $mermaids = $mermaids | append $code -}}
+  {{- $html = replace $html $blk (printf "\n\nXMERMAIDPLACEHOLDER%dX\n\n" $i) 1 -}}
+{{- end -}}
 {{- $md := printf "# %s\n\n%s" .Title ($html | transform.HTMLToMarkdown) -}}
+{{- /* Restore GFM tables before the link/punctuation passes below. */ -}}
+{{- range $i, $gfm := $tables -}}
+  {{- $md = replace $md (printf "XGFMTABLEPLACEHOLDER%dX" $i) $gfm 1 -}}
+{{- end -}}
+{{- range $i, $code := $mermaids -}}
+  {{- $md = replace $md (printf "XMERMAIDPLACEHOLDER%dX" $i) (printf "```mermaid\n%s\n```" $code) 1 -}}
+{{- end -}}
 {{- /* transform.HTMLToMarkdown leaves HTML entities (`&gt;`, `&lt;`,
        `&amp;`, `&quot;`, etc.) encoded. Decode them so the copied markdown
        reads as markdown — `Gateway > ListenerSet`, not `Gateway &gt; ListenerSet`. */ -}}
