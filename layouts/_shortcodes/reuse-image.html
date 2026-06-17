@@ -1,3 +1,20 @@
+{{- /* Translation export mode: emit a placeholder that restores to the source
+       {{< reuse-image ... >}} form after HTMLToMarkdown, so the snapshot keeps
+       the shortcode (the JA pages author images this way) instead of a
+       resolved/dropped <img>. Gated on hugo.Environment. */ -}}
+{{- if eq hugo.Environment "translation" -}}
+  {{- $attrs := slice -}}
+  {{- with .Get "src" }}{{ $attrs = $attrs | append (printf "src=%q" .) }}{{ end -}}
+  {{- with .Get "srcDark" }}{{ $attrs = $attrs | append (printf "srcDark=%q" .) }}{{ end -}}
+  {{- with .Get "width" }}{{ $attrs = $attrs | append (printf "width=%q" .) }}{{ end -}}
+  {{- with .Get "alt" }}{{ $attrs = $attrs | append (printf "alt=%q" .) }}{{ end -}}
+  {{- with .Get "caption" }}{{ $attrs = $attrs | append (printf "caption=%q" .) }}{{ end -}}
+  {{- $reg := .Page.Store.Get "transReg" | default slice -}}
+  {{- $ph := printf "XTRANSPH%dX" (len $reg) -}}
+  {{- $reg = $reg | append (dict "ph" $ph "text" (printf "{{< reuse-image %s >}}" (delimit $attrs " "))) -}}
+  {{- .Page.Store.Set "transReg" $reg -}}
+  {{- printf "<p>%s</p>" $ph | safeHTML -}}
+{{- else -}}
 {{ $src := .Get "src" }}
 {{ $srcDark := .Get "srcDark"}}
 {{ $width := .Get "width" }}
@@ -54,4 +71,5 @@
 {{- end -}}
 {{- with $imageDark -}}
 <div style="text-align: center;" class="toggle-light"><figure><img src="{{ .RelPermalink }}" width="{{ $width }}" alt="{{ $alt }}"/> <figcaption style="font-style:italic">{{ $caption }}</figcaption></figure></div>
+{{- end -}}
 {{- end -}}

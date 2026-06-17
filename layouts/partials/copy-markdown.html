@@ -88,6 +88,29 @@
        `&amp;`, `&quot;`, etc.) encoded. Decode them so the copied markdown
        reads as markdown — `Gateway > ListenerSet`, not `Gateway &gt; ListenerSet`. */ -}}
 {{- $md = $md | htmlUnescape -}}
+{{- /* Translation export mode: restore structural shortcode wrappers that the
+       env-gated shortcodes (tabs/cards/link/…) emitted as XTRANSPH<n>X
+       placeholders, replacing each verbatim AFTER HTMLToMarkdown so the
+       shortcode lines land exactly where the source had them (HTMLToMarkdown
+       would otherwise collapse them). No-op when no placeholders are
+       registered (normal/preview/prod builds). */ -}}
+{{- range .Store.Get "transReg" -}}
+  {{- $ph := .ph -}}
+  {{- $text := .text -}}
+  {{- /* Re-indent a multi-line wrapper to the placeholder line's leading
+         whitespace, so a shortcode nested in a list item keeps every wrapper
+         line at the list-item column. Otherwise a continuation line (e.g. the
+         {{% tab %}} after {{< tabs >}}) lands at column 0 and breaks the list
+         when the JA is built. Inline placeholders (e.g. a link used as a
+         markdown-link href) aren't at line start, so $indent stays "". */ -}}
+  {{- $m := findRE (printf `(?m)^[ \t]*%s` $ph) $md 1 -}}
+  {{- $indent := "" -}}
+  {{- with $m -}}{{- $indent = strings.TrimSuffix $ph (index . 0) -}}{{- end -}}
+  {{- if and (ne $indent "") (strings.Contains $text "\n") -}}
+    {{- $text = replace $text "\n" (printf "\n%s" $indent) -}}
+  {{- end -}}
+  {{- $md = replace $md $ph $text -}}
+{{- end -}}
 {{- /* Strip empty heading-permalink anchors only — [](#id) → "".
        Preserve [text](#id) cross-section links so readers retain the reference. */ -}}
 {{- $md = $md | replaceRE `\[\]\(#[^)]+\)` "" -}}

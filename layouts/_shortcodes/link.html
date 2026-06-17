@@ -1,4 +1,19 @@
 {{- $path := .Get "path" -}}
+{{- /* Translation export mode: emit a placeholder (registered verbatim in the
+       page store) that restores to the source {{< link path="..." >}} form
+       AFTER HTMLToMarkdown. The placeholder rides through as the href of the
+       enclosing markdown link ([text](placeholder)); copy-markdown.html
+       restores it before its link-rewriting passes, so the translation
+       snapshot keeps the shortcode (translate only the display text) instead
+       of a root-absolute URL that doubles the prefix / drops ja/. Gated on
+       hugo.Environment so normal builds resolve the real URL below. */ -}}
+{{- if eq hugo.Environment "translation" -}}
+  {{- $reg := .Page.Store.Get "transReg" | default slice -}}
+  {{- $ph := printf "XTRANSPH%dX" (len $reg) -}}
+  {{- $reg = $reg | append (dict "ph" $ph "text" (printf "{{< link path=\"%s\" >}}" $path)) -}}
+  {{- .Page.Store.Set "transReg" $reg -}}
+  {{- $ph -}}
+{{- else -}}
 {{- $finalURL := printf "/%s/%s" .Page.FirstSection.RelPermalink $path -}}
 
 {{- /* Append a slash if the link is not a fragment */ -}}
@@ -18,3 +33,4 @@
 {{- /* Restore the protocol separator */ -}}
 {{- $finalURL = replace $finalURL "__PROTOCOL_SEPARATOR__" "://" -}}
 {{- $finalURL -}}
+{{- end -}}
