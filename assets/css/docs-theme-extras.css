@@ -1108,6 +1108,10 @@ svg.section-card-icon {
   flex-shrink: 0;
 }
 
+.sidebar-icon-svg {
+  transform: scale(0.833333);
+}
+
 /* Keep icon + text left-aligned */
 .hextra-sidebar-item a:has(.sidebar-icon) {
   justify-content: flex-start !important;

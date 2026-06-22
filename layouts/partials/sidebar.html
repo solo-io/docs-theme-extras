@@ -428,7 +428,9 @@
 
         {{- /* Per-page sidebar adornments, driven by front matter and mirroring
                the in-page badges in docs/single.html:
-                 - `icon`: a Material Symbols glyph name (e.g. `sailing`)
+                 - `icon`: a local SVG path, a Hextra icon name from
+                   data/icons.yaml, or a Material Symbols glyph name
+                   (e.g. `sailing`)
                  - `enterprise: true` / `oss: true`: nav badges
                Both the .material-icons/.sidebar-icon and .sidebar-badge* classes
                are styled in docs-theme-extras.css. The Open Source variant is
@@ -442,7 +444,16 @@
             <a href="{{ .RelPermalink }}"
                class="sidebar-link {{ if $childIsActive }}sidebar-active-item{{ end }}"
                {{ if $childIsActive }}aria-current="page"{{ end }}>
-              {{- with $icon }}<i class="material-icons sidebar-icon" aria-hidden="true">{{ . }}</i>{{ end -}}
+              {{- with $icon -}}
+                {{- $svgIconPath := printf "static/%s" (replaceRE "^/" "" .) -}}
+                {{- if and (findRE `\.svg$` .) (fileExists $svgIconPath) -}}
+                  {{- readFile $svgIconPath | replaceRE "<svg" `<svg class="sidebar-icon sidebar-icon-svg" aria-hidden="true"` | safeHTML -}}
+                {{- else if index site.Data.icons . -}}
+                  {{- partial "utils/icon.html" (dict "name" . "attributes" `class="sidebar-icon" aria-hidden="true"`) -}}
+                {{- else -}}
+                  <i class="material-icons sidebar-icon" aria-hidden="true">{{ . }}</i>
+                {{- end -}}
+              {{- end -}}
               <span class="hx:flex-1">{{ $navLabel }}
                 {{- if .Params.enterprise }} <span class="sidebar-badge sidebar-badge-enterprise">Enterprise</span>{{ end -}}
                 {{- if .Params.oss }} <span class="sidebar-badge sidebar-badge-oss">Open Source</span>{{ end -}}
