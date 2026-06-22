@@ -75,7 +75,12 @@
     <img src="{{ $imageSrc }}" alt="{{ $alt }}" class="section-card-image" loading="lazy" />
   {{- end -}}
   {{- if $icon -}}
-    {{ partial "utils/icon.html" (dict "name" $icon "attributes" "class=\"section-card-icon\"") }}
+    {{- $svgIconPath := printf "static/%s" (replaceRE "^/" "" $icon) -}}
+    {{- if and (findRE `\.svg$` $icon) (fileExists $svgIconPath) -}}
+      {{- readFile $svgIconPath | replaceRE "<svg" `<svg class="section-card-icon" aria-hidden="true"` | safeHTML -}}
+    {{- else -}}
+      {{ partial "utils/icon.html" (dict "name" $icon "attributes" "class=\"section-card-icon\"") }}
+    {{- end -}}
   {{- end -}}
   <span class="section-card-body">
     {{- if $title }}<span class="section-card-title">{{ $title }}</span>{{ end -}}
