@@ -15,6 +15,20 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [Unreleased] — 2026-06-23
+
+### Callout / alert
+
+- **`callout` is now the single renderer for both callout and alert, gained `text=` support and a `translation`-environment branch, and carries `role="note"` for accessibility.** Four related changes, all in `_shortcodes/callout.html`:
+  - **Translation gating (extends v0.1.6).** v0.1.6 gated `link`/`reuse-image`/`reuse-image-dark` in this module and left `callout`/`alert` to consumer-local overrides. That gating now lives here: under `eq hugo.Environment "translation"` the shortcode emits its opening and closing tags as `XTRANSPH<n>X` placeholders (registered in `.Store.transReg`, with the store re-read between the open and close registrations so a placeholder a nested shortcode registers while the body renders keeps its order) and lets the body flow through between them. `copy-markdown.html` restores them after `transform.HTMLToMarkdown`, so the translation-export snapshot keeps the `{{< callout >}}` shortcode (and its translatable body) instead of flattening to the rendered `<div>`, whose `aria-hidden` material-icons `<i>` was leaking as an italic `*info*` / `*warning*` label. No-op for normal/preview/prod builds.
+  - **`text=` attribute.** Callout now accepts a self-closing `text="…"` body in addition to inner content, so a consumer's `alert` (which uses `text=` heavily) can map straight onto it.
+  - **Single source for alert.** `alert` no longer needs its own renderer: a consumer maps `alert`'s `context` onto `type` and calls this shortcode (e.g. via `RenderString`), so the two are byte-identical — including reducing to the same `{{< callout >}}` form in the translation snapshot, which matches the convention the Japanese pages already standardized on. (This supersedes the v0.1.6 note that `alert` was intentionally left ungated.)
+  - **List-safety + a11y.** The rendered `<div>` is emitted on one logical line (body newlines → `&#10;`) and the body is dedented before `markdownify`, so a callout nested in a numbered-list item no longer trips Goldmark's content-continuation column rule and fragments the list. The container gains `role="note"` — the correct ARIA role for a static admonition (ancillary content), as opposed to `role="alert"`, an assertive live region meant for dynamically-injected messages that would make screen readers announce every box on load.
+
+  Behavior is backward-compatible: existing `{{< callout type=… >}}…{{< /callout >}}` calls render the same box (now one-line and with `role="note"`), and the `translation` branch only activates under `--environment translation`. Example of the bug this fixes — a Japanese page whose experimental-feature note currently renders as a bare italic `info` label instead of a callout box: [Solo Enterprise for agentgateway — 日本語 コスト追跡](https://docs.solo.io/agentgateway/ja/latest/llm/cost-tracking/).
+
+---
+
 ## [v0.1.6] — 2026-06-17
 
 ### Translation export

@@ -1,33 +1,86 @@
-{{- $icon_map := dict
-  "info"    "info"
-  "warning" "warning"
-  "success" "check_circle"
-  "danger"  "report"
-  "error"   "report"
-  "default" "notifications"
-  "primary" "info"
--}}
-{{- $color_map := dict
-  "info"    "alert-info"
-  "warning" "alert-warning"
-  "success" "alert-success"
-  "danger"  "alert-danger"
-  "error"   "alert-danger"
-  "default" "alert-default"
-  "primary" "alert-info"
--}}
-{{- $alertContext := or (.Get "context") (.Get "type") "default" -}}
-{{- $colors := index $color_map $alertContext | default "alert-default" -}}
-{{- $icon := index $icon_map $alertContext | default "notifications" -}}
-<div class="solo-alert {{ $colors }}">
-  <div class="solo-alert-icon">
-    <i class="material-icons" aria-hidden="true">{{ $icon }}</i>
-  </div>
-  <div class="solo-alert-body">
-    {{- with .Inner -}}
-      {{ . | markdownify }}
-    {{- else -}}
-      <p><em>Content not available</em></p>
-    {{- end -}}
-  </div>
-</div>
+{{- /* Callout admonition. Uses the Material Icons font and derives the icon from
+       type/context (Hextra's stock callout instead does an SVG lookup via .icon).
+
+       Single source for both callout and alert: a consumer's alert shortcode can
+       just call this one (e.g. solo-io/docs maps alert's "context" onto "type"
+       and renders {{< callout >}} via RenderString), so the two stay identical.
+
+       Accepts a body from either the inner content (block form) or a
+       self-closing text="…" attribute.
+
+       Two modes:
+         - hugo.Environment "translation": emit the callout shortcode itself as
+           open/close placeholders (restored verbatim by copy-markdown.html AFTER
+           transform.HTMLToMarkdown) with the body flowing through between them,
+           so the translation-export snapshot keeps the shortcode while the prose
+           stays translatable. The store is re-read between the open and close
+           registrations so a placeholder a nested shortcode registers while the
+           body renders keeps its order. No-op for normal/preview/prod builds.
+         - otherwise: render the solo-alert div on ONE logical line (body newlines
+           → &#10;) so a callout nested in a list item doesn't trip Goldmark's
+           content-continuation column rule and break the list.
+
+       a11y: role="note" marks the box as ancillary content (the correct ARIA
+       role for a static admonition — NOT role="alert", which is an assertive
+       live region meant for dynamically-injected messages). The icon is
+       aria-hidden; it's decorative and the body text carries the meaning. */ -}}
+{{- $type := .Get "type" | default (.Get "context") -}}
+{{- $body := .Get "text" | default .Inner -}}
+{{- /* Dedent the body so CommonMark's "4 spaces = code block" rule doesn't fire
+       when the shortcode is nested in a deeply-indented list item. No-op for a
+       single-line text="" body or an already-flush block. */ -}}
+{{- $lines := split $body "\n" -}}
+{{- $minIndent := -1 -}}
+{{- range $lines -}}
+  {{- $trimmed := strings.TrimLeft " \t" . -}}
+  {{- if ne $trimmed "" -}}
+    {{- $thisIndent := sub (len .) (len $trimmed) -}}
+    {{- if or (eq $minIndent -1) (lt $thisIndent $minIndent) -}}{{- $minIndent = $thisIndent -}}{{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- if gt $minIndent 0 -}}
+  {{- $dedented := slice -}}
+  {{- range $lines -}}
+    {{- if ge (len .) $minIndent -}}{{- $dedented = $dedented | append (substr . $minIndent) -}}
+    {{- else -}}{{- $dedented = $dedented | append . -}}{{- end -}}
+  {{- end -}}
+  {{- $body = delimit $dedented "\n" -}}
+{{- end -}}
+{{- if eq hugo.Environment "translation" -}}
+  {{- $open := cond (ne $type "") (printf "{{< callout type=%q >}}" $type) "{{< callout >}}" -}}
+  {{- $reg := .Page.Store.Get "transReg" | default slice -}}
+  {{- $pho := printf "XTRANSPH%dX" (len $reg) -}}
+  {{- $reg = $reg | append (dict "ph" $pho "text" $open) -}}
+  {{- .Page.Store.Set "transReg" $reg -}}
+  {{- $bodyHTML := $body | markdownify -}}
+  {{- $reg2 := .Page.Store.Get "transReg" | default slice -}}
+  {{- $phc := printf "XTRANSPH%dX" (len $reg2) -}}
+  {{- $reg2 = $reg2 | append (dict "ph" $phc "text" "{{< /callout >}}") -}}
+  {{- .Page.Store.Set "transReg" $reg2 -}}
+  {{- printf "<p>%s</p>%s<p>%s</p>" $pho $bodyHTML $phc | safeHTML -}}
+{{- else -}}
+  {{- $icon_map := dict
+    "info"    "info"
+    "warning" "warning"
+    "success" "check_circle"
+    "danger"  "report"
+    "error"   "report"
+    "default" "notifications"
+    "primary" "info"
+  -}}
+  {{- $color_map := dict
+    "info"    "alert-info"
+    "warning" "alert-warning"
+    "success" "alert-success"
+    "danger"  "alert-danger"
+    "error"   "alert-danger"
+    "default" "alert-default"
+    "primary" "alert-info"
+  -}}
+  {{- $ctx := or $type "default" -}}
+  {{- $colors := index $color_map $ctx | default "alert-default" -}}
+  {{- $icon := index $icon_map $ctx | default "notifications" -}}
+  {{- $bodyHTML := cond (ne $body "") ($body | markdownify) "<p><em>Content not available</em></p>" -}}
+  {{- $bodyHTML = replace (printf "%s" $bodyHTML) "\n" "&#10;" -}}
+  <div class="solo-alert {{ $colors }}" role="note"><div class="solo-alert-icon"><i class="material-icons" aria-hidden="true">{{ $icon }}</i></div><div class="solo-alert-body">{{ $bodyHTML | safeHTML }}</div></div>
+{{- end -}}
