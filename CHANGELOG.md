@@ -15,7 +15,7 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
-## [Unreleased] — 2026-06-23
+## [v0.1.9] — 2026-06-24
 
 ### Callout / alert
 
@@ -31,6 +31,22 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 ### Test harness
 
 - **Bumped the `@playwright/test` dev dependency from 1.60.0 to 1.61.0 (Dependabot, `npm-minor-and-patch` group).** This is a dev-tooling-only bump of the Playwright HTML-test harness; it does not change any shortcode, partial, or rendered output, so consumer repos need not re-pin the module on its account. v1.61.0 adds WebAuthn passkey and Web Storage test APIs and new video-retry modes, none of which the current specs use. NOTE: this change has no reader-facing production page to demonstrate — it is observable only in the `tests/` harness ([@playwright/test 1.60.0…1.61.0](https://github.com/microsoft/playwright/compare/v1.60.0...v1.61.0)).
+
+---
+
+## [v0.1.8] — 2026-06-22
+
+### Cards
+
+- **Section-card icons now accept a local SVG file, so a card can show a brand/product logo instead of only a Material Symbols glyph or a Hextra icon name.** ([#8](https://github.com/solo-io/docs-theme-extras/pull/8).) The card `icon` resolution in `_shortcodes/card.html` and `partials/auto-section-cards.html` gains an SVG branch that mirrors the v0.1.7 sidebar change: when the `icon` value ends in `.svg` and the file exists under `static/`, the partial `readFile`s the SVG and injects `class="section-card-icon"` (via `replaceRE "<svg"`) so it's styled like any other card icon, rather than passing the name to `utils/icon.html` (which only knows Hextra `data/icons.yaml` names) or emitting a `material-icons` `<i>`. `auto-section-cards.html` additionally picks up the `data/icons.yaml` lookup branch that `card.html` already had, so an auto-generated child-card grid now resolves the same three icon kinds (local SVG → Hextra icon name → Material Symbols glyph) as an explicit `{{< card >}}`. Behavior is unchanged for any card whose `icon` is a glyph or Hextra name. Example in production — the LLM-providers landing page, whose child cards now render each provider's brand logo from `static/integrations/providers/bw/*.svg`: [agentgateway — LLM providers](https://agentgateway.dev/docs/standalone/latest/llm/providers/).
+
+---
+
+## [v0.1.7] — 2026-06-22
+
+### Sidebar
+
+- **A per-page sidebar `icon` can now be a local SVG path or a Hextra icon name, not just a Material Symbols glyph name.** ([#7](https://github.com/solo-io/docs-theme-extras/pull/7).) The sidebar adornment block in `partials/sidebar.html` previously emitted the front-matter `icon` value verbatim inside a `material-icons` `<i>`, so anything that wasn't a Material Symbols glyph name rendered as broken ligature text. It now branches three ways: an `icon` ending in `.svg` whose file exists under `static/` is read inline (`readFile … | replaceRE "<svg" … | safeHTML`) with `class="sidebar-icon sidebar-icon-svg"`; a value present in `site.Data.icons` resolves through `utils/icon.html`; everything else falls back to the original `material-icons` `<i>`. A new `.sidebar-icon-svg { transform: scale(0.833333) }` rule (≈20/24) shrinks the inline SVG to match the optical size of the Material Symbols glyphs alongside it, so a mixed sidebar stays visually even. Behavior is unchanged for pages whose `icon` is a glyph name. Example in production — the LLM-provider pages, whose left-nav entries now show each provider's brand logo from `static/integrations/providers/bw/*.svg`: [agentgateway — OpenAI provider](https://agentgateway.dev/docs/standalone/latest/llm/providers/openai/).
 
 ---
 
