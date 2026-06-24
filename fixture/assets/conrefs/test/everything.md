@@ -51,6 +51,24 @@ In the local override at `layouts/shortcodes/callout.html`, the `callout` shortc
 
 {{% callout type="success" %}}MARKER_CALLOUT_SUCCESS. Success callout.{{% /callout %}}
 
+## Callouts - Github default styling
+
+> [!NOTE]
+> Useful information that users should know, even when skimming.
+
+> [!TIP]
+> Helpful advice for doing things better or more easily.
+
+> [!IMPORTANT]
+> Key information users need to know to achieve their goal.
+
+> [!WARNING]
+> Urgent info that needs immediate user attention to avoid problems.
+
+> [!CAUTION]
+> Advises about risks or negative outcomes of certain actions.
+
+
 ## Cards
 
 {{< cards >}}
@@ -762,6 +780,18 @@ A version block inside an alert and a conditional-text block inside a callout â€
 {{< alert context="info" >}}Prefix text. {{< version include-if="v2" >}}MARKER_VERSION_IN_CALLOUT. v2-only sentence inside the alert.{{< /version >}}{{< /alert >}}
 
 {{% callout type="warning" %}}Prefix text. {{% conditional-text include-if="test" %}}COND_IN_CALLOUT. Build-gated sentence inside the callout.{{% /conditional-text %}}{{% /callout %}}
+
+### Inside an ordered list
+
+An `alert` and a `callout` as the body of ordered-list items â€” the same info-alert / warning-callout pair as the "Inside callouts" subsection above, but each shortcode is now a block child of a numbered step. The shortcodes must emit their `.solo-alert` div inside the `<li>` without collapsing the list or escaping the step numbering.
+
+1. First step, with an alert as its body.
+
+   {{< alert context="info" >}}MARKER_ALERT_IN_OL. An alert nested inside an ordered-list item.{{< /alert >}}
+
+2. Second step, with a callout as its body.
+
+   {{% callout type="warning" %}}MARKER_CALLOUT_IN_OL. A callout nested inside an ordered-list item.{{% /callout %}}
 
 ### Inside a 3-level unordered list
 

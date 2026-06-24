@@ -138,6 +138,58 @@ test.describe("shortcodes inside callout/alert host", () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────
+// 1b. Alert / callout as the body of an ordered-list item
+// ──────────────────────────────────────────────────────────────────────
+
+test.describe("alert/callout inside an ordered list item", () => {
+  // The fixture's "Inside an ordered list" subsection puts an info alert
+  // and a warning callout as block children of numbered list items. Both
+  // are ungated, so they render on every topic page. We assert each marker
+  // lands inside a .solo-alert div AND that the div sits inside an <li>
+  // within an <ol> — i.e., the block-level shortcode didn't collapse the
+  // list or break out of its step.
+  const cases = [
+    { marker: "MARKER_ALERT_IN_OL", label: "alert" },
+    { marker: "MARKER_CALLOUT_IN_OL", label: "callout" },
+  ];
+  for (const page of TEST_PAGES) {
+    if (!ALL_TOPIC_PAGES.includes(page.name)) continue;
+    for (const { marker, label } of cases) {
+      test(`${page.name}: ${marker} (${label}) renders as .solo-alert inside an <li>/<ol>`, () => {
+        const html = visibleHtml(page.filePath);
+        const idx = html.indexOf(marker);
+        expect(idx, `${marker} missing`).toBeGreaterThan(-1);
+
+        // No raw shortcode tag leaked next to the marker.
+        const window = html.slice(Math.max(0, idx - 80), idx + 80);
+        expect(window, `raw shortcode tag near ${marker}`).not.toMatch(/\{\{[%<]/);
+
+        // The marker must be inside the alert/callout's .solo-alert div.
+        const region = enclosingRegion(html, idx, "div");
+        expect(region, `${marker} not inside any <div>`).not.toBeNull();
+        const openTag = html.slice(
+          region!.start,
+          html.indexOf(">", region!.start) + 1,
+        );
+        expect(
+          openTag,
+          `${marker}'s enclosing <div> is not a .solo-alert (shortcode didn't render)`,
+        ).toMatch(/solo-alert/);
+
+        // That div must itself be nested inside a list item, and the list
+        // item inside an ordered list.
+        const li = enclosingRegion(html, idx, "li");
+        expect(li, `${marker} not inside any <li>`).not.toBeNull();
+        expect(
+          olDepthAt(html, idx),
+          `${marker}: not inside an <ol> (ordered-list nesting lost)`,
+        ).toBeGreaterThanOrEqual(1);
+      });
+    }
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────
 // 2. Inside 3-level unordered list (deepest bullet)
 // ──────────────────────────────────────────────────────────────────────
 

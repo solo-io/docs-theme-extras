@@ -27,6 +27,11 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
   Behavior is backward-compatible: existing `{{< callout type=… >}}…{{< /callout >}}` calls render the same box (now one-line and with `role="note"`), and the `translation` branch only activates under `--environment translation`. Example of the bug this fixes — a Japanese page whose experimental-feature note currently renders as a bare italic `info` label instead of a callout box: [Solo Enterprise for agentgateway — 日本語 コスト追跡](https://docs.solo.io/agentgateway/ja/latest/llm/cost-tracking/).
 
+
+### Test harness
+
+- **Bumped the `@playwright/test` dev dependency from 1.60.0 to 1.61.0 (Dependabot, `npm-minor-and-patch` group).** This is a dev-tooling-only bump of the Playwright HTML-test harness; it does not change any shortcode, partial, or rendered output, so consumer repos need not re-pin the module on its account. v1.61.0 adds WebAuthn passkey and Web Storage test APIs and new video-retry modes, none of which the current specs use. NOTE: this change has no reader-facing production page to demonstrate — it is observable only in the `tests/` harness ([@playwright/test 1.60.0…1.61.0](https://github.com/microsoft/playwright/compare/v1.60.0...v1.61.0)).
+
 ---
 
 ## [v0.1.6] — 2026-06-17
