@@ -1,32 +1,21 @@
-{{- $icon_map := dict
-  "info"    "info"
-  "warning" "warning"
-  "success" "check_circle"
-  "danger"  "report"
-  "default" "notifications"
-  "primary" "info"
--}}
-{{- $color_map := dict
-  "info"    "alert-info"
-  "warning" "alert-warning"
-  "success" "alert-success"
-  "danger"  "alert-danger"
-  "default" "alert-default"
-  "primary" "alert-info"
--}}
-{{- $context := .Get "context" | default "default" -}}
-{{- $colors := index $color_map $context | default "alert-default" -}}
-{{- $icon := index $icon_map $context | default "notifications" -}}
-<div class="solo-alert {{ $colors }}" role="alert">
-  <div class="solo-alert-icon">
-  {{- with .Get "icon" }}{{ . }}{{ else }}<i class="material-icons" aria-hidden="true">{{ $icon }}</i>{{ end -}}
-  </div>
-  {{- with .Get "text" }}<div class="solo-alert-body">{{ . | markdownify }}</div>
-  {{- else -}}
-  {{- with .Inner -}}
-  <div class="solo-alert-body">{{ . | markdownify }}</div>
-  {{- else -}}
-  <div class="solo-alert-body"><p><em>Alert content not available</em></p></div>
-  {{- end -}}
-  {{- end -}}
-</div>
+{{- /* alert just calls the callout shortcode so the two render identically —
+       there is a single implementation, in callout.html. The only mapping is
+       alert's "context" arg → callout's "type"; the body comes from either a
+       self-closing text="…" attribute or the inner content (block form), and is
+       handed to callout as its inner content.
+
+       Calling the shortcode (rather than sharing a partial) means alert inherits
+       callout's behavior wholesale, including the translation-snapshot output
+       (alert reduces to a callout shortcode, matching the JA convention) and the
+       list-safety handling. The legacy icon="…" override is dropped (no
+       occurrences in content; callout derives the icon from type), as is
+       role="alert".
+
+       RenderString expands the callout shortcode in the constructed string. We
+       always emit the block (open/body/close) form rather than a self-closing
+       text="" attribute, so a body containing quotes or markdown can't break the
+       attribute. */ -}}
+{{- $type := .Get "context" | default (.Get "type") -}}
+{{- $body := .Get "text" | default .Inner -}}
+{{- $call := cond (ne $type "") (printf "{{< callout type=%q >}}%s{{< /callout >}}" $type $body) (printf "{{< callout >}}%s{{< /callout >}}" $body) -}}
+{{- .Page.RenderString (dict "display" "block") $call -}}
