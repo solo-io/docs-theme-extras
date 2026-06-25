@@ -15,6 +15,20 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [Unreleased] — 2026-06-25
+
+### Callout / alert
+
+- **`alert` now ships its own renderer in this module, so consumers no longer need a local `alert.html` override to get the single-source behavior.** v0.1.9 made `callout` the one renderer and showed that a consumer could map `alert`'s `context` → `callout`'s `type` and delegate via `RenderString`; that mapping was carried in each consumer repo's local `layouts/_shortcodes/alert.html`. This release moves that 21-line delegating shortcode into the module (`_shortcodes/alert.html`), replacing the old standalone `solo-alert` markup. `alert` reads `context` (falling back to `type`), takes its body from a self-closing `text="…"` attribute or block inner content, and always emits the block `{{< callout >}}…{{< /callout >}}` form through `RenderString` so a body with quotes or markdown can't break an attribute — inheriting callout's list-safety, `role="note"` a11y, and translation-snapshot output wholesale. The legacy `icon="…"` and `role="alert"` overrides are dropped (no content occurrences; callout derives the icon from type).
+
+  Backward-compatible for the docs repo, whose local override already delegated to callout — output is byte-identical there, so this is a refactor that deletes the now-redundant override. Consumers still on the old standalone `solo-alert` markup (agw, kgw) pick up the callout rendering only when they bump the module pin. Example of an `alert` that renders identically through this path: [Solo Enterprise for agentgateway — Microsoft Purview DLP guardrail](https://docs.solo.io/agentgateway/latest/llm/guardrails/purview-dlp/).
+
+### Test harness
+
+- **Added nested-list coverage to the conref `everything.md` fixture** — a callout inside an ordered-list item, with a further callout inside a substep and an ordered sublist, to exercise the list-safety dedent path through a second nesting level. Fixture-only; no shortcode, partial, or rendered-output change.
+
+---
+
 ## [v0.1.9] — 2026-06-24
 
 ### Callout / alert

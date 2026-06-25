@@ -68,6 +68,21 @@ In the local override at `layouts/shortcodes/callout.html`, the `callout` shortc
 > [!CAUTION]
 > Advises about risks or negative outcomes of certain actions.
 
+1. Note in a list.
+
+   > [!TIP]
+   > Helpful advice for doing things better or more easily.
+
+   And some other information below.
+
+   1. What about in a substep?
+
+      > [!TIP]
+      > Helpful advice for doing things better or more easily.
+
+   2. Next step should be in order.
+
+2. and then the next in the main list.
 
 ## Cards
 
