@@ -51,6 +51,14 @@ In the local override at `layouts/shortcodes/callout.html`, the `callout` shortc
 
 {{% callout type="success" %}}MARKER_CALLOUT_SUCCESS. Success callout.{{% /callout %}}
 
+### Callout inside a table cell
+
+The `callout` shortcode works inside a markdown table cell: its `solo-alert` div is emitted on one logical line (body newlines → `&#10;`), so it lands inside the `<td>` instead of breaking the row. The body also carries an inline `--set` code span, so this guards that `harden-code-typography` keeps the typographer from mangling `<code>` inside a markdownified callout body that itself sits in a cell.
+
+| Setting | Description |
+| ------- | ----------- |
+| `MARKER_CALLOUT_IN_CELL_KEY` | MARKER_CALLOUT_IN_CELL_DESC The names look similar but are not the same. {{< callout type="info" >}}MARKER_CALLOUT_IN_CELL_BODY. The `secrets-store.csi.x-k8s.io` API group is not the `secrets-store.csi.k8s.io` CSI driver name; pass `--set apiVersion` to override it.{{< /callout >}} |
+
 ## Callouts - Github default styling
 
 > [!NOTE]
@@ -120,6 +128,14 @@ A GitHub callout whose body is a markdown list. The blank `>` line before the li
 > - MARKER_GH_CALLOUT_LIST_ITEM1 first item
 > - MARKER_GH_CALLOUT_LIST_ITEM2 second item
 > - MARKER_GH_CALLOUT_LIST_ITEM3 third item
+
+### Inside a table cell
+
+GitHub `[!NOTE]` styling can't live inside a table cell — GFM-alert syntax is block-level and a cell parses inline-only — so the in-cell "callout" is faked with `<br><br>` breaks and a bold `**Note**` lead-in. The inline `--set` code span still rides the reuse render path, so this also guards that `harden-code-typography` keeps a code span's `--` intact in a plain (non-shortcode) cell.
+
+| Setting | Description |
+| ------- | ----------- |
+| `MARKER_BRNOTE_CELL_KEY` | MARKER_BRNOTE_CELL_DESC The names look similar but are not the same. <br><br>**Note**: MARKER_BRNOTE_CELL_BODY. The `secrets-store.csi.x-k8s.io` API group is not the `secrets-store.csi.k8s.io` CSI driver name; pass `--set apiVersion` to override it.|
 
 ## Cards
 
