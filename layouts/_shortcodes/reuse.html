@@ -125,5 +125,9 @@
        into the middle of a code-block continuation line. RenderString wraps
        single-line content in a paragraph and emits a trailing newline. */ -}}
 {{- $rendered := $content | .Page.RenderString -}}
+{{- /* RenderString runs the typographer, and a {{% reuse %}} / {{% version %}}
+       output re-enters the page render for a second pass. Harden inline <code>
+       so a `--flag` code span can't render as `&ndash;flag`. See the partial. */ -}}
+{{- $rendered = partial "utils/harden-code-typography.html" $rendered -}}
 {{- strings.TrimRight " \n\t" $rendered | safeHTML -}}
 

@@ -46,6 +46,10 @@
   {{- end -}}
   {{- $body = delimit $dedented "\n" -}}
 {{- end -}}
+{{- /* Guard inline <code> spans from the typographer before markdownify, so a
+       `--set …` flag in a code span doesn't render as `&ndash;set`. See the
+       partial for the full explanation. */ -}}
+{{- $body = partial "utils/harden-code-typography.html" $body -}}
 {{- if eq hugo.Environment "translation" -}}
   {{- $open := cond (ne $type "") (printf "{{< callout type=%q >}}" $type) "{{< callout >}}" -}}
   {{- $reg := .Page.Store.Get "transReg" | default slice -}}
