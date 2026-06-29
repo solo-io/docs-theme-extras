@@ -15,6 +15,24 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [v0.1.12] — unreleased
+
+### Reuse / callout / alert — inline-code typography
+
+- **Inline `<code>` spans inside a markdownified or re-rendered shortcode body no longer get mangled by the Goldmark typographer — a `--set …` flag was rendering as `–set …` (en dash).** The typographer (smartDashes / smartQuotes) correctly skips backtick code spans and `<pre>` blocks, but NOT text inside a *literal* inline `<code>` tag: there Goldmark treats the tags as raw inline HTML and the text between them as ordinary markdown, so `<code>--set foo</code>` becomes `<code>&ndash;set foo</code>`. Three render paths hit this — `callout`/`alert` running `markdownify` over a body that already contains `<code>` (often from a nested `{{< reuse >}}`); `reuse`'s `RenderString` re-typographing a backtick span that an inner `version` / `conditional-text` block already rendered to `<code>`; and the killer, the **percent forms** `{{% reuse %}}` / `{{% version %}}` / `{{% conditional-text %}}`, whose output re-enters the page's own Goldmark for a SECOND pass that re-typographs the `<code>` after the shortcode returns. New `_partials/utils/harden-code-typography.html` rewrites the typographer's triggers inside attribute-less `<code>` to numeric character references (`--` → `&#45;&#45;`, smart quotes → `&#34;`/`&#39;`): a browser still renders `--`, but it is no longer a literal `--` pair, so neither the current render nor any later pass touches it. *Hardening*, not reversing — a post-render en-dash → `--` reversal would just be undone by the percent-form second pass. The partial is wired into `reuse.html` (after `RenderString`) and `callout.html` (before `markdownify`); it is attribute-less-`<code>` only, so Chroma `<pre><code class="language-…">` highlighted blocks are untouched. Production page: <https://docs.solo.io/istio/1.30.x/sidecar/setup/install/manual/> — the Solo-license note in the istiod Helm install step ("…by using the `--set pilot.env.SOLO_LICENSE_KEY` field") rendered `–set` before this fix and renders `--set` after.
+
+### Sidebar — long nav labels wrap instead of clipping
+
+- **A long, unbreakable left-nav label (e.g. a CRD name like `EnterpriseKgatewayTrafficPolicy`) now wraps onto multiple lines instead of being clipped at the sidebar's right edge.** `.sidebar-link` is a flex row whose label lives in a `.hx:flex-1` `<span>`; the span had no word-breaking rule, so a single word with no break opportunity overran the fixed-width (16rem) sidebar and was cut off mid-word with no ellipsis. The fix adds `.sidebar-link > span { min-width: 0; overflow-wrap: anywhere }` in `docs-theme-extras.css`. `anywhere` is load-bearing and `break-word` would NOT work here: only `overflow-wrap: anywhere` reduces the flex item's *min-content* size, so the word is allowed to break rather than forcing the box wider than its track; `min-width: 0` lets the flex span shrink below its content width in the first place. CSS-only, no template or content change. Production page showing the pre-fix clipping: <https://docs.solo.io/kgateway/2.2.x/about/policies/trafficpolicy/> — the `EnterpriseKgatewayTrafficPolicy` entry in the left **Policies** nav is truncated to `EnterpriseKgatewayTrafficP` until a consumer bumps the module pin.
+
+### Tests
+
+- **`sidebar-rail.spec.ts` gains a browser test that a long, unbreakable nav label wraps.** It runs at 1280px (desktop sidebar visible), finds the `/enterprise-kgateway-traffic-policy/` sidebar link, and asserts the label span's `overflow-wrap` computes to `anywhere`, that its content does not overflow horizontally (`scrollWidth <= clientWidth`, i.e. it is not clipped), and that it occupies more than one line. A new fixture topic page `enterprise-kgateway-traffic-policy.md` (in v1/v2/main) supplies the long single-word title; the test skips on real consumer builds where that fixture page is absent. Confirmed to fail when the `overflow-wrap` rule is reverted.
+
+- **The markdown-leaks harness gains a `code-typography` pattern** (`tests/helpers/markdown-leaks.ts`) that scans the raw HTML — code regions are stripped before the other patterns run — and fails the build on an en/em dash or a curly quote (entity *or* literal-character form) inside an attribute-less inline `<code>`. It deliberately excludes the ellipsis, since authors type a literal `…` as a code elision placeholder (e.g. the `[…](…)` fixture). This catches a regression of the typographer-in-code bug above on any consumer's built pages once the pin is bumped.
+
+---
+
 ## [v0.1.11] — 2026-06-29
 
 ### Version shortcode
