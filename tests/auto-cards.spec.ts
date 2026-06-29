@@ -38,6 +38,14 @@ const CHILD_TOPICS = [
     title: "Trailing step",
     descriptionContains: "Regression page for the percent-form version",
   },
+  // enterprise-kgateway-traffic-policy is a long, single-word CRD-style title
+  // added (in every version) to exercise sidebar/pager label wrapping. It has
+  // no manual cards, so it also surfaces as a section card on each index.
+  {
+    slug: "enterprise-kgateway-traffic-policy",
+    title: "EnterpriseKgatewayTrafficPolicy",
+    descriptionContains: "long, unbreakable CRD-style title",
+  },
 ];
 
 // Spec is fixture-specific: it asserts that every version's section index

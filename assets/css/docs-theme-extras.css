@@ -1833,6 +1833,20 @@ details[open].hextra-search-other-versions > summary::before {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+/* Hextra's prev/next pager links carry the `[word-break:break-word]` utility,
+   which (like `break-word` anywhere) does NOT reduce the flex item's
+   min-content size. A long, unbreakable title (e.g. a CRD name like
+   EnterpriseKgatewayTrafficPolicy) therefore fails to wrap and shoves the
+   pager's arrow icon past the viewport's right edge, producing a horizontal
+   scrollbar on mobile. `overflow-wrap:anywhere` + `min-width:0` lets the word
+   actually break, the same fix applied to `.sidebar-link > span` above. The
+   `[word-break:break-word]` class is Hextra's marker for these pager links, so
+   the attribute selector targets exactly them without needing the Tailwind
+   `:`/`[]` escaping. */
+a[class*="word-break:break-word"] {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .sidebar-link:hover {
   color: rgb(17, 24, 39);
   background: rgb(243, 244, 246);
