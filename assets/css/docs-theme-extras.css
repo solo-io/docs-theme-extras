@@ -1823,6 +1823,16 @@ details[open].hextra-search-other-versions > summary::before {
   text-decoration: none;
   color: rgb(75, 85, 99);
 }
+/* Let long, unbreakable nav labels (e.g. CRD names like
+   EnterpriseKgatewayTrafficPolicy) wrap instead of being clipped at the
+   sidebar's right edge. `anywhere` (not `break-word`) is required here: only
+   `anywhere` reduces the flex item's min-content size, so the word actually
+   wraps rather than overflowing the fixed-width sidebar. min-width:0 lets the
+   flex span shrink below its content width. */
+.sidebar-link > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .sidebar-link:hover {
   color: rgb(17, 24, 39);
   background: rgb(243, 244, 246);
