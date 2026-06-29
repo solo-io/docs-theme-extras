@@ -18,8 +18,7 @@ export type LeakKind =
   | "escaped-html"
   | "raw-bold"
   | "shortcode-placeholder"
-  | "unclosed-comment"
-  | "code-typography";
+  | "unclosed-comment";
 
 export type Leak = {
   kind: LeakKind;
@@ -210,38 +209,6 @@ const SHORTCODE_PLACEHOLDER = /hahahugoshortcode[a-z0-9]*/gi;
 // content-hiding bug, so a single match fails the scan.
 const UNCLOSED_COMMENT = /<!--/g;
 
-// Typographer artifacts that leaked INTO an inline code span. The Goldmark
-// typographer (smartDashes / smartQuotes) rewrites `--` to an en dash and
-// straight quotes to curly. It correctly skips real markdown code spans
-// (backtick) and raw HTML blocks (`<pre>`), but NOT text sitting inside a
-// literal inline `<code>...</code>` tag: there Goldmark treats the tags as raw
-// inline HTML and the text between them as ordinary markdown, so
-// `<code>--set foo</code>` renders as `<code>&ndash;set foo</code>`. The reader
-// then copies a broken `–set` flag.
-//
-// Two sources feed this: (1) an author writing literal `<code>--flag</code>` in
-// markdown (fix: use a backtick span, which is typographer-immune); (2) a
-// callout/alert that markdownifies a body whose `<code>` came from a nested
-// `{{< reuse >}}`'s first render (fix: neutralize the triggers before the
-// second markdownify — see utils/neutralize-code-typography.html).
-//
-// This scan runs on the RAW html (NOT the code-stripped `cleaned` string the
-// other patterns use), since the whole point is to look INSIDE code. Restricted
-// to the attribute-less `<code>` form so it targets author/reuse inline code and
-// never the Chroma `<pre><code class="language-…">` highlighted blocks (whose
-// nested `<span>`s would break the `[^<]` inner match anyway). Inner is `[^<]`
-// so a match stays within a single code span. Matches both the HTML-entity
-// forms (`&ndash;`, `&ldquo;`, …) and the literal Unicode characters (en/em
-// dash, curly quotes) since either can appear depending on the render path.
-//
-// Deliberately does NOT flag the ellipsis (`…` / `&hellip;`): authors routinely
-// type a literal `…` inside code as an elision placeholder (e.g.
-// `<code>[…](…)</code>`), so it's not a reliable artifact signal. En/em dashes
-// and curly quotes have no such legitimate use in code; the allowlist covers
-// the rare exception.
-const CODE_TYPOGRAPHY =
-  /<code>[^<]*(?:&(?:ndash|mdash|lsquo|rsquo|ldquo|rdquo);|[–—‘’“”])[^<]*<\/code>/g;
-
 function clamp(s: string, n: number): string {
   if (s.length <= n) return s;
   return s.slice(0, n - 1) + "…";
@@ -281,24 +248,6 @@ export function findMarkdownLeaks(
     }
   };
 
-  // Code-typography runs on the RAW html (it looks INSIDE code, which the
-  // other patterns strip). Context comes from html, not cleaned.
-  const scanRaw = (re: RegExp, kind: LeakKind) => {
-    re.lastIndex = 0;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(html)) !== null) {
-      const match = m[0];
-      if (!allowlist.some((r) => r.test(match))) {
-        leaks.push({
-          kind,
-          match: clamp(match, 120),
-          context: contextAround(html, m.index, 60),
-        });
-      }
-      if (m.index === re.lastIndex) re.lastIndex++;
-    }
-  };
-
   scan(MD_LINK, "markdown-link");
   scan(TABLE_PIPE, "table-pipe");
   scan(SHORTCODE_OPEN, "shortcode-delim");
@@ -309,7 +258,6 @@ export function findMarkdownLeaks(
   scan(ESCAPED_HTML, "escaped-html");
   scan(RAW_BOLD, "raw-bold");
   scan(UNCLOSED_COMMENT, "unclosed-comment");
-  scanRaw(CODE_TYPOGRAPHY, "code-typography");
 
   return leaks;
 }
