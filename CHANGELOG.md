@@ -15,6 +15,14 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [Unreleased]
+
+### Version shortcode
+
+- **`version`'s `include-if`/`exclude-if` now match the stable `linkVersion` token (e.g. `main`, `latest`) in addition to the canonical version number (e.g. `1.4.x`).** Previously the conditions compared only against each versions entry's `.version` string, which rotates every release — so a block meant for the in-development docs had to be written `include-if="1.4.x"` and re-bumped to `1.5.x` at every release, and silently flipped onto the wrong branch if anyone forgot. The two match sites in `_shortcodes/version.html` now also test `.linkVersion`, so `include-if="main"` / `exclude-if="main"` target a directory by its release-stable name and never need a per-release edit. This is backward-compatible: numeric conditions (`include-if="1.3.x"`, and the frozen-old-version `exclude-if="1.2.x,1.1.x,1.0.x"` idiom) still match exactly as before, since `.version` is checked alongside `.linkVersion`. Consumers that also run the agentgateway Python doc-test extractor carry the mirrored change in `_evaluate_version_block`, so generated tests and rendered pages agree on what `"main"` resolves to. The change is additive with no rendered-output change for any existing page, so there is no reader-facing production page to demonstrate it; the new behavior is observable only when a consumer authors a `linkVersion`-keyed condition (first use: the agentgateway `install-agentgateway-binary` doc-test snippet, which serves the nightly build on `main` and the latest release elsewhere).
+
+---
+
 ## [v0.1.10] — 2026-06-26
 
 ### Callout / alert

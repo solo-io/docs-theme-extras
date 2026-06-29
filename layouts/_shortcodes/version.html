@@ -125,13 +125,19 @@
        {{- if and (in $include_if $versionToml) (in $exclude_if $versionToml) -}}
          {{- errorf "Build condition %q appears in both include-if and exclude-if parameters" $condition -}}
        {{- end -}}
+       {{- /* Match include-if/exclude-if against BOTH the canonical version
+              string (.version, e.g. "1.4.x") AND the stable linkVersion token
+              (.linkVersion, e.g. "main"/"latest"). The linkVersion is stable
+              across releases, so `include-if="main"` never needs a per-release
+              bump, unlike the rotating version number. Mirrors the same
+              matching in the Python doc-test extractor (_evaluate_version_block). */ -}}
        {{- if isset $.Params "include-if" -}}
-         {{- if and (in $include_if $versionToml) $productMatches (not $rendered) -}}
+         {{- if and (or (in $include_if $versionToml) (in $include_if .linkVersion)) $productMatches (not $rendered) -}}
            {{- partial "utils/emit-inner.html" (dict "page" $.Page "rawInner" $.Inner "inner" $inner "isTrailingStep" $isTrailingStep "isFencedBlock" $isFencedBlock "isRowContent" $isRowContent "hasMarkdown" $hasMarkdown "isBlock" $isBlock) -}}
            {{- $rendered = true -}}
          {{- end -}}
        {{- else if isset $.Params "exclude-if" -}}
-         {{- if and (not (in $exclude_if $versionToml)) $productMatches (not $rendered) -}}
+         {{- if and (not (or (in $exclude_if $versionToml) (in $exclude_if .linkVersion))) $productMatches (not $rendered) -}}
            {{- partial "utils/emit-inner.html" (dict "page" $.Page "rawInner" $.Inner "inner" $inner "isTrailingStep" $isTrailingStep "isFencedBlock" $isFencedBlock "isRowContent" $isRowContent "hasMarkdown" $hasMarkdown "isBlock" $isBlock) -}}
            {{- $rendered = true -}}
          {{- end -}}
