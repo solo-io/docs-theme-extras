@@ -590,6 +590,17 @@ pre.mermaid:not([data-processed]) {
   background: #3a4350;
 }
 
+/* When a product mounts the AI chat launcher, both it and the back-to-top
+   arrow pin to the bottom-right at right:1.5rem and overlap. The chat widget
+   is wrapped in #chatbot-widget, so :has() lets us lift the arrow above the
+   ~3rem-tall launcher pill (bottom:5.5rem leaves a ~1rem gap) only on pages
+   where the chat exists. Sites without the chat keep the arrow at
+   bottom:1.5rem — no per-product override needed. Contract: any product that
+   adds an AI chat must wrap it in #chatbot-widget for this to apply. */
+body:has(#chatbot-widget) #solo-back-to-top {
+  bottom: 5.5rem;
+}
+
 /* Sticky offset for the side rails (left sidebar + right TOC). It must equal
    the height of Hextra's sticky `.hextra-nav-container`, which is the navbar
    PLUS any announcement banner (`--navbar-height` + `--hextra-banner-height`,
