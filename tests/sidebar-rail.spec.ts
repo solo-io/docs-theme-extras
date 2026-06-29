@@ -210,3 +210,75 @@ test.describe("desktop sidebar rail", () => {
     ).toBeLessThanOrEqual(4);
   });
 });
+
+// Long, unbreakable nav labels (CRD names like `EnterpriseKgatewayTrafficPolicy`)
+// must WRAP inside the fixed-width sidebar, not get clipped at its right edge.
+// The fix is the `.sidebar-link > span { min-width:0; overflow-wrap:anywhere }`
+// rule in docs-theme-extras.css. `anywhere` (not `break-word`) is load-bearing:
+// only `anywhere` shrinks the flex item's min-content size, so the word actually
+// breaks instead of overflowing. This is pure layout behavior — a static HTML
+// read can't see it — so it runs in a real browser at desktop width.
+//
+// The fixture page `enterprise-kgateway-traffic-policy` exists only in the
+// bundled fixture; against a real consumer build the link is absent and this
+// test skips itself (same no-op-on-consumer pattern as the rest of the suite).
+test.describe("long sidebar nav labels wrap instead of clipping", () => {
+  test.skip(!target.shouldRun("viewport"), "viewport check disabled in CONFIG");
+  test.skip(PAGE === null, "no non-landing pages configured");
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("the EnterpriseKgatewayTrafficPolicy label breaks onto multiple lines", async ({
+    page,
+  }) => {
+    // Any versioned page renders the whole section tree, so the link is in the
+    // DOM here even though PAGE isn't the long-titled page itself.
+    await page.goto(PAGE!);
+    const m = await page.evaluate(() => {
+      const link = [...document.querySelectorAll(".sidebar-container a.sidebar-link")].find(
+        (a) =>
+          (a.getAttribute("href") ?? "")
+            .replace(/\/$/, "")
+            .endsWith("/enterprise-kgateway-traffic-policy"),
+      ) as HTMLElement | undefined;
+      if (!link) return null;
+      const span = link.querySelector("span") as HTMLElement | null;
+      if (!span) return null;
+      const cs = getComputedStyle(span);
+      const lineHeight = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.2;
+      return {
+        text: (span.textContent ?? "").trim(),
+        overflowWrap: cs.overflowWrap,
+        // Content wider than the box ⇒ the word didn't wrap (it's clipped).
+        spanScrollWidth: span.scrollWidth,
+        spanClientWidth: span.clientWidth,
+        spanHeight: span.getBoundingClientRect().height,
+        lineHeight,
+      };
+    });
+
+    // Fixture page not in this build (real consumer) — nothing to assert.
+    test.skip(m === null, "EnterpriseKgatewayTrafficPolicy fixture link not present");
+
+    expect(m!.text, "the test located the wrong sidebar link").toContain(
+      "EnterpriseKgatewayTrafficPolicy",
+    );
+    // The fix's CSS actually reached the label span.
+    expect(
+      m!.overflowWrap,
+      "the .sidebar-link > span overflow-wrap rule did not apply (expected 'anywhere')",
+    ).toBe("anywhere");
+    // The label content fits within its box horizontally — i.e. it wrapped
+    // rather than overflowing. A clipped long word would make scrollWidth > clientWidth.
+    expect(
+      m!.spanScrollWidth,
+      `the nav label overflows its box horizontally (scrollWidth ${m!.spanScrollWidth} > ` +
+        `clientWidth ${m!.spanClientWidth}) — the long word is being clipped, not wrapped`,
+    ).toBeLessThanOrEqual(m!.spanClientWidth + 1);
+    // And it genuinely occupies more than one line, proving the long word broke.
+    expect(
+      m!.spanHeight,
+      `the nav label is only one line tall (${m!.spanHeight}px ≈ ${m!.lineHeight}px line) — ` +
+        `the long word did not wrap`,
+    ).toBeGreaterThan(m!.lineHeight * 1.5);
+  });
+});
