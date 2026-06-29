@@ -84,6 +84,43 @@ In the local override at `layouts/shortcodes/callout.html`, the `callout` shortc
 
 2. and then the next in the main list.
 
+### With a code block
+
+A GitHub callout whose body wraps a fenced code block. The fence is continued with `>` on every line, including the blank separator line, so GitHub (and Goldmark's GFM alert extension) keep the code block inside the callout instead of terminating the blockquote early.
+
+> [!NOTE]
+> MARKER_GH_CALLOUT_CODE. This callout contains a code block:
+>
+> ```yaml
+> # MARKER_GH_CALLOUT_CODE_FENCE
+> apiVersion: v1
+> kind: ConfigMap
+> metadata:
+>   name: gh-callout-code
+> ```
+
+### With multiple paragraphs
+
+A GitHub callout whose body spans several paragraphs. Each paragraph is separated by a blank `>` line so the blockquote stays continuous.
+
+> [!TIP]
+> MARKER_GH_CALLOUT_PARA1. This is the first paragraph of the callout.
+>
+> MARKER_GH_CALLOUT_PARA2. This is the second paragraph, separated from the first by a blank quoted line.
+>
+> MARKER_GH_CALLOUT_PARA3. And a third paragraph confirms multi-paragraph bodies render as separate `<p>` elements inside the callout.
+
+### With a list
+
+A GitHub callout whose body is a markdown list. The blank `>` line before the list lets Goldmark parse the items as a list rather than as a single wrapped paragraph.
+
+> [!IMPORTANT]
+> MARKER_GH_CALLOUT_LIST_BODY. This callout contains a list:
+>
+> - MARKER_GH_CALLOUT_LIST_ITEM1 first item
+> - MARKER_GH_CALLOUT_LIST_ITEM2 second item
+> - MARKER_GH_CALLOUT_LIST_ITEM3 third item
+
 ## Cards
 
 {{< cards >}}
