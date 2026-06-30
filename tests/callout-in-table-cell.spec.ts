@@ -14,9 +14,11 @@ import { target } from "./helpers/target";
 //      is block-level and cannot live in an inline-only table cell, so the
 //      in-cell note is faked with `<br><br>` + a bold `**Note**` lead-in.
 //
-// Both cells carry a `--set` inline code span. `harden-code-typography`
-// (in callout.html for case 1, reuse.html for case 2) must keep it from being
-// re-typographed to `&ndash;set` — the cell renders `--set`, not `–set`.
+// Both cells carry a `--set` backtick code span; the third test guards that it
+// renders as a literal `--`, not the Goldmark typographer's `&ndash;set` en
+// dash. (This render path — an angle-form `{{< callout >}}` body, and a plain
+// `<br>`+bold cell — keeps the `--set` in a backtick span, which the
+// typographer skips, so it survives without special hardening.)
 //
 // Fixture source: the "Callout inside a table cell" and "Inside a table cell"
 // subsections of fixture/assets/conrefs/test/everything.md.

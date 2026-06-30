@@ -81,12 +81,19 @@ The `callout` shortcode works inside a markdown table cell: its `solo-alert` div
    > [!TIP]
    > Helpful advice for doing things better or more easily.
 
+   > [!HELP]
+   > Helpful advice for doing things better or more easily.
+
    And some other information below.
 
    1. What about in a substep?
 
       > [!TIP]
       > Helpful advice for doing things better or more easily.
+      >
+      > ```sh
+      > some command
+      > ```
 
    2. Next step should be in order.
 

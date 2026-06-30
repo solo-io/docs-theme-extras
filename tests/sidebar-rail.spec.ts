@@ -282,3 +282,73 @@ test.describe("long sidebar nav labels wrap instead of clipping", () => {
     ).toBeGreaterThan(m!.lineHeight * 1.5);
   });
 });
+
+// The same long-CRD-name overflow, one component over: a prev/next PAGER link.
+// Hextra's pager anchors carry the `[word-break:break-word]` utility, which —
+// like plain `break-word` — does NOT reduce the flex item's min-content size,
+// so a long unbreakable title overran the `hx:max-w-[50%]` anchor and pushed
+// the pager arrow past the viewport's right edge: a horizontal scrollbar on
+// mobile. The fix is `a[class*="word-break:break-word"] { min-width:0;
+// overflow-wrap:anywhere }` in docs-theme-extras.css. Tested at a narrow
+// (mobile) width, where the anchor is small enough that an unbroken word would
+// genuinely overflow — at desktop the 50% anchor is wide enough to hide the bug.
+test.describe("long pager titles wrap instead of forcing horizontal scroll", () => {
+  test.skip(!target.shouldRun("viewport"), "viewport check disabled in CONFIG");
+  test.skip(SAMPLE.length === 0, "no non-landing pages configured");
+  test.use({ viewport: { width: 375, height: 800 } });
+
+  test("the EnterpriseKgatewayTrafficPolicy pager link wraps within its box", async ({
+    page,
+  }) => {
+    // The pager link to the long-titled page lives only on its nav-adjacent
+    // sibling, not on every page, so walk the versioned fixture pages until we
+    // find the pager anchor (the sidebar link to the same page carries
+    // `sidebar-link`, not `word-break:break-word`, so the class filter picks
+    // out the pager specifically).
+    let found: {
+      overflowWrap: string;
+      scrollWidth: number;
+      clientWidth: number;
+      text: string;
+    } | null = null;
+    for (const p of SAMPLE) {
+      await page.goto(p.url);
+      found = await page.evaluate(() => {
+        const a = [
+          ...document.querySelectorAll('a[class*="word-break:break-word"]'),
+        ].find((el) =>
+          (el.getAttribute("href") ?? "")
+            .replace(/\/$/, "")
+            .endsWith("/enterprise-kgateway-traffic-policy"),
+        ) as HTMLElement | undefined;
+        if (!a) return null;
+        const cs = getComputedStyle(a);
+        return {
+          overflowWrap: cs.overflowWrap,
+          scrollWidth: a.scrollWidth,
+          clientWidth: a.clientWidth,
+          text: (a.textContent ?? "").trim(),
+        };
+      });
+      if (found) break;
+    }
+
+    // No fixture pager link in this build (real consumer) — nothing to assert.
+    test.skip(found === null, "EnterpriseKgatewayTrafficPolicy pager link not present");
+
+    expect(found!.text, "located the wrong pager link").toContain(
+      "EnterpriseKgatewayTrafficPolicy",
+    );
+    // The fix's CSS actually reached the pager anchor (default would be 'normal').
+    expect(
+      found!.overflowWrap,
+      "the a[class*=\"word-break:break-word\"] overflow-wrap rule did not apply (expected 'anywhere')",
+    ).toBe("anywhere");
+    // The long CRD name broke within the narrow anchor instead of overflowing it.
+    expect(
+      found!.scrollWidth,
+      `the pager link overflows its box horizontally (scrollWidth ${found!.scrollWidth} > ` +
+        `clientWidth ${found!.clientWidth}) — the long CRD name is not wrapping`,
+    ).toBeLessThanOrEqual(found!.clientWidth + 1);
+  });
+});
