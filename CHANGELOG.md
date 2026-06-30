@@ -15,7 +15,7 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
-## [v0.1.12] — unreleased
+## [v0.1.12] — 2026-6-30
 
 ### Back-to-top — sits beside the AI chat launcher
 
