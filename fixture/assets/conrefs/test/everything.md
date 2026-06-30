@@ -81,7 +81,7 @@ The `callout` shortcode works inside a markdown table cell: its `solo-alert` div
    > [!TIP]
    > Helpful advice for doing things better or more easily.
 
-   > [!HELP]
+   > [!NOTE]
    > Helpful advice for doing things better or more easily.
 
    And some other information below.
