@@ -15,6 +15,19 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [Unreleased]
+
+### Smooth in-page scrolling for TOC and anchor clicks
+
+- **Clicking an "On this page" TOC entry, a heading anchor, or any in-page `#section` link now glides to the target instead of instantly snapping, and the target heading lands *below* the sticky navbar instead of tucked under it.** Requested in [agentgateway/website#664](https://github.com/agentgateway/website/issues/664). Two coordinated CSS rules in `docs-theme-extras.css`, plus one JS hardening in `head-end.html`:
+  - `@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth } }` animates the browser's native anchor-jump. It is gated on `no-preference` so it is opt-out for reduced-motion users; Hextra's own `prefers-reduced-motion: reduce` reset already forces `scroll-behavior: auto`, so the motion-safe path is covered from both sides. Hextra ships no `scroll-behavior` of its own (only that reset), and its `toc-scroll.js` merely highlights the active link via an IntersectionObserver — it does no programmatic scrolling — so the smooth glide is pure native-anchor behavior with no JS conflict.
+  - `.content h1…h6 { scroll-margin-top: calc(var(--solo-rail-top, 4rem) + 0.5rem) }` reserves the navbar (+ banner) height so an anchored heading clears Hextra's sticky nav container instead of landing at the very top of the viewport underneath it. This reuses the existing `--solo-rail-top` var (navbar + `--hextra-banner-height`) that the side rails already pin to. Content headings previously had *no* scroll offset; the abrupt instant jump masked it, but it is a real pre-existing usability bug that smooth scroll would otherwise have made obvious.
+  - `head-end.html`'s load-time hash handler — which deliberately lands deep links *instantly* and flash-free — had a bare `window.scrollTo(0, 0)` that CSS `scroll-behavior: smooth` would have animated, racing the handler's instant `scrollIntoView` and mispositioning the anchor. It now passes an explicit `{ top: 0, left: 0, behavior: 'instant' }`, so deep-link landing stays instant regardless of the new rule.
+
+  CSS + a one-line JS hardening; no template, shortcode, or content change. Affects only programmatic/anchor scrolling, never manual wheel/trackpad/scrollbar scrolling. Production page showing the pre-fix behavior: <https://agentgateway.dev/docs/standalone/latest/integrations/mcp-clients/windsurf/> — clicking a right-rail "On this page" entry snaps instantly today (and a heading clicked from the TOC sits high, partly under the navbar); after a consumer bumps the module pin the same click glides and the heading rests just below the nav.
+
+---
+
 ## [v0.1.12] — 2026-6-30
 
 ### Back-to-top — sits beside the AI chat launcher

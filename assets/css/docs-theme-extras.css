@@ -225,6 +225,28 @@
   margin-bottom: 1rem;
 }
 
+/* Anchor-jump offset. When a TOC entry or heading anchor is clicked, the
+   browser aligns the heading to the top of the viewport — which would land it
+   *under* Hextra's sticky nav container. `scroll-margin-top` reserves that
+   space so the heading clears the navbar (+ banner). Reuses --solo-rail-top
+   (navbar + banner height) plus a small breathing gap. Applies to native
+   anchor scrolling regardless of smooth vs instant. */
+.content h1, .content h2, .content h3, .content h4, .content h5, .content h6 {
+  scroll-margin-top: calc(var(--solo-rail-top, 4rem) + 0.5rem);
+}
+
+/* Smooth in-page scrolling for TOC / anchor-link clicks (agentgateway/website
+   #664). Gated on `no-preference` so it's opt-out for users who set reduced
+   motion; Hextra's own `prefers-reduced-motion` reset also forces
+   `scroll-behavior: auto`, so this stays motion-safe either way. Load-time
+   hash landing stays instant — see head-end.html, which passes explicit
+   `behavior: 'instant'` so this rule can't animate it. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
 /* Body text size matching old theme — scoped to main content, not sidebar */
 #content > .content p, #content > .content li {
   font-size: 1rem;

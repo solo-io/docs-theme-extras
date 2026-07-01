@@ -163,7 +163,10 @@ document.addEventListener('DOMContentLoaded', function () {
   if ('scrollRestoration' in history) {
     history.scrollRestoration = 'manual';
   }
-  window.scrollTo(0, 0);
+  // Explicit 'instant' so the smooth scroll-behavior added for in-page
+  // anchor clicks can't animate this load-time reset (which would race the
+  // instant scrollIntoView below and leave the anchor mispositioned).
+  window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
 
   function scrollToHash(){
     var el = document.getElementById(id);
