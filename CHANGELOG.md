@@ -15,7 +15,7 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
-## [Unreleased]
+## [v0.1.13] — 2026-7-01
 
 ### Smooth in-page scrolling for TOC and anchor clicks
 
