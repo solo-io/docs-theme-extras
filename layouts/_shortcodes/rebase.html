@@ -14,6 +14,9 @@
                           revert specific shortcodes back to percent-
                           form when their inner content must re-flow
                           through markdown (tab, steps, include).
+    3b. SOURCE FILTERS  — strip {{< upstream >}} blocks (ambientmesh.io-
+                          only content); unwrap {{< downstream >}} blocks
+                          (solo-docs-only content, hidden in source).
     4. ARG INJECTION    — pass the resolved version + product into
                           shortcodes that need them (link-hextra, reuse).
     5. VERSION REMAP    — handle keepVersion= on the version shortcode,
@@ -122,6 +125,17 @@ first segment that matches a known version wins.
      content. Hextra explicitly documents include as a percent-form-only
      shortcode for this reason. */}}
 {{ $clean = replaceRE `\{\{<\s*(include\s[^>]*)>}}` "{{% $1%}}" $clean }}
+
+{{/* ─── Stage 3b: SOURCE FILTERS ────────────────────────────────────── */}}
+
+{{/* Strip upstream blocks: content authored for the ambientmesh.io source
+     site that should not appear in the rebased downstream docs. */}}
+{{ $clean = replaceRE `(?s)\{\{<\s*upstream\s*>}}.*?\{\{<\s*/upstream\s*>}}` "" $clean }}
+
+{{/* Unwrap downstream blocks: content hidden in the ambientmesh.io source
+     that should appear when rebased into downstream docs. The wrapper tags
+     are removed but the inner content is preserved. */}}
+{{ $clean = replaceRE `(?s)\{\{<\s*downstream\s*>}}(.*?)\{\{<\s*/downstream\s*>}}` "$1" $clean }}
 
 {{/* ─── Stage 4: ARG INJECTION ──────────────────────────────────────── */}}
 
