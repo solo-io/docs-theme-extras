@@ -67,6 +67,7 @@ export const SHORTCODE_MARKERS = [
   "MARKER_BADGE",
   "MARKER_FILETREE",
   "MARKER_INCLUDE",
+  "MARKER_GH_CALLOUT_SHORTCODE_LEAD",
 ] as const;
 
 export const VERSION_MARKERS = {
@@ -90,6 +91,7 @@ export const VERSION_MARKERS = {
   // structures. Each marker below is v2-gated except the seq* group, which
   // tests adjacent same-line version blocks one per version.
   inCallout: "MARKER_VERSION_IN_CALLOUT",
+  inGhCallout: "MARKER_VERSION_IN_GH_CALLOUT",
   inUL3: "MARKER_VERSION_IN_UL3",
   inOL3: "MARKER_VERSION_IN_OL3",
   inTableCell: "MARKER_VERSION_IN_TABLE_CELL",
@@ -128,6 +130,7 @@ export const CONDITIONAL_MARKERS = {
   // markers render on every page; the matrix exercises structural placement
   // rather than gating.
   inCallout: "COND_IN_CALLOUT",
+  inGhCallout: "COND_IN_GH_CALLOUT",
   inUL3: "COND_IN_UL3",
   inOL3: "COND_IN_OL3",
   inTableCell: "COND_IN_TABLE_CELL",

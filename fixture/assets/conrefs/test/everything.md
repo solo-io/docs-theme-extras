@@ -82,7 +82,7 @@ The `callout` shortcode works inside a markdown table cell: its `solo-alert` div
    > Helpful advice for doing things better or more easily.
 
    > [!NOTE]
-   > Helpful advice for doing things better or more easily.
+   > Helpful advice with reuse {{< reuse "conrefs/test/snippet.md" >}} for doing things better or more easily.
 
    And some other information below.
 
@@ -135,6 +135,13 @@ A GitHub callout whose body is a markdown list. The blank `>` line before the li
 > - MARKER_GH_CALLOUT_LIST_ITEM1 first item
 > - MARKER_GH_CALLOUT_LIST_ITEM2 second item
 > - MARKER_GH_CALLOUT_LIST_ITEM3 third item
+
+### With reuse, version, and conditional-text shortcodes
+
+A GitHub callout whose body embeds all three inline shortcodes: a `reuse` snippet, a `version` block (angle-bracket form), and a `conditional-text` block (percent form). Each must emit its content inline within the alert's paragraph rather than leaking a raw tag, breaking out of the blockquote, or collapsing it. The `reuse` and `conditional-text` bodies render on every page; the `version` body is v2-gated. A unique lead sentinel opens the callout body so the structural test can locate the alert independently of the (non-unique) reuse snippet text.
+
+> [!NOTE]
+> MARKER_GH_CALLOUT_SHORTCODE_LEAD. Reuse: {{< reuse "conrefs/test/snippet.md" >}} {{< version include-if="v2" >}}MARKER_VERSION_IN_GH_CALLOUT. v2-only sentence inside a GitHub-native callout.{{< /version >}} {{% conditional-text include-if="test" %}}COND_IN_GH_CALLOUT. Build-gated sentence inside a GitHub-native callout.{{% /conditional-text %}}
 
 ### Inside a table cell
 
