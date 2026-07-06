@@ -56,6 +56,11 @@
   {{- $html = replace $html $blk (printf "\n\nXMERMAIDPLACEHOLDER%dX\n\n" $i) 1 -}}
 {{- end -}}
 
+{{- /* Reconstruct GitHub alerts as blockquotes so the emitted markdown keeps the
+       `> [!TYPE]` syntax (kept in sync with copy-markdown.html). See that
+       partial for the rationale. */ -}}
+{{- $html = $html | replaceRE `(?s)<div[^>]*data-alert-copyas="([^"]*)"[^>]*>\s*<p[^>]*hx:font-medium[^>]*>.*?</p>\s*<div[^>]*>\s*<div[^>]*>(.*?)<span data-alert-md-end></span>\s*</div>\s*</div>\s*</div>` "<blockquote><p>[!$1]</p>$2</blockquote>" -}}
+
 {{- $md := $html | transform.HTMLToMarkdown -}}
 
 {{- /* Restore GFM tables before the link/punctuation passes below so table-cell
@@ -110,4 +115,10 @@
        ("Gateway &gt; ListenerSet" instead of "Gateway > ListenerSet").
        Decode entities so the returned markdown reads like markdown. */ -}}
 {{- $md = $md | htmlUnescape -}}
+{{- /* transform.HTMLToMarkdown backslash-escapes the `[` in the reconstructed
+       alert marker, and splits the marker + body into two blockquote paragraphs
+       (a blank `>` line between). Un-escape `\[!` and drop that blank line so the
+       result is the canonical `> [!TYPE]` immediately followed by the body. */ -}}
+{{- $md = $md | replaceRE `\\(\[!)` "$1" -}}
+{{- $md = $md | replaceRE `(?m)^([ \t]*> \[![A-Za-z]+\])\n[ \t]*>[ \t]*\n` "$1\n" -}}
 {{- return $md -}}

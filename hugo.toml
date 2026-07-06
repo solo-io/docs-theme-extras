@@ -31,6 +31,13 @@
     source = "assets"
     target = "assets"
 
+  # Theme-shipped data (site.Data.icons entries for the built-in [!SOLO] /
+  # [!WAYPOINT] alert types). Declared explicitly because this module overrides
+  # the default mounts above; a consumer's own data/ still merges on top.
+  [[module.mounts]]
+    source = "data"
+    target = "data"
+
   # Fixture content/assets/static are deliberately NOT mounted at the
   # module level: a module-level mount at target="content" collides with
   # consumer contentDir scoping and would surface the test fixture in
