@@ -1773,7 +1773,11 @@ details[open].hextra-search-other-versions > summary::before {
    min-width:1280px block below); on mobile the slide-in panel scrolls the
    whole aside, so flex-grow lets the wrapper fill the panel. */
 .sidebar-nav-wrapper {
-  padding: 0 1rem 1rem;
+  /* Top padding matches the content pane's top padding (docs/list.html's
+     `hx:pt-6` = 1.5rem, less the first link's own ~0.375rem top padding) so the
+     sidebar's first item lines up with the first line of content instead of
+     sitting flush against the navbar. */
+  padding: 1rem 1rem 1rem;
   flex-grow: 1;
 }
 .sidebar-nav {

@@ -50,6 +50,16 @@
 {{- end -}}
 {{- $isLandingPage := or $isDocsIndex $isSectionLanding -}}
 
+{{- /* Opt-in: render the sidebar ON the docs-index / section-landing pages
+       instead of hiding it. Flat, unversioned sites (e.g. agentregistry) use
+       /docs/ as the real docs entry and want the full nav there. Versioned
+       sites (agw/kgw) use /docs/ as a "pick your version / deployment type"
+       splash with no single tree to show, so the default (false) keeps hiding
+       it. Nil-safe: consumers without a [params.sidebar] table are unaffected. */ -}}
+{{- $showOnLanding := false -}}
+{{- with site.Params.sidebar }}{{ $showOnLanding = .showOnLanding | default false }}{{ end -}}
+{{- if $showOnLanding }}{{ $isLandingPage = false }}{{ end -}}
+
 {{- if or $disableSidebar $isLandingPage -}}
   <aside class="hx:hidden"></aside>
 {{- else -}}
