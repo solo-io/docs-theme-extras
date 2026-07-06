@@ -138,6 +138,95 @@ test.describe("shortcodes inside callout/alert host", () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────
+// 1a. reuse + version + conditional-text inside a GitHub-native callout
+//
+//     GitHub-native alerts ([!NOTE] blockquote syntax) are a distinct host
+//     from the hextra callout/alert shortcodes covered in section 1: they
+//     are parsed by Goldmark's GFM-alert extension into a blockquote-derived
+//     callout <div>, and the shortcode bodies must survive that rendering.
+//     One [!NOTE] embeds all three inline shortcodes at once. We anchor on
+//     the unique lead sentinel (the reuse snippet text is not unique on the
+//     page), find its enclosing callout <div>, and assert each shortcode's
+//     payload lands inside that SAME region — reuse + conditional on every
+//     page, version only on v2.
+// ──────────────────────────────────────────────────────────────────────
+
+const REUSE_SNIPPET_MARKER = "MARKER_SNIPPET";
+const GH_CALLOUT_LEAD = "MARKER_GH_CALLOUT_SHORTCODE_LEAD";
+
+test.describe("reuse/version/conditional inside a GitHub-native callout", () => {
+  for (const page of TEST_PAGES) {
+    if (!ALL_TOPIC_PAGES.includes(page.name)) continue;
+    const isV2 = V2_PAGES.includes(page.name);
+
+    test(`${page.name}: GitHub callout renders reuse + conditional${isV2 ? " + version" : ""} inline in the same callout div`, () => {
+      const html = visibleHtml(page.filePath);
+      const leadIdx = html.indexOf(GH_CALLOUT_LEAD);
+      expect(leadIdx, `${GH_CALLOUT_LEAD} missing`).toBeGreaterThan(-1);
+
+      // The lead sentinel must live inside the GitHub-native alert. Goldmark's
+      // GFM-alert extension renders it through Hextra's blockquote-callout
+      // hook: a bordered `hx:rounded-lg` container that opens with a type
+      // label (Note/Tip/Important/Warning/Caution). enclosingRegion returns
+      // the innermost body <div>; the container + label sit just above it.
+      const region = enclosingRegion(html, leadIdx, "div");
+      expect(region, `${GH_CALLOUT_LEAD} not inside any <div>`).not.toBeNull();
+      const ancestorWindow = html.slice(
+        Math.max(0, region!.start - 900),
+        region!.start,
+      );
+      expect(
+        ancestorWindow,
+        `enclosing block isn't a GitHub-native alert (no bordered hx:rounded-lg container above the marker)`,
+      ).toMatch(/hx:rounded-lg/);
+      expect(
+        ancestorWindow,
+        `no GFM-alert type label (Note/Tip/Important/Warning/Caution) above the marker`,
+      ).toMatch(/>(?:Note|Tip|Important|Warning|Caution)<\/p>/);
+
+      // No raw shortcode tag leaked anywhere inside the callout region —
+      // a failed parse would leave a literal "{{<" / "{{%" behind.
+      const regionHtml = html.slice(region!.start, region!.end);
+      expect(regionHtml, `raw shortcode tag leaked inside the GitHub callout`).not.toMatch(
+        /\{\{[%<]/,
+      );
+
+      // Assert a marker renders inside this same callout region.
+      const inRegion = (marker: string): boolean => {
+        const idx = html.indexOf(marker, region!.start);
+        return idx > -1 && idx < region!.end;
+      };
+
+      // reuse snippet content resolved inside the callout.
+      expect(
+        inRegion(REUSE_SNIPPET_MARKER),
+        `reuse snippet (${REUSE_SNIPPET_MARKER}) did not render inside the GitHub callout`,
+      ).toBe(true);
+
+      // conditional-text (buildCondition = "test") renders on every page.
+      expect(
+        inRegion(CONDITIONAL_MARKERS.inGhCallout),
+        `${CONDITIONAL_MARKERS.inGhCallout} did not render inside the GitHub callout`,
+      ).toBe(true);
+
+      // version body is v2-gated: present in-region on v2, absent everywhere
+      // else (the negative-control describe re-checks page-wide absence).
+      if (isV2) {
+        expect(
+          inRegion(VERSION_MARKERS.inGhCallout),
+          `${VERSION_MARKERS.inGhCallout} did not render inside the GitHub callout on ${page.name}`,
+        ).toBe(true);
+      } else {
+        expect(
+          html.indexOf(VERSION_MARKERS.inGhCallout),
+          `${VERSION_MARKERS.inGhCallout} leaked onto ${page.name} (include-if="v2" should exclude it)`,
+        ).toBe(-1);
+      }
+    });
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────
 // 1b. Alert / callout as the body of an ordered-list item
 // ──────────────────────────────────────────────────────────────────────
 
@@ -863,6 +952,7 @@ test.describe("nested shortcode in another shortcode's attribute value", () => {
 test.describe("rich-context version markers are gated to v2", () => {
   const richVersionMarkers = [
     VERSION_MARKERS.inCallout,
+    VERSION_MARKERS.inGhCallout,
     VERSION_MARKERS.inUL3,
     VERSION_MARKERS.inOL3,
     VERSION_MARKERS.inTableCell,

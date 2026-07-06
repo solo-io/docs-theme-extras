@@ -50,6 +50,16 @@
 {{- end -}}
 {{- $isLandingPage := or $isDocsIndex $isSectionLanding -}}
 
+{{- /* Opt-in: render the sidebar ON the docs-index / section-landing pages
+       instead of hiding it. Flat, unversioned sites (e.g. agentregistry) use
+       /docs/ as the real docs entry and want the full nav there. Versioned
+       sites (agw/kgw) use /docs/ as a "pick your version / deployment type"
+       splash with no single tree to show, so the default (false) keeps hiding
+       it. Nil-safe: consumers without a [params.sidebar] table are unaffected. */ -}}
+{{- $showOnLanding := false -}}
+{{- with site.Params.sidebar }}{{ $showOnLanding = .showOnLanding | default false }}{{ end -}}
+{{- if $showOnLanding }}{{ $isLandingPage = false }}{{ end -}}
+
 {{- if or $disableSidebar $isLandingPage -}}
   <aside class="hx:hidden"></aside>
 {{- else -}}
@@ -364,11 +374,22 @@
       <aside class="sidebar-container hextra-sidebar-container hx:order-first hx:hidden hx:w-64 hx:shrink-0 hx:xl:block hx:print:hidden"></aside>
     {{- end -}}
   {{- else -}}
-    {{- /* Non-versioned page fallback: try Hextra's default sidebar, else render
-           a tree rooted at the current page. */ -}}
+    {{- /* Non-versioned page fallback for flat, unversioned OSS sites
+           (/docs/<section>/<page>/, no site.Params.sections, no version
+           segment — e.g. agentregistry). A consumer may still override the
+           whole tree via layouts/partials/hextra/sidebar.html; otherwise we
+           render the standard extras panel here.
+
+           Root the tree at the top-level docs section (NOT $context) so every
+           section stays visible from any page — matching Hextra's own
+           `cond (eq site.Home.Type "docs") site.Home $context.FirstSection`.
+           Rooting at $context would collapse the sidebar to just the current
+           page's children. The shared .sidebar-mobile-overlay above plus the
+           .sidebar-mobile-panel class here keep the mobile slide-in working. */ -}}
     {{- if templates.Exists "partials/hextra/sidebar.html" -}}
       {{- partial "hextra/sidebar.html" (dict "context" $context) -}}
     {{- else -}}
+      {{- $navRoot := cond (eq site.Home.Type "docs") site.Home $context.FirstSection -}}
       <aside class="sidebar-container hextra-sidebar-container sidebar-mobile-panel hx:order-first hx:w-64 hx:shrink-0 hx:hidden hx:xl:block hx:print:hidden">
         {{- with site.Params.sidebar.logo -}}
           <div class="sidebar-product-logo hx:mb-1 hx:max-md:hidden">
@@ -382,7 +403,7 @@
         {{- end -}}
         <div class="sidebar-nav-wrapper">
           <nav class="sidebar-nav">
-            {{- template "render-sidebar-tree" (dict "page" $context "current" $context "versionPrefix" "" "depth" 0) -}}
+            {{- template "render-sidebar-tree" (dict "page" $navRoot "current" $context "versionPrefix" "" "depth" 0) -}}
           </nav>
         </div>
       </aside>

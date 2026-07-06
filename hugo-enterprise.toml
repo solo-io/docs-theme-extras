@@ -92,6 +92,12 @@ pageContextMode = "siteParams"
   copyright = "Solo.io copyright 2026"
   displayPoweredBy = false
 
+# Enables the "Was this page helpful?" widget so page-feedback.spec.ts can
+# assert the module's docs templates render it. Consumers opt in the same way.
+[params.feedback]
+  enable = true
+  issueRepo = "solo-io/docs-theme-extras"
+
 [params.docs]
   title = "Docs framework test fixture"
   toc = true
