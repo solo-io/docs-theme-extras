@@ -1,0 +1,104 @@
+{{- /* Override of Hextra's github-style-alert component that adds support for
+       CONSUMER-DEFINED custom alert types on top of the five GitHub-native ones
+       (note/tip/important/warning/caution).
+
+       A consumer declares custom types under site.Params.themeExtras.alertTypes:
+
+         params:
+           themeExtras:
+             alertTypes:
+               solo:
+                 title: "Solo Enterprise for Istio"   # label shown in the header
+                 icon: solo                            # a site.Data.icons key (inline SVG)
+                 style: "hx:border-indigo-200 hx:bg-indigo-100 ..."  # box color classes
+
+       Then `> [!SOLO]` in markdown renders as a GitHub-style alert with that
+       icon, label, and color. The icon resolves through the same site.Data.icons
+       lookup Hextra uses for its built-in alert icons, so consumer SVGs (product
+       logos, etc.) and Hextra's icons both work. Unknown types still fall back to
+       the "default" style, exactly as upstream. Built-in types are untouched. */ -}}
+{{- $content := .content -}}
+{{- $alertType := .alertType -}}
+{{- $alertTitle := .alertTitle -}}
+
+{{- $styles := newScratch -}}
+{{- $styles.Set "default" (dict
+  "icon" "light-bulb"
+  "style" "hx:border-green-200 hx:bg-green-100 hx:text-green-900 hx:dark:border-green-200/30 hx:dark:bg-green-900/30 hx:dark:text-green-200"
+  )
+-}}
+{{- $styles.Set "note" (dict
+  "icon" "information-circle"
+  "style" "hx:border-blue-200 hx:bg-blue-100 hx:text-blue-900 hx:dark:border-blue-200/30 hx:dark:bg-blue-900/30 hx:dark:text-blue-200"
+  )
+-}}
+{{- $styles.Set "tip" (dict
+  "icon" "light-bulb"
+  "style" "hx:border-green-200 hx:bg-green-100 hx:text-green-900 hx:dark:border-green-200/30 hx:dark:bg-green-900/30 hx:dark:text-green-200"
+  )
+-}}
+{{- $styles.Set "important" (dict
+  "icon" "information-circle"
+  "style" "hx:border-purple-200 hx:bg-purple-100 hx:text-purple-900 hx:dark:border-purple-200/30 hx:dark:bg-purple-900/30 hx:dark:text-purple-200"
+  )
+-}}
+{{- $styles.Set "warning" (dict
+  "icon" "exclamation"
+  "style" "hx:border-amber-200 hx:bg-amber-100 hx:text-amber-900 hx:dark:border-amber-200/30 hx:dark:bg-amber-900/30 hx:dark:text-amber-200"
+  )
+-}}
+{{- $styles.Set "caution" (dict
+  "icon" "exclamation-circle"
+  "style" "hx:border-red-200 hx:bg-red-100 hx:text-red-900 hx:dark:border-red-200/30 hx:dark:bg-red-900/30 hx:dark:text-red-200"
+  )
+-}}
+
+{{- /* Theme-shipped custom alert types. Their icons (solo, waypoint) live in
+       this module's data/icons.yaml, so `[!SOLO]` / `[!WAYPOINT]` work in any
+       consumer with no per-repo config. Indigo tint matches the legacy Solo
+       `.solo-alert` (alert-default) callout background these replaced. A
+       consumer can still override or add types via themeExtras.alertTypes
+       (merged below, so consumer config wins). */ -}}
+{{- $styles.Set "solo" (dict
+  "icon" "solo"
+  "title" "Solo Enterprise for Istio"
+  "style" "hx:border-indigo-200 hx:bg-indigo-100 hx:text-indigo-900 hx:dark:border-indigo-200/30 hx:dark:bg-indigo-900/30 hx:dark:text-indigo-200"
+  )
+-}}
+{{- $styles.Set "waypoint" (dict
+  "icon" "waypoint"
+  "title" "Waypoint"
+  "style" "hx:border-indigo-200 hx:bg-indigo-100 hx:text-indigo-900 hx:dark:border-indigo-200/30 hx:dark:bg-indigo-900/30 hx:dark:text-indigo-200"
+  )
+-}}
+
+{{- /* Merge consumer-defined custom alert types. Keys are lowercased to match
+       the AlertType Hugo derives from `[!TYPE]`. A custom entry carries icon +
+       style like the built-ins, plus an optional title used for the header. */ -}}
+{{- with (site.Params.themeExtras).alertTypes -}}
+  {{- range $name, $cfg := . -}}
+    {{- $styles.Set (lower $name) (dict
+      "icon" (index $cfg "icon")
+      "style" (index $cfg "style")
+      "title" (index $cfg "title")
+      ) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $style := or ($styles.Get $alertType) ($styles.Get "default") -}}
+{{- $title := or $alertTitle (index $style "title") (or (i18n $alertType) (title $alertType)) -}}
+
+<div class="hx:overflow-x-auto hx:mt-6 hx:flex hx:flex-col hx:rounded-lg hx:border hx:py-4 hx:px-4 hx:border-gray-200 hx:contrast-more:border-current hx:contrast-more:dark:border-current {{ $style.style }}">
+  <p class="hx:flex hx:items-center hx:font-medium">
+    {{- with $style.icon -}}
+      {{- partial "utils/icon.html" (dict "name" . "attributes" `height=16px class="hx:inline-block hx:align-middle hx:mr-2"`) -}}
+    {{- end -}}
+    {{- $title -}}
+  </p>
+
+  <div class="hx:w-full hx:min-w-0 hx:leading-7">
+    <div class="hx:mt-6 hx:leading-7 hx:first:mt-0">
+      {{- $content -}}
+    </div>
+  </div>
+</div>

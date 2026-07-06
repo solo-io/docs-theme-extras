@@ -8,8 +8,8 @@ leaf page must still list its sibling (Flatguide Beta) — see sidebar-flat.spec
 
 The callouts below exercise the callout `icon=` override — see callout-icon.spec.ts.
 
-{{< callout type="info" icon="flask" >}}
-SVG-ICON-CALLOUT: `icon="flask"` is a site.Data.icons entry, so the icon renders as an inline SVG.
+{{< callout type="info" icon="solo" >}}
+SVG-ICON-CALLOUT: `icon="solo"` is a site.Data.icons entry, so the icon renders as an inline SVG.
 {{< /callout >}}
 
 {{< callout icon="rocket_launch" >}}

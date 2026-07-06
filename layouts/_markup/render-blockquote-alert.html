@@ -1,0 +1,23 @@
+{{- /* Override of Hextra's blockquote-alert render hook. Identical behavior,
+       except the "unsupported alert type" warning also accepts the custom alert
+       types a consumer declares under site.Params.themeExtras.alertTypes — so a
+       configured `[!SOLO]` renders cleanly instead of warning on every build.
+       Unconfigured/unknown types still warn (and fall back to the default
+       style in components/github-style-alert.html). */ -}}
+{{- /* Built-in GitHub types + this theme's shipped custom types (solo,
+       waypoint — see components/github-style-alert.html). */ -}}
+{{- $supported := slice "note" "tip" "important" "warning" "caution" "solo" "waypoint" -}}
+{{- with (site.Params.themeExtras).alertTypes -}}
+  {{- range $name, $_ := . -}}
+    {{- $supported = $supported | append (lower $name) -}}
+  {{- end -}}
+{{- end -}}
+{{- if not (in $supported .AlertType) -}}
+  {{- warnf "Alert type %s is not supported" .AlertType -}}
+{{- end -}}
+
+{{- $content := .Text -}}
+{{- $alertType := .AlertType -}}
+{{- $alertTitle := .AlertTitle -}}
+
+{{- partial "components/github-style-alert.html" (dict "content" $content "alertType" $alertType "alertTitle" $alertTitle) -}}

@@ -4,18 +4,15 @@ import path from "node:path";
 import { TEST_PRODUCT_ROOT } from "./helpers/fixture";
 import { target } from "./helpers/target";
 
-// Guards the callout `icon=` override (added so a consumer can restore branded
-// callout icons — e.g. ambientmesh's solo / waypoint logos — that the
-// type-derived Material icon can't express).
+// Guards the callout `icon=` override (a consumer can set a branded callout
+// icon the type-derived Material icon can't express).
 //
 // The fixture's flatguide/alpha page has two callouts:
-//   - icon="flask": a site.Data.icons entry (fixture/data/icons.yaml), so the
-//     icon slot renders that inline <svg class="solo-alert-icon-svg" …> (the
-//     SVG carries data-testicon="flask").
+//   - icon="solo": a site.Data.icons entry (theme-shipped data/icons.yaml), so
+//     the icon slot renders that inline <svg class="solo-alert-icon-svg" …>.
 //   - icon="rocket_launch": NOT in site.Data.icons, so it renders as a Material
 //     Icons ligature (<i class="material-icons">rocket_launch</i>).
-// A callout with no icon= (elsewhere in the fixture) keeps the type-derived
-// Material icon — covered by shortcode-contexts / the untouched default path.
+// A callout with no icon= keeps the type-derived Material icon (default path).
 //
 // Fixture-only; server-rendered markup read statically.
 
@@ -24,7 +21,7 @@ const IS_FIXTURE_TARGET = target.name.startsWith("docs-theme-extras-fixture");
 test.describe("callout icon= override", () => {
   test.skip(
     !IS_FIXTURE_TARGET,
-    "fixture-only: relies on the fixture's icons.yaml + flatguide callouts",
+    "fixture-only: relies on the theme's shipped icons + flatguide callouts",
   );
 
   const filePath = path.join(TEST_PRODUCT_ROOT, "flatguide", "alpha", "index.html");
@@ -32,14 +29,15 @@ test.describe("callout icon= override", () => {
   test("icon= resolves a site.Data.icons entry to an inline SVG", () => {
     test.skip(!fs.existsSync(filePath), "flatguide/alpha not built");
     const html = fs.readFileSync(filePath, "utf8");
-    // The flask icon rendered as an inline SVG inside the alert icon slot.
-    expect(html, "flask SVG icon missing").toContain('data-testicon="flask"');
+    // The solo icon rendered as an inline SVG inside the alert icon slot.
     expect(html, "SVG icon should carry the solo-alert-icon-svg class").toContain(
       "solo-alert-icon-svg",
     );
-    // It must NOT have fallen back to a Material ligature literally named "flask".
+    // The solo logo SVG's distinctive viewBox proves the inline SVG rendered.
+    expect(html, "solo SVG markup missing").toContain('viewBox="0 0 84 84"');
+    // It must NOT have fallen back to a Material ligature literally named "solo".
     expect(html).not.toContain(
-      '<i class="material-icons" aria-hidden="true">flask</i>',
+      '<i class="material-icons" aria-hidden="true">solo</i>',
     );
   });
 
