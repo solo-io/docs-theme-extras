@@ -1,0 +1,7 @@
+# Fixture icon set for callout-icon.spec.ts. The callout `icon=` override
+# resolves a name present here to an inline SVG (via Hextra's utils/icon.html),
+# the same lookup consumers use for branded icons (e.g. ambientmesh's solo /
+# waypoint logos). A single currentColor path so it inherits the callout's
+# per-type color; `data-testicon` gives the spec a stable hook.
+flask: |
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" data-testicon="flask"><path d="M9 3h6M10 3v6l-4.5 8.1A2 2 0 0 0 7.3 21h9.4a2 2 0 0 0 1.8-2.9L14 9V3"/></svg>

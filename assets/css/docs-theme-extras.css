@@ -91,6 +91,16 @@
   vertical-align: middle;
 }
 
+/* Inline SVG icon (from a callout `icon=` override that resolves to a
+   site.Data.icons entry). Sized to match the 20px material glyph. Branded
+   logos carry their own fills; single-color line icons using currentColor
+   inherit the per-type .solo-alert-icon color rules below. */
+.solo-alert-icon .solo-alert-icon-svg {
+  width: 20px;
+  height: 20px;
+  vertical-align: middle;
+}
+
 .solo-alert-body {
   flex: 1;
   min-width: 0;

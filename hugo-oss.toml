@@ -49,6 +49,12 @@ enableInlineShortcodes = true
     source = "fixture/static"
     target = "static"
 
+  # Fixture icon set so callout-icon.spec.ts can exercise the callout `icon=`
+  # override's site.Data.icons SVG branch.
+  [[module.mounts]]
+    source = "fixture/data"
+    target = "data"
+
 [build]
   writeStats = true
   [[build.cachebusters]]
