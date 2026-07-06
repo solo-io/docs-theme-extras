@@ -54,4 +54,36 @@ test.describe("built-in custom alert types (solo, waypoint)", () => {
     // The waypoint icon SVG (theme data) rendered inline.
     expect(html, "waypoint icon SVG missing").toContain('viewBox="0 0 36 36"');
   });
+
+  // Copy-as-markdown / .md-output round-trip. The copy-markdown pipeline
+  // reconstructs alerts back into `> [!TYPE]` (a styled div would otherwise
+  // flatten to a bare label + text). Standard types survive as themselves;
+  // CUSTOM types downgrade to their `copyAs` native type (solo/waypoint → tip)
+  // so the exported markdown renders as an alert on GitHub instead of an inert
+  // `[!SOLO]` blockquote. Read the page's embedded copy-md-source and verify.
+  test("alerts round-trip in copy-md; custom types downgrade to a native type", () => {
+    test.skip(!filePath, "no everything page built");
+    const html = fs.readFileSync(filePath!, "utf8");
+    const m = html.match(
+      /<script[^>]*class="copy-md-source"[^>]*>([\s\S]*?)<\/script>/,
+    );
+    test.skip(!m, "no copy-md-source on this page");
+    const md = m![1]
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&");
+    // Standard types survive as themselves.
+    for (const marker of ["> [!NOTE]", "> [!WARNING]", "> [!TIP]"]) {
+      expect(md, `copy-md lost ${marker}`).toContain(marker);
+    }
+    // Custom types must NOT leak their theme-only marker (GitHub wouldn't
+    // render `[!SOLO]`/`[!WAYPOINT]`); they downgrade to `> [!TIP]` above.
+    expect(md, "copy-md leaked [!SOLO]").not.toContain("[!SOLO]");
+    expect(md, "copy-md leaked [!WAYPOINT]").not.toContain("[!WAYPOINT]");
+    // Canonical form: no blank `>` line directly after a marker.
+    expect(
+      /\[![A-Za-z]+\]\n>\s*\n/.test(md),
+      "copy-md has a blank `>` line between the alert marker and its body",
+    ).toBe(false);
+  });
 });
