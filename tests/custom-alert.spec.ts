@@ -37,14 +37,14 @@ test.describe("built-in custom alert types (solo, waypoint)", () => {
 
   const filePath = everythingPage();
 
-  test("[!SOLO] renders the Solo label, logo SVG, and indigo style", () => {
+  test("[!SOLO] renders the Solo label, logo SVG, and green style", () => {
     test.skip(!filePath, "no everything page built");
     const html = fs.readFileSync(filePath!, "utf8");
     expect(html, "Solo alert label missing").toContain("Solo Enterprise for Istio");
     // The solo logo SVG (from the theme's data/icons.yaml) rendered inline.
     expect(html, "solo logo SVG missing").toContain('viewBox="0 0 84 84"');
-    // Indigo tint applied (matches the legacy alert-default callout).
-    expect(html, "indigo alert style missing").toContain("hx:bg-indigo-100");
+    // Green tint applied (matches the production ambientmesh rendering).
+    expect(html, "green alert style missing").toContain("hx:bg-green-100");
   });
 
   test("[!WAYPOINT] renders the Waypoint label and waypoint icon", () => {

@@ -55,20 +55,21 @@
 
 {{- /* Theme-shipped custom alert types. Their icons (solo, waypoint) live in
        this module's data/icons.yaml, so `[!SOLO]` / `[!WAYPOINT]` work in any
-       consumer with no per-repo config. Indigo tint matches the legacy Solo
-       `.solo-alert` (alert-default) callout background these replaced. A
-       consumer can still override or add types via themeExtras.alertTypes
-       (merged below, so consumer config wins). */ -}}
+       consumer with no per-repo config. Green tint matches how these render on
+       the production ambientmesh site (and reuses the palette Hextra's own
+       tip/default alerts use, so the classes are always compiled). A consumer
+       can still override or add types via themeExtras.alertTypes (merged
+       below, so consumer config wins). */ -}}
 {{- $styles.Set "solo" (dict
   "icon" "solo"
   "title" "Solo Enterprise for Istio"
-  "style" "hx:border-indigo-200 hx:bg-indigo-100 hx:text-indigo-900 hx:dark:border-indigo-200/30 hx:dark:bg-indigo-900/30 hx:dark:text-indigo-200"
+  "style" "hx:border-green-200 hx:bg-green-100 hx:text-green-900 hx:dark:border-green-200/30 hx:dark:bg-green-900/30 hx:dark:text-green-200"
   )
 -}}
 {{- $styles.Set "waypoint" (dict
   "icon" "waypoint"
   "title" "Waypoint"
-  "style" "hx:border-indigo-200 hx:bg-indigo-100 hx:text-indigo-900 hx:dark:border-indigo-200/30 hx:dark:bg-indigo-900/30 hx:dark:text-indigo-200"
+  "style" "hx:border-green-200 hx:bg-green-100 hx:text-green-900 hx:dark:border-green-200/30 hx:dark:bg-green-900/30 hx:dark:text-green-200"
   )
 -}}
 
