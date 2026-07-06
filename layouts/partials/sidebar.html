@@ -32,6 +32,14 @@
 */ -}}
 {{- $context := .context -}}
 {{- $disableSidebar := .disableSidebar | default false -}}
+{{- /* When the sidebar is disabled but the caller still wants the column's
+       width reserved (Hextra's blog/list.html passes this), emit a width-
+       preserving left placeholder instead of a zero-width hidden <aside>.
+       Without it, the blog list's right w-64 spacer has no left counterpart
+       and the centered content shifts left. Mirrors Hextra's own sidebar.html.
+       Defaults false, so extras' docs templates (which never pass it) are
+       unaffected. */ -}}
+{{- $displayPlaceholder := .displayPlaceholder | default false -}}
 
 {{- /* Collect section keys from site.Params.sections (sorted for stable output). */ -}}
 {{- $sectionKeys := slice -}}
@@ -61,7 +69,11 @@
 {{- if $showOnLanding }}{{ $isLandingPage = false }}{{ end -}}
 
 {{- if or $disableSidebar $isLandingPage -}}
-  <aside class="hx:hidden"></aside>
+  {{- if $displayPlaceholder -}}
+    <div class="hx:max-xl:hidden hx:h-0 hx:w-64 hx:shrink-0"></div>
+  {{- else -}}
+    <aside class="hx:hidden"></aside>
+  {{- end -}}
 {{- else -}}
   {{- /* Two URL shapes to support:
            OSS (kgw, agw):     /docs/<section>/<version>/…
