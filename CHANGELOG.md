@@ -15,6 +15,22 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [v0.1.15] — 2026-7-06
+
+### Docs layout — footnotes render after the auto section cards
+
+- **On a docs section-index page (`docs/list.html`) that uses Markdown footnotes AND auto-generates section cards, the footnote list no longer renders wedged between the page body and the card grid — it now renders after the cards, at the bottom of the content.** Goldmark appends the footnotes block (`<div class="footnotes" role="doc-endnotes">`) to the very end of `.Content`, and the template rendered `.Content` and *then* `auto-section-cards.html`, so the footnote list landed above the cards (e.g. `https://ambientmesh.io/docs/traffic/` has a `[^1]` footnote and auto-cards, and shows the footnotes between the "Explore the following sections" intro and the card grid). The fix splits the trailing footnotes block out of `.Content` with a `findRE`/`replaceRE` pair, renders the body, then the cards, then the footnotes. **Behavior-neutral for pages without footnotes** — the regex matches nothing, so `$body == .Content` and `$footnotes` is empty (no stray element emitted); confirmed against the fixture's no-footnote section indexes, which still render cards and no footnotes div. `docs/single.html` is unchanged (it has no cards; footnotes at the end of `.Content`, before the pager, is already correct). Template-only; no CSS, shortcode, or content change. Observable in production once a consumer with footnoted section indexes ships on the module (ambientmesh). Guarded by `footnotes-after-cards.spec.ts` (see Tests).
+
+### Sidebar — honor `displayPlaceholder` so Hextra blog lists stay centered
+
+- **`sidebar.html` now honors the `displayPlaceholder` argument, restoring the left spacer column that keeps Hextra's blog list (`blog/list.html`) centered.** Hextra's blog list centers its content with a symmetric layout: a left sidebar *placeholder* (`{{ partial "sidebar.html" (dict … "disableSidebar" true "displayPlaceholder" true) }}`) that reserves the same `w-64` width as the right-hand TOC spacer. The module's `sidebar.html` overrides Hextra's but had dropped the `displayPlaceholder` branch — for any `disableSidebar` call it emitted a zero-width `<aside class="hx:hidden">`, so the left column reserved no width, the right spacer had no counterpart, and the centered content shifted left (visible on a consumer that themes its blog section, e.g. ambientmesh's `/blog/`). The fix mirrors Hextra's own sidebar: when `disableSidebar` (or a hidden landing) is set AND `displayPlaceholder` is true, emit the width-reserving `<div class="hx:max-xl:hidden hx:h-0 hx:w-64 hx:shrink-0">` instead of the hidden aside. **Defaults to false, so every current call is unaffected** — the module's own `docs/list.html` and `docs/single.html` never pass `displayPlaceholder` (they render the real sidebar or the zero-width hidden aside as before, confirmed by the fixture suite staying byte-stable), and only Hextra's blog templates pass it. Partial-only; no CSS or content change. No fixture guard yet: the bundled fixture is docs-only (no `blog` section / `[params.blog]` config), so nothing exercises `displayPlaceholder` there; verified against the ambientmesh consumer build (its `/blog/` now renders a balanced left placeholder + right spacer, 2 spacers total). A fixture blog section would let this be guarded like the footnote fix — tracked as a follow-up.
+
+### Tests
+
+- **`footnotes-after-cards.spec.ts` (new) guards the footnote-reorder fix above.** The fixture's `test/v2/_index.md` now carries a footnote (`[^order]`) alongside its child pages (which drive the auto-cards), so the v2 landing exercises both features at once. The static spec reads the built `test/v2/index.html` and asserts the `class="section-cards"` grid appears *before* the `class="footnotes"` block — minify-tolerant (matches quoted or bare class attributes). Gated on `IS_FIXTURE_TARGET`. Registered in `playwright.config.ts`'s `static` project. Confirmed to fail when `docs/list.html` is reverted to the naive `{{ .Content }}` → cards order (footnotes then land before the cards).
+
+---
+
 ## [v0.1.14] — 2026-7-06
 
 ### Docs layout — "Was this page helpful?" feedback widget

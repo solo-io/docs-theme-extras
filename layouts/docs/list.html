@@ -19,9 +19,23 @@
           {{- with .Description }}
           <p class="page-description">{{ . | markdownify }}</p>
           {{- end }}
-          {{ .Content }}
+          {{- /* Goldmark appends the footnotes block to the very end of
+                 .Content. On a section-index page that also renders auto
+                 section cards, that wedges the footnote list between the body
+                 and the card grid. Split the trailing footnotes block out so
+                 it renders AFTER the cards, at the bottom of the content.
+                 Pages without footnotes: the regex matches nothing, so $body
+                 == .Content and $footnotes is empty — no behavior change. */ -}}
+          {{- $content := .Content -}}
+          {{- $fnRE := `(?s)\n?<div class="footnotes" role="doc-endnotes">.*</div>\s*$` -}}
+          {{- $footnotes := "" -}}
+          {{- with (findRE $fnRE $content 1) -}}{{- $footnotes = index . 0 -}}{{- end -}}
+          {{- $body := cond (ne $footnotes "") (replaceRE $fnRE "" $content) $content -}}
+          {{ $body | safeHTML }}
 
           {{- partial "auto-section-cards.html" . -}}
+
+          {{- with $footnotes }}{{ . | safeHTML }}{{ end -}}
         </div>
         {{ partial "components/last-updated.html" . }}
         {{- if (site.Params.page.displayPagination | default true) -}}
