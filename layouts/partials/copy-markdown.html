@@ -60,14 +60,15 @@
 {{- $html = $html | replaceRE `(?s)<div[^>]*class="toggle-light"[^>]*>.*?</div>` "" -}}
 {{- /* Reconstruct GitHub alerts as blockquotes so the copied markdown keeps the
        `> [!TYPE]` syntax instead of flattening to a bare label + body text.
-       github-style-alert.html tags the box with data-alert-type (uppercased);
-       drop the icon/label row and the two body-wrapper divs, then wrap the body
-       in a <blockquote> whose first paragraph is the [!TYPE] marker.
-       transform.HTMLToMarkdown then emits `> [!TYPE]` with the `>`-prefixed
-       body (works for custom types like [!SOLO] too). Alert bodies are
-       prose/code (no nested divs), so the lazy triple-`</div>` lands on the
-       alert's own close; no-op when no alert is present. */ -}}
-{{- $html = $html | replaceRE `(?s)<div[^>]*data-alert-copyas="([^"]*)"[^>]*>\s*<p[^>]*hx:font-medium[^>]*>.*?</p>\s*<div[^>]*>\s*<div[^>]*>(.*?)</div>\s*</div>\s*</div>` "<blockquote><p>[!$1]</p>$2</blockquote>" -}}
+       github-style-alert.html tags the box with data-alert-copyas (the native
+       type to export as) and marks the body end with a <!--/alert-md--> sentinel;
+       drop the icon/label row and the two body-wrapper divs, capture the body up
+       to the sentinel (robust to nested divs like a code block's chroma wrapper),
+       and wrap it in a <blockquote> whose first paragraph is the [!TYPE] marker.
+       transform.HTMLToMarkdown then emits `> [!TYPE]` with the `>`-prefixed body
+       (custom types export as their native copyAs, e.g. [!SOLO] → [!TIP]).
+       No-op when no alert is present. */ -}}
+{{- $html = $html | replaceRE `(?s)<div[^>]*data-alert-copyas="([^"]*)"[^>]*>\s*<p[^>]*hx:font-medium[^>]*>.*?</p>\s*<div[^>]*>\s*<div[^>]*>(.*?)<span data-alert-md-end></span>\s*</div>\s*</div>\s*</div>` "<blockquote><p>[!$1]</p>$2</blockquote>" -}}
 {{- /* Pre-convert data tables to GFM. transform.HTMLToMarkdown flattens some
        tables (e.g. github-table schema tables) to pipe-less text, so we build
        the GFM ourselves and swap each table for an inert placeholder that
@@ -105,7 +106,7 @@
 {{- /* HTMLToMarkdown splits the alert marker + body into two blockquote
        paragraphs (a blank `>` line between). Drop it so the result is the
        canonical `> [!TYPE]` immediately followed by the body. */ -}}
-{{- $md = $md | replaceRE `(?m)^(> \[![A-Za-z]+\])\n>[ \t]*\n` "$1\n" -}}
+{{- $md = $md | replaceRE `(?m)^([ \t]*> \[![A-Za-z]+\])\n[ \t]*>[ \t]*\n` "$1\n" -}}
 {{- /* Translation export mode: restore structural shortcode wrappers that the
        env-gated shortcodes (tabs/cards/link/…) emitted as XTRANSPH<n>X
        placeholders, replacing each verbatim AFTER HTMLToMarkdown so the

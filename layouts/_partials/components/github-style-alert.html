@@ -113,7 +113,14 @@
 
   <div class="hx:w-full hx:min-w-0 hx:leading-7">
     <div class="hx:mt-6 hx:leading-7 hx:first:mt-0">
-      {{- $content -}}
+      {{- /* Empty <span> body-end sentinel: copy-markdown / page-to-markdown
+         capture the body up to this marker instead of guessing where nested
+         `</div>`s close (a code block's chroma wrapper adds several), then wrap
+         it in a `> [!TYPE]` blockquote. An empty span survives Goldmark's
+         render-hook output (HTML comments do NOT) and is invisible in the page;
+         the md reconstruction consumes it, and HTMLToMarkdown drops the bare
+         span otherwise. */ -}}
+      {{- $content -}}<span data-alert-md-end></span>
     </div>
   </div>
 </div>
