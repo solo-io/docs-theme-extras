@@ -79,9 +79,6 @@ The `callout` shortcode works inside a markdown table cell: its `solo-alert` div
 > [!SOLO]
 > Theme-shipped custom alert type — the icon and header label come from the theme, with no consumer config. (Body avoids the label text so custom-alert.spec asserts the rendered header.)
 
-> [!WAYPOINT]
-> Theme-shipped custom alert type — the pin icon and header label come from the theme. (Body avoids the label text so custom-alert.spec asserts the rendered header.)
-
 1. Note in a list.
 
    > [!TIP]

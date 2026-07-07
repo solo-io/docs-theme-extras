@@ -31,9 +31,9 @@
     source = "assets"
     target = "assets"
 
-  # Theme-shipped data (site.Data.icons entries for the built-in [!SOLO] /
-  # [!WAYPOINT] alert types). Declared explicitly because this module overrides
-  # the default mounts above; a consumer's own data/ still merges on top.
+  # Theme-shipped data (site.Data.icons entries for the built-in [!SOLO] alert
+  # type). Declared explicitly because this module overrides the default mounts
+  # above; a consumer's own data/ still merges on top.
   [[module.mounts]]
     source = "data"
     target = "data"
