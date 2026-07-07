@@ -15,7 +15,7 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
-## [v0.1.16] — Unreleased
+## [v0.1.16] — 2026-07-07
 
 ### Rebase — `upstream` / `downstream` source-filter shortcodes for single-source content
 
