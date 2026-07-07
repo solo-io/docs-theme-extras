@@ -53,28 +53,20 @@
   )
 -}}
 
-{{- /* Theme-shipped custom alert types. Their icons (solo, waypoint) live in
-       this module's data/icons.yaml, so `[!SOLO]` / `[!WAYPOINT]` work in any
-       consumer with no per-repo config. Green tint matches how these render on
-       the production ambientmesh site (and reuses the palette Hextra's own
-       tip/default alerts use, so the classes are always compiled). A consumer
-       can still override or add types via themeExtras.alertTypes (merged
-       below, so consumer config wins). */ -}}
-{{- /* `copyAs` is the STANDARD GitHub type these map to in exported markdown
-       (copy-as-md / .md output). `[!SOLO]`/`[!WAYPOINT]` only render as alerts
-       in this theme; pasted into GitHub or fed to an LLM they'd be inert
-       blockquotes, so we downgrade them to their nearest native type (green →
-       tip) for portability. */ -}}
+{{- /* Theme-shipped custom alert type. Its icon (solo) lives in
+       this module's data/icons.yaml, so `[!SOLO]` works in any consumer with
+       no per-repo config. Green tint reuses the palette Hextra's own tip/default
+       alerts use, so the classes are always compiled. A consumer can still
+       override or add types via themeExtras.alertTypes (merged below, so
+       consumer config wins). */ -}}
+{{- /* `copyAs` is the STANDARD GitHub type this maps to in exported markdown
+       (copy-as-md / .md output). `[!SOLO]` only renders as an alert in this
+       theme; pasted into GitHub or fed to an LLM it'd be an inert blockquote,
+       so we downgrade it to its nearest native type (green → tip) for
+       portability. */ -}}
 {{- $styles.Set "solo" (dict
   "icon" "solo"
   "title" "Solo Enterprise for Istio"
-  "copyAs" "tip"
-  "style" "hx:border-green-200 hx:bg-green-100 hx:text-green-900 hx:dark:border-green-200/30 hx:dark:bg-green-900/30 hx:dark:text-green-200"
-  )
--}}
-{{- $styles.Set "waypoint" (dict
-  "icon" "waypoint"
-  "title" "Waypoint"
   "copyAs" "tip"
   "style" "hx:border-green-200 hx:bg-green-100 hx:text-green-900 hx:dark:border-green-200/30 hx:dark:bg-green-900/30 hx:dark:text-green-200"
   )

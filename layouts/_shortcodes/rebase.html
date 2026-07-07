@@ -14,6 +14,9 @@
                           revert specific shortcodes back to percent-
                           form when their inner content must re-flow
                           through markdown (tab, steps, include).
+    3b. SOURCE FILTERS  — strip {{< upstream >}} blocks (OSS source-only
+                          content); unwrap {{< downstream >}} blocks
+                          (downstream-only content, hidden in source).
     4. ARG INJECTION    — pass the resolved version + product into
                           shortcodes that need them (link-hextra, reuse).
     5. VERSION REMAP    — handle keepVersion= on the version shortcode,
@@ -122,6 +125,17 @@ first segment that matches a known version wins.
      content. Hextra explicitly documents include as a percent-form-only
      shortcode for this reason. */}}
 {{ $clean = replaceRE `\{\{<\s*(include\s[^>]*)>}}` "{{% $1%}}" $clean }}
+
+{{/* ─── Stage 3b: SOURCE FILTERS ────────────────────────────────────── */}}
+
+{{/* Strip upstream blocks: content that should only appear in the OSS
+     source repo and must not be included in the rebased downstream docs. */}}
+{{ $clean = replaceRE `(?s)\{\{<\s*upstream\s*>}}.*?\{\{<\s*/upstream\s*>}}` "" $clean }}
+
+{{/* Unwrap downstream blocks: content that is hidden in the OSS source
+     repo but should appear when rebased into downstream docs. The wrapper
+     tags are removed and the inner content is preserved. */}}
+{{ $clean = replaceRE `(?s)\{\{<\s*downstream\s*>}}(.*?)\{\{<\s*/downstream\s*>}}` "$1" $clean }}
 
 {{/* ─── Stage 4: ARG INJECTION ──────────────────────────────────────── */}}
 

@@ -4,9 +4,9 @@
        configured `[!SOLO]` renders cleanly instead of warning on every build.
        Unconfigured/unknown types still warn (and fall back to the default
        style in components/github-style-alert.html). */ -}}
-{{- /* Built-in GitHub types + this theme's shipped custom types (solo,
-       waypoint — see components/github-style-alert.html). */ -}}
-{{- $supported := slice "note" "tip" "important" "warning" "caution" "solo" "waypoint" -}}
+{{- /* Built-in GitHub types + this theme's shipped custom types (solo —
+       see components/github-style-alert.html). */ -}}
+{{- $supported := slice "note" "tip" "important" "warning" "caution" "solo" -}}
 {{- with (site.Params.themeExtras).alertTypes -}}
   {{- range $name, $_ := . -}}
     {{- $supported = $supported | append (lower $name) -}}

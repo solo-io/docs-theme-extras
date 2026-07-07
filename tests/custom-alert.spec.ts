@@ -4,12 +4,12 @@ import path from "node:path";
 import { TEST_PRODUCT_ROOT } from "./helpers/fixture";
 import { target } from "./helpers/target";
 
-// Guards the theme's built-in custom GitHub-style alert types, [!SOLO] and
-// [!WAYPOINT] (components/github-style-alert.html + data/icons.yaml). These
-// need NO consumer config — the fixture declares no themeExtras.alertTypes, so
-// this proves a bare consumer gets them. The `everything` conref's
-// "Callouts - Github default styling" section carries a `> [!SOLO]` and a
-// `> [!WAYPOINT]` alert alongside the five built-in GitHub types.
+// Guards the theme's built-in custom GitHub-style alert type, [!SOLO]
+// (components/github-style-alert.html + data/icons.yaml). This needs NO
+// consumer config — the fixture declares no themeExtras.alertTypes, so this
+// proves a bare consumer gets it. The `everything` conref's "Callouts - Github
+// default styling" section carries a `> [!SOLO]` alert alongside the five
+// built-in GitHub types.
 //
 // Also implicitly covers: render-blockquote-alert must NOT warn on these
 // (they're in the supported list), and the icons resolve from the theme-shipped
@@ -29,7 +29,7 @@ function everythingPage(): string | null {
   return null;
 }
 
-test.describe("built-in custom alert types (solo, waypoint)", () => {
+test.describe("built-in custom alert types (solo)", () => {
   test.skip(
     !IS_FIXTURE_TARGET,
     "fixture-only: relies on the everything alerts + theme-shipped icons",
@@ -47,19 +47,11 @@ test.describe("built-in custom alert types (solo, waypoint)", () => {
     expect(html, "green alert style missing").toContain("hx:bg-green-100");
   });
 
-  test("[!WAYPOINT] renders the Waypoint label and waypoint icon", () => {
-    test.skip(!filePath, "no everything page built");
-    const html = fs.readFileSync(filePath!, "utf8");
-    expect(html, "Waypoint alert label missing").toContain("Waypoint");
-    // The waypoint icon SVG (theme data) rendered inline.
-    expect(html, "waypoint icon SVG missing").toContain('viewBox="0 0 36 36"');
-  });
-
   // Copy-as-markdown / .md-output round-trip. The copy-markdown pipeline
   // reconstructs alerts back into `> [!TYPE]` (a styled div would otherwise
   // flatten to a bare label + text). Standard types survive as themselves;
-  // CUSTOM types downgrade to their `copyAs` native type (solo/waypoint → tip)
-  // so the exported markdown renders as an alert on GitHub instead of an inert
+  // CUSTOM types downgrade to their `copyAs` native type (solo → tip) so the
+  // exported markdown renders as an alert on GitHub instead of an inert
   // `[!SOLO]` blockquote. Read the page's embedded copy-md-source and verify.
   test("alerts round-trip in copy-md; custom types downgrade to a native type", () => {
     test.skip(!filePath, "no everything page built");
@@ -77,9 +69,8 @@ test.describe("built-in custom alert types (solo, waypoint)", () => {
       expect(md, `copy-md lost ${marker}`).toContain(marker);
     }
     // Custom types must NOT leak their theme-only marker (GitHub wouldn't
-    // render `[!SOLO]`/`[!WAYPOINT]`); they downgrade to `> [!TIP]` above.
+    // render `[!SOLO]`); it downgrades to `> [!TIP]` above.
     expect(md, "copy-md leaked [!SOLO]").not.toContain("[!SOLO]");
-    expect(md, "copy-md leaked [!WAYPOINT]").not.toContain("[!WAYPOINT]");
     // Canonical form: no blank `>` line directly after a marker.
     expect(
       /\[![A-Za-z]+\]\n>\s*\n/.test(md),

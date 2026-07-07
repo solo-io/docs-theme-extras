@@ -49,9 +49,9 @@ enableInlineShortcodes = true
     source = "fixture/static"
     target = "static"
 
-  # Theme-shipped icons (solo, waypoint) so the standalone fixture build has the
-  # same site.Data.icons entries a consumer gets, letting callout-icon.spec and
-  # custom-alert.spec exercise the built-in [!SOLO] / [!WAYPOINT] types.
+  # Theme-shipped icons (solo) so the standalone fixture build has the same
+  # site.Data.icons entries a consumer gets, letting callout-icon.spec and
+  # custom-alert.spec exercise the built-in [!SOLO] type.
   [[module.mounts]]
     source = "data"
     target = "data"
@@ -94,9 +94,9 @@ pageContextMode = "siteParams"
 # Brand layer selector for head-end.html. Loads brand-enterprise.css.
 [params.themeExtras]
   brand = "enterprise"
-  # No custom alertTypes here: solo/waypoint are built into the theme
+  # No custom alertTypes here: solo is built into the theme
   # (components/github-style-alert.html + data/icons.yaml), so custom-alert.spec
-  # exercises them with zero consumer config.
+  # exercises it with zero consumer config.
 
 [params.footer]
   copyright = "Solo.io copyright 2026"
