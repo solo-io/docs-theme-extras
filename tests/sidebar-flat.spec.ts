@@ -67,4 +67,23 @@ test.describe("non-versioned sidebar fallback roots at the docs section", () => 
       "sibling '/flatguide/beta/' missing from the sidebar — the fallback rooted at the current page instead of the docs section",
     ).toContain("/flatguide/beta/");
   });
+
+  // Guard for the navbar version dropdown on versionless pages
+  // (layouts/_partials/navbar.html). The flatguide segment ("flatguide") is
+  // not a known version, so a version swap could only build links to
+  // /test/<version>/<segment>/ pages that don't exist. The navbar must
+  // suppress the dropdown here — matching the sidebar, which shows no version
+  // switcher on this page — instead of emitting those broken links (the bug
+  // the docs framework-test link checker flagged for /test/{v1,v2,main}/alpha).
+  test("navbar hides the version dropdown on the versionless page", () => {
+    const html = visibleHtml(alphaFile);
+    expect(
+      html,
+      "navbar version dropdown rendered on a versionless page — it would emit broken /test/<version>/<page>/ swap links",
+    ).not.toContain('class="version-dropdown"');
+    expect(
+      html,
+      "broken version-swap link to a page that only exists under /flatguide/",
+    ).not.toMatch(/href="\/test\/(v1|v2|main)\/alpha\//);
+  });
 });

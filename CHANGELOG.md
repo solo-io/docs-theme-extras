@@ -15,6 +15,18 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [v0.1.17] — Unreleased
+
+### Layout — navbar version dropdown hidden on versionless pages
+
+- **The navbar version dropdown no longer renders on a page whose version-position URL segment isn't a known version, so it can't emit broken version-swap links.** `layouts/_partials/navbar.html` builds each dropdown entry's href by swapping the version segment while keeping the rest of the path (`/<folder>/<version>/<pathAfterVersion>`). On a versionless page — one that lives outside the version tree, e.g. a flat guide at `/<folder>/<section>/<page>/` — it wrongly treated the section segment as the version slot and produced swaps like `/test/v1/alpha/`, `/test/v2/alpha/`, `/test/main/alpha/` for pages that exist only under `/flatguide/`. The sidebar already suppresses its version switcher on these pages (`sidebar.html`'s `$isVersionedDocs` branch); the navbar hadn't been updated to match. Fix: compute `$matchedVersion` while scanning `site.Params.versions` and treat the page as versionless when the segment is present but matches neither a configured version nor a version-like marker (`2.1.x` / `main` / `latest` / …); gate the dropdown on `not $isVersionless`. Product landings (empty segment, e.g. `/<folder>/`) and versioned pages are unchanged — verified against the docs-hub products, all of which keep content under a version segment (`agentregistry` content, for instance, lives under `/agentregistry/latest/…`), so there is **no production incidence**; the bug was surfaced only by the docs framework-test link checker on the bundled fixture's `flatguide` pages (`solo-io/docs#2640`). New regression guard in `tests/sidebar-flat.spec.ts` asserts the dropdown is absent and no `/test/<version>/alpha/` swap link is emitted on the versionless page.
+
+### Tests
+
+- **`tab-syntax.spec.ts` (new) guards against pre-0.12 Hextra tab styling in consumer source.** Hextra 0.12 takes each tab's label from a `name=` attribute on `{{% tab %}}`; the old `{{< tabs items="…" tabTotal="N" >}}` + `{{% tab tabName="…" %}}` forms are deprecated (`items=`), no-ops (`tabTotal=`), or silently ignored (`tabName=` → the tab renders as "Tab 0", "Tab 1", …). The `tabName=` case is the dangerous one: it produces **no** Hugo build warning, so `hugo-warnings.spec.ts` can't catch it — the build looks clean while the reader sees numbered tabs. This surfaced on the agentgateway `agctl` install page (`https://docs.solo.io/agentgateway/latest/operations/agctl/#install-agctl`), whose install tabs rendered "Tab 0"–"Tab 3" after the theme moved to Hextra 0.12. The new spec is a source-side scanner (mirrors `shortcode-args.spec.ts`): it walks the consumer's configured `scanRoots` and flags `items=`/`tabTotal=` on `tabs`, `tabName=` on `tab`, and nameless `tab` opens, reporting `file:line` + the fix. Helper `tests/helpers/tab-syntax.ts` carries the detection logic and 10 unit tests. Gated on the new `tabSyntax` check (defaults on); registered in `playwright.config.ts`'s `static` project. The bundled fixture is clean, so extras' own suite stays green. **Test-harness only** — no layout, CSS, shortcode, or rendered-output change; consumers pick it up when they bump the module pin and re-run the harness against their content.
+
+---
+
 ## [v0.1.16] — 2026-07-07
 
 ### Rebase — `upstream` / `downstream` source-filter shortcodes for single-source content

@@ -91,6 +91,7 @@
              manually navigating to a hidden version shows the correct label.
              Match against the version segment from the URL, not Site.Params.version
              (which is a static config value that doesn't change as you navigate). */ -}}
+      {{- $matchedVersion := false -}}
       {{- range . -}}
         {{- $label := .dropdown | default .version -}}
         {{- $visible := ne (trim $label " ") "" -}}
@@ -104,6 +105,7 @@
         {{- $sameProduct := or (not $currentProduct) (eq (.product | default "") $currentProduct) -}}
         {{- if and (not $currentLabel) $sameProduct $urlVersion -}}
           {{- if or (eq .linkVersion $urlVersion) (eq .version $urlVersion) -}}
+            {{- $matchedVersion = true -}}
             {{- /* For hidden versions (empty dropdown), fall back to .version for the label */ -}}
             {{- $matchLabel := $fullLabel -}}
             {{- if not $visible -}}
@@ -129,7 +131,19 @@
         {{- $currentLabel = $firstVisibleLabel -}}
       {{- end -}}
 
-      {{- if $currentLabel -}}
+      {{- /* Suppress the dropdown on versionless pages. When the version-position
+             URL segment is present but matches no known version (and isn't a
+             version-like marker such as 2.1.x / main / latest), the page lives
+             outside the version tree — e.g. a flat guide. The dropdown could
+             only build swap links to /<version>/<segment>/ pages that don't
+             exist (broken links), so hide it there, mirroring the sidebar which
+             shows no version switcher on versionless pages. An empty segment
+             (product landing, e.g. /<folder>/) keeps the dropdown: its entries
+             point at the version landing roots, which do exist. */ -}}
+      {{- $versionMarker := or (gt (len (findRE `^v?[0-9]+(\.[0-9]+)*(\.x)?$` $urlVersion)) 0) (in (slice "main" "latest" "nightly" "dev" "stable" "edge") $urlVersion) -}}
+      {{- $isVersionless := and $urlVersion (not $matchedVersion) (not $versionMarker) -}}
+
+      {{- if and $currentLabel (not $isVersionless) -}}
         <div class="version-dropdown">
           <button type="button" class="version-dropdown-btn" aria-expanded="false" aria-haspopup="true">
             {{- if $currentProductName -}}<span class="version-product-name">{{ $currentProductName }} - </span><span>{{ $currentVersionLabel }}</span>{{- else -}}<span>{{ $currentLabel }}</span>{{- end -}}

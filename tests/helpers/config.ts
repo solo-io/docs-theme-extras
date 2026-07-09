@@ -42,6 +42,9 @@ export type Checks = {
   // checks fatal.
   codeBlockIntegrity: boolean;
   shortcodeArgs: boolean;
+  // Source scan for pre-0.12 Hextra tab styling (`tabName=`, `items=`,
+  // `tabTotal=`, nameless tabs) that renders labels as "Tab 0", "Tab 1", ….
+  tabSyntax: boolean;
   includeForm: boolean;
   cascadeType: boolean;
   crossBrowser: boolean;
@@ -111,6 +114,7 @@ const DEFAULT_CHECKS: Checks = {
   shortcodeStructure: true,
   codeBlockIntegrity: true,
   shortcodeArgs: true,
+  tabSyntax: true,
   includeForm: true,
   cascadeType: true,
   crossBrowser: false,
