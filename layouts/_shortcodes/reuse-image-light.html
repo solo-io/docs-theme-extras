@@ -11,34 +11,12 @@
 {{ $src := .Get "src" }}
 {{ $width := .Get "width" }}
 {{ $alt := .Get "alt" }}
-{{ $image := resources.Get $src }}
 {{ $caption := .Get "caption" }}
 
-{{/* Fallback: if the image isn't at assets/img/<file>, look for it at
-     assets/<product>/<version>/img/<file>. Mirrors the lookup logic in
-     reuse-image-dark.html so authors get consistent path resolution
-     regardless of which variant they use. */}}
-{{ if not $image }}
-  {{ $version := "" }}
-  {{ range $part := split .Page.RelPermalink "/" }}
-    {{ if not $version }}
-      {{ range $.Site.Params.versions }}
-        {{ if eq .version $part }}{{ $version = .version }}{{ end }}
-      {{ end }}
-    {{ end }}
-  {{ end }}
-  {{ if $version }}
-    {{ $product := $.Site.Params.currentProduct }}
-    {{ $trimmed := strings.TrimPrefix "/" $src }}
-    {{ $versioned := printf "%s/%s/%s" $product $version $trimmed }}
-    {{ $r := resources.Get $versioned }}
-    {{ with $r }}
-      {{/* Strip product prefix so publishDir doesn't double it */}}
-      {{ $targetPath := printf "%s/%s" $version $trimmed }}
-      {{ $image = resources.Copy $targetPath $r }}
-    {{ end }}
-  {{ end }}
-{{ end }}
+{{/* Resolve src to a Resource, preferring a version-specific override
+     (assets/<dir>/<version>/<file>) when it exists, then the bare shared path,
+     then the legacy per-product tree. See utils/resolve-versioned-image. */}}
+{{ $image := partial "utils/resolve-versioned-image.html" (dict "ctx" . "src" $src) }}
 
 {{- with $image -}}
 <div style="text-align: center;" class="toggle-dark"><figure><img src="{{ .RelPermalink }}" width="{{ $width }}" alt="{{ $alt }}"/> <figcaption style="font-style:italic">{{ $caption }}</figcaption></figure></div>

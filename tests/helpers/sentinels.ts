@@ -79,6 +79,22 @@ export const VERSION_MARKERS = {
   keepVersion: "MARKER_KEEP_VERSION",
   nestedLink: "MARKER_NESTED_LINK",
   versionedImage: "MARKER_VERSIONED_IMAGE",
+  // Auto version-resolved image: a bare `src` that resolves to a
+  // <dir>/<version>/ override when one exists, with no {{< version >}} split.
+  // Renders on every version (not gated); the resolved path differs per page.
+  autoVersionedImage: "MARKER_AUTO_VERSIONED_IMAGE",
+  // Same resolver, bare `src` in a nested subdir (img/screens/…): pins that the
+  // version slug is spliced before the filename, not appended to the whole path.
+  autoVersionedImageNested: "MARKER_AUTO_VERSIONED_IMAGE_NESTED",
+  // Auto version-resolved image via the standalone reuse-image-light shortcode.
+  autoVersionedImageLight: "MARKER_AUTO_VERSIONED_IMAGE_LIGHT",
+  // Auto version-resolved image via the standalone reuse-image-dark shortcode
+  // (resolves the srcDark slot through the shared resolver).
+  autoVersionedImageDark: "MARKER_AUTO_VERSIONED_IMAGE_DARK",
+  // reuse-image PAIR form (src + srcDark on one call): both variants render,
+  // light in .toggle-dark and dark in .toggle-light. Distinct from the
+  // standalone reuse-image-light / reuse-image-dark shortcodes.
+  reuseImagePair: "MARKER_REUSE_IMAGE_PAIR",
   inFenceKey: "MARKER_VERSION_INFENCE_KEY",
   inFenceComment: "MARKER_VERSION_INFENCE_COMMENT",
   inFenceGated: "MARKER_VERSION_INFENCE_GATED",

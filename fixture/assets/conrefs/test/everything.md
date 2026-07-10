@@ -534,6 +534,36 @@ A version-gated image variant (only renders on v2 after remap) — uses `reuse-i
 
 {{< version include-if="v2" >}}{{< reuse-image src="img/test/light.svg" srcDark="img/test/dark.svg" alt="MARKER_VERSIONED_IMAGE. v2-only image." caption="Visible only on v2." width="160" >}}{{< /version >}}
 
+### Auto version-resolved image
+
+A single bare `src` that resolves per version WITHOUT a `version` split: the page's version slug is spliced into the path (`img/autover.svg` → `img/<version>/autover.svg`) and used when that file exists, else the bare image is used. `img/main/autover.svg` and `img/v2/autover.svg` exist but `img/v1/autover.svg` does not — so the `main` and `v2` pages show their own override while `v1` shares the bare image. Two versions carry an override to prove the splice isn't `main`-specific. This is the "shared until it diverges" model; authors never edit this reference across releases.
+
+{{< reuse-image src="img/autover.svg" alt="MARKER_AUTO_VERSIONED_IMAGE. Auto version-resolved image." caption="Override on main and v2, shared elsewhere." width="160" >}}
+
+### Auto version-resolved image (nested subdir)
+
+Same resolver, but the bare `src` sits in a nested subdir: `img/screens/autover.svg` → `img/screens/<version>/autover.svg`. Pins that the version slug is spliced before the filename (`path.Dir`/`path.Base`), not appended to the whole path. Only `img/screens/main/autover.svg` exists, so `main` shows the override and every other version shares the bare nested image.
+
+{{< reuse-image src="img/screens/autover.svg" alt="MARKER_AUTO_VERSIONED_IMAGE_NESTED. Auto version-resolved nested image." caption="Nested override on main, shared elsewhere." width="160" >}}
+
+### Auto version-resolved image (light-only shortcode)
+
+The `reuse-image-light` shortcode shares the same resolver via its `src`. Uses the same `img/autover.svg` assets (override on `main` and `v2`), so this pins that the standalone light variant is wired to the resolver, not just `reuse-image`.
+
+{{< reuse-image-light src="img/autover.svg" alt="MARKER_AUTO_VERSIONED_IMAGE_LIGHT. Auto version-resolved light-only image." caption="Light-only, override on main and v2." width="160" >}}
+
+### Auto version-resolved image (dark-only shortcode)
+
+The `reuse-image-dark` shortcode shares the same resolver via its `srcDark`. Uses `img/autover-dark.svg` with an override only on `main`, so this pins that the standalone dark variant resolves the `srcDark` slot through the shared resolver.
+
+{{< reuse-image-dark srcDark="img/autover-dark.svg" alt="MARKER_AUTO_VERSIONED_IMAGE_DARK. Auto version-resolved dark-only image." caption="Dark-only, override on main." width="160" >}}
+
+### reuse-image pair form (src + srcDark)
+
+A single `reuse-image` call given BOTH `src` and `srcDark` must gate each variant to its mode: the light image in `.toggle-dark` (shown in light mode) and the dark image in `.toggle-light` (shown in dark mode). This is the PAIR branch of `reuse-image` itself (distinct from the standalone `reuse-image-light` / `reuse-image-dark` shortcodes), and it must NOT regress to the ungated single-image output.
+
+{{< reuse-image src="img/test/light.svg" srcDark="img/test/dark.svg" alt="MARKER_REUSE_IMAGE_PAIR. Two-variant reuse-image, gated per mode." caption="Pair form, gated per mode." width="160" >}}
+
 ### Figure inside a conditional-text block (mixed block content)
 
 A build-gated section that mixes a code fence, a bullet, and a `reuse-image` figure inside one `conditional-text` block — the kgateway operations/debug "Debug your gateway setup" shape. `reuse-image` emits raw block HTML (a `div` wrapping a `figure` and `img`); this case pins that it renders as a real `figure` element on the matching build rather than leaking as escaped `&lt;div&gt;` text. The markdown-leaks scan's `escaped-html` rule fails the build if a figure here ever regresses to escaped tags.
