@@ -25,6 +25,25 @@
   default/latest version (which has no <dir>/<version>/ image) and consumers
   that don't use versioned image dirs are unaffected.
 
+  Caveat — step 1 depends on utils/page-context resolving a version slug:
+    - siteParams mode (multi-product hubs): the slug comes from the section
+      URL, so it resolves for every versioned page.
+    - url mode (single-site repos): page-context extracts the version from the
+      path, and TWO conditions must hold for it to resolve:
+        a. the path is shaped /docs/<section>/<version>/… (or /docs/<version>/…);
+           pages OUTSIDE /docs/ yield an empty slug.
+        b. for the /docs/<section>/<version>/ shape, <section> must be in
+           page-context's hardcoded known-section allowlist. A /docs/ page
+           whose section ISN'T listed is misread — the section segment is
+           taken as the version — so the override looks under the wrong slug
+           and won't find the file. (Adding a new section is a one-line edit
+           to that allowlist; see utils/page-context.)
+      When the slug is empty or wrong, step 1 is skipped / misses and
+      resolution falls through to the bare path (step 2) or the legacy tree
+      (step 3, which does its own URL-segment scan). That's safe — no
+      regression — but the auto-override won't engage until page-context
+      resolves a correct slug for that path.
+
   Returns the resolved Resource, or a falsy empty string if nothing matched
   (callers guard with `{{ with }}`).
 */ -}}

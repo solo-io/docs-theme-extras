@@ -14,15 +14,60 @@ import { VERSION_MARKERS } from "./helpers/sentinels";
 // version slug is <v>, the resolver prefers `img/<v>/autover.svg` when that file
 // exists, otherwise falls back to the bare `img/autover.svg`.
 //
-// The fixture ships `img/main/autover.svg` but no `img/v1/` or `img/v2/`
-// variant, so:
-//   - the main page must show the override  → /test/img/main/autover.svg
-//   - every other version shares the bare    → /test/img/autover.svg
+// Coverage matrix (each CASE below is one fixture section in everything.md):
+//   - reuse-image (bare `src`)         override on main + v2   → proves the
+//                                                                 splice isn't
+//                                                                 main-specific
+//   - reuse-image (nested `src`)       override on main only   → proves the slug
+//                                                                 is spliced
+//                                                                 before the file
+//                                                                 name, not the
+//                                                                 whole path
+//   - reuse-image-light (`src`)        override on main + v2   → standalone light
+//                                                                 shortcode wiring
+//   - reuse-image-dark (`srcDark`)     override on main only   → standalone dark
+//                                                                 shortcode wiring
 //
 // Static spec: reads the built HTML from disk and asserts the resolved <img src>
 // (and that the file it points at was actually published — the "won't 404" check).
 
-const AUTO_MARKER = VERSION_MARKERS.autoVersionedImage;
+interface Case {
+  marker: string;
+  // Bare (shared) path the author wrote, as it appears in the published <img src>.
+  bare: string;
+  // Versions that ship a `<dir>/<version>/<file>` override in the fixture.
+  overrideVersions: string[];
+}
+
+const CASES: Case[] = [
+  {
+    marker: VERSION_MARKERS.autoVersionedImage,
+    bare: "img/autover.svg",
+    overrideVersions: ["main", "v2"],
+  },
+  {
+    marker: VERSION_MARKERS.autoVersionedImageNested,
+    bare: "img/screens/autover.svg",
+    overrideVersions: ["main"],
+  },
+  {
+    marker: VERSION_MARKERS.autoVersionedImageLight,
+    bare: "img/autover.svg",
+    overrideVersions: ["main", "v2"],
+  },
+  {
+    marker: VERSION_MARKERS.autoVersionedImageDark,
+    bare: "img/autover-dark.svg",
+    overrideVersions: ["main"],
+  },
+];
+
+// Splice the version slug in before the filename: img/screens/foo.svg → img/screens/<v>/foo.svg.
+function overridePath(bare: string, v: string): string {
+  const dir = path.posix.dirname(bare);
+  const file = path.posix.basename(bare);
+  return dir === "." ? `${v}/${file}` : `${dir}/${v}/${file}`;
+}
 
 // Pull the <img src> whose alt contains `marker`. reuse-image emits
 // <div class="toggle-*"><figure><img src="..." width="..." alt="..."/> ...
@@ -52,23 +97,24 @@ test.describe("auto version-resolved images", () => {
     "no built everything pages with the auto-versioned-image fixture section",
   );
 
-  for (const { v, file } of versionPages) {
-    const label = path.relative(target.builtRoot, file);
-    // Only `main` has an override asset in the fixture; the rest share the bare.
-    const expected =
-      v === "main"
-        ? `${target.baseURL}/img/main/autover.svg`
-        : `${target.baseURL}/img/autover.svg`;
+  for (const { marker, bare, overrideVersions } of CASES) {
+    for (const { v, file } of versionPages) {
+      const label = path.relative(target.builtRoot, file);
+      // The version shows its own override when the fixture ships one; else it
+      // falls back to the shared bare path.
+      const rel = overrideVersions.includes(v) ? overridePath(bare, v) : bare;
+      const expected = `${target.baseURL}/${rel}`;
 
-    test(`${label}: bare src resolves to ${expected}`, () => {
-      const src = imgSrcByAlt(readFixture(file), AUTO_MARKER);
-      expect(src, `${AUTO_MARKER}: no <img> rendered on ${label}`).toBeTruthy();
-      expect(src).toBe(expected);
-      const resolved = fileForResolvedSrc(src!);
-      expect(
-        fs.existsSync(resolved),
-        `${AUTO_MARKER}: src "${src}" → ${resolved} was not published`,
-      ).toBe(true);
-    });
+      test(`${marker} — ${label}: resolves to ${expected}`, () => {
+        const src = imgSrcByAlt(readFixture(file), marker);
+        expect(src, `${marker}: no <img> rendered on ${label}`).toBeTruthy();
+        expect(src).toBe(expected);
+        const resolved = fileForResolvedSrc(src!);
+        expect(
+          fs.existsSync(resolved),
+          `${marker}: src "${src}" → ${resolved} was not published`,
+        ).toBe(true);
+      });
+    }
   }
 });

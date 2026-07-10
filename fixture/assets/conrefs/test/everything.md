@@ -536,9 +536,27 @@ A version-gated image variant (only renders on v2 after remap) — uses `reuse-i
 
 ### Auto version-resolved image
 
-A single bare `src` that resolves per version WITHOUT a `version` split: the page's version slug is spliced into the path (`img/autover.svg` → `img/<version>/autover.svg`) and used when that file exists, else the bare image is used. `img/main/autover.svg` exists but `img/v1/autover.svg` / `img/v2/autover.svg` do not — so the `main` page shows the override and every other version shares the bare image. This is the "shared until it diverges" model; authors never edit this reference across releases.
+A single bare `src` that resolves per version WITHOUT a `version` split: the page's version slug is spliced into the path (`img/autover.svg` → `img/<version>/autover.svg`) and used when that file exists, else the bare image is used. `img/main/autover.svg` and `img/v2/autover.svg` exist but `img/v1/autover.svg` does not — so the `main` and `v2` pages show their own override while `v1` shares the bare image. Two versions carry an override to prove the splice isn't `main`-specific. This is the "shared until it diverges" model; authors never edit this reference across releases.
 
-{{< reuse-image src="img/autover.svg" alt="MARKER_AUTO_VERSIONED_IMAGE. Auto version-resolved image." caption="Override on main, shared elsewhere." width="160" >}}
+{{< reuse-image src="img/autover.svg" alt="MARKER_AUTO_VERSIONED_IMAGE. Auto version-resolved image." caption="Override on main and v2, shared elsewhere." width="160" >}}
+
+### Auto version-resolved image (nested subdir)
+
+Same resolver, but the bare `src` sits in a nested subdir: `img/screens/autover.svg` → `img/screens/<version>/autover.svg`. Pins that the version slug is spliced before the filename (`path.Dir`/`path.Base`), not appended to the whole path. Only `img/screens/main/autover.svg` exists, so `main` shows the override and every other version shares the bare nested image.
+
+{{< reuse-image src="img/screens/autover.svg" alt="MARKER_AUTO_VERSIONED_IMAGE_NESTED. Auto version-resolved nested image." caption="Nested override on main, shared elsewhere." width="160" >}}
+
+### Auto version-resolved image (light-only shortcode)
+
+The `reuse-image-light` shortcode shares the same resolver via its `src`. Uses the same `img/autover.svg` assets (override on `main` and `v2`), so this pins that the standalone light variant is wired to the resolver, not just `reuse-image`.
+
+{{< reuse-image-light src="img/autover.svg" alt="MARKER_AUTO_VERSIONED_IMAGE_LIGHT. Auto version-resolved light-only image." caption="Light-only, override on main and v2." width="160" >}}
+
+### Auto version-resolved image (dark-only shortcode)
+
+The `reuse-image-dark` shortcode shares the same resolver via its `srcDark`. Uses `img/autover-dark.svg` with an override only on `main`, so this pins that the standalone dark variant resolves the `srcDark` slot through the shared resolver.
+
+{{< reuse-image-dark srcDark="img/autover-dark.svg" alt="MARKER_AUTO_VERSIONED_IMAGE_DARK. Auto version-resolved dark-only image." caption="Dark-only, override on main." width="160" >}}
 
 ### Figure inside a conditional-text block (mixed block content)
 
