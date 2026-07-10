@@ -217,6 +217,43 @@ jobs:
         run: npx playwright test --project=static --reporter=list,html
 ```
 
+#### Static vs content: run content scanners on content PRs too
+
+The harness splits into two file-scan projects with different trigger
+semantics:
+
+- **`--project=static`** — layout / theme-behavior specs (versioning,
+  cards, sidebar, callout, shortcode edge cases). They render the theme and
+  assert theme behavior, so a consumer only needs them when **layouts**
+  change. Gate this job's workflow on layout paths (`layouts/**`,
+  `static/**`, `assets/css/**`, `assets/js/**`, `go.mod`, `hugo.yaml`).
+- **`--project=content`** — scanners whose pass/fail depends on the
+  consumer's **real content**: `markdown-leaks` (walks the built HTML tree
+  for rendering leaks — fragmented code blocks, orphaned list markers,
+  escaped-HTML) and `curl-quotes` (lints source markdown). Gate this job on
+  **content paths AND layout paths** (`content/**`, plus your page/snippet
+  roots such as `assets/<product>-docs/**`, plus the layout paths above), so
+  the scanners run both when authors edit content and when a layout change
+  alters how existing content renders.
+
+The common trap this split fixes: a workflow gated only on `layouts/**`
+never fires on a content-only PR, so the leak scan never runs on the exact
+PRs that introduce content rendering breaks. The fix is just the trigger —
+make sure `content` runs on content paths. The simplest wiring is a single
+workflow gated on **content paths + layout paths** that builds once and runs
+both projects in one step:
+
+```yaml
+    run: npx playwright test --project=static --project=content --reporter=list,html
+```
+
+Since both projects share the one Hugo build (the slow part) and the layout
+specs are fast and mostly fixture-bound, running them on a content PR too is
+negligible — not worth a second workflow to avoid. Only split into two
+path-filtered workflows if you have a concrete reason to keep the layout
+specs off content PRs. agw-oss's `framework-tests.yml` is the single-workflow
+worked example.
+
 Multi-product hub repos (one site, many product subpaths) use the same
 pattern with extra jobs for `--project=browser` and a smoke matrix per
 product, plus per-product artifact downloads in place of the inline

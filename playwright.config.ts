@@ -48,10 +48,30 @@ export default defineConfig({
     timeout: 30_000,
   },
   projects: [
+    // Layout / theme-behavior specs: they render the bundled fixture and
+    // assert how the THEME behaves (versioning, cards, sidebar, callouts,
+    // shortcode edge cases). Their pass/fail depends on layouts, not on the
+    // consumer's real content, so a consumer runs these only when layouts
+    // change. Specs that scan the consumer's actual content live in the
+    // "content" project below.
     {
       name: "static",
       testMatch:
-        /static\.spec\.ts$|versioning\.spec\.ts$|version-nested-list\.spec\.ts$|version-inside-fence\.spec\.ts$|version-table-row\.spec\.ts$|version-cards\.spec\.ts$|markdown-leaks\.spec\.ts$|shortcode-contexts\.spec\.ts$|conditional-block\.spec\.ts$|cond-reuse-table\.spec\.ts$|callout-in-table-cell\.spec\.ts$|hugo-warnings\.spec\.ts$|auto-cards\.spec\.ts$|card-image\.spec\.ts$|dev-build\.spec\.ts$|presence\.spec\.ts$|curl-quotes\.spec\.ts$|shortcode-args\.spec\.ts$|tab-syntax\.spec\.ts$|include-form\.spec\.ts$|cascade-type\.spec\.ts$|github-shortcode\.spec\.ts$|language-switch\.spec\.ts$|redirect\.spec\.ts$|sidebar-linktitle\.spec\.ts$|sidebar-flat\.spec\.ts$|page-feedback\.spec\.ts$|footnotes-after-cards\.spec\.ts$|callout-icon\.spec\.ts$|custom-alert\.spec\.ts$|copy-md-fidelity\.spec\.ts$/,
+        /static\.spec\.ts$|versioning\.spec\.ts$|version-nested-list\.spec\.ts$|version-inside-fence\.spec\.ts$|version-table-row\.spec\.ts$|version-cards\.spec\.ts$|shortcode-contexts\.spec\.ts$|conditional-block\.spec\.ts$|cond-reuse-table\.spec\.ts$|callout-in-table-cell\.spec\.ts$|hugo-warnings\.spec\.ts$|auto-cards\.spec\.ts$|card-image\.spec\.ts$|dev-build\.spec\.ts$|presence\.spec\.ts$|shortcode-args\.spec\.ts$|tab-syntax\.spec\.ts$|include-form\.spec\.ts$|cascade-type\.spec\.ts$|github-shortcode\.spec\.ts$|language-switch\.spec\.ts$|redirect\.spec\.ts$|sidebar-linktitle\.spec\.ts$|sidebar-flat\.spec\.ts$|page-feedback\.spec\.ts$|footnotes-after-cards\.spec\.ts$|callout-icon\.spec\.ts$|custom-alert\.spec\.ts$|copy-md-fidelity\.spec\.ts$/,
+    },
+    // Content-facing scanners: their pass/fail depends on the CONSUMER's real
+    // content — markdown-leaks walks the built HTML tree (target.builtRoot),
+    // curl-quotes lints the source markdown (target.scanRoots). A consumer must
+    // run these whenever CONTENT changes, not just on layout changes — that is
+    // the gap that let content-only PRs (which never touched layouts/**) ship
+    // rendering breaks unscanned. Kept as their own project so a consumer's
+    // content workflow can target `--project=content` on content + layout PRs
+    // while the "static" project runs only on layout PRs. NOTE: the pure-unit
+    // `describe` blocks inside these specs (deterministic, no build needed)
+    // ride along here too — cheap, and they keep helper regressions visible.
+    {
+      name: "content",
+      testMatch: /markdown-leaks\.spec\.ts$|curl-quotes\.spec\.ts$/,
     },
     {
       name: "browser",
