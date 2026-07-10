@@ -79,6 +79,10 @@ export const VERSION_MARKERS = {
   keepVersion: "MARKER_KEEP_VERSION",
   nestedLink: "MARKER_NESTED_LINK",
   versionedImage: "MARKER_VERSIONED_IMAGE",
+  // Auto version-resolved image: a bare `src` that resolves to a
+  // <dir>/<version>/ override when one exists, with no {{< version >}} split.
+  // Renders on every version (not gated); the resolved path differs per page.
+  autoVersionedImage: "MARKER_AUTO_VERSIONED_IMAGE",
   inFenceKey: "MARKER_VERSION_INFENCE_KEY",
   inFenceComment: "MARKER_VERSION_INFENCE_COMMENT",
   inFenceGated: "MARKER_VERSION_INFENCE_GATED",

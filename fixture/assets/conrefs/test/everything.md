@@ -534,6 +534,12 @@ A version-gated image variant (only renders on v2 after remap) — uses `reuse-i
 
 {{< version include-if="v2" >}}{{< reuse-image src="img/test/light.svg" srcDark="img/test/dark.svg" alt="MARKER_VERSIONED_IMAGE. v2-only image." caption="Visible only on v2." width="160" >}}{{< /version >}}
 
+### Auto version-resolved image
+
+A single bare `src` that resolves per version WITHOUT a `version` split: the page's version slug is spliced into the path (`img/autover.svg` → `img/<version>/autover.svg`) and used when that file exists, else the bare image is used. `img/main/autover.svg` exists but `img/v1/autover.svg` / `img/v2/autover.svg` do not — so the `main` page shows the override and every other version shares the bare image. This is the "shared until it diverges" model; authors never edit this reference across releases.
+
+{{< reuse-image src="img/autover.svg" alt="MARKER_AUTO_VERSIONED_IMAGE. Auto version-resolved image." caption="Override on main, shared elsewhere." width="160" >}}
+
 ### Figure inside a conditional-text block (mixed block content)
 
 A build-gated section that mixes a code fence, a bullet, and a `reuse-image` figure inside one `conditional-text` block — the kgateway operations/debug "Debug your gateway setup" shape. `reuse-image` emits raw block HTML (a `div` wrapping a `figure` and `img`); this case pins that it renders as a real `figure` element on the matching build rather than leaking as escaped `&lt;div&gt;` text. The markdown-leaks scan's `escaped-html` rule fails the build if a figure here ever regresses to escaped tags.

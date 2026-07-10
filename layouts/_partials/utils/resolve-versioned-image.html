@@ -1,0 +1,68 @@
+{{- /*
+  resolve-versioned-image — resolve an image `src` to a Resource, preferring a
+  version-specific override when one exists.
+
+  Input dict:
+    ctx  the calling shortcode's context (provides .Site and .Page)
+    src  the author-supplied path, e.g. "img/foo.png"
+
+  Resolution order (first hit wins):
+    1. Versioned override — <dir>/<version>/<file>, where <version> is the
+       page's version slug from utils/page-context (e.g. "main", "latest",
+       "v2"). Lets a page on a non-default version show a diverged image
+       (assets/img/main/foo.png) while every other version keeps sharing the
+       bare asset. This is the "shared until it diverges" model: authors write
+       ONE bare `src` and never touch it across releases — the override is
+       picked up automatically wherever the file exists, and a release cut is
+       just a matter of moving image files, not editing content.
+    2. Bare path — resources.Get src (assets/<src>), the shared default. This
+       is also the fallback the user asked for: when no versioned subdir image
+       exists, the bare image is used.
+    3. Legacy product/version tree — assets/<product>/<version>/img/<file>,
+       preserved for consumers that store images under a per-product tree.
+
+  Steps 1 and 3 only fire when the resolved file actually exists, so the
+  default/latest version (which has no <dir>/<version>/ image) and consumers
+  that don't use versioned image dirs are unaffected.
+
+  Returns the resolved Resource, or a falsy empty string if nothing matched
+  (callers guard with `{{ with }}`).
+*/ -}}
+{{- $ctx := .ctx -}}
+{{- $src := .src -}}
+{{- $image := "" -}}
+{{- if $src -}}
+  {{- /* 1. Versioned override. */ -}}
+  {{- $pc := partial "utils/page-context.html" $ctx -}}
+  {{- $version := $pc.version -}}
+  {{- if $version -}}
+    {{- $override := path.Join (path.Dir $src) $version (path.Base $src) -}}
+    {{- with resources.Get $override -}}{{- $image = . -}}{{- end -}}
+  {{- end -}}
+  {{- /* 2. Bare, shared path. */ -}}
+  {{- if not $image -}}
+    {{- with resources.Get $src -}}{{- $image = . -}}{{- end -}}
+  {{- end -}}
+  {{- /* 3. Legacy per-product tree: assets/<product>/<version>/img/<file>. */ -}}
+  {{- if not $image -}}
+    {{- $verLegacy := "" -}}
+    {{- range $part := split $ctx.Page.RelPermalink "/" -}}
+      {{- if not $verLegacy -}}
+        {{- range $ctx.Site.Params.versions -}}
+          {{- if eq .version $part -}}{{- $verLegacy = .version -}}{{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+    {{- if $verLegacy -}}
+      {{- $product := $ctx.Site.Params.currentProduct -}}
+      {{- $trimmed := strings.TrimPrefix "/" $src -}}
+      {{- $versioned := printf "%s/%s/%s" $product $verLegacy $trimmed -}}
+      {{- with resources.Get $versioned -}}
+        {{- /* Strip product prefix so publishDir doesn't double it. */ -}}
+        {{- $target := printf "%s/%s" $verLegacy $trimmed -}}
+        {{- $image = resources.Copy $target . -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- return $image -}}

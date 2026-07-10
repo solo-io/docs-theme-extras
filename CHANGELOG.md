@@ -15,6 +15,20 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [Unreleased]
+
+### `reuse-image` family — auto-resolve a per-version image override, no `{{< version >}}` split
+
+- **The `reuse-image`, `reuse-image-light`, and `reuse-image-dark` shortcodes now resolve a bare `src` to a version-specific override automatically, so authors no longer wrap images in a `{{< version >}}` split to vary a screenshot across doc versions.** The resolver (new `_partials/utils/resolve-versioned-image.html`) splices the page's version slug into the path — `src="img/foo.png"` on a page whose version is `main` looks for `img/main/foo.png` — and uses it *when that file exists*, otherwise falls back to the bare `img/foo.png`. The version slug comes from the shared `utils/page-context` partial, so it works both for URL-shaped consumers (`/docs/<section>/<version>/…` → `main`/`latest`) and multi-product-hub consumers (`siteParams` mode). This is the "shared until it diverges" model: one bare reference that never changes across releases, with a diverged version served purely by dropping a file at `img/<version>/`. A release cut becomes an image-file move, not a content edit.
+- **Resolution order is override → bare → legacy per-product tree.** Step 1 is the new `<dir>/<version>/<file>` override; step 2 is the pre-existing bare `resources.Get src`; step 3 is the pre-existing `assets/<product>/<version>/img/<file>` fallback (kept verbatim for consumers that store images under a per-product tree). The nested-subdir case is handled — `img/screens/foo.png` → `img/screens/<version>/foo.png` — and the bare fallback the previous behavior relied on is preserved.
+- **Additive and inert for every current consumer.** Steps 1 and 3 only fire when the resolved file actually exists, so: the default version (which has no `img/<default-version>/` dir) always lands on the bare image exactly as before; consumers with no versioned image dirs see zero change; and a page that previously used an explicit `{{< version >}}` image split keeps working (the split still gates, and each branch's bare `src` resolves as it did). The three shortcodes now share one resolver instead of each carrying a copy of the legacy fallback, so their behavior is identical by construction. Guarded by `versioned-image-auto.spec.ts` (see Tests).
+
+### Tests
+
+- **`versioned-image-auto.spec.ts` (new) guards the auto version-resolved override.** The `everything` conref gains an "Auto version-resolved image" section with a single bare `{{< reuse-image src="img/autover.svg" >}}` (marker `MARKER_AUTO_VERSIONED_IMAGE`), and the fixture ships `assets/img/autover.svg` plus a `main`-only override `assets/img/main/autover.svg`. The static spec asserts the `main` page's `<img src>` resolves to `/…/img/main/autover.svg` while every other version shares `/…/img/autover.svg`, and that each resolved path was actually published. Registered in `playwright.config.ts`'s `static` project; both brands (oss/enterprise) green, build log clean.
+
+---
+
 ## [v0.1.16] — 2026-07-07
 
 ### Rebase — `upstream` / `downstream` source-filter shortcodes for single-source content
