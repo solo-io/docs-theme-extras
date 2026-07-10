@@ -336,7 +336,7 @@ Fetching a YAML file inside a code fence. The fetched YAML should appear as the 
 MARKER_GITHUB_YAML. The fetched YAML appears below:
 
 ```yaml
-{{< github url="https://raw.githubusercontent.com/agentgateway/agentgateway/refs/heads/main/examples/basic/config.yaml" >}}
+{{< github url="https://raw.githubusercontent.com/agentgateway/agentgateway/a84655a1a324afa7e8916981eab3880a07771dde/crates/agentgateway/src/types/local_tests/basic_config.yaml" >}}
 ```
 
 ### Plain text in a code fence

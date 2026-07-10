@@ -48,30 +48,36 @@ export default defineConfig({
     timeout: 30_000,
   },
   projects: [
-    // Layout / theme-behavior specs: they render the bundled fixture and
-    // assert how the THEME behaves (versioning, cards, sidebar, callouts,
-    // shortcode edge cases). Their pass/fail depends on layouts, not on the
-    // consumer's real content, so a consumer runs these only when layouts
-    // change. Specs that scan the consumer's actual content live in the
-    // "content" project below.
+    // Layout / theme-behavior specs. Every spec here renders the theme's
+    // bundled FIXTURE and asserts how the THEME behaves (versioning, cards,
+    // sidebar, callouts, shortcode edge cases). Against a consumer's own build
+    // they test.skip (their fixture pages aren't in the consumer's builtRoot),
+    // so they carry signal only when LAYOUTS change — a consumer runs this
+    // project on layout PRs. Specs whose pass/fail depends on the consumer's
+    // real content or source live in the "content" project below, NOT here.
     {
       name: "static",
       testMatch:
-        /static\.spec\.ts$|versioning\.spec\.ts$|versioned-image-auto\.spec\.ts$|version-nested-list\.spec\.ts$|version-inside-fence\.spec\.ts$|version-table-row\.spec\.ts$|version-cards\.spec\.ts$|shortcode-contexts\.spec\.ts$|conditional-block\.spec\.ts$|cond-reuse-table\.spec\.ts$|callout-in-table-cell\.spec\.ts$|hugo-warnings\.spec\.ts$|auto-cards\.spec\.ts$|card-image\.spec\.ts$|dev-build\.spec\.ts$|presence\.spec\.ts$|shortcode-args\.spec\.ts$|tab-syntax\.spec\.ts$|include-form\.spec\.ts$|cascade-type\.spec\.ts$|github-shortcode\.spec\.ts$|language-switch\.spec\.ts$|redirect\.spec\.ts$|sidebar-linktitle\.spec\.ts$|sidebar-flat\.spec\.ts$|page-feedback\.spec\.ts$|footnotes-after-cards\.spec\.ts$|callout-icon\.spec\.ts$|custom-alert\.spec\.ts$|copy-md-fidelity\.spec\.ts$/,
+        /static\.spec\.ts$|versioning\.spec\.ts$|versioned-image-auto\.spec\.ts$|version-nested-list\.spec\.ts$|version-inside-fence\.spec\.ts$|version-table-row\.spec\.ts$|version-cards\.spec\.ts$|shortcode-contexts\.spec\.ts$|conditional-block\.spec\.ts$|cond-reuse-table\.spec\.ts$|callout-in-table-cell\.spec\.ts$|auto-cards\.spec\.ts$|card-image\.spec\.ts$|dev-build\.spec\.ts$|presence\.spec\.ts$|github-shortcode\.spec\.ts$|language-switch\.spec\.ts$|redirect\.spec\.ts$|sidebar-linktitle\.spec\.ts$|sidebar-flat\.spec\.ts$|page-feedback\.spec\.ts$|footnotes-after-cards\.spec\.ts$|callout-icon\.spec\.ts$|custom-alert\.spec\.ts$/,
     },
-    // Content-facing scanners: their pass/fail depends on the CONSUMER's real
-    // content — markdown-leaks walks the built HTML tree (target.builtRoot),
-    // curl-quotes lints the source markdown (target.scanRoots). A consumer must
-    // run these whenever CONTENT changes, not just on layout changes — that is
-    // the gap that let content-only PRs (which never touched layouts/**) ship
-    // rendering breaks unscanned. Kept as their own project so a consumer's
-    // content workflow can target `--project=content` on content + layout PRs
-    // while the "static" project runs only on layout PRs. NOTE: the pure-unit
-    // `describe` blocks inside these specs (deterministic, no build needed)
-    // ride along here too — cheap, and they keep helper regressions visible.
+    // Consumer-content specs. Every spec here reads the CONSUMER's own content
+    // — either the built HTML tree (target.builtRoot) or the markdown source
+    // (target.scanRoots) — so its pass/fail tracks content edits, not layout
+    // edits. A consumer runs this project whenever CONTENT changes (and on
+    // layout PRs too, since a layout change alters how existing content
+    // renders). This is the coverage a layout-only trigger was missing.
+    //   builtRoot scanners: markdown-leaks (rendering leaks), copy-md-fidelity
+    //     (copy-as-markdown output vs HTML), hugo-warnings (build-log warnings).
+    //   source scanners: curl-quotes, tab-syntax, shortcode-args, include-form,
+    //     cascade-type (all walk scanRoots markdown).
+    // The pure-unit describe blocks inside these specs (deterministic, no build
+    // needed) ride along here too — cheap, and they keep helper regressions
+    // visible. (dev-build — a build-produced-pages sanity check — stays in
+    // "static": it's a build smoke, not a content check.)
     {
       name: "content",
-      testMatch: /markdown-leaks\.spec\.ts$|curl-quotes\.spec\.ts$/,
+      testMatch:
+        /markdown-leaks\.spec\.ts$|curl-quotes\.spec\.ts$|tab-syntax\.spec\.ts$|shortcode-args\.spec\.ts$|include-form\.spec\.ts$|cascade-type\.spec\.ts$|copy-md-fidelity\.spec\.ts$|hugo-warnings\.spec\.ts$/,
     },
     {
       name: "browser",

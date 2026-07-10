@@ -125,7 +125,7 @@
        list-item indentation doesn't trip CommonMark's "4 spaces = code
        block" rule. Skipped for the trailing-step raw path. */ -}}
 {{- $inner := .Inner -}}
-{{- if not (or $isTrailingStep $isFencedBlock) -}}
+{{- if not $isTrailingStep -}}
   {{- $lines := split $inner "\n" -}}
   {{- $minIndent := -1 -}}
   {{- range $lines -}}
@@ -165,7 +165,7 @@
 
   {{- if isset $.Params "include-if" -}}
     {{- if in $include_if $condition -}}
-      {{- if $isFullTable -}}
+      {{- if or $isFullTable $isFencedBlock -}}
         {{- /* Self-contained table: render to HTML (display:block keeps cell
                HTML, since unsafe=true) and flatten so angle form emits it
                directly and percent form re-renders it as a single HTML block
@@ -175,7 +175,7 @@
         {{- $rendered_html | safeHTML -}}
       {{- else if $isTableRow -}}
 {{ $.Inner }}
-      {{- else if or $isTrailingStep $isFencedBlock (not $hasMarkdown) -}}
+      {{- else if or $isTrailingStep (not $hasMarkdown) -}}
 {{ $.Inner }}
       {{- else -}}
         {{- $rendered_html := $.Page.RenderString (dict "display" "inline") $inner -}}
@@ -187,7 +187,7 @@
     {{- end -}}
   {{- else if isset $.Params "exclude-if" -}}
     {{- if not (in $exclude_if $condition) -}}
-      {{- if $isFullTable -}}
+      {{- if or $isFullTable $isFencedBlock -}}
         {{- /* Self-contained table: render to HTML (display:block keeps cell
                HTML, since unsafe=true) and flatten so angle form emits it
                directly and percent form re-renders it as a single HTML block
@@ -197,7 +197,7 @@
         {{- $rendered_html | safeHTML -}}
       {{- else if $isTableRow -}}
 {{ $.Inner }}
-      {{- else if or $isTrailingStep $isFencedBlock (not $hasMarkdown) -}}
+      {{- else if or $isTrailingStep (not $hasMarkdown) -}}
 {{ $.Inner }}
       {{- else -}}
         {{- $rendered_html := $.Page.RenderString (dict "display" "inline") $inner -}}

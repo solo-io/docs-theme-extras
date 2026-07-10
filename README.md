@@ -219,22 +219,29 @@ jobs:
 
 #### Static vs content: run content scanners on content PRs too
 
-The harness splits into two file-scan projects with different trigger
-semantics:
+The harness splits into two file-scan projects, categorized by **what each
+spec reads**:
 
-- **`--project=static`** — layout / theme-behavior specs (versioning,
-  cards, sidebar, callout, shortcode edge cases). They render the theme and
-  assert theme behavior, so a consumer only needs them when **layouts**
-  change. Gate this job's workflow on layout paths (`layouts/**`,
-  `static/**`, `assets/css/**`, `assets/js/**`, `go.mod`, `hugo.yaml`).
-- **`--project=content`** — scanners whose pass/fail depends on the
-  consumer's **real content**: `markdown-leaks` (walks the built HTML tree
-  for rendering leaks — fragmented code blocks, orphaned list markers,
-  escaped-HTML) and `curl-quotes` (lints source markdown). Gate this job on
-  **content paths AND layout paths** (`content/**`, plus your page/snippet
-  roots such as `assets/<product>-docs/**`, plus the layout paths above), so
-  the scanners run both when authors edit content and when a layout change
-  alters how existing content renders.
+- **`--project=static`** — every spec renders the theme's bundled **fixture**
+  and asserts theme behavior (versioning, cards, sidebar, callouts, shortcode
+  edge cases). Against a consumer's own build these `test.skip` (their fixture
+  pages aren't in the consumer's `builtRoot`), so they carry signal only when
+  **layouts** change. Gate on layout paths (`layouts/**`, `static/**`,
+  `assets/css/**`, `assets/js/**`, `go.mod`, `hugo.yaml`).
+- **`--project=content`** — every spec reads the consumer's **own** content:
+  the built HTML tree (`markdown-leaks` rendering leaks; `copy-md-fidelity`
+  copy-as-markdown output; `hugo-warnings` build-log warnings) or the markdown
+  source (`curl-quotes`, `tab-syntax`, `shortcode-args`, `include-form`,
+  `cascade-type` — all walk `scanRoots`). Pass/fail tracks content edits, so
+  gate on **content paths AND layout paths** (`content/**`, plus your
+  page/snippet roots such as `assets/<product>-docs/**`, plus the layout paths
+  above) — content edits and layout edits both change what renders.
+
+The categorization is by input, not by name: a spec that scans consumer
+content belongs in `content` even if it feels "static." Because every `static`
+spec skips against a consumer build, running `static` on a content PR is pure
+no-op — so a content PR only needs `--project=content`, and only a layout PR
+needs both.
 
 The common trap this split fixes: a workflow gated only on `layouts/**`
 never fires on a content-only PR, so the leak scan never runs on the exact
@@ -247,12 +254,17 @@ both projects in one step:
     run: npx playwright test --project=static --project=content --reporter=list,html
 ```
 
-Since both projects share the one Hugo build (the slow part) and the layout
-specs are fast and mostly fixture-bound, running them on a content PR too is
-negligible — not worth a second workflow to avoid. Only split into two
-path-filtered workflows if you have a concrete reason to keep the layout
-specs off content PRs. agw-oss's `framework-tests.yml` is the single-workflow
-worked example.
+Two viable wirings, both fine:
+
+- **One workflow, both projects** (shown above) — simplest. Since every
+  `static` spec skips against a consumer build, running it on a content PR is
+  an instant no-op, and both projects share the one Hugo build (the slow
+  part), so the waste is negligible. agw-oss's `framework-tests.yml` uses this.
+- **Two path-filtered workflows** — a content workflow (`--project=content`,
+  content + layout paths) and a layout workflow (`--project=static`, layout
+  paths only). Slightly more config, but a content PR then runs only the specs
+  that can actually fail on it. Prefer this if you want the CI summary to show
+  only relevant checks per PR.
 
 Multi-product hub repos (one site, many product subpaths) use the same
 pattern with extra jobs for `--project=browser` and a smoke matrix per
