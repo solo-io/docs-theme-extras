@@ -2,8 +2,8 @@ import { test, expect } from "@playwright/test";
 import { target } from "./helpers/target";
 import { crawlBuiltRoot, type CrawledPage } from "./helpers/crawl";
 
-// Browser-level smoke: open every built page in Chromium and fail if any of
-// these appear before or shortly after load:
+// Browser crawl (the "browser-crawl" project): open every built page in
+// Chromium and fail if any of these appear before or shortly after load:
 //
 //   • pageerror   — uncaught JS exceptions, e.g.
 //                   "TypeError: can't access property 'setAttribute', e is null"
@@ -15,7 +15,7 @@ import { crawlBuiltRoot, type CrawledPage } from "./helpers/crawl";
 //                   common root cause of follow-on JS TypeErrors.
 //
 // Each page becomes its own test so Playwright's parallel execution keeps
-// the total runtime manageable. The smoke.maxFiles cap applies (50 by
+// the total runtime manageable. The [crawl].maxFiles cap applies (50 by
 // default; set to 0 in .docs-test.toml for unlimited coverage).
 //
 // Known noise from analytics CDNs and similar third-party scripts is
@@ -32,7 +32,7 @@ import { crawlBuiltRoot, type CrawledPage } from "./helpers/crawl";
 // hide the same error coming from the consumer's or the theme's own code.
 
 const ENABLED = target.shouldRun("consoleErrors");
-const MAX = target.smoke.maxFiles;
+const MAX = target.crawl.maxFiles;
 
 // Patterns matched against every error string before the test fails.
 // Anything that matches is silently dropped. These cover universal
@@ -52,7 +52,7 @@ const BUILTIN_NOISE: RegExp[] = [
   // /livereload.js?…port=1313…) 404s when a dev build is served statically.
   // That only means the wrong build was tested; dev-build.spec.ts reports it
   // once with a clear "rebuild for production" message, so don't also flood
-  // the browser-smoke report with the same 404 on every page.
+  // the browser-crawl report with the same 404 on every page.
   /\/livereload\.js/i,
 ];
 
@@ -62,7 +62,7 @@ function isSuppressed(msg: string, extra: RegExp[]): boolean {
 
 // Collect pages at module-evaluation time so Playwright can generate one
 // test per URL. The build must exist before the test suite runs (same
-// assumption as smoke.spec.ts and all other specs that call crawlBuiltRoot).
+// assumption as every spec that calls crawlBuiltRoot).
 let pages: CrawledPage[] = [];
 try {
   const all = crawlBuiltRoot();

@@ -11,7 +11,7 @@ import {
   loadConfig,
   type Page,
   type Config,
-  type Smoke,
+  type Crawl,
 } from "./config";
 
 class Target {
@@ -32,6 +32,17 @@ class Target {
 
   get builtRoot(): string {
     return this.cfg().builtRoot;
+  }
+
+  // Root the content-scanning specs (markdown-leaks, copy-md-fidelity,
+  // built-html-integrity) actually walk. Defaults to the whole builtRoot;
+  // scoped to a subdirectory when CONTENT_DIR is set — the multi-product hub
+  // sets CONTENT_DIR=<product> to scan one product's subtree per matrix job
+  // (this replaced the former SMOKE_PRODUCT env of the deleted smoke project).
+  // A leading/trailing slash in CONTENT_DIR is tolerated.
+  get builtScanRoot(): string {
+    const dir = (process.env.CONTENT_DIR ?? "").replace(/^\/+|\/+$/g, "");
+    return dir ? path.join(this.cfg().builtRoot, dir) : this.cfg().builtRoot;
   }
 
   get baseURL(): string {
@@ -68,10 +79,6 @@ class Target {
     return this.cfg().allowlists.curlQuotes;
   }
 
-  get shortcodeAllowlist(): string[] {
-    return this.cfg().allowlists.shortcodes;
-  }
-
   // Per-consumer regex patterns for console-errors.spec.ts. Strings from
   // [allowlists].consoleErrors in the TOML are compiled to RegExp here so
   // specs never have to know about the raw string form.
@@ -87,8 +94,8 @@ class Target {
     return this.cfg().checks[check];
   }
 
-  get smoke(): Smoke {
-    return this.cfg().smoke;
+  get crawl(): Crawl {
+    return this.cfg().crawl;
   }
 
   // Extract the version string from a URL using the configured regex.

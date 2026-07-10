@@ -433,8 +433,9 @@ test.describe("markdown-leaks: rendered HTML scan", () => {
   test.skip(!ENABLED, "markdownLeaks check disabled in CONFIG");
 
   test("no leaked markdown across built HTML pages", () => {
-    const files = walkHtml(target.builtRoot);
-    expect(files.length, `no html under ${target.builtRoot}`).toBeGreaterThan(0);
+    const scanRoot = target.builtScanRoot;
+    const files = walkHtml(scanRoot);
+    expect(files.length, `no html under ${scanRoot}`).toBeGreaterThan(0);
 
     const allowlist = readAllowlist();
     type Offender = {
@@ -450,7 +451,7 @@ test.describe("markdown-leaks: rendered HTML scan", () => {
       const leaks = findMarkdownLeaks(html, { allowlist });
       for (const l of leaks) {
         offenders.push({
-          file: path.relative(target.builtRoot, f),
+          file: path.relative(scanRoot, f),
           kind: l.kind,
           match: l.match,
           context: l.context,

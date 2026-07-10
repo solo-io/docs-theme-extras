@@ -10,8 +10,8 @@ import fs from "node:fs";
 import { target } from "./target";
 
 // Today's tests use PUBLIC_ROOT to locate sibling product directories
-// (e.g. for smoke.spec.ts pointing at /public/<product>). With the new
-// model, builtRoot IS the served public dir.
+// (e.g. a CONTENT_DIR-scoped content scan pointing at /public/<product>).
+// With the new model, builtRoot IS the served public dir.
 export const PUBLIC_ROOT = target.builtRoot;
 
 // The product-scoped root that today's specs use as the base for filePath

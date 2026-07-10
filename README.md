@@ -154,8 +154,7 @@ versionFromPath = "^/docs/(?<version>v\\d+|main)/"
 versions        = ["v1", "v2", "main"]
 
 [checks]
-crossBrowser = false
-smoke        = false      # set true only for cross-product hub repos
+codeBlockIntegrity = false
 
 [allowlists]
 hugoWarnings = []
@@ -266,10 +265,13 @@ Two viable wirings, both fine:
   that can actually fail on it. Prefer this if you want the CI summary to show
   only relevant checks per PR.
 
-Multi-product hub repos (one site, many product subpaths) use the same
-pattern with extra jobs for `--project=browser` and a smoke matrix per
-product, plus per-product artifact downloads in place of the inline
-`hugo` build step.
+Multi-product hub repos (one site, many product subpaths) run the same
+`content` project **per product** via a matrix, setting `CONTENT_DIR=<product>`
+so each job scans only that product's subtree of `builtRoot`. They add extra
+jobs for `--project=browser`, plus per-product artifact downloads in place of
+the inline `hugo` build step. (`CONTENT_DIR` replaced the former dedicated
+"smoke" project + `SMOKE_PRODUCT` env — the built-HTML checks now live in
+`content`, scoped by directory.)
 
 ### 5. Run the harness locally
 
@@ -293,7 +295,7 @@ make framework-test                # all projects (static, browser, cross-browse
 make framework-test-static         # fastest loop — ~2s after Hugo build
 make framework-test-browser        # chromium only
 make framework-test-cross-browser  # chromium + firefox + webkit
-make framework-test-smoke PRODUCT=<name>   # multi-product hubs only
+make framework-test-content CONTENT_DIR=<product>   # scope content scan to one product subtree (hubs)
 
 # Override the sibling location if needed
 make framework-test FRAMEWORK_EXTRAS_DIR=/abs/path/to/docs-theme-extras
@@ -357,25 +359,22 @@ checks.
 
 ```toml
 [checks]
-smoke        = false   # for cross-product runs with SMOKE_PRODUCT env; single-site consumers skip
-crossBrowser = false   # opt-in; full chromium/firefox/webkit pass is slow
+codeBlockIntegrity = false   # e.g. a consumer with a known backlog of fenced-block fragmentation
 ```
 
 All checks default to enabled. Setting `false` skips that spec entirely.
 
-### 2a. `[smoke].maxFiles` tunes smoke coverage
+### 2a. `[crawl].maxFiles` caps the browser crawl
 
 ```toml
-[smoke]
+[crawl]
 maxFiles = 0   # 0 = unlimited; default 50
 ```
 
-Smoke's two checks (shortcode-leak scan, copy-as-md presence) default to
-sampling 50 HTML files per run — keeps `make framework-test-smoke
-PRODUCT=<x>` sub-second across any product. Set `maxFiles = 0` for
-unlimited (walk every HTML file). Worth doing when smoke is the *only*
-coverage you have against that product's build (e.g. cross-product
-invocations where the product isn't the consumer's primary `builtRoot`).
+Only the browser crawl (`console-errors.spec.ts`, the `browser-crawl`
+project) is capped — opening pages in Chromium is expensive, so it samples 50
+by default. Set `maxFiles = 0` to open every built page. The cheap file-read
+scans (`content` project) always walk every page regardless.
 For the consumer's own build the static project already crawls
 everything, so the default cap is the right choice.
 
@@ -487,7 +486,7 @@ reload reuses the cached version.
 │   └── .docs-test-{oss,enterprise}.toml   Harness config per brand
 │
 ├── tests/                          Playwright specs
-│   ├── *.spec.ts                   17 specs (smoke, presence, versioning, ...)
+│   ├── *.spec.ts                   specs (content, static, browser, ...)
 │   └── helpers/                    config, target, crawl, shortcodes, ...
 │
 ├── static/test/readfile-sample.txt Top-level path for Hugo's readFile

@@ -64,10 +64,6 @@ url = "/test/main/rebased/"
 versionFromPath = "^/(?<version>v\\d+|main)/"
 versions        = ["v1", "v2", "main"]
 
-# All checks default to enabled. cross-browser is opt-in (slow).
-[checks]
-crossBrowser = false
-
 # Allowlists: known-benign Hugo deprecation noise from hextra 0.12.2.
 [allowlists]
 hugoWarnings = ["\\.Site\\.Data was deprecated"]

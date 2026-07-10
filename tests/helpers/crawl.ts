@@ -57,7 +57,7 @@ export function _resetCrawlCache(): void {
 // Return only the explicitly listed pages from CONFIG, falling back to the
 // crawl when no [[pages]] entries are declared. Specs that test specific
 // behaviors against representative pages (contrast, viewport, browser specs)
-// use this; specs that scan everything (smoke, static) call `crawlBuiltRoot`.
+// use this; specs that scan everything (content, static) call `crawlBuiltRoot`.
 export function selectedPages(): CrawledPage[] {
   if (target.pages.length > 0) {
     return target.pages.map((p) => ({
