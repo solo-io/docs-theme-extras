@@ -91,6 +91,10 @@ export const VERSION_MARKERS = {
   // Auto version-resolved image via the standalone reuse-image-dark shortcode
   // (resolves the srcDark slot through the shared resolver).
   autoVersionedImageDark: "MARKER_AUTO_VERSIONED_IMAGE_DARK",
+  // reuse-image PAIR form (src + srcDark on one call): both variants render,
+  // light in .toggle-dark and dark in .toggle-light. Distinct from the
+  // standalone reuse-image-light / reuse-image-dark shortcodes.
+  reuseImagePair: "MARKER_REUSE_IMAGE_PAIR",
   inFenceKey: "MARKER_VERSION_INFENCE_KEY",
   inFenceComment: "MARKER_VERSION_INFENCE_COMMENT",
   inFenceGated: "MARKER_VERSION_INFENCE_GATED",

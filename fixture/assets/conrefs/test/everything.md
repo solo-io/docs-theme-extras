@@ -558,6 +558,12 @@ The `reuse-image-dark` shortcode shares the same resolver via its `srcDark`. Use
 
 {{< reuse-image-dark srcDark="img/autover-dark.svg" alt="MARKER_AUTO_VERSIONED_IMAGE_DARK. Auto version-resolved dark-only image." caption="Dark-only, override on main." width="160" >}}
 
+### reuse-image pair form (src + srcDark)
+
+A single `reuse-image` call given BOTH `src` and `srcDark` must gate each variant to its mode: the light image in `.toggle-dark` (shown in light mode) and the dark image in `.toggle-light` (shown in dark mode). This is the PAIR branch of `reuse-image` itself (distinct from the standalone `reuse-image-light` / `reuse-image-dark` shortcodes), and it must NOT regress to the ungated single-image output.
+
+{{< reuse-image src="img/test/light.svg" srcDark="img/test/dark.svg" alt="MARKER_REUSE_IMAGE_PAIR. Two-variant reuse-image, gated per mode." caption="Pair form, gated per mode." width="160" >}}
+
 ### Figure inside a conditional-text block (mixed block content)
 
 A build-gated section that mixes a code fence, a bullet, and a `reuse-image` figure inside one `conditional-text` block — the kgateway operations/debug "Debug your gateway setup" shape. `reuse-image` emits raw block HTML (a `div` wrapping a `figure` and `img`); this case pins that it renders as a real `figure` element on the matching build rather than leaking as escaped `&lt;div&gt;` text. The markdown-leaks scan's `escaped-html` rule fails the build if a figure here ever regresses to escaped tags.

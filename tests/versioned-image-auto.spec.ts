@@ -134,6 +134,19 @@ function wrapperClassByAlt(html: string, marker: string): string | null {
   return null;
 }
 
+// All wrapper classes for a marker, in document order. The PAIR form emits two
+// figures with the same alt (light + dark), so a single-match lookup isn't
+// enough — collect both.
+function wrapperClassesByAlt(html: string, marker: string): string[] {
+  const out: string[] = [];
+  for (const m of html.matchAll(/<div\b([^>]*)><figure><img\b[^>]*>/g)) {
+    if (!m[0].includes(marker)) continue;
+    const cls = m[1].match(/\bclass="([^"]*)"/);
+    out.push(cls ? cls[1] : "");
+  }
+  return out;
+}
+
 test.describe("reuse-image rendering mode", () => {
   const anyPage = versionPages[0]?.file;
   test.skip(!anyPage, "no built everything page");
@@ -161,5 +174,15 @@ test.describe("reuse-image rendering mode", () => {
   test(`${VERSION_MARKERS.autoVersionedImageDark}: reuse-image-dark stays dark-only (.toggle-light)`, () => {
     const cls = wrapperClassByAlt(readFixture(anyPage!), VERSION_MARKERS.autoVersionedImageDark);
     expect(cls).toContain("toggle-light");
+  });
+
+  // reuse-image's OWN pair form (src + srcDark on one call) must gate each
+  // variant — one .toggle-dark (light) + one .toggle-light (dark) — and must
+  // NOT collapse to the ungated single-image output. Neither the lone-src
+  // cases above nor the standalone reuse-image-light/dark shortcodes exercise
+  // this branch of reuse-image.
+  test(`${VERSION_MARKERS.reuseImagePair}: src+srcDark gates one figure per mode`, () => {
+    const classes = wrapperClassesByAlt(readFixture(anyPage!), VERSION_MARKERS.reuseImagePair).sort();
+    expect(classes).toEqual(["toggle-dark", "toggle-light"]);
   });
 });
