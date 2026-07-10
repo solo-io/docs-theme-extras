@@ -118,3 +118,48 @@ test.describe("auto version-resolved images", () => {
     }
   }
 });
+
+// Rendering mode (independent of which version resolved): a lone `reuse-image`
+// src with no dark counterpart shows in BOTH modes (a plain figure, no
+// toggle-* wrapper), while the explicit light/dark variants stay mode-gated.
+// This pins the "single image stays visible in dark mode" default added
+// alongside the resolver.
+function wrapperClassByAlt(html: string, marker: string): string | null {
+  for (const m of html.matchAll(/<div\b([^>]*)><figure><img\b[^>]*>/g)) {
+    if (m[0].includes(marker)) {
+      const cls = m[1].match(/\bclass="([^"]*)"/);
+      return cls ? cls[1] : "";
+    }
+  }
+  return null;
+}
+
+test.describe("reuse-image rendering mode", () => {
+  const anyPage = versionPages[0]?.file;
+  test.skip(!anyPage, "no built everything page");
+
+  // Lone reuse-image / reuse-image-light-with-no-dark → both modes, no toggle.
+  for (const marker of [
+    VERSION_MARKERS.autoVersionedImage,
+    VERSION_MARKERS.autoVersionedImageNested,
+  ]) {
+    test(`${marker}: lone src has no toggle wrapper (both modes)`, () => {
+      const cls = wrapperClassByAlt(readFixture(anyPage!), marker);
+      expect(cls, `${marker}: no wrapping <div>`).not.toBeNull();
+      expect(
+        /\btoggle-(dark|light)\b/.test(cls!),
+        `${marker}: lone reuse-image should not be mode-gated, got class "${cls}"`,
+      ).toBe(false);
+    });
+  }
+
+  // The explicit single-mode variants keep their toggle wrappers.
+  test(`${VERSION_MARKERS.autoVersionedImageLight}: reuse-image-light stays light-only (.toggle-dark)`, () => {
+    const cls = wrapperClassByAlt(readFixture(anyPage!), VERSION_MARKERS.autoVersionedImageLight);
+    expect(cls).toContain("toggle-dark");
+  });
+  test(`${VERSION_MARKERS.autoVersionedImageDark}: reuse-image-dark stays dark-only (.toggle-light)`, () => {
+    const cls = wrapperClassByAlt(readFixture(anyPage!), VERSION_MARKERS.autoVersionedImageDark);
+    expect(cls).toContain("toggle-light");
+  });
+});
