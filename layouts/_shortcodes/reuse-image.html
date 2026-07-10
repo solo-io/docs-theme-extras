@@ -19,57 +19,38 @@
 {{ $srcDark := .Get "srcDark"}}
 {{ $width := .Get "width" }}
 {{ $alt := .Get "alt" }}
-{{ $image := resources.Get $src }}
-{{ $imageDark := resources.Get $srcDark }}
 {{ $caption := .Get "caption" }}
 
-{{/* Fallback: if the image isn't at assets/img/<file>, look for it at
-     assets/<product>/<version>/img/<file>. Version is resolved by scanning
-     every URL segment for a known site version. */}}
-{{ if or (not $image) (not $imageDark) }}
-  {{ $version := "" }}
-  {{ range $part := split .Page.RelPermalink "/" }}
-    {{ if not $version }}
-      {{ range $.Site.Params.versions }}
-        {{ if eq .version $part }}{{ $version = .version }}{{ end }}
-      {{ end }}
-    {{ end }}
-  {{ end }}
-  {{ if $version }}
-    {{ $product := $.Site.Params.currentProduct }}
-    {{ if not $image }}
-      {{ $trimmed := strings.TrimPrefix "/" $src }}
-      {{ $versioned := printf "%s/%s/%s" $product $version $trimmed }}
-      {{ $r := resources.Get $versioned }}
-      {{ with $r }}
-        {{/* Strip product prefix so publishDir doesn't double it */}}
-        {{ $targetPath := printf "%s/%s" $version $trimmed }}
-        {{ $image = resources.Copy $targetPath $r }}
-      {{ end }}
-    {{ end }}
-    {{ if and $srcDark (not $imageDark) }}
-      {{ $trimmedDark := strings.TrimPrefix "/" $srcDark }}
-      {{ $versionedDark := printf "%s/%s/%s" $product $version $trimmedDark }}
-      {{ $r := resources.Get $versionedDark }}
-      {{ with $r }}
-        {{ $targetPath := printf "%s/%s" $version $trimmedDark }}
-        {{ $imageDark = resources.Copy $targetPath $r }}
-      {{ end }}
-    {{ end }}
-  {{ end }}
-{{ end }}
+{{/* Resolve each src to a Resource, preferring a version-specific override
+     (assets/<dir>/<version>/<file>) when it exists, then the bare shared path,
+     then the legacy per-product tree. See utils/resolve-versioned-image. */}}
+{{ $image := partial "utils/resolve-versioned-image.html" (dict "ctx" . "src" $src) }}
+{{ $imageDark := partial "utils/resolve-versioned-image.html" (dict "ctx" . "src" $srcDark) }}
 
-{{/* Emit light + dark variants in their respective toggle wrappers.
-     .toggle-dark shows in light mode, .toggle-light in dark mode (see
-     docs-theme-extras.css). The .toggle-light slot is only emitted when
-     srcDark was provided AND resolved — without that guard, authors who
-     pair `reuse-image` with a sibling `reuse-image-dark` end up with two
-     dark images stacked in dark mode. Authors that want a dark variant
-     supply srcDark on this call, or use reuse-image-dark separately. */}}
-{{- with $image -}}
+{{/* Two rendering modes, chosen by whether a dark variant was supplied:
+
+     PAIR (srcDark given AND resolved) — emit the light variant in .toggle-dark
+     (shown in light mode) and the dark variant in .toggle-light (shown in dark
+     mode); see docs-theme-extras.css.
+
+     SINGLE (src only, no dark variant) — emit ONE figure with no toggle wrapper
+     so it shows in BOTH light and dark mode. This is the least-surprising
+     default for a lone image with no dark counterpart (a diagram, a screenshot
+     that reads fine in either theme): it stays visible in dark mode instead of
+     silently disappearing. For a light-ONLY asset that must be hidden in dark
+     (e.g. a white-card screenshot with no dark version yet), use the dedicated
+     reuse-image-light shortcode; for dark-only, reuse-image-dark. Do NOT pair a
+     lone reuse-image with a sibling reuse-image-dark for the same figure — the
+     lone call now shows in both modes, so the two would stack in dark; pass
+     srcDark on THIS call, which routes back to the PAIR branch above. */}}
+{{- if $imageDark -}}
+  {{- with $image -}}
 <div style="text-align: center;" class="toggle-dark"><figure><img src="{{ .RelPermalink }}" width="{{ $width }}" alt="{{ $alt }}"/> <figcaption style="font-style:italic">{{ $caption }}</figcaption></figure></div>
-{{- end -}}
-{{- with $imageDark -}}
-<div style="text-align: center;" class="toggle-light"><figure><img src="{{ .RelPermalink }}" width="{{ $width }}" alt="{{ $alt }}"/> <figcaption style="font-style:italic">{{ $caption }}</figcaption></figure></div>
+  {{- end -}}
+<div style="text-align: center;" class="toggle-light"><figure><img src="{{ $imageDark.RelPermalink }}" width="{{ $width }}" alt="{{ $alt }}"/> <figcaption style="font-style:italic">{{ $caption }}</figcaption></figure></div>
+{{- else -}}
+  {{- with $image -}}
+<div style="text-align: center;"><figure><img src="{{ .RelPermalink }}" width="{{ $width }}" alt="{{ $alt }}"/> <figcaption style="font-style:italic">{{ $caption }}</figcaption></figure></div>
+  {{- end -}}
 {{- end -}}
 {{- end -}}
