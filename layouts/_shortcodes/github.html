@@ -21,5 +21,11 @@
     {{- .Content | safeHTML -}}
   {{- end -}}
 {{- else -}}
-  <p><strong>Error:</strong> Unable to load code from {{ $url }}</p>
+  {{- /* Render the failed URL as an <a href> so the link checker can report it.
+     NOTE: when this shortcode is used INSIDE a caller's code fence (e.g. a
+     `cat <<EOF` heredoc), this error lands inside a <pre>, and lychee skips
+     anchors in code blocks by default — so the link is only reliably checked
+     when github is used outside a fence. For fetched YAML shown as a standalone
+     block, prefer the github-yaml shortcode, whose error is a standalone <p>. */ -}}
+  <p><strong>Error:</strong> Unable to load code from <a href="{{ $url }}">{{ $url }}</a></p>
 {{- end -}}

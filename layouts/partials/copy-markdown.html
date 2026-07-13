@@ -342,11 +342,21 @@
     </div>
   </dialog>
   <script type="text/markdown" class="copy-md-source">
-{{- /* `safeHTML` so Hugo's html/template doesn't re-escape the markdown's
-       `<` and `>` (which would put `&amp;gt;` etc. into the user's clipboard).
-       Script-tag content is raw text — `<` / `>` characters are safe so long
-       as the markdown doesn't literally contain `</script>`. */ -}}
-{{- $md | safeHTML -}}
+{{- /* Escape ONLY `<` → `&lt;` (leave `&`, `>`, and any existing entities
+       untouched, so the entity round-trip the copy-md JS decodeEntities() step
+       expects is unchanged). Two reasons:
+         1. A raw `<identifier` in embedded code (e.g. `for(i=0;i<n;i++)`) makes
+            naive HTML parsers — notably the link checker's (lychee/html5ever) —
+            mis-read `<i` as a start-tag and silently drop every link after it.
+            That is the same failure that took the whole page body offline until
+            the head init script was externalized to docs-init.js; here it is
+            latent, per-page (only pages whose markdown carries such a sequence).
+         2. It also neutralizes a literal `</script>` in the markdown, which
+            would otherwise close this tag early.
+       processCopyMd() runs textContent through decodeEntities(), which reverses
+       `&lt;` → `<`, so the copied/downloaded output is byte-identical. safeHTML
+       keeps Hugo from re-escaping the `&` in the `&lt;` we just wrote. */ -}}
+{{- replace $md "<" "&lt;" | safeHTML -}}
   </script>
 </div>
 {{- end -}}

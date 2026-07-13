@@ -42,6 +42,28 @@ function collectHtml(root: string): string[] {
   return out;
 }
 
+// True if the build emitted at least one Hugo `.md` output-format file — the
+// source that the sibling-file copy-as-markdown mechanism fetches at runtime
+// (and the same files copy-md-fidelity.spec.ts pairs against each page).
+function hasMarkdownOutput(root: string): boolean {
+  const stack = [root];
+  while (stack.length) {
+    const dir = stack.pop()!;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) stack.push(p);
+      else if (e.isFile() && e.name.endsWith(".md")) return true;
+    }
+  }
+  return false;
+}
+
 test.describe(`built-html integrity: ${target.name}`, () => {
   test("scan root exists and contains built pages", () => {
     expect(fs.existsSync(SCAN_ROOT), `${SCAN_ROOT} not found`).toBe(true);
@@ -53,18 +75,31 @@ test.describe(`built-html integrity: ${target.name}`, () => {
     ).toBeGreaterThan(0);
   });
 
-  test("at least one page emits a copy-as-md script tag", () => {
+  test("copy-as-markdown source is present (inline script or .md output)", () => {
     if (!target.shouldRun("copyAsMarkdown")) {
       test.skip(true, "copyAsMarkdown check disabled in CONFIG");
     }
-    const hasCopyMd = collectHtml(SCAN_ROOT).some((f) =>
+    // Two shipping mechanisms, both valid — this is a presence sanity ("the
+    // feature shipped"), not a mechanism assertion (fidelity is copy-md-
+    // fidelity.spec.ts's job):
+    //   • inline: the page embeds its source as <script type="text/markdown">
+    //     (Hextra/extras default — the bundled fixture build uses this).
+    //   • sibling: Hugo emits a `.md` output-format file next to each page and
+    //     the copy-md JS fetches it at runtime, so there is no inline script
+    //     and the copy-md UI is built client-side (agw-oss uses this).
+    // Accept EITHER; failing only when NEITHER is present means the feature
+    // is genuinely absent, not merely implemented the other way.
+    const hasInlineScript = collectHtml(SCAN_ROOT).some((f) =>
       /<script[^>]*type=["']text\/markdown["']/i.test(
         fs.readFileSync(f, "utf8"),
       ),
     );
-    expect(hasCopyMd, `no copy-as-md found in any page under ${SCAN_ROOT}`).toBe(
-      true,
-    );
+    const hasMdOutput = hasMarkdownOutput(SCAN_ROOT);
+    expect(
+      hasInlineScript || hasMdOutput,
+      `no copy-as-markdown source under ${SCAN_ROOT} — expected either an ` +
+        `inline <script type="text/markdown"> or Hugo .md output-format files`,
+    ).toBe(true);
   });
 
   test("no <p> inside <pre> in any page", () => {
@@ -96,6 +131,58 @@ test.describe(`built-html integrity: ${target.name}`, () => {
       offenders,
       `pages where <p> is injected inside <pre> — likely markdownify called on ` +
         `already-rendered HTML from a percent-form shortcode (e.g. {{% tab %}})`,
+    ).toEqual([]);
+  });
+
+  test("no inline <head> <script> contains '<'+letter (would blind the link checker to the page body)", () => {
+    if (!target.shouldRun("inlineScriptSafety")) {
+      test.skip(true, "inlineScriptSafety check disabled in CONFIG");
+    }
+    // An inline <script> (no `src`) whose body contains `<` immediately followed
+    // by an ASCII letter makes naive HTML parsers — notably the docs link
+    // checker's (lychee / html5ever) — mis-read `<x` as a start-tag and drop
+    // every link that follows it in the document. Spec-compliant browsers parse
+    // it fine (script-data state), so the page renders correctly while link
+    // extraction silently stops — an invisible, recurring regression. Minified
+    // JS comparisons are the usual source (`i<targets`, `top<scrollerRect`).
+    //
+    // Scoped to <head> ON PURPOSE. A <head> script's `<x` is CATASTROPHIC: the
+    // entire <body> goes unextracted, so the checker stops finding any broken
+    // link on the page — the exact regression that took agw link-checking
+    // offline until the head init script was externalized to docs-init.js. A
+    // BODY script's `<x` only drops links that come after it, and site JS
+    // (feedback widgets, interactive viewers, code-tab helpers) commonly sits at
+    // the end of <body> where the effect is nil, so flagging every body script
+    // would be noise. Fix a flagged <head> script by externalizing it to a .js
+    // file (never parsed as HTML), or HTML-escape `<` in a data block.
+    //
+    // The detected substring is `<` + [A-Za-z]; `<=`, `<`+digit, `< ` (spaced),
+    // and `</` don't trip a naive parser the same way and aren't flagged.
+    const scriptRe = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+    const offenders: string[] = [];
+    for (const f of collectHtml(SCAN_ROOT)) {
+      const html = fs.readFileSync(f, "utf8");
+      const headEnd = html.indexOf("</head>");
+      const head = headEnd === -1 ? html : html.slice(0, headEnd);
+      let m: RegExpExecArray | null;
+      scriptRe.lastIndex = 0;
+      while ((m = scriptRe.exec(head)) !== null) {
+        if (/\bsrc\s*=/i.test(m[1])) continue; // external script — body isn't HTML
+        const hit = /<[a-zA-Z]/.exec(m[2]);
+        if (hit) {
+          const at = hit.index;
+          const snippet = m[2].slice(Math.max(0, at - 25), at + 15).replace(/\s+/g, " ");
+          offenders.push(`${path.relative(SCAN_ROOT, f)} — …${snippet}…`);
+          break; // one hit per page is enough to flag it
+        }
+      }
+    }
+    expect(
+      offenders,
+      `inline <head> <script> blocks with '<'+letter — a naive HTML parser (the ` +
+        `link checker's) reads '<x' as a start-tag and drops every link after it; ` +
+        `in <head> that loses the ENTIRE page body. Externalize the script to a ` +
+        `.js file, or HTML-escape '<' in a data block:`,
     ).toEqual([]);
   });
 

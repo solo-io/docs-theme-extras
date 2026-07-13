@@ -35,6 +35,16 @@ export type Checks = {
   // consumer with a known architectural backlog of these can disable just
   // these two while keeping the (docs-fixable) markdown-leak check fatal.
   codeBlockIntegrity: boolean;
+  // Fails a built page whose <head> has an inline <script> (no `src`) whose
+  // body contains `<` immediately followed by an ASCII letter. Spec-compliant
+  // browsers parse `<x` inside a <script> harmlessly, but naive HTML parsers —
+  // notably the docs link checker's (lychee/html5ever) — mis-read it as a
+  // start-tag and drop every link after it. In <head> that loses the ENTIRE
+  // page body, so the link checker silently stops finding broken links.
+  // Externalize such scripts to a .js file (never parsed as HTML), or HTML-
+  // escape `<` in data blocks. Scoped to <head> because a body script only
+  // affects links after it and site JS usually sits at the end of <body>.
+  inlineScriptSafety: boolean;
   shortcodeArgs: boolean;
   // Source scan for pre-0.12 Hextra tab styling (`tabName=`, `items=`,
   // `tabTotal=`, nameless tabs) that renders labels as "Tab 0", "Tab 1", ….
@@ -101,6 +111,7 @@ const DEFAULT_CHECKS: Checks = {
   contrast: true,
   viewport: true,
   codeBlockIntegrity: true,
+  inlineScriptSafety: true,
   shortcodeArgs: true,
   tabSyntax: true,
   includeForm: true,
