@@ -40,3 +40,7 @@ text, and the table must still render.
 | Small | Needs:<ul><li>one CPU</li><li>two GB</li></ul> |
 | Large | Plenty of capacity. |
 {{< /conditional-text >}}
+
+## Case 5 reused conditional-text wrapping an indented fence in a numbered list
+
+{{< reuse "conrefs/test/cond-reuse-fence.md" >}}
