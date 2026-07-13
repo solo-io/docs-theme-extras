@@ -49,8 +49,19 @@ class Target {
     return this.cfg().baseURL;
   }
 
+  // Path to the Hugo build log that hugo-warnings.spec scans. Single-site
+  // consumers build in the test job and write the log at the configured path
+  // (repo root). A multi-product hub scans one product per matrix job with
+  // CONTENT_DIR set and downloads only that product's artifact, so its build
+  // log ships INSIDE that artifact — resolve to <builtScanRoot>/<basename>
+  // (mirrors builtScanRoot). Backward-compatible: with CONTENT_DIR unset the
+  // configured path is returned unchanged.
   get buildLog(): string | null {
-    return this.cfg().buildLog;
+    const configured = this.cfg().buildLog;
+    if (configured === null) return null;
+    const dir = (process.env.CONTENT_DIR ?? "").replace(/^\/+|\/+$/g, "");
+    if (!dir) return configured;
+    return path.join(this.builtScanRoot, path.basename(configured));
   }
 
   get pages(): Page[] {
