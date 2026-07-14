@@ -15,7 +15,7 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
-## [v0.1.18] — Unreleased
+## [v0.1.18] — 2026-07-14
 
 ### Layout — Hextra main.js null-deref guard, injected only when the toggle markup is missing
 
