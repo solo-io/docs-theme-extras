@@ -908,7 +908,22 @@ hr.footnotes-sep,
   padding: 0.5rem 0.75rem;
   border: 1px solid #e5e7eb;
   white-space: normal;
-  word-wrap: break-word;
+  /* Cap how wide any single column may grow, then let content wrap inside that
+     cap. The table is `width:100%; table-layout:auto`, so with no cap one cell
+     with a very long unbroken value dominates: a generated reference table
+     (Helm values, CRD fields) has both long dotted keys —
+     `audit.collector.containerSecurityContext.allowPrivilegeEscalation` — and
+     giant inline defaults (a 600-char JSON blob), and the auto layout grows
+     those columns to fit, pushing other columns (Description) off the right
+     edge. `max-width` bounds every column uniformly — no per-column or
+     header-name targeting — so no column can hog the row. `overflow-wrap:
+     anywhere` (not `break-word`, which does not fold into the table algorithm's
+     intrinsic-width calculation) then lets an unbreakable token wrap at that
+     cap instead of overflowing it. Narrow columns stay narrow: the cap is a
+     ceiling, not a width, so short-content and narrative tables are unaffected
+     — it only bites a column that would otherwise blow past the cap. */
+  max-width: 24rem;
+  overflow-wrap: anywhere;
 }
 .dark .table-wrapper th,
 .dark .table-wrapper td {
