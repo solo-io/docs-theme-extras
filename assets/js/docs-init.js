@@ -1,3 +1,43 @@
+/* ── Hextra main.js null-deref guard (runs immediately, before main.js) ──────
+   Hextra's core/menu.js wires the mobile hamburger with no null guard:
+   `querySelector('.hextra-hamburger-menu')` then `menu.querySelector('svg')` /
+   `menu.addEventListener(...)`, and likewise `.hextra-sidebar-container`. On a
+   consumer whose navbar omits that markup, or any page rendered without the
+   navbar/sidebar (a bare landing), those elements are absent and menu.js throws
+   "Cannot read properties of null" on load.
+
+   This file is a DEFERRED <head> script, so it runs after the DOM is parsed and
+   BEFORE Hextra's deferred main.js (deferred scripts execute in document order;
+   this <head> script precedes main.js in the <body>). It runs IMMEDIATELY —
+   deliberately NOT inside DOMContentLoaded — so the stand-ins exist before
+   menu.js's own DOMContentLoaded handler queries them.
+
+   It injects a hidden stand-in ONLY when the real element is missing, so a page
+   that already renders the genuine navbar hamburger / sidebar keeps exactly one
+   (no duplicate — this replaced a static footer stand-in that double-rendered
+   wherever the navbar already provided the toggle). The hamburger stand-in wraps
+   an <svg> because isMenuOpen() reads `menu.querySelector('svg')`; both the old
+   unprefixed and current hextra-prefixed class names are set so a Hextra rename
+   can't silently re-break the query. */
+(function(){
+  var body = document.body;
+  if (!body) return;
+  function standIn(className, withSvg){
+    var el = document.createElement('div');
+    el.className = className;
+    el.setAttribute('hidden', '');
+    el.style.cssText = 'display:none !important;';
+    if (withSvg) el.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'svg'));
+    body.appendChild(el);
+  }
+  if (!document.querySelector('.hextra-hamburger-menu')) {
+    standIn('hamburger-menu hextra-hamburger-menu', true);
+  }
+  if (!document.querySelector('.hextra-sidebar-container')) {
+    standIn('sidebar-container hextra-sidebar-container', false);
+  }
+})();
+
 document.addEventListener('DOMContentLoaded', function(){
 
   /* ── Reveal sidebar after Hextra's sidebar.js scrolls to active item ──

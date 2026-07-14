@@ -19,12 +19,6 @@
     - Solo consumers: param-only, no custom/footer.html → just the copyright.
     - agw-oss: custom/footer.html (LF Projects block) + i18n copyright
       (Solo.io line) → both blocks render.
-
-  This footer also carries the hidden Hextra-main.js stand-in shims (see the
-  block below). They live here, not in each consumer's custom/footer.html,
-  because this module footer renders site-wide on every theme page and is NOT
-  a consumer-overridable hook — so every consumer gets the null-deref fix for
-  free and there's one place to update when Hextra renames the classes again.
 */ -}}
 {{- $copyright := .Site.Params.footer.copyright -}}
 {{- if not $copyright -}}
@@ -37,26 +31,10 @@
 {{- end -}}
 
 <footer class="solo-footer hx:print:hidden">
-  {{- /* Hidden stand-ins for Hextra's bundled main.js, which wires the mobile
-         hamburger toggle with NO null guard: it does
-         document.querySelector('.hextra-hamburger-menu') then immediately
-         menu.querySelector('svg') / menu.addEventListener(...), and likewise
-         derefs .hextra-sidebar-container. A consumer that ships a custom navbar
-         omitting Hextra's toggle markup (agw, kgw), or any page without a real
-         sidebar (section landings), otherwise makes the script throw "Cannot
-         read properties of null" on load. This footer renders on every theme
-         page, so satisfying both lookups here fixes it site-wide for every
-         consumer. The .hextra-hamburger-menu MUST wrap an <svg> (isMenuOpen
-         reads menu.querySelector('svg')). The footer is late in the <body>, so
-         on pages that render a real sidebar the genuine .hextra-sidebar-container
-         precedes these in the DOM and querySelector still resolves to it; these
-         stand-ins only take effect where the real elements are absent. Both the
-         old unprefixed names and the current hextra-prefixed names are kept so a
-         Hextra class rename in either direction can't silently re-break this (it
-         broke once when Hextra renamed .hamburger-menu → .hextra-hamburger-menu). */ -}}
-  <div class="mobile-menu-overlay hextra-overlay hx:hidden" style="display: none !important;"></div>
-  <div class="hamburger-menu hextra-hamburger-menu hx:hidden" style="display: none !important;"><svg></svg></div>
-  <div class="sidebar-container hextra-sidebar-container hx:hidden" style="display: none !important;"></div>
+  {{- /* The Hextra-main.js null-deref stand-ins are injected by assets/js/docs-init.js
+         (deferred, runs before main.js) ONLY when the real navbar hamburger /
+         sidebar is absent — a static stand-in here double-rendered wherever the
+         navbar already provided the toggle. See docs-init.js for the mechanism. */ -}}
   {{- partial "custom/footer.html" . -}}
   {{- with $copyright -}}
     <div class="solo-footer-inner">
