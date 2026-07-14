@@ -277,7 +277,7 @@
           {{- end -}}
         {{- end -}}
         {{- range .Site.Menus.main -}}
-          {{- if or (eq .Params.type "search") (eq .Params.type "language-switch") (eq .Params.type "link") -}}{{- continue -}}{{- end -}}
+          {{- if or (eq .Params.type "search") (eq .Params.type "language-switch") -}}{{- continue -}}{{- end -}}
           {{- if eq .Params.type "theme-toggle" -}}
             <button type="button" onclick="toggleMobileTheme()" class="hx:flex hx:items-center hx:gap-2 hx:p-2 hx:text-gray-700 hx:dark:text-gray-300 hx:hover:bg-gray-100 hx:dark:hover:bg-neutral-800 hx:rounded-sm hx:text-left hx:text-sm" aria-label="{{ (T "toggleTheme") | default "Toggle theme" }}">
               {{- partial "utils/icon.html" (dict "name" "sun" "attributes" (printf `height=%d class="hx:shrink-0 hx:dark:hidden"` $iconHeight)) -}}
@@ -293,6 +293,20 @@
                {{ if $itemExternal }}target="_blank" rel="{{ $itemRel }}"{{ end }}
                href="{{ $itemLink }}">
               {{- partial "utils/icon.html" (dict "name" .Params.icon "attributes" (printf `height=%d class="hx:shrink-0"` $iconHeight)) -}}
+              <span>{{ or (T .Identifier) .Name | safeHTML }}</span>
+            </a>
+          {{- else -}}
+            {{- /* Plain nav link (no type/icon) or an explicit type:link — the main
+                   menu entries (Docs, Blog, …). The desktop loop renders these via
+                   navbar-link.html (hidden below md); without this branch they were
+                   dropped from the mobile drawer entirely, so on mobile the site's
+                   top navigation was unreachable. */ -}}
+            {{- $itemLink := .URL -}}
+            {{- with .PageRef -}}{{- if hasPrefix . "/" -}}{{- $itemLink = relLangURL (strings.TrimPrefix "/" .) -}}{{- end -}}{{- end -}}
+            {{- $itemExternal := strings.HasPrefix $itemLink "http" -}}
+            <a class="hx:flex hx:items-center hx:gap-2 hx:p-2 hx:text-gray-700 hx:dark:text-gray-300 hx:hover:bg-gray-100 hx:dark:hover:bg-neutral-800 hx:rounded-sm hx:text-sm"
+               {{ if $itemExternal }}target="_blank" rel="noreferrer"{{ end }}
+               href="{{ $itemLink }}">
               <span>{{ or (T .Identifier) .Name | safeHTML }}</span>
             </a>
           {{- end -}}
