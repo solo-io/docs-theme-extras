@@ -8,28 +8,27 @@ docs sites.
 
 ## 1. Module self-test passes
 
+Build both brand variants and run the full harness against the bundled
+fixture:
+
 ```sh
-make build-fixture
-make self-test
+make test-all
 ```
 
-All three fixture builds (bare, oss, enterprise) green:
+`test-all` runs `test-oss` and `test-enterprise`; each builds its brand
+(`build-oss` / `build-enterprise`) and runs `npx playwright test` with no
+`--project` filter, so this covers every project — including the
+`cross-browser-*` suites and the `browser-crawl` console/4xx crawl.
+
+Also confirm the bare baseline (no brand layer) builds clean:
 
 ```sh
-hugo160 --config hugo.toml          # bare baseline
-hugo160 --config hugo-oss.toml      # oss brand
-hugo160 --config hugo-enterprise.toml # enterprise brand
+hugo160 --config hugo.toml   # bare baseline
 ```
 
 Check that the build log contains no new unallowlisted Hugo warnings.
 
 If you added or removed a shortcode since the last release, verify that `everything` fixture has been updated to call it. The `everything` page should exercise every current shortcode.
-
-Run cross-browser tests:
-
-```sh
-make test-cross-browser
-```
 
 ## 2. Consumer integration check (local replace)
 
@@ -46,11 +45,18 @@ The build must complete without Hugo errors or warnings. Revert the
 `replace` directive once verified — never ship a `replace` to main.
 
 Also run the consumer's framework tests against its built output to confirm
-Playwright specs pass:
+Playwright specs pass. Run **both** projects: `static` (theme/fixture
+behavior) and `content` (the consumer's own built HTML + markdown source,
+where the leak and content-break scans live). Exact target names vary per
+consumer (`framework-test-*`); if the consumer only wires a static target,
+invoke the harness directly:
 
 ```sh
-make framework-test-static
+DOCS_TEST_CONFIG=<abspath>/.docs-test.toml npx playwright test \
+  --project=static --project=content
 ```
+
+Multi-product hubs run `content` per product with `CONTENT_DIR=<product>`.
 
 ## 3. Visual smoke (light + dark, both consumers)
 
