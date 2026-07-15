@@ -24,5 +24,5 @@ playwright/.cache/
 .vscode/
 *.swp
 
-# Local-only build logs
-.build*.log
+# Local-only build logs (Hugo build capture, per-product logs, ad-hoc runs)
+*.log

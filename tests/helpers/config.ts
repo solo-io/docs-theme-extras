@@ -21,30 +21,36 @@ export type Versioning = {
 };
 
 export type Checks = {
-  smoke: boolean;
-  shortcodeLeaks: boolean;
   markdownLeaks: boolean;
   copyAsMarkdown: boolean;
-  imageAltText: boolean;
   hugoWarnings: boolean;
   curlQuotes: boolean;
   contrast: boolean;
   viewport: boolean;
-  versioning: boolean;
-  shortcodeStructure: boolean;
-  // Code-block integrity through the render pipeline: the smoke spec's
+  // Code-block integrity through the render pipeline: built-html-integrity's
   // "<p> inside <pre>" and "fragmented code block" checks. These catch the
   // double-markdown-render corruption that the rebase/reuse/{{% tab %}} chain
   // causes when a fenced block (or a fence containing `*`/blank lines, e.g.
-  // curl -v output) is rendered more than once. Separated from shortcodeLeaks
-  // so a consumer with a known architectural backlog of these can disable just
-  // these two checks while keeping the (docs-fixable) shortcode/markdown leak
-  // checks fatal.
+  // curl -v output) is rendered more than once. Kept as its own check so a
+  // consumer with a known architectural backlog of these can disable just
+  // these two while keeping the (docs-fixable) markdown-leak check fatal.
   codeBlockIntegrity: boolean;
+  // Fails a built page whose <head> has an inline <script> (no `src`) whose
+  // body contains `<` immediately followed by an ASCII letter. Spec-compliant
+  // browsers parse `<x` inside a <script> harmlessly, but naive HTML parsers —
+  // notably the docs link checker's (lychee/html5ever) — mis-read it as a
+  // start-tag and drop every link after it. In <head> that loses the ENTIRE
+  // page body, so the link checker silently stops finding broken links.
+  // Externalize such scripts to a .js file (never parsed as HTML), or HTML-
+  // escape `<` in data blocks. Scoped to <head> because a body script only
+  // affects links after it and site JS usually sits at the end of <body>.
+  inlineScriptSafety: boolean;
   shortcodeArgs: boolean;
+  // Source scan for pre-0.12 Hextra tab styling (`tabName=`, `items=`,
+  // `tabTotal=`, nameless tabs) that renders labels as "Tab 0", "Tab 1", ….
+  tabSyntax: boolean;
   includeForm: boolean;
   cascadeType: boolean;
-  crossBrowser: boolean;
   // Browser-level crawl: open every built page in Chromium and fail on
   // uncaught JS exceptions, console.error calls, or HTTP 4xx on JS/CSS assets.
   consoleErrors: boolean;
@@ -53,7 +59,6 @@ export type Checks = {
 export type Allowlists = {
   hugoWarnings: string[];
   curlQuotes: string[];
-  shortcodes: string[];
   // Regex patterns (strings) matched against each console error / pageerror
   // message. Anything that matches is silently dropped — not a test failure.
   // Useful for suppressing known third-party noise (analytics, CDN assets).
@@ -66,11 +71,12 @@ export type Allowlists = {
 };
 
 // Per-spec knobs that don't fit the boolean [checks] table.
-export type Smoke = {
-  // Max HTML files smoke.spec.ts scans for shortcode-leak / copy-as-md checks.
-  // Default 50 keeps `make framework-test-smoke PRODUCT=<x>` fast on large
-  // corpora. Set to 0 for unlimited (walk every HTML file) — useful when
-  // smoke is the only coverage you have against that product's build.
+export type Crawl = {
+  // Max HTML files the browser crawl (console-errors.spec.ts, the
+  // "browser-crawl" project) opens in Chromium. Default 50 keeps the crawl
+  // fast on large corpora; set to 0 for unlimited (open every built page).
+  // Only the browser crawl is capped — the cheap file-read scans always walk
+  // every page.
   maxFiles: number;
 };
 
@@ -94,38 +100,33 @@ export type Config = {
   versioning: Versioning | null;
   checks: Checks;
   allowlists: Allowlists;
-  smoke: Smoke;
+  crawl: Crawl;
 };
 
 const DEFAULT_CHECKS: Checks = {
-  smoke: true,
-  shortcodeLeaks: true,
   markdownLeaks: true,
   copyAsMarkdown: true,
-  imageAltText: true,
   hugoWarnings: true,
   curlQuotes: true,
   contrast: true,
   viewport: true,
-  versioning: true,
-  shortcodeStructure: true,
   codeBlockIntegrity: true,
+  inlineScriptSafety: true,
   shortcodeArgs: true,
+  tabSyntax: true,
   includeForm: true,
   cascadeType: true,
-  crossBrowser: false,
   consoleErrors: true,
 };
 
 const DEFAULT_ALLOWLISTS: Allowlists = {
   hugoWarnings: [],
   curlQuotes: [],
-  shortcodes: [],
   consoleErrors: [],
   markdownLeaks: [],
 };
 
-const DEFAULT_SMOKE: Smoke = {
+const DEFAULT_CRAWL: Crawl = {
   maxFiles: 50,
 };
 
@@ -216,9 +217,19 @@ function validate(
     versioning = { versionFromPath, versions };
   }
 
-  const checks = mergeChecks(data.checks);
-  const allowlists = mergeAllowlists(data.allowlists);
-  const smoke = mergeSmoke(data.smoke, configPath);
+  // A [smoke] block is a pre-0.1.18 leftover: the block was renamed to [crawl]
+  // (and the `smoke` check removed). Silently dropping it would revert a
+  // consumer who set `[smoke].maxFiles = 0` (unlimited crawl) back to the
+  // default cap with no signal, so warn instead of ignoring it quietly.
+  if (data.smoke && typeof data.smoke === "object") {
+    console.warn(
+      `[docs-test] [smoke] was renamed to [crawl] in docs-theme-extras 0.1.18; the [smoke] block in ${configPath} is ignored. Move maxFiles to [crawl].`,
+    );
+  }
+
+  const checks = mergeChecks(data.checks, configPath);
+  const allowlists = mergeAllowlists(data.allowlists, configPath);
+  const crawl = mergeCrawl(data.crawl, configPath);
 
   return {
     version,
@@ -233,7 +244,7 @@ function validate(
     versioning,
     checks,
     allowlists,
-    smoke,
+    crawl,
   };
 }
 
@@ -271,10 +282,30 @@ function optionalStringField(
   return v;
 }
 
-function mergeChecks(raw: unknown): Checks {
+// Warn (don't throw) for keys the harness no longer reads: a check that was
+// removed or renamed between versions is silently ignored otherwise, so a
+// consumer's stale toggle — or a typo in a live one — passes unnoticed. Warning
+// surfaces both without failing a consumer whose config predates the rename.
+function warnUnknownKeys(
+  obj: Record<string, unknown>,
+  known: readonly string[],
+  scope: string,
+  configPath: string,
+): void {
+  for (const key of Object.keys(obj)) {
+    if (!known.includes(key)) {
+      console.warn(
+        `[docs-test] ignoring unknown ${scope} key "${key}" in ${configPath}`,
+      );
+    }
+  }
+}
+
+function mergeChecks(raw: unknown, configPath: string): Checks {
   const out = { ...DEFAULT_CHECKS };
   if (!raw || typeof raw !== "object") return out;
   const obj = raw as Record<string, unknown>;
+  warnUnknownKeys(obj, Object.keys(out), "[checks]", configPath);
   for (const key of Object.keys(out) as (keyof Checks)[]) {
     const v = obj[key];
     if (typeof v === "boolean") out[key] = v;
@@ -282,31 +313,32 @@ function mergeChecks(raw: unknown): Checks {
   return out;
 }
 
-function mergeSmoke(raw: unknown, configPath: string): Smoke {
-  const out = { ...DEFAULT_SMOKE };
+function mergeCrawl(raw: unknown, configPath: string): Crawl {
+  const out = { ...DEFAULT_CRAWL };
   if (!raw || typeof raw !== "object") return out;
   const obj = raw as Record<string, unknown>;
+  warnUnknownKeys(obj, ["maxFiles"], "[crawl]", configPath);
   const v = obj.maxFiles;
   if (v === undefined) return out;
   if (typeof v !== "number" || !Number.isInteger(v) || v < 0) {
     throw new Error(
-      `[smoke].maxFiles must be a non-negative integer in ${configPath}; got ${JSON.stringify(v)}`,
+      `[crawl].maxFiles must be a non-negative integer in ${configPath}; got ${JSON.stringify(v)}`,
     );
   }
   out.maxFiles = v;
   return out;
 }
 
-function mergeAllowlists(raw: unknown): Allowlists {
+function mergeAllowlists(raw: unknown, configPath: string): Allowlists {
   const out: Allowlists = {
     hugoWarnings: [...DEFAULT_ALLOWLISTS.hugoWarnings],
     curlQuotes: [...DEFAULT_ALLOWLISTS.curlQuotes],
-    shortcodes: [...DEFAULT_ALLOWLISTS.shortcodes],
     consoleErrors: [...DEFAULT_ALLOWLISTS.consoleErrors],
     markdownLeaks: [...DEFAULT_ALLOWLISTS.markdownLeaks],
   };
   if (!raw || typeof raw !== "object") return out;
   const obj = raw as Record<string, unknown>;
+  warnUnknownKeys(obj, Object.keys(out), "[allowlists]", configPath);
   for (const key of Object.keys(out) as (keyof Allowlists)[]) {
     const v = obj[key];
     if (Array.isArray(v) && v.every((s) => typeof s === "string")) {

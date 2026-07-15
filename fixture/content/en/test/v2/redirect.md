@@ -13,7 +13,7 @@ emitted markup by reading this page's HTML from disk.
 
 The `path=` invocation is placed first and points at a real in-build page so
 the inline `window.location` navigation lands somewhere valid when the
-browser-smoke crawl (console-errors.spec) opens this page, rather than
+browser-crawl (console-errors.spec) opens this page, rather than
 aborting `page.goto` or 404ing. It is also the only form that is portable
 across the two fixture builds: it resolves through `utils/page-context.html`
 to the current section prefix, so it renders `/v2/everything/` under the

@@ -118,10 +118,11 @@ function mdHtmlPairs(root: string): { md: string; html: string }[] {
 
 test.describe("copy-md fidelity: built markdown vs rendered HTML", () => {
   test("every page's markdown preserves its tables, mermaid, and cards", () => {
-    const pairs = mdHtmlPairs(target.builtRoot);
+    const scanRoot = target.builtScanRoot;
+    const pairs = mdHtmlPairs(scanRoot);
     test.skip(
       pairs.length === 0,
-      `no markdown-output-format files under ${target.builtRoot} ` +
+      `no markdown-output-format files under ${scanRoot} ` +
         `(enable [outputs] page = ["HTML","markdown"] to exercise this check)`,
     );
 
@@ -142,7 +143,7 @@ test.describe("copy-md fidelity: built markdown vs rendered HTML", () => {
       ).filter((d) => !(isSectionLanding && d.kind === "card-collapsed"));
       for (const d of defects) {
         offenders.push({
-          file: path.relative(target.builtRoot, md),
+          file: path.relative(scanRoot, md),
           kind: d.kind,
           detail: d.detail,
         });

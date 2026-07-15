@@ -646,21 +646,31 @@ test.describe("mobile version chips match the desktop version dropdown", () => {
   }
 });
 
-// Hextra's bundled main.js wires the mobile hamburger toggle with NO null
-// guard: it does `document.querySelector('.hextra-hamburger-menu')` then
-// immediately `menu.querySelector('svg')` and `menu.addEventListener(...)`. A
-// consumer that ships a custom navbar (agw, kgw) replaces Hextra's toggle, so
-// on any page that still renders a sidebar the lookup returns null and the
-// script throws "Cannot read properties of null" on every page load — the
-// agentgateway-oss-website mobile version-link regression. Consumers paper
-// over it with hidden stand-in elements; this guard asserts that stand-in is
-// actually present and well-formed so a Hextra class rename (which silently
-// broke it once — `.hamburger-menu` → `.hextra-hamburger-menu`) fails the
-// suite here instead of shipping broken. The console-errors spec can't catch
-// it: the null-deref is on the mobile code path and consumers allowlist it by
-// bundle name. Scoped to pages WITH a sidebar (`.hextra-sidebar-container`),
-// which is exactly where the throw bites.
-test.describe("Hextra hamburger toggle target exists on sidebar pages", () => {
+// Hextra's bundled main.js (core/menu.js) wires the mobile hamburger toggle
+// with NO null guard: it does `document.querySelector('.hextra-hamburger-menu')`
+// then immediately `menu.querySelector('svg')` / `menu.addEventListener(...)`,
+// and likewise `.hextra-sidebar-container`. On a consumer whose navbar omits
+// that markup (agw, kgw), or any page rendered without the navbar/sidebar, the
+// lookup returns null and menu.js throws "Cannot read properties of null" on
+// load — the agentgateway-oss-website mobile version-link regression.
+//
+// The fix is a deferred injection in extras' assets/js/docs-init.js: it adds a
+// hidden stand-in ONLY when the real element is missing, running before main.js
+// (docs-init.js is a deferred <head> script; main.js is a deferred <body> one).
+// So the theme navbar's real hamburger is left alone (no duplicate) and a
+// custom-navbar page gets exactly one injected.
+//
+// This guard is STATIC so it runs in every consumer's static/content CI (a
+// browser check would not). It therefore can't assert the runtime outcome
+// directly — the built HTML of a custom-navbar consumer legitimately has zero
+// hamburgers (injected at load). Instead it asserts the two things that keep the
+// runtime fix in force: (1) every page that renders a sidebar also loads
+// docs-init.js — without it menu.js null-derefs; and (2) any hamburger element
+// that IS in the static HTML (the theme navbar's real button) wraps an <svg>,
+// since isMenuOpen() reads menu.querySelector('svg'). The runtime invariant
+// (exactly one hamburger, no null-deref) is exercised by the browser
+// console-errors crawl.
+test.describe("Hextra main.js null-deref guard is in place on sidebar pages", () => {
   let crawled: CrawledPage[] = [];
   try {
     crawled = crawlBuiltRoot();
@@ -689,27 +699,26 @@ test.describe("Hextra hamburger toggle target exists on sidebar pages", () => {
   });
 
   for (const page of sidebarPages) {
-    test(`${page.url}: has a .hextra-hamburger-menu containing an <svg>`, () => {
+    test(`${page.url}: loads docs-init.js and any static .hextra-hamburger-menu wraps an <svg>`, () => {
       const html = readFixture(page.filePath);
-      // Find each opening tag carrying the class, then confirm an <svg> opens
-      // before that element's tag is closed-and-its-content-consumed. A short
-      // window after the opening tag covers both the real Hextra <button> and
-      // a consumer's hidden <div> stand-in without a full HTML parser.
-      const opens = [...html.matchAll(/<(?:button|div|a|span)\b[^>]*\bhextra-hamburger-menu\b[^>]*>/g)];
+      // (1) The deferred injection must be loaded, or menu.js null-derefs.
       expect(
-        opens.length,
-        `page has a sidebar but no .hextra-hamburger-menu element; Hextra main.js will null-deref on load. ` +
-          `Custom-navbar consumers must render a (hidden) stand-in with this class — see agw chatbot.html.`,
-      ).toBeGreaterThan(0);
-      const hasSvg = opens.some((m) => {
-        const after = html.slice(m.index! + m[0].length, m.index! + m[0].length + 400);
-        return /<svg\b/.test(after);
-      });
-      expect(
-        hasSvg,
-        `.hextra-hamburger-menu exists but contains no <svg>; isMenuOpen() does menu.querySelector('svg').classList, ` +
-          `which throws on null. The stand-in element must wrap an <svg>.`,
+        /\/docs-init\.js/.test(html),
+        `sidebar page does not load docs-init.js, which injects the hamburger/sidebar stand-in ` +
+          `before Hextra's main.js runs; without it menu.js null-derefs on load.`,
       ).toBe(true);
+      // (2) Any hamburger present in the STATIC HTML (the theme navbar's real
+      // button) must wrap an <svg>. Absence is allowed: a custom-navbar consumer
+      // renders none here and docs-init.js injects one (with an <svg>) at load.
+      const opens = [...html.matchAll(/<(?:button|div|a|span)\b[^>]*\bhextra-hamburger-menu\b[^>]*>/g)];
+      for (const m of opens) {
+        const after = html.slice(m.index! + m[0].length, m.index! + m[0].length + 400);
+        expect(
+          /<svg\b/.test(after),
+          `.hextra-hamburger-menu is present but wraps no <svg>; isMenuOpen() does ` +
+            `menu.querySelector('svg').classList, which throws on null.`,
+        ).toBe(true);
+      }
     });
   }
 });

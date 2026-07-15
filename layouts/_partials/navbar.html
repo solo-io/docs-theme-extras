@@ -91,6 +91,7 @@
              manually navigating to a hidden version shows the correct label.
              Match against the version segment from the URL, not Site.Params.version
              (which is a static config value that doesn't change as you navigate). */ -}}
+      {{- $matchedVersion := false -}}
       {{- range . -}}
         {{- $label := .dropdown | default .version -}}
         {{- $visible := ne (trim $label " ") "" -}}
@@ -104,6 +105,7 @@
         {{- $sameProduct := or (not $currentProduct) (eq (.product | default "") $currentProduct) -}}
         {{- if and (not $currentLabel) $sameProduct $urlVersion -}}
           {{- if or (eq .linkVersion $urlVersion) (eq .version $urlVersion) -}}
+            {{- $matchedVersion = true -}}
             {{- /* For hidden versions (empty dropdown), fall back to .version for the label */ -}}
             {{- $matchLabel := $fullLabel -}}
             {{- if not $visible -}}
@@ -129,7 +131,24 @@
         {{- $currentLabel = $firstVisibleLabel -}}
       {{- end -}}
 
-      {{- if $currentLabel -}}
+      {{- /* Suppress the dropdown on versionless pages. When the version-position
+             URL segment is present but matches no known version (and isn't a
+             version-like marker such as 2.1.x / main / latest), the page lives
+             outside the version tree — e.g. a flat guide. The dropdown could
+             only build swap links to /<version>/<segment>/ pages that don't
+             exist (broken links), so hide it there, mirroring the sidebar which
+             shows no version switcher on versionless pages. An empty segment
+             (product landing, e.g. /<folder>/) keeps the dropdown: its entries
+             point at the version landing roots, which do exist. */ -}}
+      {{- /* Also accept a pre-release/build suffix (1.5.0-beta, 2.1.0-rc.1) so a
+             real versioned page under such a segment isn't mistaken for a flat
+             guide when it isn't the current-matched version. Arbitrary codename
+             segments still fall through — extend the marker slice if a product
+             adopts one. */ -}}
+      {{- $versionMarker := or (gt (len (findRE `^v?[0-9]+(\.[0-9]+)*(\.x)?(-[0-9A-Za-z.]+)?$` $urlVersion)) 0) (in (slice "main" "latest" "nightly" "dev" "stable" "edge") $urlVersion) -}}
+      {{- $isVersionless := and $urlVersion (not $matchedVersion) (not $versionMarker) -}}
+
+      {{- if and $currentLabel (not $isVersionless) -}}
         <div class="version-dropdown">
           <button type="button" class="version-dropdown-btn" aria-expanded="false" aria-haspopup="true">
             {{- if $currentProductName -}}<span class="version-product-name">{{ $currentProductName }} - </span><span>{{ $currentVersionLabel }}</span>{{- else -}}<span>{{ $currentLabel }}</span>{{- end -}}
@@ -263,7 +282,7 @@
           {{- end -}}
         {{- end -}}
         {{- range .Site.Menus.main -}}
-          {{- if or (eq .Params.type "search") (eq .Params.type "language-switch") (eq .Params.type "link") -}}{{- continue -}}{{- end -}}
+          {{- if or (eq .Params.type "search") (eq .Params.type "language-switch") -}}{{- continue -}}{{- end -}}
           {{- if eq .Params.type "theme-toggle" -}}
             <button type="button" onclick="toggleMobileTheme()" class="hx:flex hx:items-center hx:gap-2 hx:p-2 hx:text-gray-700 hx:dark:text-gray-300 hx:hover:bg-gray-100 hx:dark:hover:bg-neutral-800 hx:rounded-sm hx:text-left hx:text-sm" aria-label="{{ (T "toggleTheme") | default "Toggle theme" }}">
               {{- partial "utils/icon.html" (dict "name" "sun" "attributes" (printf `height=%d class="hx:shrink-0 hx:dark:hidden"` $iconHeight)) -}}
@@ -281,6 +300,28 @@
               {{- partial "utils/icon.html" (dict "name" .Params.icon "attributes" (printf `height=%d class="hx:shrink-0"` $iconHeight)) -}}
               <span>{{ or (T .Identifier) .Name | safeHTML }}</span>
             </a>
+          {{- else -}}
+            {{- /* Plain nav link (no type/icon) or an explicit type:link — the main
+                   menu entries (Docs, Blog, …). The desktop loop renders these via
+                   navbar-link.html (hidden below md); without this branch they were
+                   dropped from the mobile drawer entirely, so on mobile the site's
+                   top navigation was unreachable. */ -}}
+            {{- $itemLink := .URL -}}
+            {{- with .PageRef -}}{{- if hasPrefix . "/" -}}{{- $itemLink = relLangURL (strings.TrimPrefix "/" .) -}}{{- end -}}{{- end -}}
+            {{- $itemExternal := strings.HasPrefix $itemLink "http" -}}
+            {{- /* Only render an anchor when there's somewhere to go. A menu
+                   entry with no type/icon AND no URL/PageRef (e.g. a separator
+                   or a future custom type) would otherwise emit href="" — a
+                   clickable row pointing at the current page. The desktop loop
+                   routes these through navbar-link.html; this reimplementation
+                   guards them directly. */ -}}
+            {{- if $itemLink -}}
+            <a class="hx:flex hx:items-center hx:gap-2 hx:p-2 hx:text-gray-700 hx:dark:text-gray-300 hx:hover:bg-gray-100 hx:dark:hover:bg-neutral-800 hx:rounded-sm hx:text-sm"
+               {{ if $itemExternal }}target="_blank" rel="noreferrer"{{ end }}
+               href="{{ $itemLink }}">
+              <span>{{ or (T .Identifier) .Name | safeHTML }}</span>
+            </a>
+            {{- end -}}
           {{- end -}}
         {{- end -}}
       </div>

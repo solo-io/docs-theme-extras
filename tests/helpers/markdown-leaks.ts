@@ -113,7 +113,7 @@ const MD_LINK = /\[[^\]\n]{1,200}\]\([^)\n\[\]\\]{1,500}\)/g;
 // so we only flag the table-row shape — not arbitrary pipes in prose.
 const TABLE_PIPE = /(?:^|\n|>)[ \t]*\|[^|\n]{1,200}\|[^\n]*/g;
 
-// Shortcode delimiters that escaped processing. Mirrors the smoke spec's
+// Shortcode delimiters that escaped processing. Mirrors the delimiter
 // check but reported with location for easier triage.
 const SHORTCODE_OPEN = /\{\{\s*[<%]/g;
 const SHORTCODE_CLOSE = /[%>]\s*\}\}/g;

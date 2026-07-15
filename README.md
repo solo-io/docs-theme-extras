@@ -154,8 +154,7 @@ versionFromPath = "^/docs/(?<version>v\\d+|main)/"
 versions        = ["v1", "v2", "main"]
 
 [checks]
-crossBrowser = false
-smoke        = false      # set true only for cross-product hub repos
+codeBlockIntegrity = false
 
 [allowlists]
 hugoWarnings = []
@@ -217,10 +216,62 @@ jobs:
         run: npx playwright test --project=static --reporter=list,html
 ```
 
-Multi-product hub repos (one site, many product subpaths) use the same
-pattern with extra jobs for `--project=browser` and a smoke matrix per
-product, plus per-product artifact downloads in place of the inline
-`hugo` build step.
+#### Static vs content: run content scanners on content PRs too
+
+The harness splits into two file-scan projects, categorized by **what each
+spec reads**:
+
+- **`--project=static`** — every spec renders the theme's bundled **fixture**
+  and asserts theme behavior (versioning, cards, sidebar, callouts, shortcode
+  edge cases). Against a consumer's own build these `test.skip` (their fixture
+  pages aren't in the consumer's `builtRoot`), so they carry signal only when
+  **layouts** change. Gate on layout paths (`layouts/**`, `static/**`,
+  `assets/css/**`, `assets/js/**`, `go.mod`, `hugo.yaml`).
+- **`--project=content`** — every spec reads the consumer's **own** content:
+  the built HTML tree (`markdown-leaks` rendering leaks; `copy-md-fidelity`
+  copy-as-markdown output; `hugo-warnings` build-log warnings) or the markdown
+  source (`curl-quotes`, `tab-syntax`, `shortcode-args`, `include-form`,
+  `cascade-type` — all walk `scanRoots`). Pass/fail tracks content edits, so
+  gate on **content paths AND layout paths** (`content/**`, plus your
+  page/snippet roots such as `assets/<product>-docs/**`, plus the layout paths
+  above) — content edits and layout edits both change what renders.
+
+The categorization is by input, not by name: a spec that scans consumer
+content belongs in `content` even if it feels "static." Because every `static`
+spec skips against a consumer build, running `static` on a content PR is pure
+no-op — so a content PR only needs `--project=content`, and only a layout PR
+needs both.
+
+The common trap this split fixes: a workflow gated only on `layouts/**`
+never fires on a content-only PR, so the leak scan never runs on the exact
+PRs that introduce content rendering breaks. The fix is just the trigger —
+make sure `content` runs on content paths. The simplest wiring is a single
+workflow gated on **content paths + layout paths** that builds once and runs
+both projects in one step:
+
+```yaml
+    run: npx playwright test --project=static --project=content --reporter=list,html
+```
+
+Two viable wirings, both fine:
+
+- **One workflow, both projects** (shown above) — simplest. Since every
+  `static` spec skips against a consumer build, running it on a content PR is
+  an instant no-op, and both projects share the one Hugo build (the slow
+  part), so the waste is negligible. agw-oss's `framework-tests.yml` uses this.
+- **Two path-filtered workflows** — a content workflow (`--project=content`,
+  content + layout paths) and a layout workflow (`--project=static`, layout
+  paths only). Slightly more config, but a content PR then runs only the specs
+  that can actually fail on it. Prefer this if you want the CI summary to show
+  only relevant checks per PR.
+
+Multi-product hub repos (one site, many product subpaths) run the same
+`content` project **per product** via a matrix, setting `CONTENT_DIR=<product>`
+so each job scans only that product's subtree of `builtRoot`. They add extra
+jobs for `--project=browser`, plus per-product artifact downloads in place of
+the inline `hugo` build step. (`CONTENT_DIR` replaced the former dedicated
+"smoke" project + `SMOKE_PRODUCT` env — the built-HTML checks now live in
+`content`, scoped by directory.)
 
 ### 5. Run the harness locally
 
@@ -244,7 +295,7 @@ make framework-test                # all projects (static, browser, cross-browse
 make framework-test-static         # fastest loop — ~2s after Hugo build
 make framework-test-browser        # chromium only
 make framework-test-cross-browser  # chromium + firefox + webkit
-make framework-test-smoke PRODUCT=<name>   # multi-product hubs only
+make framework-test-content CONTENT_DIR=<product>   # scope content scan to one product subtree (hubs)
 
 # Override the sibling location if needed
 make framework-test FRAMEWORK_EXTRAS_DIR=/abs/path/to/docs-theme-extras
@@ -308,25 +359,22 @@ checks.
 
 ```toml
 [checks]
-smoke        = false   # for cross-product runs with SMOKE_PRODUCT env; single-site consumers skip
-crossBrowser = false   # opt-in; full chromium/firefox/webkit pass is slow
+codeBlockIntegrity = false   # e.g. a consumer with a known backlog of fenced-block fragmentation
 ```
 
 All checks default to enabled. Setting `false` skips that spec entirely.
 
-### 2a. `[smoke].maxFiles` tunes smoke coverage
+### 2a. `[crawl].maxFiles` caps the browser crawl
 
 ```toml
-[smoke]
+[crawl]
 maxFiles = 0   # 0 = unlimited; default 50
 ```
 
-Smoke's two checks (shortcode-leak scan, copy-as-md presence) default to
-sampling 50 HTML files per run — keeps `make framework-test-smoke
-PRODUCT=<x>` sub-second across any product. Set `maxFiles = 0` for
-unlimited (walk every HTML file). Worth doing when smoke is the *only*
-coverage you have against that product's build (e.g. cross-product
-invocations where the product isn't the consumer's primary `builtRoot`).
+Only the browser crawl (`console-errors.spec.ts`, the `browser-crawl`
+project) is capped — opening pages in Chromium is expensive, so it samples 50
+by default. Set `maxFiles = 0` to open every built page. The cheap file-read
+scans (`content` project) always walk every page regardless.
 For the consumer's own build the static project already crawls
 everything, so the default cap is the right choice.
 
@@ -438,7 +486,7 @@ reload reuses the cached version.
 │   └── .docs-test-{oss,enterprise}.toml   Harness config per brand
 │
 ├── tests/                          Playwright specs
-│   ├── *.spec.ts                   17 specs (smoke, presence, versioning, ...)
+│   ├── *.spec.ts                   specs (content, static, browser, ...)
 │   └── helpers/                    config, target, crawl, shortcodes, ...
 │
 ├── static/test/readfile-sample.txt Top-level path for Hugo's readFile

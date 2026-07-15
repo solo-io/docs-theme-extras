@@ -6,9 +6,9 @@
   "scripts": {
     "test": "playwright test",
     "test:static": "playwright test --project=static",
+    "test:content": "playwright test --project=content",
     "test:browser": "playwright test --project=browser",
-    "test:smoke": "playwright test --project=smoke",
-    "test:browser-smoke": "playwright test --project=browser-smoke",
+    "test:browser-crawl": "playwright test --project=browser-crawl",
     "report": "playwright show-report"
   },
   "devDependencies": {

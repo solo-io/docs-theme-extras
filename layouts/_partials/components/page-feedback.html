@@ -91,7 +91,21 @@
         ].join('\n');
         var issueBody = encodeURIComponent(bodyTemplate);
         var issueUrl = 'https://github.com/' + feedbackIssueRepo + '/issues/new?title=' + issueTitle + '&body=' + issueBody;
-        thanksMsg.innerHTML = 'Sorry to hear that. Please <a href="' + issueUrl + '" class="text-violet-600 dark:text-violet-400 hover:underline" target="_blank" rel="noopener noreferrer">open an issue</a> to let us know how we can improve this page.';
+        /* Build the link via DOM rather than an innerHTML string. A literal
+           `<a` in inline-script text trips naive HTML parsers (the link
+           checker's reads `<a` as a start-tag and drops every link after it in
+           the page) — see the inlineScriptSafety check. Element construction
+           keeps the served <script> free of any `<`+letter, and avoids
+           interpolating a URL into markup. */
+        thanksMsg.textContent = 'Sorry to hear that. Please ';
+        var issueLink = document.createElement('a');
+        issueLink.href = issueUrl;
+        issueLink.className = 'text-violet-600 dark:text-violet-400 hover:underline';
+        issueLink.target = '_blank';
+        issueLink.rel = 'noopener noreferrer';
+        issueLink.textContent = 'open an issue';
+        thanksMsg.appendChild(issueLink);
+        thanksMsg.appendChild(document.createTextNode(' to let us know how we can improve this page.'));
       } else {
         thanksMsg.innerHTML = "Sorry to hear that. Thanks for letting us know.";
       }

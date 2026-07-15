@@ -11,7 +11,7 @@ import {
   loadConfig,
   type Page,
   type Config,
-  type Smoke,
+  type Crawl,
 } from "./config";
 
 class Target {
@@ -34,12 +34,34 @@ class Target {
     return this.cfg().builtRoot;
   }
 
+  // Root the content-scanning specs (markdown-leaks, copy-md-fidelity,
+  // built-html-integrity) actually walk. Defaults to the whole builtRoot;
+  // scoped to a subdirectory when CONTENT_DIR is set — the multi-product hub
+  // sets CONTENT_DIR=<product> to scan one product's subtree per matrix job
+  // (this replaced the former SMOKE_PRODUCT env of the deleted smoke project).
+  // A leading/trailing slash in CONTENT_DIR is tolerated.
+  get builtScanRoot(): string {
+    const dir = (process.env.CONTENT_DIR ?? "").replace(/^\/+|\/+$/g, "");
+    return dir ? path.join(this.cfg().builtRoot, dir) : this.cfg().builtRoot;
+  }
+
   get baseURL(): string {
     return this.cfg().baseURL;
   }
 
+  // Path to the Hugo build log that hugo-warnings.spec scans. Single-site
+  // consumers build in the test job and write the log at the configured path
+  // (repo root). A multi-product hub scans one product per matrix job with
+  // CONTENT_DIR set and downloads only that product's artifact, so its build
+  // log ships INSIDE that artifact — resolve to <builtScanRoot>/<basename>
+  // (mirrors builtScanRoot). Backward-compatible: with CONTENT_DIR unset the
+  // configured path is returned unchanged.
   get buildLog(): string | null {
-    return this.cfg().buildLog;
+    const configured = this.cfg().buildLog;
+    if (configured === null) return null;
+    const dir = (process.env.CONTENT_DIR ?? "").replace(/^\/+|\/+$/g, "");
+    if (!dir) return configured;
+    return path.join(this.builtScanRoot, path.basename(configured));
   }
 
   get pages(): Page[] {
@@ -68,10 +90,6 @@ class Target {
     return this.cfg().allowlists.curlQuotes;
   }
 
-  get shortcodeAllowlist(): string[] {
-    return this.cfg().allowlists.shortcodes;
-  }
-
   // Per-consumer regex patterns for console-errors.spec.ts. Strings from
   // [allowlists].consoleErrors in the TOML are compiled to RegExp here so
   // specs never have to know about the raw string form.
@@ -87,8 +105,8 @@ class Target {
     return this.cfg().checks[check];
   }
 
-  get smoke(): Smoke {
-    return this.cfg().smoke;
+  get crawl(): Crawl {
+    return this.cfg().crawl;
   }
 
   // Extract the version string from a URL using the configured regex.
