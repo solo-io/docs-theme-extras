@@ -140,7 +140,12 @@
              shows no version switcher on versionless pages. An empty segment
              (product landing, e.g. /<folder>/) keeps the dropdown: its entries
              point at the version landing roots, which do exist. */ -}}
-      {{- $versionMarker := or (gt (len (findRE `^v?[0-9]+(\.[0-9]+)*(\.x)?$` $urlVersion)) 0) (in (slice "main" "latest" "nightly" "dev" "stable" "edge") $urlVersion) -}}
+      {{- /* Also accept a pre-release/build suffix (1.5.0-beta, 2.1.0-rc.1) so a
+             real versioned page under such a segment isn't mistaken for a flat
+             guide when it isn't the current-matched version. Arbitrary codename
+             segments still fall through — extend the marker slice if a product
+             adopts one. */ -}}
+      {{- $versionMarker := or (gt (len (findRE `^v?[0-9]+(\.[0-9]+)*(\.x)?(-[0-9A-Za-z.]+)?$` $urlVersion)) 0) (in (slice "main" "latest" "nightly" "dev" "stable" "edge") $urlVersion) -}}
       {{- $isVersionless := and $urlVersion (not $matchedVersion) (not $versionMarker) -}}
 
       {{- if and $currentLabel (not $isVersionless) -}}
@@ -304,11 +309,19 @@
             {{- $itemLink := .URL -}}
             {{- with .PageRef -}}{{- if hasPrefix . "/" -}}{{- $itemLink = relLangURL (strings.TrimPrefix "/" .) -}}{{- end -}}{{- end -}}
             {{- $itemExternal := strings.HasPrefix $itemLink "http" -}}
+            {{- /* Only render an anchor when there's somewhere to go. A menu
+                   entry with no type/icon AND no URL/PageRef (e.g. a separator
+                   or a future custom type) would otherwise emit href="" — a
+                   clickable row pointing at the current page. The desktop loop
+                   routes these through navbar-link.html; this reimplementation
+                   guards them directly. */ -}}
+            {{- if $itemLink -}}
             <a class="hx:flex hx:items-center hx:gap-2 hx:p-2 hx:text-gray-700 hx:dark:text-gray-300 hx:hover:bg-gray-100 hx:dark:hover:bg-neutral-800 hx:rounded-sm hx:text-sm"
                {{ if $itemExternal }}target="_blank" rel="noreferrer"{{ end }}
                href="{{ $itemLink }}">
               <span>{{ or (T .Identifier) .Name | safeHTML }}</span>
             </a>
+            {{- end -}}
           {{- end -}}
         {{- end -}}
       </div>

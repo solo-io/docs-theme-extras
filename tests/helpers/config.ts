@@ -217,8 +217,18 @@ function validate(
     versioning = { versionFromPath, versions };
   }
 
-  const checks = mergeChecks(data.checks);
-  const allowlists = mergeAllowlists(data.allowlists);
+  // A [smoke] block is a pre-0.1.18 leftover: the block was renamed to [crawl]
+  // (and the `smoke` check removed). Silently dropping it would revert a
+  // consumer who set `[smoke].maxFiles = 0` (unlimited crawl) back to the
+  // default cap with no signal, so warn instead of ignoring it quietly.
+  if (data.smoke && typeof data.smoke === "object") {
+    console.warn(
+      `[docs-test] [smoke] was renamed to [crawl] in docs-theme-extras 0.1.18; the [smoke] block in ${configPath} is ignored. Move maxFiles to [crawl].`,
+    );
+  }
+
+  const checks = mergeChecks(data.checks, configPath);
+  const allowlists = mergeAllowlists(data.allowlists, configPath);
   const crawl = mergeCrawl(data.crawl, configPath);
 
   return {
@@ -272,10 +282,30 @@ function optionalStringField(
   return v;
 }
 
-function mergeChecks(raw: unknown): Checks {
+// Warn (don't throw) for keys the harness no longer reads: a check that was
+// removed or renamed between versions is silently ignored otherwise, so a
+// consumer's stale toggle — or a typo in a live one — passes unnoticed. Warning
+// surfaces both without failing a consumer whose config predates the rename.
+function warnUnknownKeys(
+  obj: Record<string, unknown>,
+  known: readonly string[],
+  scope: string,
+  configPath: string,
+): void {
+  for (const key of Object.keys(obj)) {
+    if (!known.includes(key)) {
+      console.warn(
+        `[docs-test] ignoring unknown ${scope} key "${key}" in ${configPath}`,
+      );
+    }
+  }
+}
+
+function mergeChecks(raw: unknown, configPath: string): Checks {
   const out = { ...DEFAULT_CHECKS };
   if (!raw || typeof raw !== "object") return out;
   const obj = raw as Record<string, unknown>;
+  warnUnknownKeys(obj, Object.keys(out), "[checks]", configPath);
   for (const key of Object.keys(out) as (keyof Checks)[]) {
     const v = obj[key];
     if (typeof v === "boolean") out[key] = v;
@@ -287,6 +317,7 @@ function mergeCrawl(raw: unknown, configPath: string): Crawl {
   const out = { ...DEFAULT_CRAWL };
   if (!raw || typeof raw !== "object") return out;
   const obj = raw as Record<string, unknown>;
+  warnUnknownKeys(obj, ["maxFiles"], "[crawl]", configPath);
   const v = obj.maxFiles;
   if (v === undefined) return out;
   if (typeof v !== "number" || !Number.isInteger(v) || v < 0) {
@@ -298,7 +329,7 @@ function mergeCrawl(raw: unknown, configPath: string): Crawl {
   return out;
 }
 
-function mergeAllowlists(raw: unknown): Allowlists {
+function mergeAllowlists(raw: unknown, configPath: string): Allowlists {
   const out: Allowlists = {
     hugoWarnings: [...DEFAULT_ALLOWLISTS.hugoWarnings],
     curlQuotes: [...DEFAULT_ALLOWLISTS.curlQuotes],
@@ -307,6 +338,7 @@ function mergeAllowlists(raw: unknown): Allowlists {
   };
   if (!raw || typeof raw !== "object") return out;
   const obj = raw as Record<string, unknown>;
+  warnUnknownKeys(obj, Object.keys(out), "[allowlists]", configPath);
   for (const key of Object.keys(out) as (keyof Allowlists)[]) {
     const v = obj[key];
     if (Array.isArray(v) && v.every((s) => typeof s === "string")) {
