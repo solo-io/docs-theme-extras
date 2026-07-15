@@ -15,7 +15,7 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
-## [v0.1.18] — 2026-07-14
+## [v0.1.18] — 2026-07-15
 
 ### Layout — main nav links now appear in the mobile menu
 
