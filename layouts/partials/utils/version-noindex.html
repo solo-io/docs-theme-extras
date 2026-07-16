@@ -11,19 +11,22 @@
        LEFT INDEXABLE, so it stays findable in search. That's the difference
        from a blanket per-version noindex: we suppress duplicates, not history.
 
-       OPT-IN AND FAIL-SAFE. Does nothing until a consumer flags its current
-       version entry in params.versions with `latest = true`:
+       OPT-IN AND FAIL-SAFE. Activates only when the current version can be
+       identified, by either of two signals (see the detection block below):
+       an explicit `latest = true` flag, or a `linkVersion = "latest"` segment.
 
          [[params.versions]]
            version     = "2.3.x"
-           linkVersion = "latest"
-           latest      = true
+           linkVersion = "latest"   # auto-detected; no flag needed
+           # latest    = true       # only needed when linkVersion isn't "latest"
 
-       An explicit flag (rather than inference) is required because the
-       "current version" marker is not uniform across repos (linkVersion
-       "latest" vs a "(latest)"/"(current)" dropdown label vs a bare "2.2.x"),
-       and guessing wrong would deindex live docs. With no flag, nothing is
-       emitted — worst case is the pre-existing everything-indexable behavior.
+       Detection is deliberately conservative rather than inferred from, say, a
+       "(latest)"/"(current)" dropdown label — those are not uniform across repos
+       (the docs hub even carries a stale "(latest)" label on an OLD entry), and
+       guessing wrong would deindex live docs. A repo whose current version is a
+       bare number and not served at /latest/ (e.g. docs hub) must use the
+       explicit flag. Matching neither signal emits nothing — worst case is the
+       pre-existing everything-indexable behavior.
 
        WHY noindex AND NOT canonical: Hextra's head.html has already emitted a
        self-referential `<link rel="canonical">` before head-end.html runs, and
@@ -40,9 +43,21 @@
        (folder/language-prefix aware). Called once per page from head-end.html. */ -}}
 
 {{- with site.Params.versions -}}
-  {{- /* The current version's URL segment (from the entry flagged latest). */ -}}
+  {{- /* The current version's URL segment. Two detection paths, in order:
+         1. An explicit `latest = true` flag on the current version entry. This
+            is the deliberate opt-in and works for ANY convention — a repo whose
+            current version is a bare number (e.g. docs hub `linkVersion=2.3.x`)
+            can only be marked this way.
+         2. Fallback: an entry whose `linkVersion` is literally "latest". kgw-oss
+            and agw-oss serve the current version at /…/latest/, so the URL
+            segment already encodes "current" and no extra field is needed.
+         Repos matching neither (no flag, no "latest" segment) emit nothing —
+         same fail-safe as before. */ -}}
   {{- $latestSeg := "" -}}
   {{- range . -}}{{ if eq (.latest | default false) true }}{{ $latestSeg = .linkVersion | default .version }}{{ end }}{{- end -}}
+  {{- if not $latestSeg -}}
+    {{- range . -}}{{ if eq (.linkVersion | default "") "latest" }}{{ $latestSeg = "latest" }}{{ end }}{{- end -}}
+  {{- end -}}
 
   {{- if $latestSeg -}}
     {{- /* Find the version segment by SCANNING the URL for the first segment that

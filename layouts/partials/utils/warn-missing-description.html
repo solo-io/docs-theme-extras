@@ -10,12 +10,30 @@
          - only leaf content pages (`.IsPage`) — home, section indexes,
            taxonomy/term pages, and the 404 are skipped (they legitimately
            often carry no description);
-         - `noindex` pages are skipped (they won't appear in results anyway).
+         - `noindex` pages are skipped (they won't appear in results anyway);
+         - on a VERSIONED site, only pages in the DEV version (`linkVersion:
+           "main"`) are linted. `main` is the authoring source, so a description
+           added there flows into the next release; scoping to it also avoids
+           warning the same page twice (once in `main`, once in `latest`).
+           Everything else is skipped — frozen old versions (`1.0.x`, `2.1.x`, …),
+           the current release (`latest`), and unversioned pages (blog, marketing).
+           Version lists are read from both `params.versions` (top level) and
+           `params.sections.<s>.versions` (agw keeps them per section). A site
+           with NO version config is linted in full; a versioned site with no
+           `main` version falls back to linting everything rather than silently
+           going quiet.
 
-       Enabled by default. Opt out per consumer in the site config:
+       Enabled by default on every consumer (no opt-in needed). Opt out per
+       consumer only if necessary:
 
          [params.themeExtras]
            warnMissingDescription = false
+
+       NOTE: consumers ship the shared `hugo-warnings.spec.ts` framework test,
+       which fails CI on any non-allowlisted build `WARN`. This lint is
+       deliberately NOT allowlisted, so a consumer's framework test stays red
+       until every indexable page has a `description` — the failure is the
+       forcing function to backfill the backlog.
 
        Called once per page from themeExtras/head-end.html. */ -}}
 
@@ -24,7 +42,36 @@
   {{- if isset . "warnMissingDescription" }}{{ $enabled = .warnMissingDescription }}{{ end -}}
 {{- end -}}
 
-{{- if and $enabled .IsPage (not (.Params.noindex | default false)) -}}
+{{- /* Collect version entries from the top level and every section. */ -}}
+{{- $entries := slice -}}
+{{- range (site.Params.versions | default slice) }}{{ $entries = $entries | append . }}{{ end -}}
+{{- range $k, $s := (site.Params.sections | default dict) -}}
+  {{- range ($s.versions | default slice) }}{{ $entries = $entries | append . }}{{ end -}}
+{{- end -}}
+
+{{- /* Known = every version's URL segment; active = latest + main only. */ -}}
+{{- $known := slice -}}
+{{- $active := slice -}}
+{{- range $entries -}}
+  {{- $seg := .linkVersion | default .version -}}
+  {{- with $seg }}{{ $known = $known | append . }}{{ end -}}
+  {{- if eq $seg "main" -}}
+    {{- $active = $active | append $seg -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* In scope unless the site is versioned AND this page sits in a known,
+       non-active version (or in no version at all). If the site is versioned
+       but no active version is detectable, lint everything (safe fallback). */ -}}
+{{- $inScope := true -}}
+{{- if and (gt (len $known) 0) (gt (len $active) 0) -}}
+  {{- $inScope = false -}}
+  {{- range (split (trim .RelPermalink "/") "/") -}}
+    {{- if in $active . }}{{ $inScope = true }}{{ end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if and $enabled $inScope .IsPage (not (.Params.noindex | default false)) -}}
   {{- if not (.Description | plainify | strings.TrimSpace) -}}
     {{- warnf "docs-theme-extras: %q has no front-matter `description`; <meta name=description>, OpenGraph, Twitter, and JSON-LD fall back to the raw page summary. Add `description:` to the front matter, or set params.themeExtras.warnMissingDescription=false to silence." .RelPermalink -}}
   {{- end -}}

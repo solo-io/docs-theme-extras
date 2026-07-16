@@ -1,5 +1,6 @@
 ---
 title: Flatguide Beta
+description: Sibling fixture page in the flat guide section, used to verify sidebar links appear across siblings.
 weight: 20
 ---
 
