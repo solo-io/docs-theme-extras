@@ -1,0 +1,93 @@
+{{- /* Non-latest-version noindex — surgical (duplicates only).
+
+       For versioned docs, an OLD version's copy of a page that STILL EXISTS in
+       the current version is near-duplicate content competing for the same
+       query, which splits ranking signal and often surfaces the old version.
+       This marks those duplicates `noindex, follow` (follow so link equity
+       still flows to the current version).
+
+       Crucially, a page that exists ONLY in an old version — a feature that was
+       removed in the current release — has NO current-version equivalent and is
+       LEFT INDEXABLE, so it stays findable in search. That's the difference
+       from a blanket per-version noindex: we suppress duplicates, not history.
+
+       OPT-IN AND FAIL-SAFE. Does nothing until a consumer flags its current
+       version entry in params.versions with `latest = true`:
+
+         [[params.versions]]
+           version     = "2.3.x"
+           linkVersion = "latest"
+           latest      = true
+
+       An explicit flag (rather than inference) is required because the
+       "current version" marker is not uniform across repos (linkVersion
+       "latest" vs a "(latest)"/"(current)" dropdown label vs a bare "2.2.x"),
+       and guessing wrong would deindex live docs. With no flag, nothing is
+       emitted — worst case is the pre-existing everything-indexable behavior.
+
+       WHY noindex AND NOT canonical: Hextra's head.html has already emitted a
+       self-referential `<link rel="canonical">` before head-end.html runs, and
+       the theme does not shadow head.html. Emitting a second, conflicting
+       canonical makes search engines ignore BOTH; a second robots tag, by
+       contrast, resolves deterministically to the most restrictive (noindex).
+       So on a duplicate this emits an ADDITIONAL
+       `<meta name="robots" content="noindex, follow">` alongside Hextra's
+       `index, follow`, and noindex wins. (A consumer wanting a single clean
+       canonical-to-current tag can instead set `.Params.canonical` via a config
+       cascade on its old version paths and leave `latest` unset here.)
+
+       Existence lookup and version-segment extraction mirror _partials/navbar.html
+       (folder/language-prefix aware). Called once per page from head-end.html. */ -}}
+
+{{- with site.Params.versions -}}
+  {{- /* The current version's URL segment (from the entry flagged latest). */ -}}
+  {{- $latestSeg := "" -}}
+  {{- range . -}}{{ if eq (.latest | default false) true }}{{ $latestSeg = .linkVersion | default .version }}{{ end }}{{- end -}}
+
+  {{- if $latestSeg -}}
+    {{- /* Find the version segment by SCANNING the URL for the first segment that
+           matches a known version's linkVersion/version, rather than assuming a
+           fixed position. Consumers differ in how many segments precede the
+           version (dev: /<version>/…; docs hub: /<version>/…; kgw-oss:
+           /docs/envoy/<version>/…) and not all set params.folder, so a positional
+           skip is unreliable. Version strings ("2.2.x", "latest", "main") don't
+           collide with real content or language segments in practice. */ -}}
+    {{- $segments := split (trim $.RelPermalink "/") "/" -}}
+    {{- $urlVersion := "" -}}
+    {{- $versionIdx := -1 -}}
+    {{- range $i, $seg := $segments -}}
+      {{- if lt $versionIdx 0 -}}
+        {{- range $.Site.Params.versions -}}
+          {{- if or (eq (.linkVersion | default .version) $seg) (eq .version $seg) -}}
+            {{- $urlVersion = $seg -}}
+            {{- $versionIdx = $i -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{- /* Only proceed for a KNOWN, NON-latest version segment. Pages with no
+           version segment (landings) or already on the latest version are left
+           alone. */ -}}
+    {{- if and (ge $versionIdx 0) (ne $urlVersion $latestSeg) -}}
+      {{- /* Rebuild this page's URL with the latest version swapped in, preserving
+             any prefix segments before the version (e.g. /docs/envoy/). If that
+             page exists, this old-version page is a duplicate → noindex it. A page
+             that exists ONLY in the old version has no equivalent and is left
+             indexable. */ -}}
+      {{- $prefix := "" -}}
+      {{- if gt $versionIdx 0 -}}{{ $prefix = delimit (first $versionIdx $segments) "/" }}{{- end -}}
+      {{- $after := delimit (after (add $versionIdx 1) $segments) "/" -}}
+      {{- $latestEquiv := "" -}}
+      {{- if $prefix -}}
+        {{- $latestEquiv = printf "/%s/%s/%s" $prefix $latestSeg $after -}}
+      {{- else -}}
+        {{- $latestEquiv = printf "/%s/%s" $latestSeg $after -}}
+      {{- end -}}
+      {{- $latestEquiv = strings.TrimRight "/" $latestEquiv -}}
+      {{- if site.GetPage $latestEquiv -}}
+  <meta name="robots" content="noindex, follow" />
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}

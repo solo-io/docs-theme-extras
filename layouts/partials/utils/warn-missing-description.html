@@ -1,0 +1,31 @@
+{{- /* Build-time SEO lint.
+
+       Emits a Hugo build WARNING (non-fatal) when an indexable content page
+       has no front-matter `description`. Without one, Hextra's
+       `utils/page-description.html` falls back to the raw page Summary (the
+       first ~70 words of body, markdown stripped) for `<meta name="description">`
+       and OpenGraph/Twitter/JSON-LD — which usually makes a poor SERP snippet.
+
+       Scope is deliberately narrow to avoid log noise:
+         - only leaf content pages (`.IsPage`) — home, section indexes,
+           taxonomy/term pages, and the 404 are skipped (they legitimately
+           often carry no description);
+         - `noindex` pages are skipped (they won't appear in results anyway).
+
+       Enabled by default. Opt out per consumer in the site config:
+
+         [params.themeExtras]
+           warnMissingDescription = false
+
+       Called once per page from themeExtras/head-end.html. */ -}}
+
+{{- $enabled := true -}}
+{{- with site.Params.themeExtras -}}
+  {{- if isset . "warnMissingDescription" }}{{ $enabled = .warnMissingDescription }}{{ end -}}
+{{- end -}}
+
+{{- if and $enabled .IsPage (not (.Params.noindex | default false)) -}}
+  {{- if not (.Description | plainify | strings.TrimSpace) -}}
+    {{- warnf "docs-theme-extras: %q has no front-matter `description`; <meta name=description>, OpenGraph, Twitter, and JSON-LD fall back to the raw page summary. Add `description:` to the front matter, or set params.themeExtras.warnMissingDescription=false to silence." .RelPermalink -}}
+  {{- end -}}
+{{- end -}}

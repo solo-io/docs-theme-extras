@@ -1,0 +1,32 @@
+{{- /* Twitter/X card tags.
+
+       Fills Hextra's empty `_partials/twitter_cards.html` stub (a zero-byte
+       placeholder in every pinned Hextra version).
+
+       X and most other consumers fall back to OpenGraph when these are
+       absent, so this is mostly belt-and-suspenders — but declaring
+       `summary_large_image` explicitly opts into the large-image card
+       rather than letting the crawler guess from the OG image. Values are
+       resolved the same way Hextra's opengraph.html resolves them, so the
+       card and the OG preview stay in sync. */ -}}
+
+{{- $desc := partial "utils/page-description.html" . -}}
+<meta name="twitter:card" content="summary_large_image" />
+{{- with site.Params.themeExtras.twitterSite }}
+<meta name="twitter:site" content="{{ . }}" />
+{{- end }}
+<meta name="twitter:title" content="{{ .Title | default site.Title }}" />
+{{- with $desc }}
+<meta name="twitter:description" content="{{ . }}" />
+{{- end }}
+{{- /* Image: page images first, else site-wide images. */ -}}
+{{- $img := "" -}}
+{{- with .Params.images }}{{ $img = index . 0 }}{{ else }}{{ with site.Params.images }}{{ $img = index . 0 }}{{ end }}{{ end -}}
+{{- with $img -}}
+  {{- $imgURL := . -}}
+  {{- if not (or (hasPrefix $imgURL "http://") (hasPrefix $imgURL "https://")) -}}
+    {{- if hasPrefix $imgURL "/" }}{{ $imgURL = relURL (strings.TrimPrefix "/" $imgURL) }}{{ end -}}
+    {{- $imgURL = $imgURL | absURL -}}
+  {{- end }}
+<meta name="twitter:image" content="{{ $imgURL }}" />
+{{- end }}
