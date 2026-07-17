@@ -72,6 +72,22 @@
   )
 -}}
 
+{{- /* Theme-shipped `success` type: a positive/confirmation admonition that GitHub
+       markdown has no native equivalent for (its five are note/tip/important/
+       warning/caution). This mirrors the callout shortcode's `success` variant
+       (green box + check icon) so `> [!SUCCESS]` and a `callout type="success"`
+       shortcode render the same. The green palette is reused verbatim from tip/solo because
+       this theme only compiles the `hx:` color utilities Hextra core already uses,
+       so a novel palette (e.g. emerald) would silently no-op. `copyAs` downgrades
+       to the nearest native green type (tip) for exported/copied markdown. */ -}}
+{{- $styles.Set "success" (dict
+  "icon" "check-circle"
+  "title" "Success"
+  "copyAs" "tip"
+  "style" "hx:border-green-200 hx:bg-green-100 hx:text-green-900 hx:dark:border-green-200/30 hx:dark:bg-green-900/30 hx:dark:text-green-200"
+  )
+-}}
+
 {{- /* Merge consumer-defined custom alert types. Keys are lowercased to match
        the AlertType Hugo derives from `[!TYPE]`. A custom entry carries icon +
        style like the built-ins, plus an optional title used for the header. */ -}}

@@ -22,6 +22,14 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
+## [v0.1.20] — 2026-07-17
+
+### New theme-shipped `[!SUCCESS]` GitHub-style alert type
+
+- **`layouts/_partials/components/github-style-alert.html` now ships a `success` custom alert type, and `layouts/_markup/render-blockquote-alert.html` adds it to the supported list — so `> [!SUCCESS]` renders a green box with a check icon instead of warning and falling back to the default style.** GitHub markdown has only five native alert types (note/tip/important/warning/caution), but the theme's `callout` shortcode has always carried a green `success` context. As repos migrate `alert`/`callout` shortcodes to GitHub-default `> [!TYPE]` syntax, `success` notes had no target — the closest native type is `tip`, which loses the success semantic. `[!SUCCESS]` closes that gap the same way the existing `[!SOLO]` type does: a theme-shipped entry with an icon (`check-circle`, resolved from the transitively-mounted Hextra `data/icons.yaml`), a "Success" header, and the green palette reused verbatim from `tip`/`solo` (this theme only compiles the `hx:` color utilities Hextra core already uses, so a novel palette such as emerald would silently no-op). For copy-as-markdown / `.md` export it carries `copyAs: tip`, so a copied `> [!SUCCESS]` round-trips to `> [!TIP]` (GitHub would render a bare `[!SUCCESS]` as an inert blockquote). The rendering mechanism is identical to the already-in-production `[!SOLO]` type, observable on [ambientmesh.io](https://ambientmesh.io/) (view-source: a `<div data-alert-type="SOLO" …>` with the green `hx:bg-green-100` classes); `[!SUCCESS]` produces the same structure with `data-alert-type="SUCCESS"` and the check-circle SVG. Verified in the OSS and enterprise fixture builds (both warning-free) via `tests/custom-alert.spec.ts`, which now asserts the SUCCESS label, the check-circle SVG path, the green style, and that copy-md downgrades `[!SUCCESS]` to a native type without leaking the theme-only marker. No consumer config required; takes effect when a consumer bumps its extras pin.
+
+---
+
 ## [v0.1.19] — 2026-07-16
 
 ### SEO improvements — JSON-LD + Twitter cards (fill Hextra's empty stubs), missing-description lint, non-latest-version noindex
