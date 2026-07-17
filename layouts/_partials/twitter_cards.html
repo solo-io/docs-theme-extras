@@ -19,14 +19,23 @@
 {{- with $desc }}
 <meta name="twitter:description" content="{{ . }}" />
 {{- end }}
-{{- /* Image: page images first, else site-wide images. */ -}}
+{{- /* Image: page images first, else site-wide images. Resolved through
+       utils/prod-host.html so the URL stays absolute even in preview builds
+       whose baseURL is root-relative — matching schema.html's resolution
+       (absURL alone would leave "/img.png" when baseURL is "/"). */ -}}
+{{- $host := partial "utils/prod-host.html" . -}}
 {{- $img := "" -}}
 {{- with .Params.images }}{{ $img = index . 0 }}{{ else }}{{ with site.Params.images }}{{ $img = index . 0 }}{{ end }}{{ end -}}
+{{- $imgURL := "" -}}
 {{- with $img -}}
-  {{- $imgURL := . -}}
-  {{- if not (or (hasPrefix $imgURL "http://") (hasPrefix $imgURL "https://")) -}}
-    {{- if hasPrefix $imgURL "/" }}{{ $imgURL = relURL (strings.TrimPrefix "/" $imgURL) }}{{ end -}}
-    {{- $imgURL = $imgURL | absURL -}}
-  {{- end }}
-<meta name="twitter:image" content="{{ $imgURL }}" />
+  {{- if or (hasPrefix . "http://") (hasPrefix . "https://") -}}
+    {{- $imgURL = . -}}
+  {{- else if $host -}}
+    {{- $imgURL = print $host (relURL (strings.TrimPrefix "/" .)) -}}
+  {{- else -}}
+    {{- $imgURL = . | absURL -}}
+  {{- end -}}
+{{- end -}}
+{{- with $imgURL }}
+<meta name="twitter:image" content="{{ . }}" />
 {{- end }}
