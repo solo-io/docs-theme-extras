@@ -1,5 +1,6 @@
 ---
 title: Flatguide Alpha
+description: Fixture page in the flat (non-versioned) guide section, used to test sibling sidebar rendering and the callout icon override.
 weight: 10
 ---
 

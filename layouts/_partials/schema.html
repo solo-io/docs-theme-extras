@@ -1,0 +1,107 @@
+{{- /* schema.org JSON-LD structured data.
+
+       Fills Hextra's empty `_partials/schema.html` stub (it ships as a
+       zero-byte placeholder in every Hextra version we've pinned, so no
+       structured data is emitted unless a consumer overrides it here).
+
+       Emits a single `@graph`:
+         - Home:  WebSite + Organization
+         - Others: TechArticle + BreadcrumbList (+ Organization as publisher)
+
+       URLs are built from `utils/prod-host.html` so they stay absolute even
+       in preview builds whose baseURL is root-relative — the same approach
+       llms.txt and page-to-markdown already use.
+
+       No SearchAction is emitted: Hextra search is client-side (FlexSearch)
+       with no query-param results URL, so a SearchAction target would 404.
+
+       Deliberately minimal and additive — it only asserts facts already on
+       the page (title, description, dates, breadcrumb trail, publisher). */ -}}
+
+{{- $host := partial "utils/prod-host.html" . -}}
+
+{{- /* Absolute URL for the current page. */ -}}
+{{- $pageURL := .Permalink -}}
+{{- if $host -}}{{ $pageURL = print $host .RelPermalink -}}{{- end -}}
+
+{{- /* Resolve an absolute Organization logo from the navbar or themeExtras
+       logo params (docs hub uses params.navbar.logo, OSS sites use
+       params.themeExtras.logo). Left empty when neither is set. */ -}}
+{{- $logo := "" -}}
+{{- with site.Params.navbar.logo }}{{ with .path }}{{ $logo = . }}{{ end }}{{ end -}}
+{{- if not $logo }}{{ with site.Params.themeExtras.logo }}{{ with .path }}{{ $logo = . }}{{ end }}{{ end }}{{ end -}}
+{{- $logoURL := "" -}}
+{{- with $logo -}}
+  {{- if or (hasPrefix . "http://") (hasPrefix . "https://") -}}
+    {{- $logoURL = . -}}
+  {{- else if $host -}}
+    {{- /* Prefer the prod host so the logo is absolute even when baseURL is
+           root-relative ("/") — absURL alone would leave "/logo.svg". */ -}}
+    {{- $logoURL = print $host (relURL (strings.TrimPrefix "/" .)) -}}
+  {{- else -}}
+    {{- $logoURL = . | absURL -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* Article image: page images first, else site-wide images. Mirrors the
+       resolution in Hextra's opengraph.html. */ -}}
+{{- $img := "" -}}
+{{- with .Params.images }}{{ $img = index . 0 }}{{ else }}{{ with site.Params.images }}{{ $img = index . 0 }}{{ end }}{{ end -}}
+{{- $imgURL := "" -}}
+{{- with $img -}}
+  {{- if or (hasPrefix . "http://") (hasPrefix . "https://") -}}
+    {{- $imgURL = . -}}
+  {{- else if $host -}}
+    {{- $imgURL = print $host (relURL (strings.TrimPrefix "/" .)) -}}
+  {{- else -}}
+    {{- $imgURL = . | absURL -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* Organization node, reused as publisher. Name defaults to the site
+       title; a consumer can override with themeExtras.schemaOrgName. */ -}}
+{{- $orgName := site.Params.themeExtras.schemaOrgName | default site.Title -}}
+{{- $org := dict "@type" "Organization" "name" $orgName "url" (or $host site.Home.Permalink) -}}
+{{- with $logoURL }}{{ $org = merge $org (dict "logo" .) }}{{ end -}}
+
+{{- $graph := slice -}}
+
+{{- if .IsHome -}}
+  {{- $website := dict "@type" "WebSite" "name" site.Title "url" (or $host site.Home.Permalink) -}}
+  {{- with (partial "utils/page-description.html" .) }}{{ $website = merge $website (dict "description" .) }}{{ end -}}
+  {{- $graph = $graph | append $website $org -}}
+{{- else -}}
+  {{- $iso := "2006-01-02T15:04:05-07:00" -}}
+  {{- $article := dict
+      "@type" "TechArticle"
+      "headline" (.Title | default (partial "utils/title" .))
+      "url" $pageURL
+      "mainEntityOfPage" $pageURL
+      "publisher" $org -}}
+  {{- with (partial "utils/page-description.html" .) }}{{ $article = merge $article (dict "description" .) }}{{ end -}}
+  {{- with $imgURL }}{{ $article = merge $article (dict "image" .) }}{{ end -}}
+  {{- with .PublishDate }}{{ if not .IsZero }}{{ $article = merge $article (dict "datePublished" (.Format $iso)) }}{{ end }}{{ end -}}
+  {{- with .Lastmod }}{{ if not .IsZero }}{{ $article = merge $article (dict "dateModified" (.Format $iso)) }}{{ end }}{{ end -}}
+  {{- $graph = $graph | append $article -}}
+
+  {{- /* BreadcrumbList mirrors _partials/breadcrumb.html: Home, then each
+         non-home ancestor in root→parent order, then the current page. */ -}}
+  {{- $items := slice (dict "@type" "ListItem" "position" 1 "name" "Home" "item" (or $host site.Home.Permalink)) -}}
+  {{- $pos := 1 -}}
+  {{- range .Ancestors.Reverse -}}
+    {{- if not .IsHome -}}
+      {{- $pos = add $pos 1 -}}
+      {{- $crumbURL := .Permalink -}}
+      {{- if $host }}{{ $crumbURL = print $host .RelPermalink }}{{ end -}}
+      {{- $items = $items | append (dict "@type" "ListItem" "position" $pos "name" (partial "utils/title" .) "item" $crumbURL) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $pos = add $pos 1 -}}
+  {{- $items = $items | append (dict "@type" "ListItem" "position" $pos "name" (.Title | default (partial "utils/title" .)) "item" $pageURL) -}}
+  {{- $graph = $graph | append (dict "@type" "BreadcrumbList" "itemListElement" $items) -}}
+{{- end -}}
+
+{{- with $graph -}}
+  {{- $ld := dict "@context" "https://schema.org" "@graph" . -}}
+  <script type="application/ld+json">{{ $ld | jsonify | safeJS }}</script>
+{{- end -}}

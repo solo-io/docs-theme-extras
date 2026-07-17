@@ -1,5 +1,6 @@
 ---
 title: Hextra include target
+description: Fixture page whose body is pulled into another page via Hextra's include shortcode.
 build:
   list: never
   render: always

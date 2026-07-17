@@ -207,3 +207,12 @@ document.addEventListener('DOMContentLoaded', function () {
 {{- if $docsInit }}
   <script src="{{ $docsInit.RelPermalink }}" defer></script>
 {{- end }}
+
+{{/* Build-time SEO lint — warns (non-fatal) on indexable pages missing a
+     front-matter `description`. Opt out per consumer with
+     params.themeExtras.warnMissingDescription = false. */}}
+{{- partial "utils/warn-missing-description.html" . -}}
+
+{{/* Emit noindex on non-latest versioned pages. Opt-in and fail-safe: does
+     nothing unless a params.versions entry is flagged `latest = true`. */}}
+{{- partial "utils/version-noindex.html" . -}}
