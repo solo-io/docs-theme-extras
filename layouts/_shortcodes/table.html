@@ -1,0 +1,50 @@
+{{- /*
+  Shortcode: table
+  Wraps a markdown table so the author can pick how its columns size,
+  overriding the theme's default column-count heuristic (which caps cell
+  width only on 3+ column reference tables). Use it when the default doesn't
+  suit a specific table.
+
+  Usage (the markdown table must start at column 0 — .InnerDeindent strips
+  a uniform leading indent, but ragged indentation still breaks the table):
+
+    {{% table mode="nowrap" %}}
+    | Command | Description |
+    | ------- | ----------- |
+    | `kubectl get pods -n agentgateway -o wide` | Lists pods. |
+    {{% /table %}}
+
+  Parameters:
+    - mode (or positional 0): one of
+        wrap    (default) Fill the body width; wrap content as needed; never
+                scroll horizontally. Best for prose/description tables and
+                small 2-column tables that should span the page.
+        nowrap  Size each column to its content; never wrap; scroll
+                horizontally when the table is wider than the body. Best for
+                code snippets and command tables where wrapping hurts reading.
+        equal   Equal-width columns (table-layout:fixed); wrap content. Best
+                when you want uniform columns regardless of content length.
+
+  Renders the inner markdown through .Page.RenderString so both call forms
+  (percent and angle-bracket) produce identical HTML — the rebase pipeline
+  rewrites percent-form shortcodes to angle-bracket form, so relying on
+  percent-form splice-back semantics would break on rebased pages (same
+  reasoning as github-table.html).
+*/ -}}
+{{- $modes := slice "wrap" "nowrap" "equal" -}}
+{{- $mode := .Get "mode" | default (.Get 0) | default "wrap" -}}
+{{- if not (in $modes $mode) -}}
+  {{- warnf "table shortcode: unknown mode %q in %s — using \"wrap\". Valid modes: %s" $mode .Page.Path (delimit $modes ", ") -}}
+  {{- $mode = "wrap" -}}
+{{- end -}}
+{{- $html := .Page.RenderString (dict "display" "block") .InnerDeindent -}}
+{{- /* Count columns from the rendered header row and expose it as a CSS
+     variable. `equal` mode needs it: table-layout:fixed does NOT divide
+     columns evenly on its own (Chrome content-sizes the leading cells and
+     dumps the remainder in the last), so the CSS gives each cell an explicit
+     `width: calc(100% / var(--solo-table-cols))`. The other modes ignore it. */ -}}
+{{- $firstRow := index (findRE `(?s)<tr>.*?</tr>` $html 1) 0 | default "" -}}
+{{- $cols := len (findRE `<th[\s>]` $firstRow) -}}
+<div class="solo-table solo-table--{{ $mode }}"{{ if gt $cols 0 }} style="--solo-table-cols: {{ $cols }}"{{ end }}>
+{{ $html }}
+</div>

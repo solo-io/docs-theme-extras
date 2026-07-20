@@ -203,6 +203,17 @@ first segment that matches a known version wins.
      comment above protects from percent-form's 4-space-code-block rule. */}}
 {{ $clean = replaceRE `\{\{<\s*(version\s+(?:include|exclude)-if="[^"]+"[^>]*?)\s*>}}((?:\r?\n)?(?:[*+\-]|[0-9]+\.)[ \t][\s\S]*?)\{\{<\s*/version\s*>}}` "{{% $1 %}}$2{{% /version %}}" $clean }}
 
+{{/* Prefix root-absolute <img src="/..."> with the site's baseURL path so
+     OSS-authored static image refs (e.g. /integrations/providers/*.svg, which
+     assume an OSS site served at root) resolve when the hub serves this product
+     under a path prefix (e.g. /agentgateway/). relURL only prefixes RELATIVE
+     inputs, so the prefix is computed once and spliced into the root-absolute
+     src; on a root-served site (OSS, local) the prefix is "/" and this is a
+     no-op. Scoped to <img src="/..."> — relative, external (https://), and
+     href values are left untouched. */}}
+{{ $imgPrefix := strings.TrimSuffix "_MARK_" (relURL "_MARK_") }}
+{{ $clean = replaceRE `(<img[^>]*\ssrc=")/` (printf "${1}%s" $imgPrefix) $clean }}
+
 {{/* ─── Stage 6: RENDER ─────────────────────────────────────────────── */}}
 
 {{ $clean | .Page.RenderString }}
