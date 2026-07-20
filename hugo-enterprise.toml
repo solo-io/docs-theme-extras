@@ -145,6 +145,19 @@ pageContextMode = "siteParams"
 [params.editURL]
   enable = false
 
+# Tab navigation (issue solo-io/docs#3164). The `main` version tags two of its
+# top-level pages into a "Reference" tab (everything/rebased stay in the default
+# "Documentation" tab), giving main >=2 non-empty tabs so the band renders —
+# the ENABLED state that docs-tabs.spec.ts asserts. v1/v2 leave their pages
+# untagged, so they collapse to the single default tab, suppress the band, and
+# exercise the DISABLED state in the same build.
+[[params.docTabs]]
+  name = "Documentation"
+  default = true
+
+[[params.docTabs]]
+  name = "Reference"
+
 [[params.versions]]
   version = "v2"
   dropdown = "v2 (current)"

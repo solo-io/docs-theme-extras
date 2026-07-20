@@ -647,6 +647,85 @@ pre.mermaid:not([data-processed]) {
   --solo-rail-top: calc(var(--navbar-height, 4rem) + var(--hextra-banner-height, 0rem));
 }
 
+/* ── Tab navigation band (PROTOTYPE — issue solo-io/docs#3164) ───────────
+   A horizontal row of tabs rendered by layouts/_partials/docs-tabs.html,
+   BETWEEN the top navbar and the sidebar/content row. Each tab scopes the
+   left nav to one group of top-level sections (Mintlify / Portkey style) so
+   the left nav stays short. Left-aligned, its own band. Only rendered when a
+   product opts in via [[params.docTabs]] AND the current version has >=2
+   non-empty tabs, so sites/versions without it are visually unchanged. */
+.docs-tabs-band {
+  /* Full-bleed band with a hairline under it, like the navbar's own divider.
+     Non-sticky in this prototype: it sits at the top of the content area and
+     scrolls away, so it needs no rail-offset math against the sticky sidebar.
+     (Making it sticky under the navbar is a follow-up: it would require
+     bumping --solo-rail-top by the band height so the sidebar/TOC don't tuck
+     under it.) */
+  width: 100%;
+  border-bottom: 1px solid #e5e7eb;
+  background: transparent;
+}
+/* Below the desktop-sidebar breakpoint (xl, 1280px) the persistent sidebar
+   becomes the slide-in drawer, so the band is hidden and the tabs render as a
+   chip row inside that drawer (.sidebar-mobile-tab-row). */
+@media (max-width: 1279px) {
+  .docs-tabs-band {
+    display: none;
+  }
+}
+.dark .docs-tabs-band {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+.docs-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 1.5rem;
+  /* Left-aligned; inset to sit roughly above the sidebar's text column. */
+  padding: 0 1.5rem;
+  max-width: var(--hextra-max-page-width, 100%);
+  margin: 0 auto;
+  /* Let a long tab set scroll rather than wrap or overflow the viewport. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.docs-tabs::-webkit-scrollbar {
+  display: none;
+}
+.docs-tab {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.875rem 0.125rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: #4b5563;
+  /* Transparent underline reserves space so the active state doesn't shift
+     the row by 2px. */
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px; /* overlap the band's hairline so the active underline sits on it */
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.docs-tab:hover {
+  color: #111827;
+}
+.dark .docs-tab {
+  color: #9ca3af;
+}
+.dark .docs-tab:hover {
+  color: #f3f4f6;
+}
+.docs-tab-active,
+.docs-tab-active:hover {
+  color: var(--theme-primary, rgb(30, 64, 175));
+  border-bottom-color: var(--theme-primary, rgb(30, 64, 175));
+}
+.dark .docs-tab-active,
+.dark .docs-tab-active:hover {
+  color: var(--theme-primary, rgb(199, 210, 254));
+  border-bottom-color: var(--theme-primary, rgb(199, 210, 254));
+}
+
 /* ── TOC (right-hand "On this page" nav) ────────────────────────────────
    Rendered by layouts/_partials/toc.html. Class hooks are .solo-toc-*
    (plus the outer hextra-toc wrapper that hextra owns). Centralized
@@ -928,6 +1007,59 @@ hr.footnotes-sep,
 .dark .table-wrapper th,
 .dark .table-wrapper td {
   border-color: #374151;
+}
+
+/* ── Author-selected table display (`table` shortcode) ─────────────────
+   The `table` shortcode wraps a rendered markdown table in
+   `.solo-table.solo-table--<mode>` so an author can override the default
+   column-count cap. Each mode targets `.table-wrapper table th/td` (the
+   wrapper + table still come from render-table.html) with an extra element
+   in the selector so it outweighs the `.table-wrapper.table-capped th`
+   cap rule (both are two classes; the trailing `table` element tips the
+   specificity) regardless of source order. Note render-table.html also
+   emits an INLINE `white-space: nowrap` on short cells (<=30 chars); inline
+   styles beat these class rules, so in `wrap`/`equal` mode short cells stay
+   unwrapped — harmless, they're short by definition. */
+.solo-table--wrap .table-wrapper table {
+  width: 100%;
+  table-layout: auto;
+}
+.solo-table--wrap .table-wrapper table th,
+.solo-table--wrap .table-wrapper table td {
+  max-width: none;         /* fill the body width; don't cap at 24rem */
+  white-space: normal;
+  overflow-wrap: anywhere; /* break long tokens so nothing overflows the row */
+}
+
+.solo-table--nowrap .table-wrapper table {
+  /* `max-content` sizes the table to its unwrapped content and, unlike
+     `auto` (shrink-to-fit, which is capped at the available width), lets it
+     grow past the wrapper so the wrapper's overflow-x:auto actually scrolls.
+     `max-width:none` clears the prose `max-width:100%` that would re-clamp it. */
+  width: max-content;
+  max-width: none;
+  table-layout: auto;
+}
+.solo-table--nowrap .table-wrapper table th,
+.solo-table--nowrap .table-wrapper table td {
+  max-width: none;
+  white-space: nowrap;     /* never wrap; the wrapper's overflow-x:auto scrolls */
+  overflow-wrap: normal;
+}
+
+.solo-table--equal .table-wrapper table {
+  width: 100%;
+  table-layout: fixed;
+}
+.solo-table--equal .table-wrapper table th,
+.solo-table--equal .table-wrapper table td {
+  /* table-layout:fixed alone content-sizes columns in Chrome; an explicit
+     equal width per cell (column count comes from the shortcode as
+     --solo-table-cols) is what actually divides the row evenly. */
+  width: calc(100% / var(--solo-table-cols, 1));
+  max-width: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* ── Section cards (auto-generated on list pages) ────────────────────── */
@@ -1747,6 +1879,49 @@ details[open].hextra-search-other-versions > summary::before {
   background: rgba(96, 165, 250, 0.1);
   color: rgb(96, 165, 250);
 }
+/* Tab-navigation chips in the mobile drawer (issue solo-io/docs#3164). The
+   desktop tab band is hidden below the sidebar breakpoint, so tabs appear here
+   above the version chips. A horizontally scrollable row keeps a long tab set
+   on one line rather than wrapping into the version chips. */
+.sidebar-mobile-tab-row {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sidebar-mobile-tab-row::-webkit-scrollbar {
+  display: none;
+}
+.sidebar-mobile-tab-link {
+  white-space: nowrap;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgb(75, 85, 99);
+  text-decoration: none;
+}
+.sidebar-mobile-tab-link:hover {
+  background: rgb(243, 244, 246);
+}
+.dark .sidebar-mobile-tab-link {
+  color: rgb(156, 163, 175);
+}
+.dark .sidebar-mobile-tab-link:hover {
+  background: rgb(31, 41, 55);
+}
+.sidebar-mobile-tab-active,
+.sidebar-mobile-tab-active:hover {
+  background: rgb(219, 234, 254);
+  color: rgb(30, 64, 175);
+}
+.dark .sidebar-mobile-tab-active,
+.dark .sidebar-mobile-tab-active:hover {
+  background: rgba(96, 165, 250, 0.1);
+  color: rgb(96, 165, 250);
+}
+
 .sidebar-mobile-version-row {
   padding: 0 0.75rem 0.75rem;
   display: flex;

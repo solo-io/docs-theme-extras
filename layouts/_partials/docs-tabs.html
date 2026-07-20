@@ -1,0 +1,108 @@
+{{- /*
+  docs-tabs.html — PROTOTYPE tab-navigation band (issue solo-io/docs#3164).
+
+  Renders a horizontal row of tabs BETWEEN the top navbar and the
+  sidebar/content row. Each tab scopes the left nav to a subset of the
+  version's top-level sections, the way Mintlify / Portkey group concepts so
+  the left nav stays short. Left-aligned, its own band (Portkey style).
+
+  Model (hybrid, matches the discussion on #3164):
+    - Config declares the tab bar: an ordered `[[params.docTabs]]` list, each
+      with a `name` and optional `default = true`. This is version-agnostic
+      (the labels rarely change), so one block per product covers every
+      version.
+    - Front matter assigns pages to tabs: a top-level section/page carries
+      `tab: "<name>"`. Anything without a `tab` falls into the default tab
+      (the one flagged `default`, else the first).
+
+  Opt-in / backward compatible:
+    - No `params.docTabs`  → this partial emits nothing and records
+      "disabled" in the page store, so the sidebar renders the whole tree
+      exactly as before. (This is why the fixture's test build, which sets no
+      docTabs, is completely unaffected.)
+    - Fewer than 2 non-empty tabs in the current version → same as disabled.
+      A single-tab band would add chrome without slimming anything, and it
+      lets a version that hasn't been organised into tabs keep today's nav.
+
+  Sharing with the sidebar:
+    We compute the active tab here and stash it (plus the enabled flag and the
+    default tab name) on the page store. The sidebar partial reads it back and
+    filters its depth-0 items, so the version-root detection lives in one
+    place per render. single.html / list.html call this partial BEFORE the
+    sidebar, so the store is populated first.
+
+  Version-root detection is shared with the sidebar via
+  utils/version-root.html, so both agree on which version tree the page is in.
+*/ -}}
+
+{{- $context := . -}}
+{{- $tabsCfg := site.Params.docTabs -}}
+
+{{- /* Default: feature off. Overwritten below once we confirm >=2 tabs. */ -}}
+{{- $context.Store.Set "docTabs" (dict "enabled" false) -}}
+
+{{- if $tabsCfg -}}
+
+  {{- /* Resolve the version root through the shared helper (same detection the
+         sidebar uses), so the band and the left nav never disagree about the
+         active version tree. */ -}}
+  {{- $vr := partial "utils/version-root.html" $context -}}
+
+  {{- if $vr.isVersioned -}}
+    {{- $versionRoot := $vr.docsSection -}}
+
+    {{- if $versionRoot -}}
+      {{- /* ---- Default tab name -------------------------------------- */ -}}
+      {{- $defaultTab := (index $tabsCfg 0).name -}}
+      {{- range $tabsCfg -}}
+        {{- if .default -}}{{- $defaultTab = .name -}}{{- end -}}
+      {{- end -}}
+
+      {{- /* ---- Active tab: the tab of the current page's top-level
+             ancestor (or the page itself when it sits at the top level). */ -}}
+      {{- $activeTab := $defaultTab -}}
+      {{- range $versionRoot.Pages -}}
+        {{- if or (eq .RelPermalink $context.RelPermalink) ($context.IsDescendant .) -}}
+          {{- $activeTab = .Params.tab | default $defaultTab -}}
+        {{- end -}}
+      {{- end -}}
+
+      {{- /* ---- Build the ordered, non-empty tab list ----------------- */ -}}
+      {{- $tabs := slice -}}
+      {{- range $tabsCfg -}}
+        {{- $name := .name -}}
+        {{- $items := slice -}}
+        {{- range $versionRoot.Pages -}}
+          {{- if eq (.Params.tab | default $defaultTab) $name -}}
+            {{- $items = $items | append . -}}
+          {{- end -}}
+        {{- end -}}
+        {{- if gt (len $items) 0 -}}
+          {{- $first := index $items 0 -}}
+          {{- $href := trim (partial "utils/first-leaf.html" $first) " \n" -}}
+          {{- $tabs = $tabs | append (dict "name" $name "href" $href) -}}
+        {{- end -}}
+      {{- end -}}
+
+      {{- /* Share with the sidebar regardless of count so it can decide. The
+             tab list travels too, so the sidebar can render the mobile drawer's
+             tab-chip row (the band itself is hidden below the desktop-sidebar
+             breakpoint). */ -}}
+      {{- $enabled := ge (len $tabs) 2 -}}
+      {{- $context.Store.Set "docTabs" (dict "enabled" $enabled "active" $activeTab "default" $defaultTab "tabs" $tabs) -}}
+
+      {{- if $enabled -}}
+        <div class="docs-tabs-band hx:print:hidden">
+          <nav class="docs-tabs" aria-label="{{ (T "sectionTabs") | default "Section navigation" }}">
+            {{- range $tabs -}}
+              {{- $isActive := eq .name $activeTab -}}
+              <a href="{{ .href }}"
+                 class="docs-tab{{ if $isActive }} docs-tab-active{{ end }}"
+                 {{ if $isActive }}aria-current="true"{{ end }}>{{ .name }}</a>
+            {{- end -}}
+          </nav>
+        </div>
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}

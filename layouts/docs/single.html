@@ -1,4 +1,5 @@
 {{ define "main" }}
+  {{ partial "docs-tabs.html" . }}
   <div class='hx:mx-auto hx:flex hextra-max-page-width'>
     {{ partial "sidebar.html" (dict "context" .) }}
     {{ partial "toc.html" . }}

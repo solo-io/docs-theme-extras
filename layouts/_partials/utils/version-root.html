@@ -1,0 +1,165 @@
+{{- /*
+  version-root.html — resolve the versioned-docs root for a page.
+
+  Extracted verbatim from sidebar.html so the sidebar and the docs-tabs band
+  (issue solo-io/docs#3164) share ONE version-detection implementation instead
+  of each re-deriving it. Input is a Page (passed as `.`); output is a dict:
+
+    isVersioned    bool    — the page lives under a version tree
+    isOSSShape     bool    — /docs/<section>/<version>/… (vs enterprise)
+    section        string  — product segment (OSS) or production product seg
+    versionBase    string  — URL prefix before the version segment (carries
+                             product + /<lang>/ for enterprise/multilingual)
+    currentVersion string  — the matched version segment (e.g. "2.10.x")
+    matchedIdx     int     — index of the version segment (enterprise shapes)
+    versionPrefix  string  — published-URL prefix through the version segment,
+                             for hasPrefix filtering of page RelPermalinks
+    lookupPath     string  — path for site.GetPage (relative to contentDir in
+                             enterprise; == versionPrefix in OSS)
+    docsSection    Page    — the resolved version root page (nil if not found)
+
+  Keep this in sync with any URL-shape changes; both callers depend on it.
+*/ -}}
+{{- $context := . -}}
+
+{{- /* Two URL shapes to support:
+         OSS (kgw, agw):     /docs/<section>/<version>/…
+         Enterprise (docs):  /<product>/<version>/…   (each product is its
+                             own Hugo site with baseURL=/<product>/, no
+                             /docs/ prefix; versions are a flat list under
+                             site.Params.versions, not nested under
+                             site.Params.sections.<x>.versions)
+       Detect via segments[1]: "docs" → OSS, anything else → enterprise. */ -}}
+{{- $segments := split $context.RelPermalink "/" -}}
+{{- $section := "" -}}
+{{- /* $versionBase is the full published-URL prefix that precedes the version
+       segment (all segments before the version), so the mobile version row can
+       rebuild hrefs that keep every product and language (/<lang>/) prefix.
+       $section only holds the single product segment, which drops the language
+       prefix for multilingual URLs; $versionBase carries both. */ -}}
+{{- $versionBase := "" -}}
+{{- $currentVersion := "" -}}
+{{- $isVersionedDocs := false -}}
+{{- $isOSSShape := false -}}
+{{- /* Position of the matched version segment for enterprise shapes (2 in
+       production, 1 in local dev). Declared at top scope so the version-row
+       path-stripping in the sidebar can read it; the enterprise branch below
+       assigns it with `=`, not `:=`. */ -}}
+{{- $matchedIdx := 0 -}}
+{{- /* $versionPrefix is the URL prefix used for link building and
+       render-sidebar-tree's hasPrefix check against page RelPermalinks.
+       $lookupPath is the path passed to site.GetPage to locate the
+       version section. In OSS these are the same; in enterprise they
+       diverge because each docs-hub product is its own Hugo site with
+       contentDir set to that product's subtree, so GetPage paths are
+       relative to that subtree (no /<product>/ prefix) even though
+       published URLs still include it. */ -}}
+{{- $versionPrefix := "" -}}
+{{- $lookupPath := "" -}}
+
+{{- if and (ge (len $segments) 4) (eq (index $segments 1) "docs") -}}
+  {{- /* OSS shape: /docs/<section>/<version>/… */ -}}
+  {{- $isOSSShape = true -}}
+  {{- $section = index $segments 2 -}}
+  {{- $candidate := index $segments 3 -}}
+  {{- if and site.Params.sections (isset site.Params.sections $section) -}}
+    {{- range (index site.Params.sections $section).versions -}}
+      {{- if eq .linkVersion $candidate -}}
+        {{- $currentVersion = $candidate -}}
+        {{- $isVersionedDocs = true -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if not $isVersionedDocs -}}
+    {{- if or (eq $candidate "latest") (eq $candidate "main") (findRE `^[0-9]+\.[0-9]+\.x$` $candidate) -}}
+      {{- $currentVersion = $candidate -}}
+      {{- $isVersionedDocs = true -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if $isVersionedDocs -}}
+    {{- $versionPrefix = printf "/docs/%s/%s/" $section $currentVersion -}}
+    {{- $lookupPath = $versionPrefix -}}
+  {{- end -}}
+{{- else if and (ge (len $segments) 2) (ne (index $segments 1) "") -}}
+  {{- /* Enterprise shape, three layouts:
+           Production:            /<product>/<version>/…   baseURL=https://host/<product>,
+                                                so segments[1]=product, segments[2]=version.
+           Production + language: /<product>/<lang>/<version>/…   non-default languages
+                                                (defaultContentLanguageInSubdir=false) gain a
+                                                /<lang>/ segment after the product, so the
+                                                version lands at segments[3]. The default
+                                                language (en) has no prefix and stays at [2].
+           Local dev:             /<version>/…   baseURL=/ (hugo server),
+                                                so segments[1]=version directly.
+         Try segments[2] first (production), then [3] (production + language),
+         then [1] (local). The version match — against site.Params.versions[].linkVersion
+         or a well-known marker — is the disambiguator. */ -}}
+  {{- $candidatePositions := slice -}}
+  {{- if ge (len $segments) 3 -}}{{- $candidatePositions = $candidatePositions | append 2 -}}{{- end -}}
+  {{- if ge (len $segments) 4 -}}{{- $candidatePositions = $candidatePositions | append 3 -}}{{- end -}}
+  {{- $candidatePositions = $candidatePositions | append 1 -}}
+  {{- range $candidatePositions -}}
+    {{- $i := . -}}
+    {{- if not $isVersionedDocs -}}
+      {{- $candidate := index $segments $i -}}
+      {{- range site.Params.versions -}}
+        {{- if eq .linkVersion $candidate -}}
+          {{- $currentVersion = $candidate -}}
+          {{- $isVersionedDocs = true -}}
+          {{- $matchedIdx = $i -}}
+        {{- end -}}
+      {{- end -}}
+      {{- if not $isVersionedDocs -}}
+        {{- if or (eq $candidate "latest") (eq $candidate "main") (findRE `^[0-9]+\.[0-9]+\.x$` $candidate) -}}
+          {{- $currentVersion = $candidate -}}
+          {{- $isVersionedDocs = true -}}
+          {{- $matchedIdx = $i -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if $isVersionedDocs -}}
+    {{- /* $versionPrefix is the published-URL prefix through and including the
+           version segment, so render-sidebar-tree's hasPrefix check matches the
+           page RelPermalinks. Build it from the matched segments rather than
+           reassembling from $section/$currentVersion, so any product and
+           language (/<lang>/) segments that precede the version are carried
+           along — multilingual URLs (/<product>/<lang>/<version>/…) would
+           otherwise filter to nothing and leave an empty sidebar. */ -}}
+    {{- $versionPrefix = printf "%s/" (delimit (first (add $matchedIdx 1) $segments) "/") -}}
+    {{- /* $section is the product segment, used to look up per-section version
+           lists. Only the production shape (version at [2], product at [1])
+           exposes one; the local-dev and language-prefixed shapes leave it
+           empty. The mobile version row builds hrefs from $versionBase instead,
+           which keeps the language prefix the language-prefixed shape drops. */ -}}
+    {{- if eq $matchedIdx 2 -}}
+      {{- $section = index $segments 1 -}}
+    {{- else -}}
+      {{- $section = "" -}}
+    {{- end -}}
+    {{- /* Everything before the version segment: "" (local dev),
+           "/<product>" (production), or "/<product>/<lang>" (multilingual). */ -}}
+    {{- $versionBase = delimit (first $matchedIdx $segments) "/" -}}
+    {{- /* GetPage paths are relative to contentDir, which is set to the
+           product subtree (and is per-language: content/<lang>/<product>),
+           so the lookup never includes the product or language prefix. */ -}}
+    {{- $lookupPath = printf "/%s/" $currentVersion -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $docsSection := "" -}}
+{{- if $isVersionedDocs -}}
+  {{- $docsSection = site.GetPage $lookupPath -}}
+{{- end -}}
+
+{{- return (dict
+      "isVersioned" $isVersionedDocs
+      "isOSSShape" $isOSSShape
+      "section" $section
+      "versionBase" $versionBase
+      "currentVersion" $currentVersion
+      "matchedIdx" $matchedIdx
+      "versionPrefix" $versionPrefix
+      "lookupPath" $lookupPath
+      "docsSection" $docsSection
+   ) -}}

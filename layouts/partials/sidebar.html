@@ -32,6 +32,27 @@
 */ -}}
 {{- $context := .context -}}
 {{- $disableSidebar := .disableSidebar | default false -}}
+
+{{- /* Tab-navigation scoping (issue solo-io/docs#3164). The docs-tabs.html
+       band partial runs first (single.html / list.html call it before the
+       sidebar) and records the active tab on the page store. When enabled, the
+       sidebar shows only the current tab's top-level sections; when the store
+       is absent or reports disabled (no params.docTabs, or <2 non-empty tabs
+       in this version), $tabsEnabled stays false and the whole tree renders as
+       before. These values are threaded into render-sidebar-tree and applied
+       only at depth 0. */ -}}
+{{- $tabsEnabled := false -}}
+{{- $activeTab := "" -}}
+{{- $defaultTab := "" -}}
+{{- $docTabsList := slice -}}
+{{- with $context.Store.Get "docTabs" -}}
+  {{- if .enabled -}}
+    {{- $tabsEnabled = true -}}
+    {{- $activeTab = .active -}}
+    {{- $defaultTab = .default -}}
+    {{- $docTabsList = .tabs -}}
+  {{- end -}}
+{{- end -}}
 {{- /* When the sidebar is disabled but the caller still wants the column's
        width reserved (Hextra's blog/list.html passes this), emit a width-
        preserving left placeholder instead of a zero-width hidden <aside>.
@@ -75,136 +96,27 @@
     <aside class="hx:hidden"></aside>
   {{- end -}}
 {{- else -}}
-  {{- /* Two URL shapes to support:
-           OSS (kgw, agw):     /docs/<section>/<version>/…
-           Enterprise (docs):  /<product>/<version>/…   (each product is its
-                               own Hugo site with baseURL=/<product>/, no
-                               /docs/ prefix; versions are a flat list under
-                               site.Params.versions, not nested under
-                               site.Params.sections.<x>.versions)
-         Detect via segments[1]: "docs" → OSS, anything else → enterprise. */ -}}
+  {{- /* Version-root detection lives in utils/version-root.html so the sidebar
+         and the docs-tabs band (issue solo-io/docs#3164) share one
+         implementation. It handles the OSS (/docs/<section>/<version>/…) and
+         enterprise (/<product>/<version>/…, incl. local-dev and multilingual)
+         URL shapes and returns the resolved version root page plus the
+         supporting fields the mobile section/version rows need below. */ -}}
+  {{- $vr := partial "utils/version-root.html" $context -}}
+  {{- $section := $vr.section -}}
+  {{- $versionBase := $vr.versionBase -}}
+  {{- $currentVersion := $vr.currentVersion -}}
+  {{- $isVersionedDocs := $vr.isVersioned -}}
+  {{- $isOSSShape := $vr.isOSSShape -}}
+  {{- $matchedIdx := $vr.matchedIdx -}}
+  {{- $versionPrefix := $vr.versionPrefix -}}
   {{- $segments := split $context.RelPermalink "/" -}}
-  {{- $section := "" -}}
-  {{- /* $versionBase is the full published-URL prefix that precedes the version
-         segment (all segments before the version), so the mobile version row can
-         rebuild hrefs that keep every product and language (/<lang>/) prefix.
-         $section only holds the single product segment, which drops the language
-         prefix for multilingual URLs; $versionBase carries both. */ -}}
-  {{- $versionBase := "" -}}
-  {{- $currentVersion := "" -}}
-  {{- $isVersionedDocs := false -}}
-  {{- $isOSSShape := false -}}
-  {{- /* Position of the matched version segment for enterprise shapes (2 in
-         production, 1 in local dev). Declared at top scope so the version-row
-         path-stripping at line ~235 can read it; the enterprise branch below
-         assigns it with `=`, not `:=`. */ -}}
-  {{- $matchedIdx := 0 -}}
-  {{- /* $versionPrefix is the URL prefix used for link building and
-         render-sidebar-tree's hasPrefix check against page RelPermalinks.
-         $lookupPath is the path passed to site.GetPage to locate the
-         version section. In OSS these are the same; in enterprise they
-         diverge because each docs-hub product is its own Hugo site with
-         contentDir set to that product's subtree, so GetPage paths are
-         relative to that subtree (no /<product>/ prefix) even though
-         published URLs still include it. */ -}}
-  {{- $versionPrefix := "" -}}
-  {{- $lookupPath := "" -}}
-
-  {{- if and (ge (len $segments) 4) (eq (index $segments 1) "docs") -}}
-    {{- /* OSS shape: /docs/<section>/<version>/… */ -}}
-    {{- $isOSSShape = true -}}
-    {{- $section = index $segments 2 -}}
-    {{- $candidate := index $segments 3 -}}
-    {{- if and site.Params.sections (isset site.Params.sections $section) -}}
-      {{- range (index site.Params.sections $section).versions -}}
-        {{- if eq .linkVersion $candidate -}}
-          {{- $currentVersion = $candidate -}}
-          {{- $isVersionedDocs = true -}}
-        {{- end -}}
-      {{- end -}}
-    {{- end -}}
-    {{- if not $isVersionedDocs -}}
-      {{- if or (eq $candidate "latest") (eq $candidate "main") (findRE `^[0-9]+\.[0-9]+\.x$` $candidate) -}}
-        {{- $currentVersion = $candidate -}}
-        {{- $isVersionedDocs = true -}}
-      {{- end -}}
-    {{- end -}}
-    {{- if $isVersionedDocs -}}
-      {{- $versionPrefix = printf "/docs/%s/%s/" $section $currentVersion -}}
-      {{- $lookupPath = $versionPrefix -}}
-    {{- end -}}
-  {{- else if and (ge (len $segments) 2) (ne (index $segments 1) "") -}}
-    {{- /* Enterprise shape, three layouts:
-             Production:            /<product>/<version>/…   baseURL=https://host/<product>,
-                                                  so segments[1]=product, segments[2]=version.
-             Production + language: /<product>/<lang>/<version>/…   non-default languages
-                                                  (defaultContentLanguageInSubdir=false) gain a
-                                                  /<lang>/ segment after the product, so the
-                                                  version lands at segments[3]. The default
-                                                  language (en) has no prefix and stays at [2].
-             Local dev:             /<version>/…   baseURL=/ (hugo server),
-                                                  so segments[1]=version directly.
-           Try segments[2] first (production), then [3] (production + language),
-           then [1] (local). The version match — against site.Params.versions[].linkVersion
-           or a well-known marker — is the disambiguator. */ -}}
-    {{- $candidatePositions := slice -}}
-    {{- if ge (len $segments) 3 -}}{{- $candidatePositions = $candidatePositions | append 2 -}}{{- end -}}
-    {{- if ge (len $segments) 4 -}}{{- $candidatePositions = $candidatePositions | append 3 -}}{{- end -}}
-    {{- $candidatePositions = $candidatePositions | append 1 -}}
-    {{- range $candidatePositions -}}
-      {{- $i := . -}}
-      {{- if not $isVersionedDocs -}}
-        {{- $candidate := index $segments $i -}}
-        {{- range site.Params.versions -}}
-          {{- if eq .linkVersion $candidate -}}
-            {{- $currentVersion = $candidate -}}
-            {{- $isVersionedDocs = true -}}
-            {{- $matchedIdx = $i -}}
-          {{- end -}}
-        {{- end -}}
-        {{- if not $isVersionedDocs -}}
-          {{- if or (eq $candidate "latest") (eq $candidate "main") (findRE `^[0-9]+\.[0-9]+\.x$` $candidate) -}}
-            {{- $currentVersion = $candidate -}}
-            {{- $isVersionedDocs = true -}}
-            {{- $matchedIdx = $i -}}
-          {{- end -}}
-        {{- end -}}
-      {{- end -}}
-    {{- end -}}
-    {{- if $isVersionedDocs -}}
-      {{- /* $versionPrefix is the published-URL prefix through and including the
-             version segment, so render-sidebar-tree's hasPrefix check matches the
-             page RelPermalinks. Build it from the matched segments rather than
-             reassembling from $section/$currentVersion, so any product and
-             language (/<lang>/) segments that precede the version are carried
-             along — multilingual URLs (/<product>/<lang>/<version>/…) would
-             otherwise filter to nothing and leave an empty sidebar. */ -}}
-      {{- $versionPrefix = printf "%s/" (delimit (first (add $matchedIdx 1) $segments) "/") -}}
-      {{- /* $section is the product segment, used to look up per-section version
-             lists. Only the production shape (version at [2], product at [1])
-             exposes one; the local-dev and language-prefixed shapes leave it
-             empty. The mobile version row builds hrefs from $versionBase instead,
-             which keeps the language prefix the language-prefixed shape drops. */ -}}
-      {{- if eq $matchedIdx 2 -}}
-        {{- $section = index $segments 1 -}}
-      {{- else -}}
-        {{- $section = "" -}}
-      {{- end -}}
-      {{- /* Everything before the version segment: "" (local dev),
-             "/<product>" (production), or "/<product>/<lang>" (multilingual). */ -}}
-      {{- $versionBase = delimit (first $matchedIdx $segments) "/" -}}
-      {{- /* GetPage paths are relative to contentDir, which is set to the
-             product subtree (and is per-language: content/<lang>/<product>),
-             so the lookup never includes the product or language prefix. */ -}}
-      {{- $lookupPath = printf "/%s/" $currentVersion -}}
-    {{- end -}}
-  {{- end -}}
 
   <!-- Mobile sidebar overlay (clicking outside the panel closes it) -->
   <div class="sidebar-mobile-overlay" onclick="closeMobileSidebar()"></div>
 
   {{- if $isVersionedDocs -}}
-    {{- $docsSection := $context.Site.GetPage $lookupPath -}}
+    {{- $docsSection := $vr.docsSection -}}
 
     {{- if $docsSection -}}
       <aside class="sidebar-container hextra-sidebar-container sidebar-mobile-panel hx:order-first hx:w-64 hx:shrink-0 hx:hidden hx:xl:block hx:print:hidden">
@@ -224,8 +136,22 @@
           </div>
         {{- end -}}
 
-        {{- /* Mobile-only: section selector (only when >1 section) + version picker */ -}}
+        {{- /* Mobile-only: tab selector (issue solo-io/docs#3164) + section
+               selector (only when >1 section) + version picker. The desktop
+               tab band is hidden below the sidebar breakpoint, so on mobile the
+               tabs live here as a chip row above the version chips. */ -}}
         <div class="sidebar-mobile-only sidebar-mobile-header">
+
+          {{- if and $tabsEnabled $docTabsList -}}
+            <div class="sidebar-mobile-tab-row">
+              {{- range $docTabsList -}}
+                {{- $isCurrent := eq .name $activeTab -}}
+                <a href="{{ .href }}"
+                   class="sidebar-mobile-tab-link{{ if $isCurrent }} sidebar-mobile-tab-active{{ end }}"
+                   {{ if $isCurrent }}aria-current="true"{{ end }}>{{ .name }}</a>
+              {{- end -}}
+            </div>
+          {{- end -}}
 
           {{- if and $isOSSShape (gt (len $sectionKeys) 1) -}}
             <div class="sidebar-mobile-section-row">
@@ -378,7 +304,7 @@
 
         <div class="sidebar-nav-wrapper">
           <nav class="sidebar-nav">
-            {{- template "render-sidebar-tree" (dict "page" $docsSection "current" $context "versionPrefix" $versionPrefix "depth" 0) -}}
+            {{- template "render-sidebar-tree" (dict "page" $docsSection "current" $context "versionPrefix" $versionPrefix "depth" 0 "tabsEnabled" $tabsEnabled "activeTab" $activeTab "defaultTab" $defaultTab) -}}
           </nav>
         </div>
       </aside>
@@ -415,7 +341,7 @@
         {{- end -}}
         <div class="sidebar-nav-wrapper">
           <nav class="sidebar-nav">
-            {{- template "render-sidebar-tree" (dict "page" $navRoot "current" $context "versionPrefix" "" "depth" 0) -}}
+            {{- template "render-sidebar-tree" (dict "page" $navRoot "current" $context "versionPrefix" "" "depth" 0 "tabsEnabled" $tabsEnabled "activeTab" $activeTab "defaultTab" $defaultTab) -}}
           </nav>
         </div>
       </aside>
@@ -429,6 +355,9 @@
   {{- $current := .current -}}
   {{- $versionPrefix := .versionPrefix -}}
   {{- $depth := .depth | default 0 -}}
+  {{- $tabsEnabled := .tabsEnabled | default false -}}
+  {{- $activeTab := .activeTab | default "" -}}
+  {{- $defaultTab := .defaultTab | default "" -}}
   {{- $maxDepth := 4 -}}
 
   {{- if gt $depth $maxDepth -}}{{- return -}}{{- end -}}
@@ -438,6 +367,13 @@
     {{- $include := true -}}
     {{- if ne $versionPrefix "" -}}
       {{- $include = hasPrefix .RelPermalink $versionPrefix -}}
+    {{- end -}}
+    {{- /* Tab scoping is a top-level (depth 0) concern only: keep an item when
+           its tab (front-matter `tab`, else the default tab) matches the active
+           tab. Deeper levels are never filtered, so a tab's subtree renders in
+           full. */ -}}
+    {{- if and $include $tabsEnabled (eq $depth 0) -}}
+      {{- $include = eq (.Params.tab | default $defaultTab) $activeTab -}}
     {{- end -}}
     {{- if $include -}}{{- $children = $children | append . -}}{{- end -}}
   {{- end -}}
