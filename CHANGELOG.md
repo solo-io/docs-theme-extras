@@ -22,7 +22,7 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
-## [v0.1.20] — 2026-07-17
+## [v0.1.20] — 2026-07-21
 
 ### Shortcodes — `version` wrapping MULTIPLE table rows now re-flows into the table
 
