@@ -34,12 +34,29 @@
 {{- if and (in $path "agentgateway") (eq $ver "2.1.x") -}}
   {{- $path = replace $path "agentgateway/" "" -}}
 {{- end -}}
-{{- if and (in $path "reference/api") (eq $ver "2.1.x") -}}
-  {{- if eq $product "envoy" -}}
-    {{- $path = replace $path "reference/api" "/reference/api/kgateway" -}}
-  {{- end -}}
-  {{- if eq $product "agentgateway" -}}
-    {{- $path = replace $path "reference/api" "/reference/api/api" -}}
+{{- /* Route OSS single-page reference/api anchors to the enterprise reference
+       subpages. The OSS site serves one reference/api page, so its anchors are
+       correct as-is; the enterprise site splits the reference into subpages
+       (kgateway, solo, portal, waf), so a bare /reference/api/#x must be routed
+       to a subpage. Applies to every enterprise version, not just 2.1.x.
+
+       Two signals mark an enterprise build:
+         - $product == "envoy": injected by the rebase shortcode (rebased pages).
+         - currentProduct == "kgateway": set on the enterprise kgateway site
+           config (covers reuse-based pages, which get no rebase-injected product).
+       The OSS kgateway.dev config sets neither, so OSS anchors stay untouched.
+       The agentgateway branch stays product-only, to avoid assuming anything
+       about the agentgateway OSS site config. Links that already target a
+       subpage are left alone so re-routing can't double up the path. */ -}}
+{{- if in $path "reference/api" -}}
+  {{- $curProduct := .Site.Params.currentProduct | default "" -}}
+  {{- $alreadyRouted := or (in $path "reference/api/kgateway") (in $path "reference/api/solo") (in $path "reference/api/portal") (in $path "reference/api/waf") (in $path "reference/api/api") (in $path "reference/api/kubernetes") -}}
+  {{- if not $alreadyRouted -}}
+    {{- if or (eq $product "envoy") (eq $curProduct "kgateway") -}}
+      {{- $path = replace $path "reference/api" "/reference/api/kgateway" -}}
+    {{- else if eq $product "agentgateway" -}}
+      {{- $path = replace $path "reference/api" "/reference/api/api" -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
 

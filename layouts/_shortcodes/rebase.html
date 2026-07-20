@@ -77,8 +77,10 @@ first segment that matches a known version wins.
 
 {{/* For kgateway/envoy content, override product so link-hextra can apply
      envoy-specific path transformations (e.g. reference/api → /reference/api/kgateway).
+     Match every envoy version dir (envoy/2.2.x, envoy/latest, envoy/main, ...), not
+     just latest/main — enterprise 2.1.x rebases envoy/2.2.x and needs the same routing.
      Version is NOT overridden — the URL-based inference above is correct. */}}
-{{ if or (in $file "envoy/latest") (in $file "envoy/main") }}
+{{ if in $file "kgateway/envoy" }}
 {{ $product = "envoy" }}
 {{ end }}
 
