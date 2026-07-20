@@ -16,8 +16,11 @@ import { TEST_PAGES, readFixture } from "./helpers/fixture";
 //     pages — the preprocessing regex normalizes both to percent
 //   - the per-cell pattern (pipes outside the shortcode) still works
 //     as the alternative for cell-scope conditionals
-//   - the multi-line form (shortcode tags on their own lines) is NOT
-//     covered by the regex and stays broken — documented as test.fail
+//   - the MULTI-ROW form (opener glued to the end of the preceding row,
+//     closer glued to the end of the last gated row, wrapping more than
+//     one row across lines — the kgateway templating-language.md
+//     get_cookie/get_cookie_i shape) now re-flows into the table: the
+//     table-row regex matches a run of pipe rows, not just one line
 //   - non-v2 pages exclude the gated markers (gating works)
 
 const PERCENT_BASELINE = "MARKER_TABLE_VERSION_ROW_BASELINE_FEATURE";
@@ -28,6 +31,9 @@ const KEEPVERSION_BASELINE = "MARKER_TABLE_VERSION_ROW_KEEPVERSION_BASELINE";
 const KEEPVERSION_GATED = "MARKER_TABLE_VERSION_ROW_KEEPVERSION_FEATURE";
 const PERCELL_BASELINE = "MARKER_TABLE_VERSION_ROW_PERCELL_BASELINE";
 const PERCELL_GATED = "MARKER_TABLE_VERSION_ROW_PERCELL_FEATURE";
+const MULTIROW_BASELINE = "MARKER_TABLE_VERSION_ROW_MULTIROW_BASELINE";
+const MULTIROW_GATED_1 = "MARKER_TABLE_VERSION_ROW_MULTIROW_FEATURE1";
+const MULTIROW_GATED_2 = "MARKER_TABLE_VERSION_ROW_MULTIROW_FEATURE2";
 
 // Strip the copy-as-markdown <script> block before searching — it
 // embeds the raw markdown source (including literal pipes) and would
@@ -130,6 +136,51 @@ test.describe("percent-form version wrapping a table row: gating absence", () =>
     test(`${page.name}: gated marker is absent`, () => {
       const html = visibleHtml(page.filePath);
       expect(html).not.toContain(PERCENT_GATED);
+    });
+  }
+});
+
+// ── Percent-form multi-row: opener glued to the preceding row, closer
+//    glued to the last gated row, wrapping >1 row across lines. This is
+//    the kgateway templating-language.md get_cookie/get_cookie_i shape.
+//    On the rebase path the bulk percent→angle conversion + the widened
+//    table-row regex reconverts it; on the reuse path it stays percent
+//    and version.html raw-emits it back into the table. Both gated rows
+//    must land as real <tr>s inside the same table as the baseline. ────
+
+test.describe("percent-form version wrapping multiple table rows", () => {
+  for (const page of TEST_PAGES) {
+    if (!V2_PAGES.includes(page.name)) continue;
+
+    for (const marker of [MULTIROW_GATED_1, MULTIROW_GATED_2]) {
+      test(`${page.name}: ${marker} renders as a real <tr> with 2 <td> cells`, () => {
+        assertRowRendersAsTwoCells(visibleHtml(page.filePath), marker);
+      });
+
+      test(`${page.name}: ${marker} contains no literal pipe characters`, () => {
+        assertRowHasNoLeakedPipes(visibleHtml(page.filePath), marker);
+      });
+
+      test(`${page.name}: ${marker} shares a <table> with the baseline row`, () => {
+        assertRowSharesTableWithBaseline(
+          visibleHtml(page.filePath),
+          MULTIROW_BASELINE,
+          marker,
+        );
+      });
+    }
+  }
+});
+
+test.describe("percent-form version wrapping multiple table rows: gating absence", () => {
+  for (const page of TEST_PAGES) {
+    if (!NON_V2_PAGES.includes(page.name)) continue;
+    test(`${page.name}: both gated markers are absent`, () => {
+      const html = visibleHtml(page.filePath);
+      expect(html).not.toContain(MULTIROW_GATED_1);
+      expect(html).not.toContain(MULTIROW_GATED_2);
+      // The ungated baseline row stays on every version.
+      expect(html).toContain(MULTIROW_BASELINE);
     });
   }
 });

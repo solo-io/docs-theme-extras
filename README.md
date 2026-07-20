@@ -228,10 +228,12 @@ spec reads**:
   **layouts** change. Gate on layout paths (`layouts/**`, `static/**`,
   `assets/css/**`, `assets/js/**`, `go.mod`, `hugo.yaml`).
 - **`--project=content`** — every spec reads the consumer's **own** content:
-  the built HTML tree (`markdown-leaks` rendering leaks; `copy-md-fidelity`
-  copy-as-markdown output; `hugo-warnings` build-log warnings) or the markdown
-  source (`curl-quotes`, `tab-syntax`, `shortcode-args`, `include-form`,
-  `cascade-type` — all walk `scanRoots`). Pass/fail tracks content edits, so
+  the built HTML tree (`markdown-leaks` rendering leaks; `missing-images`
+  `<img>`/`<source>` references that resolve to an unpublished file;
+  `copy-md-fidelity` copy-as-markdown output; `hugo-warnings` build-log
+  warnings) or the markdown source (`curl-quotes`, `tab-syntax`,
+  `shortcode-args`, `include-form`, `cascade-type` — all walk `scanRoots`).
+  Pass/fail tracks content edits, so
   gate on **content paths AND layout paths** (`content/**`, plus your
   page/snippet roots such as `assets/<product>-docs/**`, plus the layout paths
   above) — content edits and layout edits both change what renders.

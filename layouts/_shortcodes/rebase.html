@@ -177,16 +177,21 @@ first segment that matches a known version wins.
      runs, and indented inner content would get wrapped in <pre><code> by
      CommonMark's "4 spaces = code" rule before we ever see it. */}}
 
-{{/* Table-row exception: a single-line version block whose inner content
-     is a pipe-delimited row needs the percent form so the shortcode output
+{{/* Table-row exception: a version block whose inner content is one or more
+     pipe-delimited rows needs the percent form so the shortcode output
      re-enters the markdown stream and the pipes get parsed as cell
      delimiters by Goldmark. Angle form would emit opaque HTML inline and
-     Goldmark would treat the whole pipe-string as one <td>. The pattern
-     match requires the opening and closing tags on the same line as the
-     content, with the content starting and ending in `|` — narrow enough
-     that it doesn't trip the indented-list or fence-adjacent cases that
-     rely on staying in angle form. */}}
-{{ $clean = replaceRE `\{\{<\s*(version\s+(?:include|exclude)-if="[^"]+"[^>]*?)\s*>}}(\s*\|[^\n]*?\|\s*)\{\{<\s*/version\s*>}}` "{{% $1 %}}$2{{% /version %}}" $clean }}
+     Goldmark would treat the whole pipe-string as one <td> (or, for a
+     multi-row block, drop the rows entirely because they land in the
+     shortcode placeholder AFTER the table is parsed). The content group
+     `(?:\s*\|[^\n]*\|)+` matches one row (`{{< version >}}| a | b |{{< /version >}}`)
+     OR several rows across lines (the get_cookie / get_cookie_i block in
+     templating-language.md, where the opener is glued to the preceding row
+     and the closer to the last row) — the inter-row `\n` is absorbed by the
+     leading `\s*`. Every matched line must be a full `|...|` row, so it stays
+     narrow enough that it doesn't trip the indented-list or fence-adjacent
+     cases that rely on staying in angle form. */}}
+{{ $clean = replaceRE `\{\{<\s*(version\s+(?:include|exclude)-if="[^"]+"[^>]*?)\s*>}}((?:\s*\|[^\n]*\|)+\s*)\{\{<\s*/version\s*>}}` "{{% $1 %}}$2{{% /version %}}" $clean }}
 
 {{/* List-item exception: a version block whose inner content starts with
      a bullet or numbered list marker at column 0 needs the percent form

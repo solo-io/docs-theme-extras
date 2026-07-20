@@ -632,6 +632,14 @@ Percent-form, inline (current behavior: gated row renders as `<p>| ... |</p>` ou
 | MARKER_TABLE_VERSION_ROW_BASELINE_FEATURE | 1.0 |
 {{% version include-if="v2" %}}| MARKER_TABLE_VERSION_ROW_PERCENT_FEATURE | 2.0 |{{% /version %}}
 
+Percent-form, multi-row (the get_cookie / get_cookie_i shape from kgateway `templating-language.md`: the opener is glued to the END of the preceding baseline row and the closer to the END of the last gated row, so the block wraps MORE than one row across lines. The table-row regex now matches a run of pipe rows, not just a single line, so both gated rows re-flow into the parent table):
+
+| Feature | Min version |
+| --- | --- |
+| MARKER_TABLE_VERSION_ROW_MULTIROW_BASELINE | 1.0 |{{% version include-if="v2" %}}
+| MARKER_TABLE_VERSION_ROW_MULTIROW_FEATURE1 | 2.0 |
+| MARKER_TABLE_VERSION_ROW_MULTIROW_FEATURE2 | 2.0 |{{% /version %}}
+
 Angle-bracket form, inline (current behavior: gated row renders inside the table but the whole row is a single `<td>` with literal pipes as text):
 
 | Feature | Min version |

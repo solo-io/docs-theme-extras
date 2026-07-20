@@ -66,8 +66,9 @@ export default defineConfig({
     // edits. A consumer runs this project whenever CONTENT changes (and on
     // layout PRs too, since a layout change alters how existing content
     // renders). This is the coverage a layout-only trigger was missing.
-    //   builtRoot scanners: markdown-leaks (rendering leaks), built-html-integrity
-    //     (<p>-in-<pre>, fragmented code blocks, copy-md presence), copy-md-fidelity
+    //   builtRoot scanners: markdown-leaks (rendering leaks), missing-images
+    //     (<img>/<source> refs that 404), built-html-integrity (<p>-in-<pre>,
+    //     fragmented code blocks, copy-md presence), copy-md-fidelity
     //     (copy-as-markdown output vs HTML), hugo-warnings (build-log warnings),
     //     dev-build (fails if the build carries a dev-server LiveReload script).
     //   source scanners: curl-quotes, tab-syntax, shortcode-args, include-form,
@@ -78,7 +79,7 @@ export default defineConfig({
     {
       name: "content",
       testMatch:
-        /markdown-leaks\.spec\.ts$|built-html-integrity\.spec\.ts$|copy-md-fidelity\.spec\.ts$|hugo-warnings\.spec\.ts$|dev-build\.spec\.ts$|curl-quotes\.spec\.ts$|tab-syntax\.spec\.ts$|shortcode-args\.spec\.ts$|include-form\.spec\.ts$|cascade-type\.spec\.ts$/,
+        /markdown-leaks\.spec\.ts$|missing-images\.spec\.ts$|built-html-integrity\.spec\.ts$|copy-md-fidelity\.spec\.ts$|hugo-warnings\.spec\.ts$|dev-build\.spec\.ts$|curl-quotes\.spec\.ts$|tab-syntax\.spec\.ts$|shortcode-args\.spec\.ts$|include-form\.spec\.ts$|cascade-type\.spec\.ts$/,
     },
     {
       name: "browser",

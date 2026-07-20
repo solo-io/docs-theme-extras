@@ -93,16 +93,18 @@
 
 {{- end -}}
 
-{{- /* Table-row exception: an inline {{< version >}} that wraps a single
-       pipe-delimited row needs the percent form so the shortcode output
+{{- /* Table-row exception: a {{< version >}} that wraps one or more
+       pipe-delimited rows needs the percent form so the shortcode output
        re-enters the markdown stream and the pipes get parsed as cell
        delimiters. Angle form would emit opaque HTML inline and Goldmark
-       would treat the whole pipe-string as one <td>. The pattern is narrow
-       (opening tag, content with leading + trailing `|`, closing tag, all
-       on the same line), so it won't affect the indented-list or
-       fence-adjacent cases that rely on staying in angle form. Mirrors
-       the same conversion in rebase.html. */ -}}
-{{- $content = replaceRE `\{\{<\s*(version\s+(?:include|exclude)-if="[^"]+"[^>]*?)\s*>}}(\s*\|[^\n]*?\|\s*)\{\{<\s*/version\s*>}}` "{{% $1 %}}$2{{% /version %}}" $content -}}
+       would treat the whole pipe-string as one <td> (or drop a multi-row
+       block entirely, since the rows land in the placeholder after the
+       table is parsed). The content group `(?:\s*\|[^\n]*\|)+` matches a
+       single same-line row OR several rows across lines (inter-row `\n`
+       absorbed by the leading `\s*`); every matched line must be a full
+       `|...|` row, so it won't affect the indented-list or fence-adjacent
+       cases that rely on staying in angle form. Mirrors rebase.html. */ -}}
+{{- $content = replaceRE `\{\{<\s*(version\s+(?:include|exclude)-if="[^"]+"[^>]*?)\s*>}}((?:\s*\|[^\n]*\|)+\s*)\{\{<\s*/version\s*>}}` "{{% $1 %}}$2{{% /version %}}" $content -}}
 
 {{- /* List-item exception: a version block whose inner content starts
        with a bullet or numbered list marker at column 0 needs the percent
