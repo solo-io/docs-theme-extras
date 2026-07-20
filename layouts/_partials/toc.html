@@ -76,9 +76,21 @@
   {{- end -}}
 {{- end }}
 
-{{/* ---------- TOC container ---------- */}}
-{{- if and $toc (ge (len $headings) $minNumHeadings) }}
-<nav class="hextra-toc hx:order-last hx:hidden hx:w-64 hx:shrink-0 hx:xl:block hx:print:hidden hx:px-4" aria-label="table of contents">
+{{/* ---------- TOC container ----------
+     Render the rail whenever `toc` is enabled, even when there are too few
+     headings to list. The empty rail reserves its `w-64` width so the main
+     content column stays the same width across pages — otherwise a page whose
+     body is a single generated table with no headings (e.g. a Helm values
+     reference) loses the rail entirely and its content widens relative to
+     sibling pages. The heading list, "On this page" label, and back-to-top
+     footer render only when there are enough headings; below that the rail is
+     an empty reserved gutter (marked aria-hidden so screen readers don't
+     announce an empty navigation landmark). `toc: false` in front matter still
+     removes the rail completely. */}}
+{{- if $toc }}
+{{- $hasHeadings := ge (len $headings) $minNumHeadings }}
+<nav class="hextra-toc hx:order-last hx:hidden hx:w-64 hx:shrink-0 hx:xl:block hx:print:hidden hx:px-4"{{ if $hasHeadings }} aria-label="table of contents"{{ else }} aria-hidden="true"{{ end }}>
+  {{- if $hasHeadings }}
   <div class="hextra-scrollbar solo-toc-inner">
     <p class="solo-toc-heading">{{ $onThisPage }}</p>
 
@@ -93,5 +105,6 @@
       </button>
     </div>
   </div>
+  {{- end }}
 </nav>
 {{- end }}

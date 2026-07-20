@@ -940,6 +940,59 @@ hr.footnotes-sep,
   border-color: #374151;
 }
 
+/* ── Author-selected table display (`table` shortcode) ─────────────────
+   The `table` shortcode wraps a rendered markdown table in
+   `.solo-table.solo-table--<mode>` so an author can override the default
+   column-count cap. Each mode targets `.table-wrapper table th/td` (the
+   wrapper + table still come from render-table.html) with an extra element
+   in the selector so it outweighs the `.table-wrapper.table-capped th`
+   cap rule (both are two classes; the trailing `table` element tips the
+   specificity) regardless of source order. Note render-table.html also
+   emits an INLINE `white-space: nowrap` on short cells (<=30 chars); inline
+   styles beat these class rules, so in `wrap`/`equal` mode short cells stay
+   unwrapped — harmless, they're short by definition. */
+.solo-table--wrap .table-wrapper table {
+  width: 100%;
+  table-layout: auto;
+}
+.solo-table--wrap .table-wrapper table th,
+.solo-table--wrap .table-wrapper table td {
+  max-width: none;         /* fill the body width; don't cap at 24rem */
+  white-space: normal;
+  overflow-wrap: anywhere; /* break long tokens so nothing overflows the row */
+}
+
+.solo-table--nowrap .table-wrapper table {
+  /* `max-content` sizes the table to its unwrapped content and, unlike
+     `auto` (shrink-to-fit, which is capped at the available width), lets it
+     grow past the wrapper so the wrapper's overflow-x:auto actually scrolls.
+     `max-width:none` clears the prose `max-width:100%` that would re-clamp it. */
+  width: max-content;
+  max-width: none;
+  table-layout: auto;
+}
+.solo-table--nowrap .table-wrapper table th,
+.solo-table--nowrap .table-wrapper table td {
+  max-width: none;
+  white-space: nowrap;     /* never wrap; the wrapper's overflow-x:auto scrolls */
+  overflow-wrap: normal;
+}
+
+.solo-table--equal .table-wrapper table {
+  width: 100%;
+  table-layout: fixed;
+}
+.solo-table--equal .table-wrapper table th,
+.solo-table--equal .table-wrapper table td {
+  /* table-layout:fixed alone content-sizes columns in Chrome; an explicit
+     equal width per cell (column count comes from the shortcode as
+     --solo-table-cols) is what actually divides the row evenly. */
+  width: calc(100% / var(--solo-table-cols, 1));
+  max-width: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 /* ── Section cards (auto-generated on list pages) ────────────────────── */
 /* Replicates the docs-theme-lotus card grid on parent sections */
 .section-cards {
