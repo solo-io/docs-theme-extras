@@ -70,10 +70,20 @@ first segment that matches a known version wins.
 {{ if not $doc }}
   {{ $doc = resources.Get $file }}
 {{ end }}
-{{ if not $doc }}
+{{/* Fail LOUDLY on a missing rebased resource: a wrong `file=` path or an
+     incomplete assembly is real breakage we want to surface, not paper over with
+     an empty section. `errorf` fails the build with a clear message. The `with
+     $doc` guard sets $content only when the resource resolved, so a not-found
+     $doc never falls through to `$doc.Content` on `false` — that would crash with
+     a confusing "nil pointer evaluating resource.Resource.Content" instead of the
+     actionable message below. So this is the same fail-the-build behavior, minus
+     the misleading secondary error. */}}
+{{ $content := "" }}
+{{ with $doc }}
+  {{ $content = .Content }}
+{{ else }}
   {{ errorf "rebase: resource not found: %q (page: %s). Run 'make server PRODUCT=<product>' to assemble versioned assets." (.Get "file") .Page.RelPermalink }}
 {{ end }}
-{{ $content := $doc.Content }}
 
 {{/* For kgateway/envoy content, override product so link-hextra can apply
      envoy-specific path transformations (e.g. reference/api → /reference/api/kgateway).
