@@ -14,23 +14,45 @@
     - url: The remote URL of the markdown file to fetch.
     - section: The heading name of the section to extract.
     - exclude: (optional) A regex pattern for lines to remove from the section.
+
+  Network resilience: `timeout` caps how long a slow/unreachable remote can
+  block the build, and `try` (required since Hugo v0.141 removed `resource.Err`)
+  turns a fetch error/timeout into a WARN + link-checker-visible fallback instead
+  of a hang. This is the "cel.md GetRemote stall": a cold CI build (no getresource
+  cache) fetches `schema/cel.md` from raw.githubusercontent.com, and without a cap
+  a stalled/throttled runner connection hangs the whole build. A transient FETCH
+  error/timeout (the `try` wrapper's `.Err`) is treated as recoverable (warn +
+  fallback link, build stays green — the docs-hub hugo-warnings test escalates a
+  persistent one, and the link checker reports the dead URL). A dead/404 URL (a
+  nil `.Value`) and a missing SECTION are both real reference bugs and fail loudly
+  with `errorf`.
 */ -}}
 {{- $url := .Get "url" -}}
 {{ $exclude := .Get "exclude" }}
 {{- $section := .Get "section" -}}
-{{- with resources.GetRemote $url -}}
-  {{- $content := .Content -}}
-  {{- $pattern := printf "(?ms)^#+? %s\\s*(.*?)(^#+? |\\z)" $section -}}
-  {{- $match := index (findRESubmatch $pattern $content) 0 -}}
-  {{- if $match -}}
-    {{- $section := index $match 1 | replaceRE (printf "^#+? %s\\s*" $section) "" -}}
-    {{- if $exclude -}}
-      {{- $section = replaceRE (printf "(?m)%s.*\n?" $exclude) "" $section -}}
-    {{- end -}}
-    {{- $.Page.RenderString $section -}}
-  {{- else -}}
-    {{- errorf "fail to find section: %s" $section -}}
-  {{- end -}}
+{{- $attempt := try (resources.GetRemote $url (dict "timeout" "15s")) -}}
+{{- with $attempt.Err -}}
+  {{- warnf "github-table: failed to fetch %q: %s" $url . -}}
+  <p><strong>Error:</strong> Unable to load table from <a href="{{ $url }}">{{ $url }}</a></p>
 {{- else -}}
-  {{- errorf "unable to load content from %s" $url -}}
+  {{- with $attempt.Value -}}
+    {{- $content := .Content -}}
+    {{- $pattern := printf "(?ms)^#+? %s\\s*(.*?)(^#+? |\\z)" $section -}}
+    {{- $match := index (findRESubmatch $pattern $content) 0 -}}
+    {{- if $match -}}
+      {{- $section := index $match 1 | replaceRE (printf "^#+? %s\\s*" $section) "" -}}
+      {{- if $exclude -}}
+        {{- $section = replaceRE (printf "(?m)%s.*\n?" $exclude) "" $section -}}
+      {{- end -}}
+      {{- $.Page.RenderString $section -}}
+    {{- else -}}
+      {{- errorf "fail to find section: %s" $section -}}
+    {{- end -}}
+  {{- else -}}
+    {{- /* A nil .Value with no .Err means the host responded but the resource is
+       absent (a 404 / dead or moved URL) — a real reference bug, not a transient
+       network blip — so fail the build LOUDLY, like the missing-section errorf
+       above and github.html. Contrast the .Err branch, which stays a WARN. */ -}}
+    {{- errorf "github-table: no content at %q (dead or moved URL) — fix or remove the reference" $url -}}
+  {{- end -}}
 {{- end -}}

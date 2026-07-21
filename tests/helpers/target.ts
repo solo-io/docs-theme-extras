@@ -101,6 +101,12 @@ class Target {
     return this.cfg().allowlists.consoleErrors.map((p) => new RegExp(p));
   }
 
+  // Per-consumer regex patterns for missing-images.spec.ts. Strings from
+  // [allowlists].missingImages in the TOML are compiled to RegExp here.
+  get missingImagesAllowlist(): RegExp[] {
+    return this.cfg().allowlists.missingImages.map((p) => new RegExp(p));
+  }
+
   shouldRun(check: keyof Checks): boolean {
     return this.cfg().checks[check];
   }

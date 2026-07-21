@@ -58,7 +58,7 @@ export default defineConfig({
     {
       name: "static",
       testMatch:
-        /static\.spec\.ts$|versioning\.spec\.ts$|versioned-image-auto\.spec\.ts$|version-nested-list\.spec\.ts$|version-inside-fence\.spec\.ts$|version-table-row\.spec\.ts$|version-cards\.spec\.ts$|shortcode-contexts\.spec\.ts$|conditional-block\.spec\.ts$|cond-reuse-table\.spec\.ts$|callout-in-table-cell\.spec\.ts$|auto-cards\.spec\.ts$|card-image\.spec\.ts$|presence\.spec\.ts$|github-shortcode\.spec\.ts$|language-switch\.spec\.ts$|redirect\.spec\.ts$|sidebar-linktitle\.spec\.ts$|sidebar-flat\.spec\.ts$|page-feedback\.spec\.ts$|footnotes-after-cards\.spec\.ts$|callout-icon\.spec\.ts$|custom-alert\.spec\.ts$/,
+        /static\.spec\.ts$|versioning\.spec\.ts$|versioned-image-auto\.spec\.ts$|version-nested-list\.spec\.ts$|version-inside-fence\.spec\.ts$|version-table-row\.spec\.ts$|version-cards\.spec\.ts$|shortcode-contexts\.spec\.ts$|conditional-block\.spec\.ts$|cond-reuse-table\.spec\.ts$|callout-in-table-cell\.spec\.ts$|auto-cards\.spec\.ts$|card-image\.spec\.ts$|presence\.spec\.ts$|github-shortcode\.spec\.ts$|language-switch\.spec\.ts$|redirect\.spec\.ts$|sidebar-linktitle\.spec\.ts$|sidebar-flat\.spec\.ts$|link-hextra-apiref\.spec\.ts$|build-resilience\.spec\.ts$|page-feedback\.spec\.ts$|footnotes-after-cards\.spec\.ts$|callout-icon\.spec\.ts$|custom-alert\.spec\.ts$/,
     },
     // Consumer-content specs. Every spec here reads the CONSUMER's own content
     // — either the built HTML tree (target.builtRoot) or the markdown source
@@ -66,8 +66,9 @@ export default defineConfig({
     // edits. A consumer runs this project whenever CONTENT changes (and on
     // layout PRs too, since a layout change alters how existing content
     // renders). This is the coverage a layout-only trigger was missing.
-    //   builtRoot scanners: markdown-leaks (rendering leaks), built-html-integrity
-    //     (<p>-in-<pre>, fragmented code blocks, copy-md presence), copy-md-fidelity
+    //   builtRoot scanners: markdown-leaks (rendering leaks), missing-images
+    //     (<img>/<source> refs that 404), built-html-integrity (<p>-in-<pre>,
+    //     fragmented code blocks, copy-md presence), copy-md-fidelity
     //     (copy-as-markdown output vs HTML), hugo-warnings (build-log warnings),
     //     dev-build (fails if the build carries a dev-server LiveReload script).
     //   source scanners: curl-quotes, tab-syntax, shortcode-args, include-form,
@@ -78,13 +79,13 @@ export default defineConfig({
     {
       name: "content",
       testMatch:
-        /markdown-leaks\.spec\.ts$|built-html-integrity\.spec\.ts$|copy-md-fidelity\.spec\.ts$|hugo-warnings\.spec\.ts$|dev-build\.spec\.ts$|curl-quotes\.spec\.ts$|tab-syntax\.spec\.ts$|shortcode-args\.spec\.ts$|include-form\.spec\.ts$|cascade-type\.spec\.ts$/,
+        /markdown-leaks\.spec\.ts$|missing-images\.spec\.ts$|built-html-integrity\.spec\.ts$|copy-md-fidelity\.spec\.ts$|hugo-warnings\.spec\.ts$|dev-build\.spec\.ts$|curl-quotes\.spec\.ts$|tab-syntax\.spec\.ts$|shortcode-args\.spec\.ts$|include-form\.spec\.ts$|cascade-type\.spec\.ts$/,
     },
     {
       name: "browser",
       use: { ...devices["Desktop Chrome"] },
       testMatch:
-        /browser\.spec\.ts$|contrast\.spec\.ts$|viewport\.spec\.ts$|brand\.spec\.ts$|theme-toggle\.spec\.ts$|mermaid-render\.spec\.ts$|sidebar-rail\.spec\.ts$|toc-layout\.spec\.ts$|alert-body\.spec\.ts$|back-to-top\.spec\.ts$/,
+        /browser\.spec\.ts$|contrast\.spec\.ts$|viewport\.spec\.ts$|brand\.spec\.ts$|theme-toggle\.spec\.ts$|mermaid-render\.spec\.ts$|sidebar-rail\.spec\.ts$|toc-layout\.spec\.ts$|alert-body\.spec\.ts$|back-to-top\.spec\.ts$|table-display\.spec\.ts$/,
     },
     {
       name: "cross-browser-chromium",
