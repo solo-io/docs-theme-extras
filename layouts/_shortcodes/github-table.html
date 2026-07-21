@@ -20,11 +20,12 @@
   turns a fetch error/timeout into a WARN + link-checker-visible fallback instead
   of a hang. This is the "cel.md GetRemote stall": a cold CI build (no getresource
   cache) fetches `schema/cel.md` from raw.githubusercontent.com, and without a cap
-  a stalled/throttled runner connection hangs the whole build. A FETCH failure is
-  treated as transient (warn + fallback link, build stays green — the docs-hub
-  hugo-warnings test escalates a persistent one, and the link checker reports the
-  dead URL). A missing SECTION, by contrast, is a real author bug in `section=`
-  and still fails loudly with `errorf`.
+  a stalled/throttled runner connection hangs the whole build. A transient FETCH
+  error/timeout (the `try` wrapper's `.Err`) is treated as recoverable (warn +
+  fallback link, build stays green — the docs-hub hugo-warnings test escalates a
+  persistent one, and the link checker reports the dead URL). A dead/404 URL (a
+  nil `.Value`) and a missing SECTION are both real reference bugs and fail loudly
+  with `errorf`.
 */ -}}
 {{- $url := .Get "url" -}}
 {{ $exclude := .Get "exclude" }}
@@ -48,7 +49,10 @@
       {{- errorf "fail to find section: %s" $section -}}
     {{- end -}}
   {{- else -}}
-    {{- warnf "github-table: no content at %q (dead or moved URL)" $url -}}
-    <p><strong>Error:</strong> Unable to load table from <a href="{{ $url }}">{{ $url }}</a></p>
+    {{- /* A nil .Value with no .Err means the host responded but the resource is
+       absent (a 404 / dead or moved URL) — a real reference bug, not a transient
+       network blip — so fail the build LOUDLY, like the missing-section errorf
+       above and github.html. Contrast the .Err branch, which stays a WARN. */ -}}
+    {{- errorf "github-table: no content at %q (dead or moved URL) — fix or remove the reference" $url -}}
   {{- end -}}
 {{- end -}}
