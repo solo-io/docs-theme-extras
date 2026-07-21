@@ -9,6 +9,12 @@ Two faces, one repo:
 - **Hugo theme module** — consumers import this via `go.mod`. Hextra comes along as a transitive dependency.
 - **Playwright HTML-only harness** — consumers point it at their built output via `make test CONFIG=path/to/.docs-test.toml`.
 
+> [!TIP]
+> Authoring or maintaining content? See [USAGE.md](./USAGE.md) for the
+> shortcodes and render behavior this module adds on top of, or changes from,
+> stock Hugo and Hextra (with links to the upstream docs), plus which Hextra
+> layout files this module shadows and how to maintain them.
+
 ## Architecture
 
 ```
@@ -460,6 +466,9 @@ reload reuses the cached version.
 ├── playwright.config.ts            Reads DOCS_TEST_CONFIG TOML
 ├── Makefile                        Build + test targets
 ├── README.md
+├── USAGE.md                        Authoring + maintaining reference: shortcode
+│                                   and render-hook diffs vs Hugo/Hextra, plus
+│                                   the Hextra files this module shadows
 ├── LICENSE                         Apache-2.0
 ├── MIGRATION_AUDIT.md              Phase-0 audit (kept for reference)
 │
