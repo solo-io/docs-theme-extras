@@ -58,7 +58,7 @@ export default defineConfig({
     {
       name: "static",
       testMatch:
-        /static\.spec\.ts$|versioning\.spec\.ts$|versioned-image-auto\.spec\.ts$|version-nested-list\.spec\.ts$|version-inside-fence\.spec\.ts$|version-table-row\.spec\.ts$|version-cards\.spec\.ts$|shortcode-contexts\.spec\.ts$|conditional-block\.spec\.ts$|cond-reuse-table\.spec\.ts$|callout-in-table-cell\.spec\.ts$|auto-cards\.spec\.ts$|card-image\.spec\.ts$|presence\.spec\.ts$|github-shortcode\.spec\.ts$|language-switch\.spec\.ts$|redirect\.spec\.ts$|sidebar-linktitle\.spec\.ts$|sidebar-flat\.spec\.ts$|page-feedback\.spec\.ts$|footnotes-after-cards\.spec\.ts$|callout-icon\.spec\.ts$|custom-alert\.spec\.ts$/,
+        /static\.spec\.ts$|versioning\.spec\.ts$|versioned-image-auto\.spec\.ts$|version-nested-list\.spec\.ts$|version-inside-fence\.spec\.ts$|version-table-row\.spec\.ts$|version-cards\.spec\.ts$|shortcode-contexts\.spec\.ts$|conditional-block\.spec\.ts$|cond-reuse-table\.spec\.ts$|callout-in-table-cell\.spec\.ts$|auto-cards\.spec\.ts$|card-image\.spec\.ts$|presence\.spec\.ts$|github-shortcode\.spec\.ts$|language-switch\.spec\.ts$|redirect\.spec\.ts$|sidebar-linktitle\.spec\.ts$|sidebar-flat\.spec\.ts$|link-hextra-apiref\.spec\.ts$|page-feedback\.spec\.ts$|footnotes-after-cards\.spec\.ts$|callout-icon\.spec\.ts$|custom-alert\.spec\.ts$/,
     },
     // Consumer-content specs. Every spec here reads the CONSUMER's own content
     // — either the built HTML tree (target.builtRoot) or the markdown source

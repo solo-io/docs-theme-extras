@@ -430,6 +430,19 @@ The `link-hextra` shortcode is the cross-product variant; it expects a product/v
 
 The link-hextra shortcode resolves to a clickable [MARKER_LINK_HEXTRA]({{< link-hextra path="/everything/" version="v2" product="test" >}}) link.
 
+#### link-hextra reference/api routing
+
+`link-hextra` routes an OSS single-page `reference/api` anchor to the enterprise
+reference subpages on enterprise builds, keyed off the `product` (rebase-injected
+`envoy`) or the site's `currentProduct`. On OSS the anchor is left untouched. These
+markers force each branch explicitly through the `product` param so the routing is
+brand-independent:
+
+- OSS single-page, untouched: [MARKER_APIREF_OSS]({{< link-hextra path="/reference/api/#TypeA" version="v2" >}})
+- Enterprise (rebase `product=envoy`) routes to the kgateway subpage: [MARKER_APIREF_ENT]({{< link-hextra path="/reference/api/#TypeA" version="v2" product="envoy" >}})
+- Agentgateway routes to the api subpage: [MARKER_APIREF_AGW]({{< link-hextra path="/reference/api/#TypeA" version="v2" product="agentgateway" >}})
+- Already a subpage, not doubled up: [MARKER_APIREF_NODOUBLE]({{< link-hextra path="/reference/api/kgateway/#TypeA" version="v2" product="envoy" >}})
+
 ## Lists (3-level ordered and unordered)
 
 ### Ordered (3 levels)

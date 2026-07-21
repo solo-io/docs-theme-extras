@@ -32,7 +32,9 @@
 {{- if $isRemoteBase -}}
   {{- $jsPath := cond (ne $mermaidJsAsset "") $mermaidJsAsset (printf "mermaid%s.js" $minSuffix) -}}
   {{- $mermaidJsUrl := urls.JoinPath $mermaidBase $jsPath -}}
-  {{- with try (resources.GetRemote $mermaidJsUrl) -}}
+  {{- /* `timeout` caps a slow/unreachable CDN so a cold build fails fast instead
+         of hanging (Hugo's default is ~30s per attempt with no cap here). */ -}}
+  {{- with try (resources.GetRemote $mermaidJsUrl (dict "timeout" "15s")) -}}
     {{- with .Err -}}
       {{- errorf "Could not retrieve Mermaid js file from %s. Reason: %s." $mermaidJsUrl . -}}
     {{- else with .Value -}}
