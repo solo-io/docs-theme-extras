@@ -102,6 +102,12 @@ pageContextMode = "siteParams"
   copyright = "Solo.io copyright 2026"
   displayPoweredBy = false
 
+  # Enterprise puts the product lockup in the navbar (see params.navbar.logo),
+  # so the Solo corporate mark moves to the footer.
+  [params.footer.logo]
+    path = "images/logos/solo-light.svg"
+    dark = "images/logos/solo-dark.svg"
+
 [params.docs]
   title = "Docs framework test fixture"
   toc = true
@@ -111,16 +117,15 @@ pageContextMode = "siteParams"
   displayLogo = true
   width = "wide"
 
+  # Product lockup in the navbar (enterprise). The Solo corporate mark now
+  # lives in the footer (see params.footer.logo). With no sidebar.logo set, the
+  # product logo is also the mobile navbar mark and the sidebar product-logo
+  # band no longer renders — so the tab band sits directly above the left nav.
   [params.navbar.logo]
-    path = "images/logos/solo-light.svg"
-    dark = "images/logos/solo-dark.svg"
-    width = 120
-    height = 40
-
-[params.sidebar]
-  [params.sidebar.logo]
     path = "images/logos/logo-sef-test.svg"
     dark = "images/logos/logo-sef-test-dark.svg"
+    width = 238
+    height = 63
 
 [params.page]
   width = "wide"

@@ -579,6 +579,26 @@ pre.mermaid:not([data-processed]) {
   margin: 0 auto;
   text-align: center;
 }
+/* Optional footer logo (opt-in via params.footer.logo). Centered above the
+   copyright line; the dark variant swaps in under `.dark`. */
+.solo-footer-logo-link {
+  display: inline-block;
+}
+.solo-footer-logo {
+  height: 44px;
+  width: auto;
+  margin: 0 auto 0.75rem;
+  display: block;
+}
+.solo-footer-logo-dark {
+  display: none;
+}
+.dark .solo-footer-logo-light {
+  display: none;
+}
+.dark .solo-footer-logo-dark {
+  display: block;
+}
 .solo-footer p {
   margin: 0;
 }
@@ -662,7 +682,7 @@ pre.mermaid:not([data-processed]) {
      bumping --solo-rail-top by the band height so the sidebar/TOC don't tuck
      under it.) */
   width: 100%;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid #f0f1f3;
   background: transparent;
 }
 /* Below the desktop-sidebar breakpoint (xl, 1280px) the persistent sidebar
@@ -674,7 +694,7 @@ pre.mermaid:not([data-processed]) {
   }
 }
 .dark .docs-tabs-band {
-  border-bottom-color: rgba(255, 255, 255, 0.1);
+  border-bottom-color: rgba(255, 255, 255, 0.06);
 }
 .docs-tabs {
   display: flex;
@@ -1596,10 +1616,10 @@ details[open].hextra-search-other-versions > summary::before {
    `contrast-more:` variants are also missing. Rebuild them as direct
    rules on .nav-container-blur. */
 .nav-container-blur {
-  box-shadow: 0 2px 4px rgba(0,0,0,.02), 0 1px 0 rgba(0,0,0,.06);
+  box-shadow: 0 2px 4px rgba(0,0,0,.02), 0 1px 0 rgba(0,0,0,.035);
 }
 :where(.dark, .dark *) .nav-container-blur {
-  box-shadow: 0 -1px 0 rgba(255,255,255,.1) inset;
+  box-shadow: 0 -1px 0 rgba(255,255,255,.06) inset;
 }
 @media (prefers-contrast: more) {
   .nav-container-blur { box-shadow: 0 0 0 1px #000; }

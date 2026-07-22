@@ -2,9 +2,13 @@
 title: API reference
 weight: 30
 tab: API Reference
-description: Generated API reference for the fixture. Assigned to the API Reference tab via front matter.
+description: Reference for the resources and policies you use to configure the platform.
 ---
 
-The API reference section is pinned to the **API Reference** tab with
-`tab: API Reference` front matter, so it drops out of the Documentation left
-nav and gets its own tab.
+<!-- Demo content for the tab-navigation prototype (solo-io/docs#3164). Pinned
+     to the API Reference tab with `tab: API Reference`, so it drops out of the
+     Documentation left nav and gets its own tab. -->
+
+This section is the reference for the resources and policies you use to
+configure the platform. Start with the core resources, then review the
+authentication options.

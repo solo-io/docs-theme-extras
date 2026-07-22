@@ -4,11 +4,20 @@
 {{- $logoHeight := .Site.Params.navbar.logo.height | default "20" -}}
 {{- $logoDarkPath := .Site.Params.navbar.logo.dark | default $logoPath -}}
 
+{{- /* When a separate mobile logo is configured via sidebar.logo (below), the
+       navbar logo is desktop-only and the sidebar logo covers mobile. When it
+       is NOT configured, show the navbar logo at every breakpoint so it is the
+       brand mark on mobile too (the product-logo-in-navbar shape, matching OSS).
+       Only utilities Hextra already emits are used here. */ -}}
+{{- $hasMobileLogo := false -}}
+{{- with .Site.Params.sidebar.logo -}}{{- if .path -}}{{- $hasMobileLogo = true -}}{{- end -}}{{- end -}}
+{{- $lightClass := cond $hasMobileLogo "hx:mr-2 hx:md:block hx:dark:hidden hx:max-md:hidden" "hx:mr-2 hx:dark:hidden" -}}
+{{- $darkClass := cond $hasMobileLogo "hx:mr-2 hx:hidden hx:md:dark:block" "hx:mr-2 hx:hidden hx:dark:block" -}}
 <a class="hx:flex hx:items-center hx:hover:opacity-75 hx:ltr:mr-auto hx:rtl:ml-auto" href="{{ $logoLink }}">
-  {{- /* Desktop: Solo.io navbar logo + title text (original hextra behaviour) */ -}}
+  {{- /* Navbar logo (Solo mark or product mark, per params.navbar.logo) */ -}}
   {{- if (.Site.Params.navbar.displayLogo | default true) -}}
-    <img class="hx:mr-2 hx:md:block hx:dark:hidden hx:max-md:hidden" src="{{ $logoPath | relURL }}" alt="{{ .Site.Title }}" height="{{ $logoHeight }}" width="{{ $logoWidth }}" />
-    <img class="hx:mr-2 hx:hidden hx:md:dark:block" src="{{ $logoDarkPath | relURL }}" alt="{{ .Site.Title }}" height="{{ $logoHeight }}" width="{{ $logoWidth }}" />
+    <img class="{{ $lightClass }}" src="{{ $logoPath | relURL }}" alt="{{ .Site.Title }}" height="{{ $logoHeight }}" width="{{ $logoWidth }}" />
+    <img class="{{ $darkClass }}" src="{{ $logoDarkPath | relURL }}" alt="{{ .Site.Title }}" height="{{ $logoHeight }}" width="{{ $logoWidth }}" />
   {{- end -}}
   {{- if (.Site.Params.navbar.displayTitle | default true) -}}
     <span class="hx:mr-2 hx:font-extrabold hx:select-none hx:hidden hx:md:inline">{{- .Site.Title -}}</span>

@@ -1,8 +1,11 @@
 ---
 title: Getting started
 weight: 10
-description: Install the fixture and run through a first quickstart. Part of the Documentation tab (no explicit tab, so it falls into the default tab).
+description: Install the control plane and run through a first quickstart.
 ---
 
-The Getting started section belongs to the default **Documentation** tab
-because it carries no `tab` front matter.
+<!-- Demo content for the tab-navigation prototype (solo-io/docs#3164). Carries
+     no `tab` front matter, so it falls into the default Documentation tab. -->
+
+This section walks you through a first deployment. Start by installing the
+control plane, then run the quickstart to route traffic to a sample workload.

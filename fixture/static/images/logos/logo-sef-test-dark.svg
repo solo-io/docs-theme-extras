@@ -1,7 +1,13 @@
 <svg viewBox="0 0 2708 714" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Solo Enterprise for Test">
   <title>Solo Enterprise for Test</title>
-  <text x="1300" y="335" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="160" font-weight="600" letter-spacing="2" fill="white">Solo Enterprise</text>
-  <text x="1300" y="525" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="160" font-weight="600" letter-spacing="2" fill="white">for</text>
-  <path fill-rule="evenodd" clip-rule="evenodd" d="M1345.47 488.104L1345.47 201.133L1347.97 201.133L1347.97 488.104L1345.47 488.104Z" fill="white"/>
-  <text x="1430" y="490" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="380" font-weight="700" letter-spacing="-8" fill="white">Test</text>
+  <!-- Left-align the artwork within the viewBox so the logo sits close to the
+       navbar's left inset (roughly aligned with the tab band / sidebar below).
+       The "Solo Enterprise" line is right-anchored; a smaller shift keeps its
+       leading "S" from clipping at the viewBox's left edge. -->
+  <g transform="translate(-120 0)">
+    <text x="1300" y="335" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="160" font-weight="600" letter-spacing="2" fill="white">Solo Enterprise</text>
+    <text x="1300" y="525" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="160" font-weight="600" letter-spacing="2" fill="white">for</text>
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M1345.47 488.104L1345.47 201.133L1347.97 201.133L1347.97 488.104L1345.47 488.104Z" fill="white"/>
+    <text x="1430" y="490" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="380" font-weight="700" letter-spacing="-8" fill="white">Test</text>
+  </g>
 </svg>

@@ -36,6 +36,21 @@
          sidebar is absent — a static stand-in here double-rendered wherever the
          navbar already provided the toggle. See docs-init.js for the mechanism. */ -}}
   {{- partial "custom/footer.html" . -}}
+  {{- /* Optional footer logo (e.g. the Solo corporate mark on enterprise sites,
+         where the navbar carries the product logo instead). Opt-in via
+         params.footer.logo.path, with an optional .dark variant. */ -}}
+  {{- with .Site.Params.footer.logo -}}
+    {{- if .path -}}
+      <div class="solo-footer-inner">
+        <a class="solo-footer-logo-link" href="{{ $.Site.Home.RelPermalink }}" aria-label="{{ $.Site.Title }}">
+          <img class="solo-footer-logo solo-footer-logo-light" src="{{ relURL .path }}" alt="{{ $.Site.Title }}" />
+          {{- with .dark -}}
+            <img class="solo-footer-logo solo-footer-logo-dark" src="{{ relURL . }}" alt="{{ $.Site.Title }}" />
+          {{- end -}}
+        </a>
+      </div>
+    {{- end -}}
+  {{- end -}}
   {{- with $copyright -}}
     <div class="solo-footer-inner">
       <p>{{ . | markdownify }}</p>
