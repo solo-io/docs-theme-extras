@@ -1,6 +1,11 @@
 <svg viewBox="0 0 2708 714" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="OSS Test">
   <title>OSS Test</title>
-  <text x="1290" y="490" text-anchor="end" font-family="'Open Sans', system-ui, sans-serif" font-size="380" font-weight="700" letter-spacing="-8" fill="hsl(212, 100%, 70%)">OSS</text>
-  <path fill-rule="evenodd" clip-rule="evenodd" d="M1345.47 488.104L1345.47 201.133L1347.97 201.133L1347.97 488.104L1345.47 488.104Z" fill="hsl(212, 100%, 70%)"/>
-  <text x="1430" y="490" font-family="'Open Sans', system-ui, sans-serif" font-size="380" font-weight="700" letter-spacing="-8" fill="hsl(212, 100%, 70%)">Test</text>
+  <!-- Left-align the artwork within the viewBox so the logo's visible glyphs
+       start at the image box's left edge, flush with the tabs band and sidebar
+       below it. The artwork was authored centered in the 2708-wide viewBox. -->
+  <g transform="translate(-510 0)">
+    <text x="1290" y="490" text-anchor="end" font-family="'Open Sans', system-ui, sans-serif" font-size="380" font-weight="700" letter-spacing="-8" fill="hsl(212, 100%, 70%)">OSS</text>
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M1345.47 488.104L1345.47 201.133L1347.97 201.133L1347.97 488.104L1345.47 488.104Z" fill="hsl(212, 100%, 70%)"/>
+    <text x="1430" y="490" font-family="'Open Sans', system-ui, sans-serif" font-size="380" font-weight="700" letter-spacing="-8" fill="hsl(212, 100%, 70%)">Test</text>
+  </g>
 </svg>
