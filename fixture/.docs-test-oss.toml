@@ -65,4 +65,6 @@ versions        = ["v1", "v2", "main"]
 
 # Allowlists: known-benign Hugo deprecation noise from hextra 0.12.2.
 [allowlists]
-hugoWarnings = ["\\.Site\\.Data was deprecated"]
+# The "unknown mode" warn is emitted on purpose by the table-display fixture
+# page to exercise the `table` shortcode's invalid-mode fallback path.
+hugoWarnings = ["\\.Site\\.Data was deprecated", "table shortcode: unknown mode"]

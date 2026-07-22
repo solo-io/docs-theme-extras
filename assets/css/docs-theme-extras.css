@@ -987,22 +987,32 @@ hr.footnotes-sep,
   padding: 0.5rem 0.75rem;
   border: 1px solid #e5e7eb;
   white-space: normal;
-  /* Cap how wide any single column may grow, then let content wrap inside that
-     cap. The table is `width:100%; table-layout:auto`, so with no cap one cell
-     with a very long unbroken value dominates: a generated reference table
-     (Helm values, CRD fields) has both long dotted keys —
-     `audit.collector.containerSecurityContext.allowPrivilegeEscalation` — and
-     giant inline defaults (a 600-char JSON blob), and the auto layout grows
-     those columns to fit, pushing other columns (Description) off the right
-     edge. `max-width` bounds every column uniformly — no per-column or
-     header-name targeting — so no column can hog the row. `overflow-wrap:
-     anywhere` (not `break-word`, which does not fold into the table algorithm's
-     intrinsic-width calculation) then lets an unbreakable token wrap at that
-     cap instead of overflowing it. Narrow columns stay narrow: the cap is a
-     ceiling, not a width, so short-content and narrative tables are unaffected
-     — it only bites a column that would otherwise blow past the cap. */
-  max-width: 24rem;
+  /* Let an unbreakable token (long URL, base64 blob, dotted key) fold instead
+     of forcing horizontal scroll. This is harmless on uncapped tables, and the
+     capped rule below relies on it to fold content at the cap. `anywhere` (not
+     `break-word`) is the value that feeds the table algorithm's intrinsic-width
+     calculation, so the fold actually influences column sizing. */
   overflow-wrap: anywhere;
+}
+/* Cap how wide any single column may grow, then let content wrap inside that
+   cap. Applied ONLY to generated multi-column reference tables (Helm values,
+   CRD fields: `Key | Type | Default | Description`), which render-table.html
+   flags with `.table-capped` when the header row has 3+ columns. Those tables
+   mix long dotted keys —
+   `audit.collector.containerSecurityContext.allowPrivilegeEscalation` — with
+   giant inline defaults (a 600-char JSON blob), and because the table is
+   `width:100%; table-layout:auto`, the auto layout grows those columns to fit
+   and pushes other columns (Description) off the right edge. `max-width` bounds
+   every column uniformly — no per-column or header-name targeting — so no
+   column can hog the row.
+
+   Narrow 2-column tables (metric/description, narrative) are deliberately NOT
+   capped: with the cap they can only reach ~48rem total and a legitimately long
+   text column folds at 24rem, leaving dead space on wide viewports. Uncapped,
+   they fill the content width and let the long column use the room. */
+.table-wrapper.table-capped th,
+.table-wrapper.table-capped td {
+  max-width: 24rem;
 }
 .dark .table-wrapper th,
 .dark .table-wrapper td {

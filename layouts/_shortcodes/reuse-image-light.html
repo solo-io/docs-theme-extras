@@ -8,6 +8,26 @@
      whose colors are reference-specific. For the common "show this image
      in both modes" case, use the reuse-image shortcode; for dark-only,
      use reuse-image-dark. */}}
+{{- /* Translation export mode: preserve the {{< reuse-image-light ... >}} source
+       form via a placeholder (see reuse-image.html). Gated on hugo.Environment.
+       Without this, the JA translation snapshot renders the resolved <img> and
+       HTMLToMarkdown bakes its `.RelPermalink` (an absolute `/agentgateway/img/…`
+       path) into the JA markdown; the next build's Hextra render-image hook then
+       `relURL`s that already-prefixed path, doubling it to
+       `/agentgateway/agentgateway/img/…` (a 404). reuse-image / reuse-image-dark
+       already guard this; reuse-image-light was the missing one. */ -}}
+{{- if eq hugo.Environment "translation" -}}
+  {{- $attrs := slice -}}
+  {{- with .Get "src" }}{{ $attrs = $attrs | append (printf "src=%q" .) }}{{ end -}}
+  {{- with .Get "width" }}{{ $attrs = $attrs | append (printf "width=%q" .) }}{{ end -}}
+  {{- with .Get "alt" }}{{ $attrs = $attrs | append (printf "alt=%q" .) }}{{ end -}}
+  {{- with .Get "caption" }}{{ $attrs = $attrs | append (printf "caption=%q" .) }}{{ end -}}
+  {{- $reg := .Page.Store.Get "transReg" | default slice -}}
+  {{- $ph := printf "XTRANSPH%dX" (len $reg) -}}
+  {{- $reg = $reg | append (dict "ph" $ph "text" (printf "{{< reuse-image-light %s >}}" (delimit $attrs " "))) -}}
+  {{- .Page.Store.Set "transReg" $reg -}}
+  {{- printf "<p>%s</p>" $ph | safeHTML -}}
+{{- else -}}
 {{ $src := .Get "src" }}
 {{ $width := .Get "width" }}
 {{ $alt := .Get "alt" }}
@@ -20,4 +40,5 @@
 
 {{- with $image -}}
 <div style="text-align: center;" class="toggle-dark"><figure><img src="{{ .RelPermalink }}" width="{{ $width }}" alt="{{ $alt }}"/> <figcaption style="font-style:italic">{{ $caption }}</figcaption></figure></div>
+{{- end -}}
 {{- end -}}

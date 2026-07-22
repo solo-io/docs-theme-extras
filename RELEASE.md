@@ -116,7 +116,8 @@ these mobile-specific behaviors:
 ## 4. Re-diff shadows on Hextra bumps
 
 If this release bumps the Hextra pin (`go.mod`), walk every file
-listed in [SHADOWS.md](./SHADOWS.md) and confirm our local additions
+listed in the [shadows tables in USAGE.md](./USAGE.md#maintaining-the-shadows)
+and confirm our local additions
 are still present and well-positioned in the new upstream context.
 Don't skip this — a silently-dropped insertion is the most common
 hextra-upgrade regression and the hardest to debug after the fact.

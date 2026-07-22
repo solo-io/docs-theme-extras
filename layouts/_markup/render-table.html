@@ -1,4 +1,12 @@
-<div class="table-wrapper" style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
+{{- /* Cap column width only on wide reference tables (Helm values, CRD fields:
+      Key | Type | Default | Description). A 3+ column header is the signal;
+      2-column narrative/metric tables render uncapped so they fill the content
+      width instead of folding at the per-cell cap. See `.table-capped` in
+      docs-theme-extras.css. */ -}}
+{{- $cols := 0 -}}
+{{- with .THead -}}{{- $cols = len (index . 0) -}}{{- end -}}
+{{- $capped := ge $cols 3 -}}
+<div class="table-wrapper{{ if $capped }} table-capped{{ end }}" style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
   <table>
     <thead>
       {{- range .THead }}
