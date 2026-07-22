@@ -47,6 +47,21 @@ test.describe("built-in custom alert types (solo)", () => {
     expect(html, "green alert style missing").toContain("hx:bg-green-100");
   });
 
+  test("[!SUCCESS] renders the Success label, check icon, and green style", () => {
+    test.skip(!filePath, "no everything page built");
+    const html = fs.readFileSync(filePath!, "utf8");
+    // Isolate the SUCCESS alert box so assertions can't pass on some other type.
+    const i = html.indexOf('data-alert-type="SUCCESS"');
+    expect(i, "SUCCESS alert missing").toBeGreaterThan(-1);
+    const block = html.slice(i, i + 900);
+    expect(block, "Success label missing").toContain("Success</p>");
+    // Hextra's check-circle heroicon (the theme ships no success-specific icon
+    // of its own; it resolves from the transitively-mounted hextra icons.yaml).
+    expect(block, "check-circle SVG missing").toContain("M9 12l2 2 4-4m6 2a9 9");
+    // Same compiled green palette as tip/solo (a novel palette would no-op).
+    expect(block, "green alert style missing").toContain("hx:bg-green-100");
+  });
+
   // Copy-as-markdown / .md-output round-trip. The copy-markdown pipeline
   // reconstructs alerts back into `> [!TYPE]` (a styled div would otherwise
   // flatten to a bare label + text). Standard types survive as themselves;
@@ -69,8 +84,10 @@ test.describe("built-in custom alert types (solo)", () => {
       expect(md, `copy-md lost ${marker}`).toContain(marker);
     }
     // Custom types must NOT leak their theme-only marker (GitHub wouldn't
-    // render `[!SOLO]`); it downgrades to `> [!TIP]` above.
+    // render `[!SOLO]` / `[!SUCCESS]`); both downgrade to their native `copyAs`
+    // (tip) above.
     expect(md, "copy-md leaked [!SOLO]").not.toContain("[!SOLO]");
+    expect(md, "copy-md leaked [!SUCCESS]").not.toContain("[!SUCCESS]");
     // Canonical form: no blank `>` line directly after a marker.
     expect(
       /\[![A-Za-z]+\]\n>\s*\n/.test(md),

@@ -79,6 +79,9 @@ The `callout` shortcode works inside a markdown table cell: its `solo-alert` div
 > [!SOLO]
 > Theme-shipped custom alert type — the icon and header label come from the theme, with no consumer config. (Body avoids the label text so custom-alert.spec asserts the rendered header.)
 
+> [!SUCCESS]
+> Theme-shipped custom alert type for positive/confirmation notes — GitHub has no native success type, so the theme supplies the green box and check icon. (Body avoids the label text so custom-alert.spec asserts the rendered header.)
+
 1. Note in a list.
 
    > [!TIP]
@@ -427,6 +430,19 @@ The `link-hextra` shortcode is the cross-product variant; it expects a product/v
 
 The link-hextra shortcode resolves to a clickable [MARKER_LINK_HEXTRA]({{< link-hextra path="/everything/" version="v2" product="test" >}}) link.
 
+#### link-hextra reference/api routing
+
+`link-hextra` routes an OSS single-page `reference/api` anchor to the enterprise
+reference subpages on enterprise builds, keyed off the `product` (rebase-injected
+`envoy`) or the site's `currentProduct`. On OSS the anchor is left untouched. These
+markers force each branch explicitly through the `product` param so the routing is
+brand-independent:
+
+- OSS single-page, untouched: [MARKER_APIREF_OSS]({{< link-hextra path="/reference/api/#TypeA" version="v2" >}})
+- Enterprise (rebase `product=envoy`) routes to the kgateway subpage: [MARKER_APIREF_ENT]({{< link-hextra path="/reference/api/#TypeA" version="v2" product="envoy" >}})
+- Agentgateway routes to the api subpage: [MARKER_APIREF_AGW]({{< link-hextra path="/reference/api/#TypeA" version="v2" product="agentgateway" >}})
+- Already a subpage, not doubled up: [MARKER_APIREF_NODOUBLE]({{< link-hextra path="/reference/api/kgateway/#TypeA" version="v2" product="envoy" >}})
+
 ## Lists (3-level ordered and unordered)
 
 ### Ordered (3 levels)
@@ -629,6 +645,14 @@ Percent-form, inline (current behavior: gated row renders as `<p>| ... |</p>` ou
 | MARKER_TABLE_VERSION_ROW_BASELINE_FEATURE | 1.0 |
 {{% version include-if="v2" %}}| MARKER_TABLE_VERSION_ROW_PERCENT_FEATURE | 2.0 |{{% /version %}}
 
+Percent-form, multi-row (the get_cookie / get_cookie_i shape from kgateway `templating-language.md`: the opener is glued to the END of the preceding baseline row and the closer to the END of the last gated row, so the block wraps MORE than one row across lines. The table-row regex now matches a run of pipe rows, not just a single line, so both gated rows re-flow into the parent table):
+
+| Feature | Min version |
+| --- | --- |
+| MARKER_TABLE_VERSION_ROW_MULTIROW_BASELINE | 1.0 |{{% version include-if="v2" %}}
+| MARKER_TABLE_VERSION_ROW_MULTIROW_FEATURE1 | 2.0 |
+| MARKER_TABLE_VERSION_ROW_MULTIROW_FEATURE2 | 2.0 |{{% /version %}}
+
 Angle-bracket form, inline (current behavior: gated row renders inside the table but the whole row is a single `<td>` with literal pipes as text):
 
 | Feature | Min version |
@@ -649,6 +673,56 @@ Per-cell conditional (works today: pipes stay outside the shortcode, version gat
 | --- | --- |
 | MARKER_TABLE_VERSION_ROW_PERCELL_BASELINE | 1.0 |
 | {{< version include-if="v2" >}}MARKER_TABLE_VERSION_ROW_PERCELL_FEATURE{{< /version >}} | {{< version include-if="v2" >}}2.0{{< /version >}} |
+
+### Table shortcode wrap mode
+
+The `table` shortcode with `mode="wrap"`: fills the body width and wraps content, no horizontal scroll. `table-display.spec.ts` targets these sections by heading id.
+
+{{% table mode="wrap" %}}
+| Setting | Description |
+| ------- | ----------- |
+| `timeout` | A fairly long description that should wrap within the body width rather than forcing the table wider than the page or scrolling horizontally. |
+{{% /table %}}
+
+### Table shortcode nowrap mode
+
+The `table` shortcode with `mode="nowrap"`: columns sized to content, no wrapping, wrapper scrolls when wider than the body.
+
+{{% table mode="nowrap" %}}
+| Command | Description |
+| ------- | ----------- |
+| `kubectl get pods -n agentgateway -o wide --show-labels --field-selector=status.phase=Running` | Sized to content, no wrapping. |
+{{% /table %}}
+
+### Table shortcode equal mode
+
+The `table` shortcode with `mode="equal"`: `table-layout:fixed` with evenly divided columns.
+
+{{% table mode="equal" %}}
+| A | B | C |
+| - | - | - |
+| short | short | A longer cell whose content wraps inside an equal-width column. |
+{{% /table %}}
+
+### Table shortcode default mode
+
+No `mode` argument, so this resolves to the `wrap` default with no build warning.
+
+{{% table %}}
+| Setting | Description |
+| ------- | ----------- |
+| `retries` | Omitted mode resolves to the wrap default. |
+{{% /table %}}
+
+### Table shortcode unknown mode
+
+An unrecognized `mode` warns at build time (allowlisted in the fixture config) and falls back to `wrap`.
+
+{{% table mode="bogus" %}}
+| Setting | Description |
+| ------- | ----------- |
+| `unknown` | An unrecognized mode warns and falls back to wrap. |
+{{% /table %}}
 
 ## Tabs in both shortcode forms
 

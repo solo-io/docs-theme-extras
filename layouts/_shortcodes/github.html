@@ -11,21 +11,32 @@
 
   Parameters:
     - url: The remote URL of the file to fetch and display.
+
+  Network resilience: `timeout` caps a slow/unreachable remote so a cold CI
+  build (no getresource cache) fails fast instead of hanging, and `try`
+  (required since Hugo v0.141 removed `resource.Err`) turns a transient fetch
+  error/timeout into a WARN + link-checker-visible fallback rather than a build
+  hang/crash. A dead/404 URL (a nil resource with no error) is treated as a real
+  reference bug instead and fails the build with an `errorf`.
 */ -}}
 {{- $url := .Get "url" -}}
-
-{{- with resources.GetRemote $url -}}
-  {{- if hasSuffix $url ".md" -}}
-    {{- $.Page.RenderString .Content -}}
-  {{- else -}}
-    {{- .Content | safeHTML -}}
-  {{- end -}}
-{{- else -}}
-  {{- /* Render the failed URL as an <a href> so the link checker can report it.
-     NOTE: when this shortcode is used INSIDE a caller's code fence (e.g. a
-     `cat <<EOF` heredoc), this error lands inside a <pre>, and lychee skips
-     anchors in code blocks by default — so the link is only reliably checked
-     when github is used outside a fence. For fetched YAML shown as a standalone
-     block, prefer the github-yaml shortcode, whose error is a standalone <p>. */ -}}
+{{- $attempt := try (resources.GetRemote $url (dict "timeout" "15s")) -}}
+{{- with $attempt.Err -}}
+  {{- warnf "github: failed to fetch %q: %s" $url . -}}
   <p><strong>Error:</strong> Unable to load code from <a href="{{ $url }}">{{ $url }}</a></p>
+{{- else -}}
+  {{- with $attempt.Value -}}
+    {{- if hasSuffix $url ".md" -}}
+      {{- $.Page.RenderString .Content -}}
+    {{- else -}}
+      {{- .Content | safeHTML -}}
+    {{- end -}}
+  {{- else -}}
+    {{- /* A nil .Value with no .Err means the host responded but the resource is
+       absent (a 404 / dead or moved URL) — a real reference bug in the docs, not
+       a transient network blip — so fail the build LOUDLY, mirroring github-table's
+       missing-section errorf. Contrast the .Err branch above, which stays a WARN
+       because a timeout/transport error can be transient on a cold CI build. */ -}}
+    {{- errorf "github: no content at %q (dead or moved URL) — fix or remove the reference" $url -}}
+  {{- end -}}
 {{- end -}}

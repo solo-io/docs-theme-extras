@@ -5,32 +5,59 @@
      plain-text summary for the "Copy as Markdown" feature. Swagger UI renders
      the live spec client-side, but transform.HTMLToMarkdown only sees the empty
      placeholder div, so the API content is lost from the copy without this. */}}
+{{/* Network resilience: every build-time remote fetch below is capped with
+     `timeout` and wrapped in `try` (Hugo v0.141+ removed `resource.Err`), so a
+     slow/unreachable remote on a cold CI build fails fast (warn) instead of
+     hanging. Swagger UI still renders client-side from `$url`, and the CDN
+     assets fall back to loading directly from unpkg (client-side, no SRI) when
+     their build-time fetch fails — so the page works even when the build can't
+     reach the network. */}}
 {{ $specResource := false }}
 {{ if $src }}
   {{ $specResource = resources.Get $src }}
   {{ with $specResource }}{{ $url = .RelPermalink }}{{ end }}
 {{ else if $url }}
-  {{ $specResource = resources.GetRemote $url }}
+  {{ $specAttempt := try (resources.GetRemote $url (dict "timeout" "15s")) }}
+  {{ with $specAttempt.Err }}{{ warnf "openapi: failed to fetch spec %q: %s" $url . }}{{ else }}{{ $specResource = $specAttempt.Value }}{{ end }}
 {{ end }}
 
 {{ $info := dict }}
 {{ with $specResource }}
-  {{ $parsed := . | transform.Unmarshal }}
-  {{ with $parsed.info }}{{ $info = . }}{{ end }}
+  {{ $parsed := try (transform.Unmarshal .Content) }}
+  {{ with $parsed.Err }}{{ warnf "openapi: spec %q did not parse: %s" $url . }}{{ else }}{{ with $parsed.Value.info }}{{ $info = . }}{{ end }}{{ end }}
 {{ end }}
 
 {{/* Swagger UI assets are already minified upstream. Don't run them through
      resources.Minify — re-minifying webpack-bundled JS can rename internal
      identifiers (e.g. webpackUniversalModuleDefinition) and leave
-     SwaggerUIBundle undefined at runtime. Just fingerprint for SRI. */}}
-{{ $swaggerCSS := resources.GetRemote "https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui.css" | resources.Fingerprint }}
-<link rel="stylesheet" href="{{ $swaggerCSS.RelPermalink }}" integrity="{{ $swaggerCSS.Data.Integrity }}">
+     SwaggerUIBundle undefined at runtime. Just fingerprint for SRI when the
+     build-time fetch succeeds; otherwise load straight from the CDN. */}}
+{{ $cssUrl := "https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui.css" }}
+{{ with (try (resources.GetRemote $cssUrl (dict "timeout" "15s"))).Value }}
+  {{ $f := . | resources.Fingerprint }}
+  <link rel="stylesheet" href="{{ $f.RelPermalink }}" integrity="{{ $f.Data.Integrity }}">
+{{ else }}
+  {{ warnf "openapi: swagger CSS fetch failed, loading from CDN: %s" $cssUrl }}
+  <link rel="stylesheet" href="{{ $cssUrl }}">
+{{ end }}
 
-{{ $swaggerBundle := resources.GetRemote "https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-bundle.js" | resources.Fingerprint }}
-<script src="{{ $swaggerBundle.RelPermalink }}" integrity="{{ $swaggerBundle.Data.Integrity }}"></script>
+{{ $bundleUrl := "https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-bundle.js" }}
+{{ with (try (resources.GetRemote $bundleUrl (dict "timeout" "15s"))).Value }}
+  {{ $f := . | resources.Fingerprint }}
+  <script src="{{ $f.RelPermalink }}" integrity="{{ $f.Data.Integrity }}"></script>
+{{ else }}
+  {{ warnf "openapi: swagger bundle fetch failed, loading from CDN: %s" $bundleUrl }}
+  <script src="{{ $bundleUrl }}"></script>
+{{ end }}
 
-{{ $swaggerPreset := resources.GetRemote "https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-standalone-preset.js" | resources.Fingerprint }}
-<script src="{{ $swaggerPreset.RelPermalink }}" integrity="{{ $swaggerPreset.Data.Integrity }}"></script>
+{{ $presetUrl := "https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-standalone-preset.js" }}
+{{ with (try (resources.GetRemote $presetUrl (dict "timeout" "15s"))).Value }}
+  {{ $f := . | resources.Fingerprint }}
+  <script src="{{ $f.RelPermalink }}" integrity="{{ $f.Data.Integrity }}"></script>
+{{ else }}
+  {{ warnf "openapi: swagger preset fetch failed, loading from CDN: %s" $presetUrl }}
+  <script src="{{ $presetUrl }}"></script>
+{{ end }}
 
 <div class="openapi-container">
   <div id="swagger-ui" data-spec-url="{{ $url }}"></div>

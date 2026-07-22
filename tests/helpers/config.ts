@@ -54,6 +54,13 @@ export type Checks = {
   // Browser-level crawl: open every built page in Chromium and fail on
   // uncaught JS exceptions, console.error calls, or HTTP 4xx on JS/CSS assets.
   consoleErrors: boolean;
+  // Built-HTML scan for image references (<img src>, <img>/<source> srcset)
+  // that resolve to a same-origin file the build never published — a broken
+  // image for the reader and a 404 for the link checker. Catches typos and
+  // missing per-version reuse-image overrides at the tag that broke. Kept as
+  // its own toggle so a consumer with a known backlog can disable it without
+  // losing the other content scans.
+  missingImages: boolean;
 };
 
 export type Allowlists = {
@@ -68,6 +75,10 @@ export type Allowlists = {
   // intentional uses of pipe-delimited prose or markdown-shaped strings
   // that shouldn't fail the scan.
   markdownLeaks: string[];
+  // Regex patterns matched against each missing-image src detected by
+  // missing-images.spec.ts. A match silently drops the offender — for
+  // references intentionally supplied by a downstream build.
+  missingImages: string[];
 };
 
 // Per-spec knobs that don't fit the boolean [checks] table.
@@ -117,6 +128,7 @@ const DEFAULT_CHECKS: Checks = {
   includeForm: true,
   cascadeType: true,
   consoleErrors: true,
+  missingImages: true,
 };
 
 const DEFAULT_ALLOWLISTS: Allowlists = {
@@ -124,6 +136,7 @@ const DEFAULT_ALLOWLISTS: Allowlists = {
   curlQuotes: [],
   consoleErrors: [],
   markdownLeaks: [],
+  missingImages: [],
 };
 
 const DEFAULT_CRAWL: Crawl = {
@@ -335,6 +348,7 @@ function mergeAllowlists(raw: unknown, configPath: string): Allowlists {
     curlQuotes: [...DEFAULT_ALLOWLISTS.curlQuotes],
     consoleErrors: [...DEFAULT_ALLOWLISTS.consoleErrors],
     markdownLeaks: [...DEFAULT_ALLOWLISTS.markdownLeaks],
+    missingImages: [...DEFAULT_ALLOWLISTS.missingImages],
   };
   if (!raw || typeof raw !== "object") return out;
   const obj = raw as Record<string, unknown>;
