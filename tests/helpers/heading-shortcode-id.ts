@@ -60,9 +60,30 @@ export function findHeadingShortcodeIdViolations(
   const out: HeadingShortcodeIdViolation[] = [];
   const lines = blankOutComments(source).split(/\r?\n/);
 
+  // Skip YAML (`---`) or TOML (`+++`) front matter. A `#` line there is a
+  // config comment, not a heading (and it may legitimately mention a
+  // shortcode, as in a `# ...` note above a `test:` block). Front matter is
+  // only front matter when the delimiter is the file's first line.
+  let frontMatterEnd = -1;
+  const fmDelim =
+    lines[0]?.trim() === "---"
+      ? "---"
+      : lines[0]?.trim() === "+++"
+        ? "+++"
+        : "";
+  if (fmDelim) {
+    for (let i = 1; i < lines.length; i++) {
+      if (lines[i].trim() === fmDelim) {
+        frontMatterEnd = i;
+        break;
+      }
+    }
+  }
+
   let inFence = false;
   let fenceChar = "";
   for (let i = 0; i < lines.length; i++) {
+    if (i <= frontMatterEnd) continue;
     const line = lines[i];
 
     // Track fenced code blocks (``` or ~~~). A `#` inside a fence is a shell

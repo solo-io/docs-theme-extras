@@ -93,6 +93,20 @@ test.describe("heading-shortcode-id lint helper", () => {
     expect(v[0].line).toBe(4);
   });
 
+  test("does NOT flag a `#` comment inside YAML front matter", () => {
+    const md =
+      `---\ntitle: MCP\n# note above a test block, mentions {{< doc-test >}}\ntest:\n  foo: bar\n---\n\n## Real heading\n`;
+    const v = findHeadingShortcodeIdViolations(md, "test.md");
+    expect(v).toEqual([]);
+  });
+
+  test("still flags a shortcode heading in the body after front matter", () => {
+    const md = `---\ntitle: X\n---\n\n## Install {{< reuse "x" >}}\n`;
+    const v = findHeadingShortcodeIdViolations(md, "test.md");
+    expect(v).toHaveLength(1);
+    expect(v[0].line).toBe(5);
+  });
+
   test("reports correct 1-based line numbers", () => {
     const md = `# Title\n\nSome prose.\n\n## Install {{< reuse "x" >}}\n`;
     const v = findHeadingShortcodeIdViolations(md, "test.md");
