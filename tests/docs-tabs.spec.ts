@@ -29,7 +29,11 @@ const DRAWER_TABS = "sidebar-mobile-tab-row";
 // Pull the "<nav class="sidebar-nav">…</nav>" block out of a built page so we
 // can assert which top-level entries the sidebar lists.
 function sidebarNav(html: string): string {
-  const m = html.match(/<nav class="sidebar-nav">([\s\S]*?)<\/nav>/);
+  // The canonical active-tab nav is `class="sidebar-nav"` exactly (now carries a
+  // data-tab-panel attribute); the other tabs' hidden mobile panels are
+  // `class="sidebar-nav sidebar-mobile-tree-panel"`, which this does NOT match,
+  // so the scoping assertions still read only the active tab's tree.
+  const m = html.match(/<nav class="sidebar-nav"[^>]*>([\s\S]*?)<\/nav>/);
   return m ? m[1] : "";
 }
 

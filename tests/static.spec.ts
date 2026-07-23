@@ -635,7 +635,7 @@ test.describe("mobile version chips match the desktop version dropdown", () => {
       );
       const chipHrefs = hrefsIn(
         html,
-        /<div class="sidebar-mobile-version-row">[\s\S]*?<\/div>/,
+        /<div class="sidebar-mobile-version-row"[^>]*>[\s\S]*?<\/div>/,
         "sidebar-mobile-version-link",
       );
       expect(

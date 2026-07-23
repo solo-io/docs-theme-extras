@@ -121,12 +121,35 @@
     {{- if $docsSection -}}
       <aside class="sidebar-container hextra-sidebar-container sidebar-mobile-panel hx:order-first hx:w-64 hx:shrink-0 hx:hidden hx:xl:block hx:print:hidden">
 
-        {{- /* Desktop-only product logo. Hidden on mobile because the
-               navbar already shows the same logo via navbar-title.html.
-               Consumers opt in by setting site.Params.sidebar.logo.path
-               (with optional .dark for a dark-mode variant). */ -}}
+        {{- /* Mobile-only product logo, pinned to the top of the slide-out
+               drawer where the navbar logo would be (the drawer overlays the
+               navbar's left region, so the navbar logo is hidden while the
+               drawer is open). Prefer an explicit sidebar.logo, else fall back
+               to the navbar logo — OSS leaves sidebar.logo unset but always has
+               a navbar logo. The CSS collapses the drawer's navbar spacer
+               (padding-top) when this block is present. */ -}}
+        {{- $mobileLogo := "" -}}
+        {{- with site.Params.sidebar -}}{{- $mobileLogo = .logo -}}{{- end -}}
+        {{- if not $mobileLogo -}}
+          {{- with site.Params.navbar -}}{{- $mobileLogo = .logo -}}{{- end -}}
+        {{- end -}}
+        {{- with $mobileLogo -}}
+          <div class="sidebar-mobile-only sidebar-mobile-logo">
+            <a href="{{ site.Home.RelPermalink }}">
+              <img class="sidebar-logo-light" src="{{ relURL .path }}" alt="{{ site.Title }}" />
+              {{- with .dark -}}
+                <img class="sidebar-logo-dark" src="{{ relURL . }}" alt="{{ site.Title }}" />
+              {{- end -}}
+            </a>
+          </div>
+        {{- end -}}
+
+        {{- /* Desktop-only product logo. Hidden on mobile because the drawer
+               shows the same logo via .sidebar-mobile-logo above. Consumers opt
+               in by setting site.Params.sidebar.logo.path (with optional .dark
+               for a dark-mode variant). */ -}}
         {{- with site.Params.sidebar.logo -}}
-          <div class="sidebar-product-logo hx:mb-1 hx:max-md:hidden">
+          <div class="sidebar-product-logo hx:mb-1 hx:max-xl:hidden">
             <a href="{{ site.Home.RelPermalink }}">
               <img class="sidebar-logo-light" src="{{ relURL .path }}" alt="{{ site.Title }}" />
               {{- with .dark -}}
@@ -140,20 +163,15 @@
                selector (only when >1 section) + version picker. The desktop
                tab band is hidden below the sidebar breakpoint, so on mobile the
                tabs live here as a chip row above the version chips. */ -}}
+        {{- /* Mobile drawer header. Rows run broad -> narrow so the axes read as
+               a hierarchy: version (which release) -> section (which doc set) ->
+               tabs (Documentation vs API Reference), with the tabs sitting
+               directly above the page tree they scope. Each row carries a small
+               label so it's clear what the chips switch. */ -}}
         <div class="sidebar-mobile-only sidebar-mobile-header">
 
-          {{- if and $tabsEnabled $docTabsList -}}
-            <div class="sidebar-mobile-tab-row">
-              {{- range $docTabsList -}}
-                {{- $isCurrent := eq .name $activeTab -}}
-                <a href="{{ .href }}"
-                   class="sidebar-mobile-tab-link{{ if $isCurrent }} sidebar-mobile-tab-active{{ end }}"
-                   {{ if $isCurrent }}aria-current="true"{{ end }}>{{ .name }}</a>
-              {{- end -}}
-            </div>
-          {{- end -}}
-
           {{- if and $isOSSShape (gt (len $sectionKeys) 1) -}}
+            <span class="sidebar-mobile-row-label">{{ (T "section") | default "Section" }}</span>
             <div class="sidebar-mobile-section-row">
               {{- range $sectionKeys -}}
                 {{- $isCurrent := eq . $section -}}
@@ -250,7 +268,10 @@
             {{- $filteredAfter := cond $isOSSShape 4 (add $matchedIdx 1) -}}
             {{- $filtered := after $filteredAfter $segments -}}
             {{- $newPath := printf "/%s" (delimit $filtered "/") -}}
-            <div class="sidebar-mobile-version-row">
+            <span class="sidebar-mobile-row-label">{{ (T "version") | default "Version" }}</span>
+            <div class="sidebar-mobile-scroller">
+              <button type="button" class="sidebar-mobile-scroll-arrow sidebar-mobile-scroll-prev" aria-label="Scroll versions left" hidden>&lsaquo;</button>
+              <div class="sidebar-mobile-version-row" data-scroll-track>
               {{- range $versions -}}
                 {{- $isSameProduct := or (not $currentProduct) (eq (.product | default "") $currentProduct) -}}
                 {{- /* Only the current product's matching version is "active". */ -}}
@@ -288,6 +309,16 @@
                       {{- else -}}
                         {{- $href = printf "%s/%s/not-in-version/" $versionBase .linkVersion -}}
                       {{- end -}}
+                    {{- else -}}
+                      {{- /* No not-in-version page either: fall back to the
+                             version's landing page (always exists) so switching
+                             versions can never 404 — the user lands in the target
+                             version and can navigate from its sidebar. */ -}}
+                      {{- if $isOSSShape -}}
+                        {{- $href = printf "/docs/%s/%s/" $section .linkVersion -}}
+                      {{- else -}}
+                        {{- $href = printf "%s/%s/" $versionBase .linkVersion -}}
+                      {{- end -}}
                     {{- end -}}
                   {{- end -}}
                 {{- else -}}
@@ -298,14 +329,54 @@
                   {{ .dropdown }}
                 </a>
               {{- end -}}
+              </div>
+              <button type="button" class="sidebar-mobile-scroll-arrow sidebar-mobile-scroll-next" aria-label="Scroll versions right" hidden>&rsaquo;</button>
             </div>
           {{- end -}}
         </div>
 
+        {{- /* Tabs live with the page tree (not among the section/version
+               chips) under a "Section" heading — the heading + tabs + tree are
+               one unit, so the separator below the tabs is kept light. Tabs
+               scroll horizontally like the version row, with < / > arrows that
+               appear only when a tab (e.g. "Changelog") sits off-screen.
+               Mobile-only: desktop uses the tab band. */ -}}
         <div class="sidebar-nav-wrapper">
-          <nav class="sidebar-nav">
+          {{- if and $tabsEnabled $docTabsList -}}
+            <span class="sidebar-mobile-only sidebar-mobile-row-label">{{ (T "contents") | default "Contents" }}</span>
+            <div class="sidebar-mobile-only sidebar-mobile-scroller sidebar-mobile-tab-scroller">
+              <button type="button" class="sidebar-mobile-scroll-arrow sidebar-mobile-scroll-prev" aria-label="Scroll sections left" hidden>&lsaquo;</button>
+              <div class="sidebar-mobile-tab-row" data-scroll-track>
+                {{- range $docTabsList -}}
+                  {{- $isCurrent := eq .name $activeTab -}}
+                  <a href="{{ .href }}"
+                     class="sidebar-mobile-tab-link{{ if $isCurrent }} sidebar-mobile-tab-active{{ end }}"
+                     data-tab-target="{{ .name }}"
+                     {{ if $isCurrent }}aria-current="true"{{ end }}>{{ .name }}</a>
+                {{- end -}}
+              </div>
+              <button type="button" class="sidebar-mobile-scroll-arrow sidebar-mobile-scroll-next" aria-label="Scroll sections right" hidden>&rsaquo;</button>
+            </div>
+          {{- end -}}
+          <nav class="sidebar-nav" data-tab-panel="{{ $activeTab }}">
             {{- template "render-sidebar-tree" (dict "page" $docsSection "current" $context "versionPrefix" $versionPrefix "depth" 0 "tabsEnabled" $tabsEnabled "activeTab" $activeTab "defaultTab" $defaultTab) -}}
           </nav>
+          {{- /* Mobile only: pre-render the OTHER tabs' trees as hidden panels
+                 so tapping a tab in the drawer swaps the link structure in place
+                 (client-side, no navigation) rather than jumping to that tab's
+                 landing page. Desktop never shows these — it keeps the tab band
+                 and reloads — and the canonical .sidebar-nav above stays scoped
+                 to the active tab, so server-rendered/desktop behavior and the
+                 scoping tests are unchanged. Wired in head-end.html. */ -}}
+          {{- if and $tabsEnabled $docTabsList -}}
+            {{- range $docTabsList -}}
+              {{- if ne .name $activeTab -}}
+                <nav class="sidebar-nav sidebar-mobile-tree-panel" data-tab-panel="{{ .name }}" aria-hidden="true">
+                  {{- template "render-sidebar-tree" (dict "page" $docsSection "current" $context "versionPrefix" $versionPrefix "depth" 0 "tabsEnabled" $tabsEnabled "activeTab" .name "defaultTab" $defaultTab) -}}
+                </nav>
+              {{- end -}}
+            {{- end -}}
+          {{- end -}}
         </div>
       </aside>
     {{- else -}}
@@ -330,7 +401,7 @@
       {{- $navRoot := cond (eq site.Home.Type "docs") site.Home $context.FirstSection -}}
       <aside class="sidebar-container hextra-sidebar-container sidebar-mobile-panel hx:order-first hx:w-64 hx:shrink-0 hx:hidden hx:xl:block hx:print:hidden">
         {{- with site.Params.sidebar.logo -}}
-          <div class="sidebar-product-logo hx:mb-1 hx:max-md:hidden">
+          <div class="sidebar-product-logo hx:mb-1 hx:max-xl:hidden">
             <a href="{{ site.Home.RelPermalink }}">
               <img class="sidebar-logo-light" src="{{ relURL .path }}" alt="{{ site.Title }}" />
               {{- with .dark -}}
