@@ -110,30 +110,43 @@ function extractCards(
   //   <p class="section-card-desc">DESC</p>
   // </a>
   const out: { href: string; title: string; description: string }[] = [];
-  const cardRe =
-    /<a\s+class="section-card"\s+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+  // The fixture is built with `hugo --minify`, which strips quotes around
+  // attribute values (`class=section-card` rather than `class="section-card"`).
+  // Match each `<a>` tag, then pull class/href from its attributes with
+  // optional quotes so the assertions work on minified output. `section-card`
+  // is an exact class (not a prefix of `section-card-title`/`-desc`/`-body`),
+  // so require a non-hyphen boundary after it.
+  const cardRe = /<a\s+([^>]*)>([\s\S]*?)<\/a>/g;
   for (const match of html.matchAll(cardRe)) {
+    const attrs = match[1];
+    if (!/\bclass=("?)section-card\1(?=[\s>]|$)/.test(attrs)) continue;
+    const hrefMatch = attrs.match(/\bhref=("?)([^"\s>]+)\1/);
+    if (!hrefMatch) continue;
     const inner = match[2];
     const titleMatch = inner.match(
-      /<p[^>]*class="section-card-title"[^>]*>([\s\S]*?)<\/p>/,
+      /<p[^>]*\bclass=("?)section-card-title\1[^>]*>([\s\S]*?)<\/p>/,
     );
     const descMatch = inner.match(
-      /<p[^>]*class="section-card-desc"[^>]*>([\s\S]*?)<\/p>/,
+      /<p[^>]*\bclass=("?)section-card-desc\1[^>]*>([\s\S]*?)<\/p>/,
     );
     // Strip any badge spans from the title: list.html appends
     // `<span class="section-card-badge ...">LABEL</span>` next to the
     // title text when the target page sets enterprise/alpha/etc. flags.
     // The badge presence is asserted separately; here we want just the
     // human-readable title text.
-    const rawTitle = titleMatch?.[1] ?? "";
+    const rawTitle = titleMatch?.[2] ?? "";
+    // Match any badge span regardless of attribute quoting. Minify keeps
+    // quotes only on multi-class values (e.g. `class="section-card-badge
+    // badge-oss"`) and drops them on single-class ones (`class=section-card-badge`),
+    // so match `section-card-badge` anywhere in the span's attributes.
     const titleWithoutBadges = rawTitle.replace(
-      /<span[^>]*class="section-card-badge[^"]*"[^>]*>[\s\S]*?<\/span>/g,
+      /<span\b[^>]*\bsection-card-badge[^>]*>[\s\S]*?<\/span>/g,
       "",
     );
     out.push({
-      href: match[1],
+      href: hrefMatch[2],
       title: titleWithoutBadges.replace(/\s+/g, " ").trim(),
-      description: (descMatch?.[1] ?? "").replace(/\s+/g, " ").trim(),
+      description: (descMatch?.[2] ?? "").replace(/\s+/g, " ").trim(),
     });
   }
   return out;
