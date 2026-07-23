@@ -15,6 +15,15 @@
   {{- if $baseURLPath -}}
     {{- $relURL = strings.TrimPrefix $baseURLPath $relURL -}}
   {{- end -}}
+  {{- /* Strip the language prefix (e.g. `/ja`) so version inference works on */ -}}
+  {{- /* localized pages. A JA page permalink is /<product>/ja/<version>/… (full */ -}}
+  {{- /* build) or /ja/<version>/… (single-product build); neither regex below */ -}}
+  {{- /* expects the language segment, so without this the version can't be inferred */ -}}
+  {{- /* and the link falls back to "latest". `.Site.LanguagePrefix` is empty for the */ -}}
+  {{- /* default language, so this is a no-op there. */ -}}
+  {{- with .Site.LanguagePrefix -}}
+    {{- $relURL = replace $relURL (printf "%s/" .) "/" -}}
+  {{- end -}}
   {{- with findRE `(?:kgateway|agentgateway|gateway|envoy)/(\d+\.\d+\.x|latest|main)` $relURL 1 -}}
     {{- $ver = replaceRE `^.*/` "" (index . 0) -}}
   {{- end -}}
