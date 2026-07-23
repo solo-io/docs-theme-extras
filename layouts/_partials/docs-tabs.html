@@ -78,8 +78,12 @@
           {{- end -}}
         {{- end -}}
         {{- if gt (len $items) 0 -}}
-          {{- $first := index $items 0 -}}
-          {{- $href := trim (partial "utils/first-leaf.html" $first) " \n" -}}
+          {{- /* Link the tab to its first top-level item's own page — the first
+                 entry in the tab's left nav — rather than drilling to the first
+                 leaf. Clicking "Reference" should land on the Reference section
+                 landing, not jump several levels into its first subsection. A
+                 leaf first item links to itself. */ -}}
+          {{- $href := (index $items 0).RelPermalink -}}
           {{- $tabs = $tabs | append (dict "name" $name "href" $href) -}}
         {{- end -}}
       {{- end -}}

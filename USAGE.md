@@ -1,11 +1,16 @@
 # Usage and customizations: where this module differs from Hugo and Hextra
 
-This file is a reference for content authors and maintainers. It has two halves:
+This file is a reference for content authors and maintainers. It has four parts:
 
 - **[Authoring](#authoring-shortcodes-and-render-behavior)** — the shortcodes and
   render behavior that `docs-theme-extras` adds on top of, or changes from, stock
   [Hugo](https://gohugo.io/) and [Hextra](https://imfing.github.io/hextra/). For
   anything not listed, the Hugo and Hextra defaults apply unchanged.
+- **[Section tab navigation](#section-tab-navigation-doctabs)** — the opt-in
+  `docTabs` feature that groups a version's top-level sections into tabs, and how
+  it behaves on desktop versus in the mobile drawer.
+- **[Logo placement](#logo-placement)** — the navbar / sidebar / footer logo
+  slots, the common arrangements, and the mobile slide-out drawer logo.
 - **[Maintaining](#maintaining-the-shadows)** — the Hextra layout files this module
   shadows, the `# ours` convention, how to debug override precedence, and the
   Hextra upgrade workflow.
@@ -119,6 +124,139 @@ are grouped by purpose. See each source file for full parameters.
 | Shortcode | Status |
 |---|---|
 | `prism` | Deprecated legacy stub from docs-theme-lotus. Use a fenced code block ( ```` ```lang {hl_lines=[...]} ```` ) instead. `prism` emits pre-rendered `<pre>` HTML, which breaks list continuation when used inside a reused list item. Slated for removal once no consumer references it. |
+
+---
+
+# Section tab navigation (`docTabs`)
+
+Groups a version's top-level sections into named tabs — for example
+**Documentation**, **API Reference**, **Changelog** — so a large version presents
+one group of sections at a time instead of one long left nav. It is configured
+per site, opt-in, and only affects versions that actually populate two or more
+tabs.
+
+Source: [`docs-tabs.html`](./layouts/_partials/docs-tabs.html) (the desktop band
+plus the shared state the sidebar reads), [`sidebar.html`](./layouts/partials/sidebar.html)
+(the mobile chip row, the per-tab tree panels, and tree scoping),
+[`head-end.html`](./layouts/partials/themeExtras/head-end.html) (the mobile
+interaction JS), and the `docs-tabs*` / `sidebar-mobile-tab*` rules in
+[`docs-theme-extras.css`](./assets/css/docs-theme-extras.css).
+
+## Enabling
+
+Declare the tabs, in display order, under `params.docTabs`. Mark one as the
+default; if none is marked, the first entry is the default.
+
+```toml
+[[params.docTabs]]
+  name = "Documentation"
+  default = true
+[[params.docTabs]]
+  name = "API Reference"
+[[params.docTabs]]
+  name = "Changelog"
+```
+
+Tabs render **only when a version has two or more non-empty tabs.** An empty tab
+is dropped, and a version that ends up with fewer than two populated tabs shows
+its full, unscoped left nav (the feature is effectively off for that version).
+So tabs roll out per version as you tag pages — no per-version config change is
+needed.
+
+## Assigning pages to tabs
+
+Tabs are populated by the version's **top-level** sections and pages. Assign one
+to a tab with `tab:` front matter; anything untagged falls into the default tab.
+
+```yaml
+---
+title: API Reference
+tab: API Reference   # this top-level section and its descendants live in that tab
+---
+```
+
+- The **active tab** is the tab of the current page's top-level ancestor (or the
+  page itself, when it sits at the top level).
+- The left-nav tree is **scoped to the active tab at depth 0** — only that tab's
+  top-level sections show; levels below the top are unfiltered.
+- Each tab links to its **first top-level item's own page** — the first entry in
+  that tab's left nav — which is that section's landing page (or the page itself
+  when the first item is a leaf), not a deeper first-leaf page.
+
+## Desktop: the tab band
+
+At and above the sidebar breakpoint (`xl`, 1280px) the tabs render as a band
+across the top of the content area (`.docs-tabs-band`). Clicking a tab navigates
+to that tab's first page.
+
+## Mobile: tabs in the slide-out drawer
+
+Below `xl` the band is hidden and the tabs move into the slide-out sidebar drawer
+as a chip row, under a **Contents** heading, directly above the page tree they
+scope:
+
+- **Underline style** — the active tab is a brand-colored underline sitting on
+  the row's hairline (matching the desktop `.docs-tab` band), so it reads as a
+  different kind of control from the outlined version chips above it.
+- **Horizontal scroll** — the row scrolls sideways instead of wrapping; `‹`/`›`
+  arrows appear only when a tab is off-screen, and tapping a chip centers it.
+- **Structure-swap, not navigation** — tapping a tab shows *that tab's link
+  structure in place* (client-side), so you can explore a section's topics before
+  committing to a page; you then tap a page in the tree to navigate. The desktop
+  band still navigates on click — the swap only applies below `xl`.
+
+**Cost:** the structure-swap works by pre-rendering every tab's tree into the
+page as hidden panels (`.sidebar-mobile-tree-panel`), so each page in a tabbed
+version carries all of that version's tab trees in its HTML. On a version with
+large per-tab trees this adds page weight — a deliberate trade for no-navigation
+tab switching on mobile.
+
+---
+
+# Logo placement
+
+Three optional logo slots, each set independently in a consumer's config. The
+theme renders whatever each points at — the placements below are convention, not
+enforced by the theme.
+
+| Param | Slot | Rendered by |
+|---|---|---|
+| `params.navbar.logo` | Top navbar (`path`, `dark`, `width`, `height`, `link`) | [`navbar-title.html`](./layouts/partials/navbar-title.html) |
+| `params.sidebar.logo` | Desktop sidebar header, and the mobile slide-out drawer | [`sidebar.html`](./layouts/partials/sidebar.html) |
+| `params.footer.logo` | Footer (`path`, `dark`) | [`footer.html`](./layouts/partials/footer.html) |
+
+## Common arrangements
+
+- **Product mark in the navbar** (OSS shape): set `navbar.logo` to the product
+  lockup and leave `sidebar.logo` unset. The navbar mark then shows at every
+  breakpoint.
+- **Product in navbar, corporate mark in footer** (enterprise target): set
+  `navbar.logo` to the product lockup and `footer.logo` to the corporate (Solo)
+  mark, with no `sidebar.logo`.
+- **Product in sidebar, corporate mark in navbar** (older enterprise): set
+  `navbar.logo` to the corporate mark and `sidebar.logo` to the product lockup.
+
+## The mobile slide-out drawer logo
+
+Below the sidebar breakpoint (`xl`, 1280px) the persistent sidebar becomes the
+slide-out drawer, and the theme pins a logo to the top of it — where the navbar
+logo would sit, since the open drawer covers the navbar's left region. It uses
+`sidebar.logo` if set, otherwise falls back to `navbar.logo`, so a site that only
+configures a navbar logo still gets a drawer mark.
+
+Details worth knowing:
+
+- The drawer logo is **centered** and sized by an explicit `height` (28px), not
+  `max-height` — the logo SVGs carry only a `viewBox` (no intrinsic
+  width/height), which would otherwise collapse a `max-height` image to 0×0.
+- The desktop sidebar header logo (`.sidebar-product-logo`) is hidden below `xl`
+  (the drawer logo replaces it), so on a site with `sidebar.logo` set you never
+  see both at once. It sizes the navbar logo from the `width`/`height` params
+  directly, so adjust those to resize it.
+- When `sidebar.logo` is set, the navbar logo is desktop-only (the sidebar/drawer
+  logo covers mobile); when it is not, the navbar logo shows at all breakpoints.
+
+Nothing here is tied to `docTabs` — logos and tabs are independent features.
 
 ---
 
