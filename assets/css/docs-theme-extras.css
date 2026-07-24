@@ -27,6 +27,18 @@
 .dark .toggle-light { display: block; }
 .dark .toggle-dark  { display: none;  }
 
+/* Legacy-pair defense. A lone reuse-image (no srcDark) renders unwrapped in
+   BOTH modes and carries .reuse-image-nodark. The pre-srcDark authoring
+   pattern followed it with a separate reuse-image-dark (.toggle-light, shown
+   in dark) for the same figure. Since v0.1.20 the lone light image also shows
+   in dark, so both stacked. Hide the both-modes light image in dark mode ONLY
+   when a dark-only sibling immediately follows it — the two-shortcode pair then
+   renders one image per mode with no content migration. A truly lone image (no
+   dark sibling) never matches and still shows in both modes. Graceful
+   degradation: browsers without :has() fall back to the pre-fix stacked
+   rendering (no worse than today). See layouts/_shortcodes/reuse-image.html. */
+.dark .reuse-image-nodark:has(+ .toggle-light) { display: none; }
+
 /* ── Cards-shortcode grid wrapper handling ──────────────────────────────
    Both the auto-card partial and the {{< cards >}} shortcode emit a
    `.section-cards` container; the grid styling lives further down with

@@ -532,6 +532,13 @@ The `reuse-image` shortcode emits both the light and dark variants in one call. 
 
 {{< reuse-image src="img/test/light.svg" srcDark="img/test/dark.svg" alt="MARKER_IMAGE_ALT. A simple themed test image." caption="A test image with a light and dark variant." width="160" >}}
 
+### Legacy pair (lone reuse-image + separate reuse-image-dark)
+
+The pre-`srcDark` authoring pattern: a lone `reuse-image` (no `srcDark`, so it renders in BOTH modes) immediately followed by a separate `reuse-image-dark`. Without a defense this stacks both images in dark mode. The `.reuse-image-nodark:has(+ .toggle-light)` CSS rule hides the both-modes light image when a dark-only sibling immediately follows, so this legacy content renders correctly (one image per mode) with no content migration.
+
+{{< reuse-image src="img/test/light.svg" alt="MARKER_LEGACY_PAIR_LIGHT. Legacy lone light image." caption="Legacy pair: light half." width="160" >}}
+{{< reuse-image-dark srcDark="img/test/dark.svg" alt="MARKER_LEGACY_PAIR_DARK. Legacy dark-only sibling." caption="Legacy pair: dark half." width="160" >}}
+
 ### Dark variant only
 
 The `reuse-image-dark` variant by itself (renders only when dark mode is active):

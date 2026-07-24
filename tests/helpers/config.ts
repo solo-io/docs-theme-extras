@@ -67,6 +67,15 @@ export type Checks = {
   // its own toggle so a consumer with a known backlog can disable it without
   // losing the other content scans.
   missingImages: boolean;
+  // Source scan for the legacy image-pair anti-pattern: a lone `reuse-image`
+  // (no `srcDark`) immediately followed by a separate `reuse-image-dark` for
+  // the same figure. Since v0.1.20 the lone call renders in both modes, so the
+  // two stack in dark mode. The CSS `.reuse-image-nodark:has(+ .toggle-light)`
+  // rule now hides the light half in dark mode, so this renders correctly
+  // WITHOUT a migration — hence the check defaults to false (opt-in). Enable it
+  // only to enforce the canonical single-call `src`+`srcDark` form in source.
+  // See helpers/reuse-image-pair.ts.
+  reuseImagePair: boolean;
 };
 
 export type Allowlists = {
@@ -141,6 +150,9 @@ const DEFAULT_CHECKS: Checks = {
   cascadeType: true,
   consoleErrors: true,
   missingImages: true,
+  // Opt-in: the CSS defense makes the legacy pattern render correctly, so this
+  // is a "prefer the canonical form" lint, not a correctness gate.
+  reuseImagePair: false,
 };
 
 const DEFAULT_ALLOWLISTS: Allowlists = {
