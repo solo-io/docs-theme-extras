@@ -143,6 +143,59 @@ test.describe("theme templates: no uncapped build-time remote fetch", () => {
   }
 });
 
+test.describe("search.html: a transient CDN fetch failure falls back to a runtime <script>, not a fatal errorf", () => {
+  // Companion to the timeout cap above. The cap makes a slow/unreachable CDN
+  // fail FAST; this guards what happens on that failure: search.html must NOT
+  // `errorf` (which fails the whole build on a network blip we don't control —
+  // e.g. "connection reset by peer") but `warnf` and emit a runtime CDN
+  // `<script src>` so the build stays green and search still works. Same
+  // source-scan rationale as the timeout guard: reproducing a real fetch
+  // failure needs a black-holed network, so the invariant is pinned at source.
+  const SEARCH = path.join(LAYOUTS_DIR, "_partials/scripts/search.html");
+  test.skip(!fs.existsSync(SEARCH), "search.html not present (consumer target)");
+
+  const src = fs.existsSync(SEARCH) ? fs.readFileSync(SEARCH, "utf8") : "";
+  // Isolate the remote-fetch error branch only: from the capped GetRemote of
+  // the FlexSearch bundle to the `else with .Value` that begins the success
+  // path. The `errorf`s further down (local/misconfigured base) are a
+  // different, non-transient failure and are intentionally left fatal.
+  const fetchIdx = src.indexOf("resources.GetRemote $flexSearchJsUrl");
+  const errStart = src.indexOf("with .Err", fetchIdx);
+  const errEnd = src.indexOf("else with .Value", errStart);
+  const errBranch =
+    errStart >= 0 && errEnd > errStart ? src.slice(errStart, errEnd) : "";
+
+  test("the capped remote fetch and its .Err branch were located", () => {
+    expect(
+      fetchIdx,
+      "no capped GetRemote for the FlexSearch bundle — scan would vacuously pass",
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      errBranch.length,
+      "could not isolate the GetRemote .Err branch",
+    ).toBeGreaterThan(0);
+  });
+
+  test("does not errorf (fail the build) on a transient fetch failure", () => {
+    expect(
+      errBranch.includes("errorf"),
+      "the remote-fetch failure branch still calls errorf — a transient CDN error will fail the whole build",
+    ).toBe(false);
+  });
+
+  test("warns and emits a runtime CDN <script> fallback pointing at the same pinned URL", () => {
+    expect(errBranch, "no warnf on the fetch-failure branch").toMatch(/warnf/);
+    expect(
+      errBranch,
+      "no runtime <script src> fallback on the fetch-failure branch",
+    ).toMatch(/<script[^>]*\bsrc=/);
+    expect(
+      errBranch.includes("$flexSearchJsUrl"),
+      "fallback does not point at the pinned CDN URL",
+    ).toBe(true);
+  });
+});
+
 test.describe("theme templates: rebase reads resource content guarded", () => {
   const REBASE = path.join(LAYOUTS_DIR, "_shortcodes/rebase.html");
   test.skip(!fs.existsSync(REBASE), "rebase.html not present (consumer target)");
