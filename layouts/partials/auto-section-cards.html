@@ -36,8 +36,16 @@
               {{- if .Params.Beta }} <span class="section-card-badge badge-tag">Beta</span>{{ end -}}
               {{- if .Params.Experimental }} <span class="section-card-badge badge-tag">Experimental</span>{{ end -}}
             </p>
+            {{- /* Strip markdown to plain text (markdownify renders it, plainify
+                   removes the tags), THEN truncate. Two reasons this beats the
+                   old `truncate | markdownify`: a markdown link in the
+                   description would `markdownify` into an `<a>` NESTED inside
+                   this card's own `<a href>` (invalid HTML that trips build
+                   scans), and truncating BEFORE rendering can cut a token in
+                   half (`**bol…`) and leak a stray `**`. Matches the plain-text
+                   treatment in `utils/page-description.html`. */ -}}
             {{- with .Description }}
-              <p class="section-card-desc">{{ . | truncate 100 | markdownify }}</p>
+              <p class="section-card-desc">{{ . | markdownify | plainify | htmlUnescape | truncate 100 }}</p>
             {{- end }}
           </div>
         </a>
