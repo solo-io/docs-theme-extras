@@ -1,0 +1,28 @@
+{{- /* Plain-text page description for <meta name="description">, OpenGraph,
+       Twitter cards, and JSON-LD.
+
+       Overrides Hextra's `_partials/utils/page-description.html`, which pipes
+       the value through `plainify | htmlUnescape` only. `plainify` strips HTML
+       tags but NOT markdown syntax, so a front-matter description like
+       `... the **2.3 release**.` leaked its literal `**` into every meta tag
+       (and into Slack/X link unfurls, which read those tags).
+
+       Adding `markdownify` first renders the markdown to HTML
+       (`**x**` -> `<strong>x</strong>`, `[a](b)` -> `<a href=b>a</a>`), then
+       `plainify` strips the tags, leaving clean plain text. Descriptions are
+       plain-text metadata, so rendering-then-stripping is always what we want.
+
+       Logic otherwise mirrors the upstream partial: explicit `.Description`
+       wins; home falls back to the site description; other pages fall back to
+       the rendered page summary (already HTML, so it skips markdownify). */ -}}
+{{- with .Description -}}
+  {{- . | markdownify | plainify | htmlUnescape -}}
+{{- else -}}
+  {{- if .IsHome -}}
+    {{- with .Site.Params.description -}}
+      {{- . | markdownify | plainify | htmlUnescape -}}
+    {{- end -}}
+  {{- else -}}
+    {{- .Summary | plainify | htmlUnescape | chomp -}}
+  {{- end -}}
+{{- end -}}

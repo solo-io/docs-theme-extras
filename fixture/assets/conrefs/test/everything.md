@@ -1038,11 +1038,11 @@ The setting **{{% conditional-text include-if="test" %}}COND_IN_BOLD{{% /conditi
 
 Both shortcodes append a fragment to a heading line. On non-matching versions/builds, the heading still renders without the appended fragment.
 
-#### MARKER_VERSION_HEADING_HOST {{% version include-if="v2" %}}MARKER_VERSION_IN_HEADING suffix{{% /version %}}
+#### MARKER_VERSION_HEADING_HOST {{% version include-if="v2" %}}MARKER_VERSION_IN_HEADING suffix{{% /version %}} {#marker-version-heading-host}
 
 The H4 above keeps its prefix marker on every page; on v2 it also includes the version suffix.
 
-#### COND_HEADING_HOST {{% conditional-text include-if="test" %}}COND_IN_HEADING suffix{{% /conditional-text %}}
+#### COND_HEADING_HOST {{% conditional-text include-if="test" %}}COND_IN_HEADING suffix{{% /conditional-text %}} {#cond-heading-host}
 
 The H4 above keeps its prefix marker on every page; the suffix only appears when buildCondition matches.
 

@@ -746,6 +746,18 @@ pre.mermaid:not([data-processed]) {
   border-bottom-color: var(--theme-primary, rgb(199, 210, 254));
 }
 
+/* ── Content column top padding ─────────────────────────────────────────
+   docs/single.html + list.html put `hx:pt-6` (1.5rem) on <main id="content">,
+   but that Tailwind utility is only emitted when the consumer's build happens
+   to generate it — on some OSS builds (e.g. agentgateway) it purges out and
+   the content top padding collapses to 0, pulling the breadcrumb up above the
+   sidebar/TOC. Pin it with a real rule so the content column top is 1.5rem on
+   every consumer, and the three columns' `padding-top` math (here, plus
+   .solo-toc-inner and .sidebar-nav-wrapper) lines all three up. */
+#content {
+  padding-top: 1.5rem;
+}
+
 /* ── TOC (right-hand "On this page" nav) ────────────────────────────────
    Rendered by layouts/_partials/toc.html. Class hooks are .solo-toc-*
    (plus the outer hextra-toc wrapper that hextra owns). Centralized
@@ -759,7 +771,12 @@ pre.mermaid:not([data-processed]) {
   flex-direction: column;
   overflow: hidden;
   padding-right: 1rem;
-  padding-top: 0.5rem;
+  /* Aligns the "On this page" heading with the breadcrumb: the content column's
+     1.5rem top padding (#content, above) plus the heading's own 0.1875rem
+     margin-top matches the breadcrumb's 1.5rem + 0.1875rem. Shared by both
+     brands — previously this lived only in brand-enterprise.css, so OSS sites
+     (which also use the centralized docs templates now) left the TOC too high. */
+  padding-top: 1.5rem;
   font-size: 0.875rem;
   hyphens: auto;
   max-height: calc(100vh - var(--solo-rail-top) - env(safe-area-inset-bottom));
@@ -2183,11 +2200,12 @@ details[open].hextra-search-other-versions > summary::before {
    min-width:1280px block below); on mobile the slide-in panel scrolls the
    whole aside, so flex-grow lets the wrapper fill the panel. */
 .sidebar-nav-wrapper {
-  /* Top padding matches the content pane's top padding (docs/list.html's
-     `hx:pt-6` = 1.5rem, less the first link's own ~0.375rem top padding) so the
-     sidebar's first item lines up with the first line of content instead of
-     sitting flush against the navbar. */
-  padding: 1rem 1rem 1rem;
+  /* Top padding aligns the first sidebar link with the breadcrumb. The content
+     column's top is 1.5rem (#content, above) + the breadcrumb's 0.1875rem
+     margin-top = 1.6875rem; the first link's own 0.5rem top padding is part of
+     that, so the wrapper carries 1.6875 − 0.5 = 1.1875rem. Shared by both brands
+     — previously only brand-enterprise.css set this, so OSS sites sat too high. */
+  padding: 1.1875rem 1rem 1rem;
   flex-grow: 1;
 }
 .sidebar-nav {

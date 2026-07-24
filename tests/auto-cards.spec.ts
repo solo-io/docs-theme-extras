@@ -110,12 +110,15 @@ function extractCards(
   //   <p class="section-card-desc">DESC</p>
   // </a>
   const out: { href: string; title: string; description: string }[] = [];
-  // The fixture is built with `hugo --minify`, which strips quotes around
-  // attribute values (`class=section-card` rather than `class="section-card"`).
+  // A consumer that builds with `hugo --minify` strips quotes around attribute
+  // values (`class=section-card` rather than `class="section-card"`). The
+  // bundled fixture build (see the Makefile) does NOT minify, so locally the
+  // attributes are quoted; the optional-quote matching below keeps this spec
+  // correct against BOTH a minified consumer build and the quoted fixture.
   // Match each `<a>` tag, then pull class/href from its attributes with
-  // optional quotes so the assertions work on minified output. `section-card`
-  // is an exact class (not a prefix of `section-card-title`/`-desc`/`-body`),
-  // so require a non-hyphen boundary after it.
+  // optional quotes. `section-card` is an exact class (not a prefix of
+  // `section-card-title`/`-desc`/`-body`), so require a non-hyphen boundary
+  // after it.
   const cardRe = /<a\s+([^>]*)>([\s\S]*?)<\/a>/g;
   for (const match of html.matchAll(cardRe)) {
     const attrs = match[1];
