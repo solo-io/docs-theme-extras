@@ -22,7 +22,7 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
-## [v0.1.21] — 2026-07-24
+## [v0.1.21] — 2026-07-27
 
 ### Fix — stop legacy image pairs from stacking in dark mode (`layouts/_shortcodes/reuse-image.html`, `assets/css/docs-theme-extras.css`)
 
