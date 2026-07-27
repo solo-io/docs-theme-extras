@@ -69,55 +69,18 @@
   <script src="{{ $glossaryJs.RelPermalink }}" defer></script>
 {{- end }}
 
-<script>
-function toggleMobileTheme() {
-  var current = localStorage.getItem('color-theme') || 'system';
-  var next = current === 'dark' ? 'light' : 'dark';
-  var btn = document.querySelector('.hextra-theme-toggle-options button[data-item="' + next + '"]');
-  if (btn) btn.click();
-}
-
-/* Mobile sidebar open/close. Globals so consumers' nav templates can call
-   them inline (agw-oss's nav.html, kgw's breadcrumb mobile trigger, etc.). */
-function toggleMobileSidebar() {
-  var sidebar = document.querySelector('.sidebar-mobile-panel');
-  var overlay = document.querySelector('.sidebar-mobile-overlay');
-  if (sidebar && overlay) {
-    sidebar.classList.toggle('mobile-sidebar-open');
-    overlay.classList.toggle('active');
-  }
-}
-function closeMobileSidebar() {
-  var sidebar = document.querySelector('.sidebar-mobile-panel');
-  var overlay = document.querySelector('.sidebar-mobile-overlay');
-  if (sidebar) sidebar.classList.remove('mobile-sidebar-open');
-  if (overlay) overlay.classList.remove('active');
-}
-
-/* Wire the stock Hextra hamburger (.hextra-hamburger-menu) to our
-   mobile-sidebar toggle. Hextra's own menu.js toggles a different set of
-   classes (hx:max-md:[transform:...]) that don't match our .sidebar-mobile-panel
-   design, so we intercept the click here. Capture phase + stopImmediatePropagation
-   so Hextra's listener doesn't fight us by toggling its own classes back. */
-document.addEventListener('DOMContentLoaded', function () {
-  /* Reveal the theme navbar's sidebar trigger only when this page actually
-     renders a sidebar (the `.sidebar-mobile-panel` aside is present). Keeps
-     landing / non-docs pages from showing a dead button. Consumer navbars
-     (kgw/agw) render their trigger without the `hidden` attribute, so this
-     query matches only the theme-navbar instance. */
-  var sbTrigger = document.querySelector('.solo-sidebar-mobile-trigger[hidden]');
-  if (sbTrigger && document.querySelector('.sidebar-mobile-panel')) {
-    sbTrigger.removeAttribute('hidden');
-  }
-  var hamburger = document.querySelector('.hextra-hamburger-menu');
-  if (!hamburger) return;
-  hamburger.addEventListener('click', function (e) {
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    toggleMobileSidebar();
-  }, true);
-});
-</script>
+{{/* Mobile navigation (theme toggle, sidebar open/close, hamburger wiring,
+     version/tab chip scroller, tab structure-swap). Loaded EXTERNALLY, not
+     inlined: minified it contains `<`+identifier comparisons (`i<n.length`)
+     that a naive HTML parser (the link checker's) reads as a start-tag,
+     dropping the whole page body from link extraction. An external .js file
+     is never parsed as HTML. `defer` + the DOMContentLoaded wrappers preserve
+     timing; the toggle / closeMobileSidebar globals stay callable from
+     consumer nav templates. Same rationale as docs-init.js below. */}}
+{{- $mobileNav := resources.Get "js/mobile-nav.js" -}}
+{{- if $mobileNav }}
+  <script src="{{ $mobileNav.RelPermalink }}" defer></script>
+{{- end }}
 
 {{/* Mark sidebar as not-ready synchronously during <head> parse, before the
      body renders. Custom.css uses this class to hide the sidebar contents

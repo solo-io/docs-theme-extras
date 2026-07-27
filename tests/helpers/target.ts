@@ -107,6 +107,12 @@ class Target {
     return this.cfg().allowlists.missingImages.map((p) => new RegExp(p));
   }
 
+  // Per-consumer regex patterns for heading-shortcode-id.spec.ts. Strings from
+  // [allowlists].headingShortcodeId in the TOML are compiled to RegExp here.
+  get headingShortcodeIdAllowlist(): RegExp[] {
+    return this.cfg().allowlists.headingShortcodeId.map((p) => new RegExp(p));
+  }
+
   shouldRun(check: keyof Checks): boolean {
     return this.cfg().checks[check];
   }

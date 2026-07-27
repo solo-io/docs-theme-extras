@@ -26,6 +26,10 @@ const EXPECTED: Record<
     fontIncludes: string; // Google Font URL fragment (e.g., "Open+Sans")
     fontExcludes: string;
     navbarLogoIncludes: string; // path fragment (e.g., "logo-oss-test")
+    // Footer logo path fragment, or null when the brand configures no
+    // params.footer.logo. Enterprise moves the Solo corporate mark to the
+    // footer (the navbar carries the product lockup); OSS sets no footer logo.
+    footerLogoIncludes: string | null;
     bodyFontFamily: RegExp; // matched against computed style
     themePrimary: string; // expected resolved value of --theme-primary in light mode
   }
@@ -36,6 +40,7 @@ const EXPECTED: Record<
     fontIncludes: "family=Open+Sans",
     fontExcludes: "family=Nunito",
     navbarLogoIncludes: "logo-oss-test",
+    footerLogoIncludes: null,
     bodyFontFamily: /Open Sans/i,
     themePrimary: "rgb(0, 107, 230)", // hsl(212, 100%, 45%) → 0/107/230
   },
@@ -44,7 +49,11 @@ const EXPECTED: Record<
     cssExcludes: "brand-oss.css",
     fontIncludes: "family=Nunito",
     fontExcludes: "family=Open+Sans",
-    navbarLogoIncludes: "solo-light",
+    // Enterprise carries the PRODUCT lockup in the navbar (the Solo corporate
+    // mark moved to the footer — see footerLogoIncludes and params.footer.logo
+    // / params.navbar.logo in hugo-enterprise.toml).
+    navbarLogoIncludes: "logo-sef-test",
+    footerLogoIncludes: "solo-light",
     // The enterprise stack starts with -apple-system; computed value usually
     // surfaces a literal "system-ui" or "-apple-system" depending on the
     // browser and OS. Match either marker.
@@ -102,6 +111,29 @@ test.describe("brand layer is correctly wired", () => {
     expect(
       navImgSrcs.some((s) => s.includes(exp.navbarLogoIncludes)),
       `expected navbar <img> src including ${exp.navbarLogoIncludes}; got:\n  ${navImgSrcs.join("\n  ")}`,
+    ).toBe(true);
+  });
+
+  test(`${BRAND}: footer logo matches params.footer.logo (or is absent)`, async ({
+    page,
+  }) => {
+    await page.goto(EVERYTHING);
+    // params.footer.logo renders an <img class="solo-footer-logo …"> in the
+    // footer. Enterprise sets it to the Solo corporate mark (the navbar carries
+    // the product lockup); OSS sets none, so the footer logo must be absent.
+    const footerLogoSrcs = await page
+      .locator("img.solo-footer-logo")
+      .evaluateAll((els) => els.map((e) => (e as HTMLImageElement).src));
+    if (exp.footerLogoIncludes === null) {
+      expect(
+        footerLogoSrcs,
+        `no footer logo expected for the ${BRAND} brand; got:\n  ${footerLogoSrcs.join("\n  ")}`,
+      ).toHaveLength(0);
+      return;
+    }
+    expect(
+      footerLogoSrcs.some((s) => s.includes(exp.footerLogoIncludes!)),
+      `expected footer <img> src including ${exp.footerLogoIncludes}; got:\n  ${footerLogoSrcs.join("\n  ")}`,
     ).toBe(true);
   });
 

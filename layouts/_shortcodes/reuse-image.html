@@ -39,18 +39,29 @@
      that reads fine in either theme): it stays visible in dark mode instead of
      silently disappearing. For a light-ONLY asset that must be hidden in dark
      (e.g. a white-card screenshot with no dark version yet), use the dedicated
-     reuse-image-light shortcode; for dark-only, reuse-image-dark. Do NOT pair a
-     lone reuse-image with a sibling reuse-image-dark for the same figure — the
-     lone call now shows in both modes, so the two would stack in dark; pass
-     srcDark on THIS call, which routes back to the PAIR branch above. */}}
+     reuse-image-light shortcode; for dark-only, reuse-image-dark. Prefer
+     passing srcDark on THIS call (routes to the PAIR branch above) over the
+     legacy pattern of a lone reuse-image followed by a sibling reuse-image-dark
+     for the same figure. That legacy pattern would otherwise stack both images
+     in dark mode (the lone call now shows in both), but the SINGLE branch tags
+     its wrapper with .reuse-image-nodark and docs-theme-extras.css hides it in
+     dark mode when a .toggle-light sibling immediately follows — so legacy
+     content still renders one image per mode without a srcDark migration. */}}
 {{- if $imageDark -}}
   {{- with $image -}}
 <div style="text-align: center;" class="toggle-dark"><figure><img src="{{ .RelPermalink }}" width="{{ $width }}" alt="{{ $alt }}"/> <figcaption style="font-style:italic">{{ $caption }}</figcaption></figure></div>
   {{- end -}}
 <div style="text-align: center;" class="toggle-light"><figure><img src="{{ $imageDark.RelPermalink }}" width="{{ $width }}" alt="{{ $alt }}"/> <figcaption style="font-style:italic">{{ $caption }}</figcaption></figure></div>
 {{- else -}}
+  {{- /* SINGLE: no toggle class, so it shows in both modes. The
+       .reuse-image-nodark hook lets CSS defend the legacy pattern where a lone
+       reuse-image is still paired with a following reuse-image-dark: the rule
+       `.dark .reuse-image-nodark:has(+ .toggle-light)` hides this both-modes
+       image in dark mode only when a dark-only sibling immediately follows, so
+       that content renders one-image-per-mode without a srcDark migration. A
+       truly lone image (no dark sibling) is unaffected and stays in both modes. */ -}}
   {{- with $image -}}
-<div style="text-align: center;"><figure><img src="{{ .RelPermalink }}" width="{{ $width }}" alt="{{ $alt }}"/> <figcaption style="font-style:italic">{{ $caption }}</figcaption></figure></div>
+<div style="text-align: center;" class="reuse-image-nodark"><figure><img src="{{ .RelPermalink }}" width="{{ $width }}" alt="{{ $alt }}"/> <figcaption style="font-style:italic">{{ $caption }}</figcaption></figure></div>
   {{- end -}}
 {{- end -}}
 {{- end -}}

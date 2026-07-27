@@ -58,7 +58,7 @@ export default defineConfig({
     {
       name: "static",
       testMatch:
-        /static\.spec\.ts$|versioning\.spec\.ts$|versioned-image-auto\.spec\.ts$|version-nested-list\.spec\.ts$|version-inside-fence\.spec\.ts$|version-table-row\.spec\.ts$|version-cards\.spec\.ts$|shortcode-contexts\.spec\.ts$|conditional-block\.spec\.ts$|cond-reuse-table\.spec\.ts$|callout-in-table-cell\.spec\.ts$|auto-cards\.spec\.ts$|card-image\.spec\.ts$|presence\.spec\.ts$|github-shortcode\.spec\.ts$|language-switch\.spec\.ts$|redirect\.spec\.ts$|sidebar-linktitle\.spec\.ts$|sidebar-flat\.spec\.ts$|link-hextra-apiref\.spec\.ts$|build-resilience\.spec\.ts$|page-feedback\.spec\.ts$|footnotes-after-cards\.spec\.ts$|callout-icon\.spec\.ts$|custom-alert\.spec\.ts$/,
+        /static\.spec\.ts$|versioning\.spec\.ts$|versioned-image-auto\.spec\.ts$|version-nested-list\.spec\.ts$|version-inside-fence\.spec\.ts$|version-table-row\.spec\.ts$|version-cards\.spec\.ts$|shortcode-contexts\.spec\.ts$|conditional-block\.spec\.ts$|cond-reuse-table\.spec\.ts$|callout-in-table-cell\.spec\.ts$|auto-cards\.spec\.ts$|card-image\.spec\.ts$|presence\.spec\.ts$|github-shortcode\.spec\.ts$|language-switch\.spec\.ts$|redirect\.spec\.ts$|sidebar-linktitle\.spec\.ts$|sidebar-flat\.spec\.ts$|link-hextra-apiref\.spec\.ts$|build-resilience\.spec\.ts$|page-feedback\.spec\.ts$|footnotes-after-cards\.spec\.ts$|callout-icon\.spec\.ts$|custom-alert\.spec\.ts$|docs-tabs\.spec\.ts$|meta-description\.spec\.ts$|link-hextra-lang-prefix\.spec\.ts$|warn-missing-description\.spec\.ts$/,
     },
     // Consumer-content specs. Every spec here reads the CONSUMER's own content
     // — either the built HTML tree (target.builtRoot) or the markdown source
@@ -71,21 +71,22 @@ export default defineConfig({
     //     fragmented code blocks, copy-md presence), copy-md-fidelity
     //     (copy-as-markdown output vs HTML), hugo-warnings (build-log warnings),
     //     dev-build (fails if the build carries a dev-server LiveReload script).
-    //   source scanners: curl-quotes, tab-syntax, shortcode-args, include-form,
-    //     cascade-type (all walk scanRoots markdown).
+    //   source scanners: curl-quotes, tab-syntax, shortcode-args,
+    //     heading-shortcode-id, include-form, cascade-type (all walk scanRoots
+    //     markdown).
     // The pure-unit describe blocks inside these specs (deterministic, no build
     // needed) ride along here too — cheap, and they keep helper regressions
     // visible.
     {
       name: "content",
       testMatch:
-        /markdown-leaks\.spec\.ts$|missing-images\.spec\.ts$|built-html-integrity\.spec\.ts$|copy-md-fidelity\.spec\.ts$|hugo-warnings\.spec\.ts$|dev-build\.spec\.ts$|curl-quotes\.spec\.ts$|tab-syntax\.spec\.ts$|shortcode-args\.spec\.ts$|include-form\.spec\.ts$|cascade-type\.spec\.ts$/,
+        /markdown-leaks\.spec\.ts$|missing-images\.spec\.ts$|built-html-integrity\.spec\.ts$|copy-md-fidelity\.spec\.ts$|hugo-warnings\.spec\.ts$|dev-build\.spec\.ts$|curl-quotes\.spec\.ts$|tab-syntax\.spec\.ts$|shortcode-args\.spec\.ts$|heading-shortcode-id\.spec\.ts$|include-form\.spec\.ts$|cascade-type\.spec\.ts$|reuse-image-pair-lint\.spec\.ts$/,
     },
     {
       name: "browser",
       use: { ...devices["Desktop Chrome"] },
       testMatch:
-        /browser\.spec\.ts$|contrast\.spec\.ts$|viewport\.spec\.ts$|brand\.spec\.ts$|theme-toggle\.spec\.ts$|mermaid-render\.spec\.ts$|sidebar-rail\.spec\.ts$|toc-layout\.spec\.ts$|alert-body\.spec\.ts$|back-to-top\.spec\.ts$|table-display\.spec\.ts$/,
+        /browser\.spec\.ts$|contrast\.spec\.ts$|viewport\.spec\.ts$|brand\.spec\.ts$|theme-toggle\.spec\.ts$|mermaid-render\.spec\.ts$|sidebar-rail\.spec\.ts$|toc-layout\.spec\.ts$|alert-body\.spec\.ts$|back-to-top\.spec\.ts$|table-display\.spec\.ts$|reuse-image-dark-pair\.spec\.ts$/,
     },
     {
       name: "cross-browser-chromium",

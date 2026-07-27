@@ -206,6 +206,15 @@
                     {{- else -}}
                       {{- $versionUrl = printf "%s/%s/not-in-version/" $langPath .linkVersion -}}
                     {{- end -}}
+                  {{- else -}}
+                    {{- /* No not-in-version page either: fall back to the target
+                           version's landing page (always exists) so the switch
+                           can never 404. */ -}}
+                    {{- if $includeFolder -}}
+                      {{- $versionUrl = printf "/%s%s/%s/" $folder $langPath .linkVersion -}}
+                    {{- else -}}
+                      {{- $versionUrl = printf "%s/%s/" $langPath .linkVersion -}}
+                    {{- end -}}
                   {{- end -}}
                 {{- end -}}
               {{- else -}}

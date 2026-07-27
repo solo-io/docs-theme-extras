@@ -185,4 +185,18 @@ test.describe("reuse-image rendering mode", () => {
     const classes = wrapperClassesByAlt(readFixture(anyPage!), VERSION_MARKERS.reuseImagePair).sort();
     expect(classes).toEqual(["toggle-dark", "toggle-light"]);
   });
+
+  // Legacy-pair defense (class contract). A lone reuse-image emits
+  // .reuse-image-nodark; docs-theme-extras.css hides it in dark mode when a
+  // .toggle-light sibling immediately follows. This pins the emitted class the
+  // CSS rule keys on — the computed-visibility side is proven in
+  // reuse-image-dark-pair.spec.ts.
+  test("MARKER_LEGACY_PAIR_LIGHT: lone light half carries .reuse-image-nodark", () => {
+    const cls = wrapperClassByAlt(readFixture(anyPage!), "MARKER_LEGACY_PAIR_LIGHT");
+    expect(cls).toBe("reuse-image-nodark");
+  });
+  test("MARKER_LEGACY_PAIR_DARK: dark half stays dark-only (.toggle-light)", () => {
+    const cls = wrapperClassByAlt(readFixture(anyPage!), "MARKER_LEGACY_PAIR_DARK");
+    expect(cls).toContain("toggle-light");
+  });
 });

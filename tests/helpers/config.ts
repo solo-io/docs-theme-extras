@@ -46,6 +46,12 @@ export type Checks = {
   // affects links after it and site JS usually sits at the end of <body>.
   inlineScriptSafety: boolean;
   shortcodeArgs: boolean;
+  // Source scan for a Hugo shortcode used in a markdown heading with no
+  // explicit `{#id}`. Hugo builds the heading anchor from the raw text before
+  // substituting shortcodes, so the anchor leaks a "hahahugoshortcode…"
+  // placeholder (also caught downstream by markdown-leaks). See
+  // helpers/heading-shortcode-id.ts.
+  headingShortcodeId: boolean;
   // Source scan for pre-0.12 Hextra tab styling (`tabName=`, `items=`,
   // `tabTotal=`, nameless tabs) that renders labels as "Tab 0", "Tab 1", ….
   tabSyntax: boolean;
@@ -61,6 +67,15 @@ export type Checks = {
   // its own toggle so a consumer with a known backlog can disable it without
   // losing the other content scans.
   missingImages: boolean;
+  // Source scan for the legacy image-pair anti-pattern: a lone `reuse-image`
+  // (no `srcDark`) immediately followed by a separate `reuse-image-dark` for
+  // the same figure. Since v0.1.20 the lone call renders in both modes, so the
+  // two stack in dark mode. The CSS `.reuse-image-nodark:has(+ .toggle-light)`
+  // rule now hides the light half in dark mode, so this renders correctly
+  // WITHOUT a migration — hence the check defaults to false (opt-in). Enable it
+  // only to enforce the canonical single-call `src`+`srcDark` form in source.
+  // See helpers/reuse-image-pair.ts.
+  reuseImagePair: boolean;
 };
 
 export type Allowlists = {
@@ -79,6 +94,11 @@ export type Allowlists = {
   // missing-images.spec.ts. A match silently drops the offender — for
   // references intentionally supplied by a downstream build.
   missingImages: string[];
+  // Regex patterns matched against each shortcode-in-heading found by
+  // heading-shortcode-id.spec.ts (matched against the raw heading text). A
+  // match silently drops the offender — for a genuine exception where the
+  // auto-generated anchor is acceptable.
+  headingShortcodeId: string[];
 };
 
 // Per-spec knobs that don't fit the boolean [checks] table.
@@ -124,11 +144,15 @@ const DEFAULT_CHECKS: Checks = {
   codeBlockIntegrity: true,
   inlineScriptSafety: true,
   shortcodeArgs: true,
+  headingShortcodeId: true,
   tabSyntax: true,
   includeForm: true,
   cascadeType: true,
   consoleErrors: true,
   missingImages: true,
+  // Opt-in: the CSS defense makes the legacy pattern render correctly, so this
+  // is a "prefer the canonical form" lint, not a correctness gate.
+  reuseImagePair: false,
 };
 
 const DEFAULT_ALLOWLISTS: Allowlists = {
@@ -137,6 +161,7 @@ const DEFAULT_ALLOWLISTS: Allowlists = {
   consoleErrors: [],
   markdownLeaks: [],
   missingImages: [],
+  headingShortcodeId: [],
 };
 
 const DEFAULT_CRAWL: Crawl = {
@@ -349,6 +374,7 @@ function mergeAllowlists(raw: unknown, configPath: string): Allowlists {
     consoleErrors: [...DEFAULT_ALLOWLISTS.consoleErrors],
     markdownLeaks: [...DEFAULT_ALLOWLISTS.markdownLeaks],
     missingImages: [...DEFAULT_ALLOWLISTS.missingImages],
+    headingShortcodeId: [...DEFAULT_ALLOWLISTS.headingShortcodeId],
   };
   if (!raw || typeof raw !== "object") return out;
   const obj = raw as Record<string, unknown>;

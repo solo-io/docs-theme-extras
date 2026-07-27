@@ -1,14 +1,31 @@
 {{/* Search — SHADOWS Hextra core's _partials/scripts/search.html.
 
-     The ONLY change from the upstream Hextra 0.12.3 partial is a `(dict
-     "timeout" "15s")` on the FlexSearch `resources.GetRemote` below. Upstream
-     fetches the FlexSearch bundle from the jsdelivr CDN at build time with no
-     timeout, so on a cold CI build (the docs hub caches only npm — its Hugo
-     getresource cache starts empty every run) an unreachable/throttled CDN
-     blocks for Hugo's ~30s default per attempt and, compounded with retries,
-     stalls the whole build. The cap makes it fail fast with the existing clear
-     `errorf` instead of hanging. Keep this file in sync with Hextra on module
-     bumps; delete it if upstream adds a timeout of its own. */}}
+     Two changes from the upstream Hextra 0.12.3 partial, both on the FlexSearch
+     `resources.GetRemote` below:
+
+     1. A `(dict "timeout" "15s")` cap. Upstream fetches the FlexSearch bundle
+        from the jsdelivr CDN at build time with no timeout, so on a cold CI
+        build (the docs hub caches only npm — its Hugo getresource cache starts
+        empty every run) an unreachable/throttled CDN blocks for Hugo's ~30s
+        default per attempt and, compounded with retries, stalls the whole
+        build. The cap makes it fail fast instead of hanging.
+
+     2. A graceful fallback on fetch failure. Upstream `errorf`s and fails the
+        entire build when the CDN is slow, throttled, or resets the connection
+        (a transient, network-only failure on CI we don't control — e.g.
+        "read: connection reset by peer"). Instead we `warnf` and emit a
+        runtime `<script src>` pointing at the same pinned CDN URL, so the
+        build stays green and search still works (the browser loads the bundle
+        at page load). This keeps NO vendored copy to go stale: the normal path
+        still fetches the live pinned bundle and self-hosts it with a
+        fingerprint + SRI on every build; only the rare failure path defers to
+        the CDN at runtime (no SRI there, since Hugo never saw the bytes). The
+        one thing that can go out of date is the version pin
+        (`site.Params.search.flexsearch.version`, default below) — the
+        check-versions skill watches it.
+
+     Keep this file in sync with Hextra on module bumps; drop these changes if
+     upstream adds a timeout and non-fatal fallback of its own. */}}
 {{- if (site.Params.search.enable | default true) -}}
   {{- $searchType := site.Params.search.type | default "flexsearch" -}}
   {{- if eq $searchType "flexsearch" -}}
@@ -48,7 +65,11 @@
       {{- /* extras: `timeout` added so a slow/unreachable CDN fails fast instead of hanging the build. */ -}}
       {{- with try (resources.GetRemote $flexSearchJsUrl (dict "timeout" "15s")) -}}
         {{- with .Err -}}
-          {{- errorf "Could not retrieve FlexSearch js file from %s. Reason: %s." $flexSearchJsUrl . -}}
+          {{- /* extras: don't fail the build on a transient CDN failure; warn and
+                 fall back to loading the same pinned bundle from the CDN at
+                 runtime. See the header comment for the rationale. */ -}}
+          {{- warnf "FlexSearch: could not fetch %s at build time (%s); falling back to a runtime CDN <script> tag. Build not failed; search still works." $flexSearchJsUrl . -}}
+          <script defer src="{{ $flexSearchJsUrl }}" crossorigin="anonymous"></script>
         {{- else with .Value -}}
           {{- with resources.Copy "js/flexsearch.js" . -}}
             {{- $flexSearchJs := . | fingerprint -}}

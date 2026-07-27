@@ -10,6 +10,11 @@
          - only leaf content pages (`.IsPage`) — home, section indexes,
            taxonomy/term pages, and the 404 are skipped (they legitimately
            often carry no description);
+         - raw static-HTML content pages (a `.html` source file, e.g. a
+           standalone Redoc/Swagger viewer that ships its own <head>) are
+           skipped — the theme doesn't own their <head>, so a front-matter
+           `description` wouldn't reach a <meta> tag anyway. Markdown pages and
+           generated pages (no source file) are still linted;
          - `noindex` pages are skipped (they won't appear in results anyway);
          - on a VERSIONED site, only pages in the DEV version (`linkVersion:
            "main"`) are linted. `main` is the authoring source, so a description
@@ -37,9 +42,15 @@
 
        Called once per page from themeExtras/head-end.html. */ -}}
 
+{{- /* Read the opt-out via case-insensitive dot access (maps.Params). The
+       earlier `isset . "warnMissingDescription"` guard matched the key
+       case-SENSITIVELY against Hugo's lowercased param key, so a consumer's
+       `warnMissingDescription = false` never disabled the lint. `eq … false`
+       here disables only on an explicit false; an unset key reads as nil
+       (not false), so the default-on behavior is preserved. */ -}}
 {{- $enabled := true -}}
 {{- with site.Params.themeExtras -}}
-  {{- if isset . "warnMissingDescription" }}{{ $enabled = .warnMissingDescription }}{{ end -}}
+  {{- if eq .warnMissingDescription false -}}{{ $enabled = false }}{{ end -}}
 {{- end -}}
 
 {{- /* Collect version entries from the top level and every section. */ -}}
@@ -71,7 +82,15 @@
   {{- end -}}
 {{- end -}}
 
-{{- if and $enabled $inScope .IsPage (not (.Params.noindex | default false)) -}}
+{{- /* Skip raw static-HTML content (a `.html` source file). Such a page ships
+       its own document (its own <head>), so the theme's SEO partials never emit
+       a <meta name=description> for it and a front-matter `description` would be
+       inert. `.File` is nil for generated pages (no source file) — those are
+       NOT static HTML and stay in scope. */ -}}
+{{- $isStaticHTML := false -}}
+{{- with .File -}}{{- if eq .Ext "html" -}}{{- $isStaticHTML = true -}}{{- end -}}{{- end -}}
+
+{{- if and $enabled $inScope .IsPage (not $isStaticHTML) (not (.Params.noindex | default false)) -}}
   {{- if not (.Description | plainify | strings.TrimSpace) -}}
     {{- warnf "docs-theme-extras: %q has no front-matter `description`; <meta name=description>, OpenGraph, Twitter, and JSON-LD fall back to the raw page summary. Add `description:` to the front matter, or set params.themeExtras.warnMissingDescription=false to silence." .RelPermalink -}}
   {{- end -}}

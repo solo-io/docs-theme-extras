@@ -1,6 +1,7 @@
 ---
 title: EnterpriseKgatewayTrafficPolicy
 weight: 150
+tab: Reference
 description: A long, unbreakable CRD-style title used to verify that sidebar nav labels wrap instead of being clipped at the sidebar's right edge.
 ---
 
