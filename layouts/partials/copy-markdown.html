@@ -10,6 +10,19 @@
        themeExtras.prodHost > site.BaseURL host > empty). */ -}}
 {{- $html := .Content -}}
 {{- $prodHost := partial "utils/prod-host.html" . -}}
+{{- /* Pull the Goldmark footnotes block off the end of .Content so it can be
+       re-appended AFTER the section child-link list below — matching the
+       rendered page, where docs/list.html splits the footnotes out to render
+       them beneath the auto section cards rather than between the body and the
+       grid. Also drop the leading <hr> Goldmark emits as the body/footnote
+       separator: it serializes to a bare `* * *` that adds nothing to a
+       plain-markdown artifact. No-op on pages without footnotes. */ -}}
+{{- $fnRE := `(?s)\n?<div class="footnotes" role="doc-endnotes">.*</div>\s*$` -}}
+{{- $fnHTML := "" -}}
+{{- with (findRE $fnRE $html 1) -}}
+  {{- $fnHTML = index . 0 | replaceRE `<hr[^>]*>` "" -}}
+  {{- $html = $html | replaceRE $fnRE "" -}}
+{{- end -}}
 {{- /* Convert Hextra card links to simple <p><a> links before markdown conversion,
        otherwise transform.HTMLToMarkdown drops them entirely.
        Matches: <a class="hextra-card..."><span class="card-title">Title</span></a>
@@ -94,6 +107,37 @@
 {{- end -}}
 {{- range $i, $code := $mermaids -}}
   {{- $md = replace $md (printf "XMERMAIDPLACEHOLDER%dX" $i) (printf "```mermaid\n%s\n```" $code) 1 -}}
+{{- end -}}
+{{- /* Section-index pages: append child pages as a plain markdown link list,
+       then the footnotes block pulled off above. Placed here — BEFORE the
+       entity-decode and smart-punctuation passes below — so the child
+       descriptions (rendered via markdownify, which applies Goldmark's
+       typographer) and the footnote text get the same ASCII normalization as
+       the body. The auto card grid from auto-section-cards.html is navigation,
+       not part of .Content, so emitting the children as bullet links is the
+       plain-md equivalent. Mirrors that partial's child selection (ByWeight,
+       drop hidden, honor disableCards and the hasManualCards flag a
+       {{< cards >}} in the body sets — that content is already in .Content).
+       The link-rewrite passes below absolutize the dev `//localhost`
+       permalinks. No-op on leaf pages and on sections with no children. */ -}}
+{{- if and .IsSection (not .Params.disableCards) (not (.Store.Get "hasManualCards")) -}}
+  {{- $children := where .Pages.ByWeight "Params.hidden" "!=" true -}}
+  {{- if gt (len $children) 0 -}}
+    {{- $lines := slice -}}
+    {{- range $children -}}
+      {{- $line := printf "- [%s](%s)" .Title .Permalink -}}
+      {{- with .Description -}}
+        {{- $line = printf "%s: %s" $line (. | markdownify | plainify | htmlUnescape | strings.TrimSpace) -}}
+      {{- end -}}
+      {{- $lines = $lines | append $line -}}
+    {{- end -}}
+    {{- $md = printf "%s\n\n%s\n" $md (delimit $lines "\n") -}}
+  {{- end -}}
+{{- end -}}
+{{- /* Re-append the footnotes (hr already stripped) after the child list, so
+       the copied order matches the rendered page: body → cards → footnotes. */ -}}
+{{- with $fnHTML -}}
+  {{- $md = printf "%s\n\n%s" $md ($fnHTML | transform.HTMLToMarkdown) -}}
 {{- end -}}
 {{- /* transform.HTMLToMarkdown leaves HTML entities (`&gt;`, `&lt;`,
        `&amp;`, `&quot;`, etc.) encoded. Decode them so the copied markdown
@@ -194,8 +238,14 @@
     {{- end -}}
   {{- end -}}
 {{- end -}}
+{{- /* Destination for the "Connect to Docs MCP" dropdown action. Consumers point
+       this at their own MCP setup page via params.themeExtras.mcpUrl; OSS products
+       use a product-scoped page instead of the shared enterprise search.solo.io.
+       Defaults to search.solo.io so existing (enterprise) builds are unchanged. */ -}}
+{{- $mcpUrl := "https://search.solo.io/" -}}
+{{- with site.Params.themeExtras }}{{ with .mcpUrl }}{{ $mcpUrl = . }}{{ end }}{{ end -}}
 {{- if $md -}}
-<div class="copy-md-wrapper" style="display:flex;justify-content:flex-end;margin-bottom:0.5rem;" data-page-url="{{ $pageAbs }}">
+<div class="copy-md-wrapper" style="display:flex;justify-content:flex-end;margin-bottom:0.5rem;" data-page-url="{{ $pageAbs }}" data-mcp-url="{{ $mcpUrl }}">
   <style>
     .copy-md-split{display:inline-flex;border:1px solid #e5e7eb;border-radius:0.375rem;position:relative;}
     .dark .copy-md-split{border-color:#374151;}

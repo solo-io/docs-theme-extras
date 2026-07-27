@@ -49,3 +49,83 @@ test.describe("footnotes render after auto section cards", () => {
     ).toBeGreaterThan(cards);
   });
 });
+
+// The two markdown-output surfaces — the `markdown` output format (`.md` URL,
+// page-to-markdown.html) and the "Copy as Markdown" button embed
+// (copy-markdown.html) — carry the same auto-card-as-link-list + footnote
+// handling. The auto section-cards grid is rendered by the LIST layout and is
+// NOT part of `.Content`, so those partials emit the children as a plain
+// markdown link list, then re-append the footnotes AFTER that list (matching
+// the rendered page). This block locks in that both surfaces:
+//   - emit the child pages as a plain link list (a child that appears ONLY in
+//     the grid, never in the body prose, proves the list is the auto-cards),
+//   - place the footnote block AFTER the link list,
+//   - strip Goldmark's footnote <hr> separator (serialized as `* * *`),
+//   - normalize typographer output to ASCII (curly quote → straight).
+// Fixture-only, same as above.
+
+function readMdOutputFormat(): string | null {
+  const p = path.join(TEST_PRODUCT_ROOT, "v2", "index.md");
+  return fs.existsSync(p) ? fs.readFileSync(p, "utf8") : null;
+}
+
+function readCopyMdSource(): string | null {
+  const p = path.join(TEST_PRODUCT_ROOT, "v2", "index.html");
+  if (!fs.existsSync(p)) return null;
+  const html = fs.readFileSync(p, "utf8");
+  const m = html.match(
+    /<script[^>]*type=["']text\/markdown["'][^>]*>([\s\S]*?)<\/script>/i,
+  );
+  // copy-markdown.html escapes ONLY `<` → `&lt;`; the button's JS decodes it
+  // back before copying, so mirror that here to compare the real payload.
+  return m ? m[1].replace(/&lt;/g, "<") : null;
+}
+
+const MARKDOWN_SURFACES: { name: string; read: () => string | null }[] = [
+  { name: ".md output format", read: readMdOutputFormat },
+  { name: "copy-as-markdown button source", read: readCopyMdSource },
+];
+
+test.describe("section-index markdown: auto-card link list + footnote order", () => {
+  test.skip(
+    !IS_FIXTURE_TARGET,
+    "fixture-only: relies on the fixture's v2 landing footnote + child cards",
+  );
+
+  for (const surface of MARKDOWN_SURFACES) {
+    test(`${surface.name}: child link list, footnote after it, no hr, ASCII punctuation`, () => {
+      const md = surface.read();
+      test.skip(md === null, `${surface.name} not built for v2 landing`);
+
+      // "Nav group" is a v2 child page that never appears in the body prose,
+      // so a "- [Nav group](" bullet can only come from the auto-card link list.
+      const listPos = md!.indexOf("- [Nav group](");
+      expect(listPos, "auto-card child link list missing").toBeGreaterThan(-1);
+
+      // The footnote block (its `#fnref` backref is unique to the bottom
+      // footnote list) must come AFTER the link list.
+      const footnotePos = md!.indexOf("#fnref");
+      expect(footnotePos, "footnote block missing").toBeGreaterThan(-1);
+      expect(
+        footnotePos,
+        "footnote block should follow the child link list, not precede it",
+      ).toBeGreaterThan(listPos);
+
+      // Goldmark's body/footnote <hr> separator is dropped for plain markdown.
+      expect(md, "footnote `* * *` separator should be stripped").not.toContain(
+        "* * *",
+      );
+
+      // Typographer output is normalized to ASCII: markdownify emits an
+      // entity-encoded curly apostrophe in the child description, which the
+      // entity-decode + smart-punctuation passes turn back into a straight `'`.
+      expect(md, "curly apostrophe should be normalized to ASCII").not.toContain(
+        "’",
+      );
+      expect(
+        md,
+        "child description should carry a straight apostrophe",
+      ).toContain("sidebar's right edge");
+    });
+  }
+});

@@ -7,6 +7,20 @@
        whether they hit the .md URL or click "Copy as Markdown". */ -}}
 {{- $html := .Content -}}
 
+{{- /* Pull the Goldmark footnotes block off the end of .Content so it can be
+       re-appended AFTER the section child-link list below — matching the
+       rendered page, where docs/list.html splits the footnotes out to render
+       them beneath the auto section cards. Also drop the leading <hr> Goldmark
+       emits as the body/footnote separator: it serializes to a bare `* * *`
+       that adds nothing to a plain-markdown artifact. Kept in sync with
+       copy-markdown.html. No-op on pages without footnotes. */ -}}
+{{- $fnRE := `(?s)\n?<div class="footnotes" role="doc-endnotes">.*</div>\s*$` -}}
+{{- $fnHTML := "" -}}
+{{- with (findRE $fnRE $html 1) -}}
+  {{- $fnHTML = index . 0 | replaceRE `<hr[^>]*>` "" -}}
+  {{- $html = $html | replaceRE $fnRE "" -}}
+{{- end -}}
+
 {{- /* Section cards → plain link list. The shortcode and the auto-card
        partial both emit <a class="section-card"><span class="section-card-title"> /
        <p class="section-card-title">; collapse either form to <p><a>. */ -}}
@@ -72,13 +86,42 @@
   {{- $md = replace $md (printf "XMERMAIDPLACEHOLDER%dX" $i) (printf "```mermaid\n%s\n```" $code) 1 -}}
 {{- end -}}
 
+{{- /* Section-index pages: append child pages as a plain markdown link list,
+       then the footnotes block pulled off above. Placed here — before the
+       smart-punctuation, URL-rewrite, and entity-decode passes below — so the
+       child descriptions (rendered via markdownify, which applies Goldmark's
+       typographer) and the footnote text get the same normalization as the
+       body. The auto card grid from auto-section-cards.html is navigation, not
+       part of .Content, so emitting the children as bullet links is the
+       plain-md equivalent. Mirrors that partial's child selection (ByWeight,
+       drop hidden, honor disableCards and the hasManualCards flag a
+       {{< cards >}} in the body sets). Kept in sync with copy-markdown.html.
+       No-op on leaf pages and on sections with no children. */ -}}
+{{- if and .IsSection (not .Params.disableCards) (not (.Store.Get "hasManualCards")) -}}
+  {{- $children := where .Pages.ByWeight "Params.hidden" "!=" true -}}
+  {{- if gt (len $children) 0 -}}
+    {{- $lines := slice -}}
+    {{- range $children -}}
+      {{- $line := printf "- [%s](%s)" .Title .Permalink -}}
+      {{- with .Description -}}
+        {{- $line = printf "%s: %s" $line (. | markdownify | plainify | htmlUnescape | strings.TrimSpace) -}}
+      {{- end -}}
+      {{- $lines = $lines | append $line -}}
+    {{- end -}}
+    {{- $md = printf "%s\n\n%s\n" $md (delimit $lines "\n") -}}
+  {{- end -}}
+{{- end -}}
+{{- with $fnHTML -}}
+  {{- $md = printf "%s\n\n%s" $md ($fnHTML | transform.HTMLToMarkdown) -}}
+{{- end -}}
+
 {{- /* Remove empty heading-permalink anchors. */ -}}
 {{- $md = $md | replaceRE `\[\]\(#[^)]+\)` "" -}}
 
 {{- /* Normalize smart punctuation to ASCII so the markdown is
        easier to diff and friendlier to non-Unicode-aware consumers. */ -}}
-{{- $md = $md | replaceRE `[""]` `"` -}}
-{{- $md = $md | replaceRE `['']` `'` -}}
+{{- $md = $md | replaceRE `[“”]` `"` -}}
+{{- $md = $md | replaceRE `[‘’]` `'` -}}
 {{- $md = $md | replaceRE `…` `...` -}}
 {{- $md = $md | replaceRE `–` `-` -}}
 {{- $md = $md | replaceRE `—` `--` -}}
