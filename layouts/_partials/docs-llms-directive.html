@@ -1,14 +1,18 @@
 {{- /* Screen-reader-only hint that points AI agents at the LLM-friendly
-       index (`/docs/llms.txt`) and the `.md` URL form of every docs page.
-       Renders only when both output formats are enabled in hugo.yaml so
-       the directive doesn't promise URLs that 404. */ -}}
+       index (the site's llms.txt) and the `.md` URL form of every docs page.
+       The llms.txt href is derived from the home page's `llms` output format
+       rather than hardcoded, so it resolves whether the site is served at the
+       domain root (agentgateway.dev/llms.txt) or under a product prefix
+       (docs.solo.io/kgateway/llms.txt). Each half renders only when its output
+       format is enabled, so the directive never promises a URL that 404s. */ -}}
 {{- $outputs := site.Params.themeExtras.outputs | default dict -}}
-{{- $hasLlms := $outputs.llms | default true -}}
 {{- $hasMd := $outputs.markdown | default true -}}
-{{- if or $hasLlms $hasMd -}}
+{{- $llmsHref := "" -}}
+{{- with site.Home.OutputFormats.Get "llms" -}}{{- $llmsHref = .RelPermalink -}}{{- end -}}
+{{- if or $llmsHref $hasMd -}}
 <p class="sr-only">
-  {{- if $hasLlms -}}
-    For the complete documentation index, see <a href="/docs/llms.txt">llms.txt</a>.
+  {{- with $llmsHref -}}
+    For the complete documentation index, see <a href="{{ . }}">llms.txt</a>.
   {{- end }}
   {{- if $hasMd }}
     Markdown versions of all docs pages are available by appending .md to any docs URL.

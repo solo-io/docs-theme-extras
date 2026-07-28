@@ -22,7 +22,14 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
-## [v0.1.22] — 2026-07-27
+## [v0.1.22] — 2026-07-28
+
+### Fix — emit the llms.txt discovery directive on hub-rendered docs pages (`layouts/docs/single.html`, `layouts/docs/list.html`, `layouts/_partials/docs-llms-directive.html`)
+
+- **Every docs.solo.io product fails the afdocs `llms-txt-directive-html` check (0/50 sampled pages) while the OSS sites pass it, because the `docs-llms-directive.html` partial that emits the `<p class="sr-only">…llms.txt…</p>` hint was only ever called from the OSS repos' own `docs/single.html`/`list.html` overrides — extras' own `docs/` layouts, which the hub renders through unmodified, never invoked it.** Wired the partial into extras' `docs/single.html` and `docs/list.html` (top of `<div class="content">`, matching the OSS placement), so any consumer without a layout override — i.e. the whole `docs` hub — now emits the directive. Also fixed the partial's hardcoded `href="/docs/llms.txt"`, which 404s on the hub (llms.txt is product-prefixed there, e.g. `/kgateway/llms.txt`, not `/docs/llms.txt`): the href is now derived from the home page's `llms` output format (`site.Home.OutputFormats.Get "llms"`), so it resolves to `/llms.txt` on the OSS domains and `/kgateway/llms.txt` on the hub, and the llms half renders only when that output format actually exists. Non-breaking for the OSS sites: their override still calls the same partial, and the derived `/llms.txt` returns 200 on both agentgateway.dev and kgateway.dev (as does the old `/docs/llms.txt`).
+- Observable in production: view-source on [Solo Enterprise for kgateway landing](https://docs.solo.io/kgateway/latest/) (or any docs.solo.io page) shows no `llms.txt` reference in the HTML today; after a consumer bumps its extras pin, each page carries `<p class="sr-only">…<a href="/kgateway/llms.txt">llms.txt</a>…</p>` near the top of content. Tracked by the [agent-readiness scan](https://github.com/solo-io/docs/actions/runs/30363231506) (`llms-txt-directive-html`, FAIL on all 8 hub products). Verified on the extras OSS fixture (`make build-oss`, served under `/test`): the directive renders on all 31 doc pages (single + section-index) with `href="/test/llms.txt"` pointing at the real generated `public-oss/test/llms.txt` (no 404), at ~13% into the page — inside the check's "near the top of content" band. Takes effect when a consumer bumps its extras pin.
+
+
 
 ### Add — section-index child navigation in the `.md` output and "Copy as Markdown" (`layouts/partials/copy-markdown.html`, `layouts/_partials/page-to-markdown.html`)
 
