@@ -75,7 +75,14 @@
     {{- if and $v.ossVersion (ne $v.ossVersion $v.version) -}}
       {{- $oss := replaceRE `\.` `\.` $v.ossVersion -}}
       {{- $ph := printf "__V%d__" $i -}}
-      {{- $content = replaceRE (printf `(\{\{<\s*version\s[^>]*?(?:in|ex)clude-if="[^"]*?)%s` $oss) (printf "${1}%s" $ph) $content -}}
+      {{- /* Match BOTH angle ({{< >}}) and percent ({{% %}}) version blocks.
+             Unlike rebase.html, reuse.html does not bulk-convert percent→angle
+             before remapping, so an OSS version number authored in a percent-
+             form block (e.g. the get_cookie table rows in
+             templating-language.md, `{{% version include-if="2.4.x,2.5.x" %}}`)
+             would otherwise never be remapped to the enterprise version and the
+             gated rows would be excluded on the enterprise build. */ -}}
+      {{- $content = replaceRE (printf `(\{\{[<%%]\s*version\s[^>%%]*?(?:in|ex)clude-if="[^"]*?)%s` $oss) (printf "${1}%s" $ph) $content -}}
     {{- end -}}
   {{- end -}}
   {{- range $i, $v := $.Site.Params.versions -}}
