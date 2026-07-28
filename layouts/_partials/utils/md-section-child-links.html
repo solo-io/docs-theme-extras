@@ -1,0 +1,41 @@
+{{- /* Section-index child navigation, rendered as a plain markdown link list
+       for the markdown-output surfaces.
+
+       A section-index page's child-navigation card grid is produced by the LIST
+       layout (auto-section-cards.html), NOT from .Content, so it never reaches
+       the `.md` output or the "Copy as Markdown" embed. This emits the same
+       children as a `- [Title](url): description` list — the plain-md
+       equivalent of that grid.
+
+       Mirrors auto-section-cards.html's child selection: .Pages.ByWeight, drop
+       `hidden: true`, and honor both `disableCards` and the `hasManualCards`
+       store flag a `{{< cards >}}` in the body sets (that content already lives
+       in .Content, so a page with manual cards is never double-listed). The
+       caller must have evaluated .Content before calling this so the store flag
+       is set. The `:` separator matches the repo's own llms.txt entry format.
+
+       Usage: {{ $md = print $md (partial "utils/md-section-child-links.html" .) }}
+       Returns the list wrapped in leading/trailing newlines, or "" for leaf
+       pages, sections with cards disabled/manual, or sections with no visible
+       children — so it appends cleanly to existing markdown.
+
+       Shared by page-to-markdown.html and copy-markdown.html. Callers place the
+       call BEFORE their smart-punctuation / entity-decode / URL-rewrite passes
+       so the markdownify'd descriptions and dev `//localhost` permalinks get the
+       same normalization as the body. */ -}}
+{{- $out := "" -}}
+{{- if and .IsSection (not .Params.disableCards) (not (.Store.Get "hasManualCards")) -}}
+  {{- $children := where .Pages.ByWeight "Params.hidden" "!=" true -}}
+  {{- if gt (len $children) 0 -}}
+    {{- $lines := slice -}}
+    {{- range $children -}}
+      {{- $line := printf "- [%s](%s)" .Title .Permalink -}}
+      {{- with .Description -}}
+        {{- $line = printf "%s: %s" $line (. | markdownify | plainify | htmlUnescape | strings.TrimSpace) -}}
+      {{- end -}}
+      {{- $lines = $lines | append $line -}}
+    {{- end -}}
+    {{- $out = printf "\n\n%s\n" (delimit $lines "\n") -}}
+  {{- end -}}
+{{- end -}}
+{{- return $out -}}

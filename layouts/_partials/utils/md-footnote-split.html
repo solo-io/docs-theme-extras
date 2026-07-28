@@ -1,0 +1,23 @@
+{{- /* Pull the Goldmark footnotes block off the end of a page's rendered
+       content HTML so a caller can re-append it AFTER a section's child-link
+       list — matching the rendered page, where docs/list.html renders the
+       footnotes beneath the auto section cards, not between the body and the
+       grid. The <hr> Goldmark emits as the body/footnote separator is dropped:
+       it serializes to a bare `* * *` that adds nothing to a plain-markdown
+       artifact.
+
+       Usage: {{ $fn := partial "utils/md-footnote-split.html" $html }}
+       Returns a dict:
+         .html     — the input HTML with the footnotes block removed
+         .footnote — the footnotes HTML (hr stripped), or "" when the page has none
+
+       Shared by page-to-markdown.html and copy-markdown.html so the `.md`
+       output format and the "Copy as Markdown" button stay in lockstep. */ -}}
+{{- $html := . -}}
+{{- $fnHTML := "" -}}
+{{- $fnRE := `(?s)\n?<div class="footnotes" role="doc-endnotes">.*</div>\s*$` -}}
+{{- with (findRE $fnRE $html 1) -}}
+  {{- $fnHTML = index . 0 | replaceRE `<hr[^>]*>` "" -}}
+  {{- $html = $html | replaceRE $fnRE "" -}}
+{{- end -}}
+{{- return (dict "html" $html "footnote" $fnHTML) -}}

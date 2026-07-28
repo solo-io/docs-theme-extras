@@ -1,0 +1,14 @@
+{{- /* Returns the site's llms.txt RelPermalink — product-prefix-aware, so it
+       resolves to /llms.txt on an OSS domain served at root and /kgateway/llms.txt
+       on the docs hub served under a product prefix — or "" when the site has no
+       `llms` output format. Derived from the home page's output format rather
+       than hardcoded, so it never promises a path that 404s under a prefix.
+
+       Shared by docs-llms-directive.html (the sr-only HTML hint) and the
+       page/section markdown output templates (page.markdown.md /
+       section.markdown.md) so the two llms.txt directive surfaces cannot drift
+       apart — which is exactly how the .md templates ended up still pointing at
+       the dead /docs/llms.txt after the HTML partial was fixed. */ -}}
+{{- $href := "" -}}
+{{- with site.Home.OutputFormats.Get "llms" -}}{{- $href = .RelPermalink -}}{{- end -}}
+{{- return $href -}}

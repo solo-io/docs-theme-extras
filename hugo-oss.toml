@@ -163,6 +163,12 @@ pageContextMode = "siteParams"
 
 [[params.versions]]
   version = "v2"
+  # ossVersion drives reuse.html / rebase.html's OSS→enterprise version remap:
+  # content authored with include-if="v2oss" is remapped to this entry's
+  # `version` (v2). Exercised by content/en/test/{v2,v1}/version-remap.md +
+  # tests/reuse-version-remap.spec.ts. No existing content gates on "v2oss",
+  # so the remap is a no-op everywhere else.
+  ossVersion = "v2oss"
   dropdown = "v2 (current)"
   linkVersion = "v2"
   url = "/test/v2"

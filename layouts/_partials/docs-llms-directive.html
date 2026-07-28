@@ -7,8 +7,7 @@
        format is enabled, so the directive never promises a URL that 404s. */ -}}
 {{- $outputs := site.Params.themeExtras.outputs | default dict -}}
 {{- $hasMd := $outputs.markdown | default true -}}
-{{- $llmsHref := "" -}}
-{{- with site.Home.OutputFormats.Get "llms" -}}{{- $llmsHref = .RelPermalink -}}{{- end -}}
+{{- $llmsHref := partial "utils/llms-href.html" . -}}
 {{- if or $llmsHref $hasMd -}}
 <p class="sr-only">
   {{- with $llmsHref -}}
