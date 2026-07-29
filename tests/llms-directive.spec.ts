@@ -48,7 +48,7 @@ test.describe("llms.txt discovery directive: derived, product-prefix-aware href"
 
       // Robust against other sr-only paragraphs on the page: pick the one that
       // actually carries the llms.txt link.
-      const paras = [...html.matchAll(/<p class="sr-only">([\s\S]*?)<\/p>/g)].map((m) => m[1]);
+      const paras = [...html.matchAll(/<p class="hx:sr-only">([\s\S]*?)<\/p>/g)].map((m) => m[1]);
       const directive = paras.find((p) => p.includes("llms.txt"));
       expect(directive, "sr-only llms.txt directive missing from content").toBeTruthy();
 

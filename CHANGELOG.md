@@ -22,6 +22,13 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
+## [v0.1.23] — 2026-07-29
+
+### Fix — actually hide the llms.txt discovery directive from sighted readers (`layouts/_partials/docs-llms-directive.html`)
+
+- **The llms.txt discovery hint wired up in v0.1.22 renders as plain, visible body text on every product — "For the complete documentation index, see llms.txt. Markdown versions of all docs pages are available by appending .md to any docs URL." — instead of the screen-reader-only hint it was meant to be.** The partial wrapped the paragraph in `class="sr-only"`, but the extras/Hextra Tailwind build only generates the `hx:`-prefixed utilities that Hextra core already references; a bare, unprefixed `sr-only` class has **no** rule in the compiled CSS, so it hides nothing and the paragraph falls back to normal flow text near the top of every docs page. (The theme's own navbar uses the correct `hx:sr-only` form, which is why that label stays hidden.) Fix: change the class to `hx:sr-only`, matching the generated utility (`.hx\:sr-only{clip-path:inset(50%);position:absolute;width:1px;height:1px;overflow:hidden;…}`). The `tests/llms-directive.spec.ts` HTML-directive matcher was updated to the new class.
+- Observable in production: [ambientmesh.io — Quickstart](https://ambientmesh.io/docs/quickstart/) (and every other docs product) shows the "For the complete documentation index, see llms.txt…" sentence as visible text at the top of the content today; after a consumer bumps its extras pin, the same sentence is present in the HTML for AI agents/screen readers but visually hidden. Verified with a local `hugo160` `make build-oss`: the rendered directive now carries `<p class="hx:sr-only">`, no unprefixed `<p class="sr-only">` directive remains, and the `.hx\:sr-only` visually-hidden rule is present in the CSS the page loads. `tests/llms-directive.spec.ts` passes 4/4 on both the OSS and enterprise fixtures. Takes effect when a consumer bumps its extras pin.
+
 ## [v0.1.22] — 2026-07-29
 
 ### Fix — remap OSS→enterprise version numbers inside percent-form `{{% version %}}` blocks in reused content (`layouts/_shortcodes/reuse.html`)
