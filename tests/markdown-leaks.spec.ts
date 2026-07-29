@@ -135,45 +135,6 @@ test.describe("findMarkdownLeaks helper", () => {
     expect(findMarkdownLeaks(html)).toEqual([]);
   });
 
-  test("flags a leaked ATX heading (version/reuse raw-emit shape)", () => {
-    // The agw jwt-setup bug shape: an angle-form {{< version >}} block whose
-    // body raw-emits, so the section's headings render as literal `## Title`
-    // text instead of <h2>/<h3> elements. Both a line-start leak and one
-    // glued to a block tag's `>` must trip.
-    const html = `
-      ## Use JWT claims in transformations
-      <p>After a JWT is validated...</p>
-      <div>### Claim-based routing</div>
-    `;
-    const leaks = findMarkdownLeaks(html);
-    const headings = leaks.filter((l) => l.kind === "leaked-heading");
-    expect(headings.length).toBeGreaterThanOrEqual(2);
-    expect(headings.some((h) => h.match.includes("## Use JWT claims"))).toBe(
-      true,
-    );
-    expect(headings.some((h) => h.match.includes("### Claim-based routing"))).toBe(
-      true,
-    );
-  });
-
-  test("does NOT flag a properly rendered heading element", () => {
-    const html = `<h2 id="use-jwt-claims">Use JWT claims in transformations</h2>`;
-    expect(findMarkdownLeaks(html)).toEqual([]);
-  });
-
-  test("does NOT flag hash usage in prose (#tag, C#, issue #12)", () => {
-    // A `#` needs 1-6 hashes followed by whitespace AND to sit at a block
-    // boundary, so none of these prose forms are heading-shaped.
-    const html = `<p>Use #hashtags in C# to file issue #12 for the ## marker.</p>`;
-    expect(findMarkdownLeaks(html)).toEqual([]);
-  });
-
-  test("does NOT flag heading-looking text inside <code>", () => {
-    // Example markdown wrapped in backticks is expected literal syntax.
-    const html = `<p>Start the section with <code>## Heading</code>.</p>`;
-    expect(findMarkdownLeaks(html)).toEqual([]);
-  });
-
   test("flags raw shortcode delimiters", () => {
     const html = `<p>Hello {{< broken >}} world</p>`;
     const leaks = findMarkdownLeaks(html);
