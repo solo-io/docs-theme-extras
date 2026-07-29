@@ -12,6 +12,15 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Supersede in-progress runs on the same ref: a new push to a PR branch (or
+# to main) cancels its own older, still-running run instead of stacking a
+# second one. Keyed on github.ref so each PR cancels only its own runs, never
+# another PR's. A hung run (see the install-step timeout below) is likewise
+# cleared by the next push rather than lingering to the job timeout.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
