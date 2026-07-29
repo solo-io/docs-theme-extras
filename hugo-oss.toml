@@ -17,6 +17,20 @@ enableInlineShortcodes = true
     path = "github.com/imfing/hextra"
     disable = false
 
+  # Content mounts. The base fixture tree, plus the tab-navigation demo tree
+  # (fixture/tabs-demo/v3, issue solo-io/docs#3164) so the directory/id tab
+  # model is exercised in CI: v3 partitions its docs into per-tab directories
+  # (documentation/, api/, changelog/) and renders the ENABLED band, while
+  # main/v1/v2 have no tab dirs and render the DISABLED (no-band) state.
+  # Declaring an explicit content mount overrides the contentDir default, so
+  # the base tree is re-mounted here too.
+  [[module.mounts]]
+    source = "fixture/content/en/test"
+    target = "content"
+  [[module.mounts]]
+    source = "fixture/tabs-demo/v3"
+    target = "content/v3"
+
   # Surface fixture/assets and fixture/static into Hugo's standard locations
   # for the self-test build. The fixture stays under fixture/ so it isn't
   # exposed to consumers that import this module via go.mod — they only see
@@ -148,18 +162,26 @@ pageContextMode = "siteParams"
 [params.editURL]
   enable = false
 
-# Tab navigation (issue solo-io/docs#3164). The `main` version tags two of its
-# top-level pages into a "Reference" tab (everything/rebased stay in the default
-# "Documentation" tab), giving main >=2 non-empty tabs so the band renders —
-# the ENABLED state that docs-tabs.spec.ts asserts. v1/v2 leave their pages
-# untagged, so they collapse to the single default tab, suppress the band, and
-# exercise the DISABLED state in the same build.
+# Tab navigation (issue solo-io/docs#3164), directory model. Each tab's `id` is
+# a top-level content directory under the version root; the left nav is rooted
+# INSIDE that directory (see layouts/partials/sidebar.html), so the directory's
+# own node never appears. The v3 (tabs-demo) tree partitions its docs into
+# documentation/, api/, and changelog/, giving it >=2 tab directories so the
+# band renders — the ENABLED state docs-tabs.spec.ts asserts. main/v1/v2 have
+# none of these directories, so they render no band — the DISABLED state, in
+# the same build.
 [[params.docTabs]]
   name = "Documentation"
+  id = "documentation"
   default = true
 
 [[params.docTabs]]
-  name = "Reference"
+  name = "API Reference"
+  id = "api"
+
+[[params.docTabs]]
+  name = "Changelog"
+  id = "changelog"
 
 [[params.versions]]
   version = "v2"
@@ -189,6 +211,17 @@ pageContextMode = "siteParams"
   linkVersion = "main"
   url = "/test/main"
   banner = "This version of the documentation is currently under development. "
+  product = "test"
+  productName = "Docs framework test fixture"
+
+# v3 (tab-navigation demo, issue solo-io/docs#3164). Directory-partitioned into
+# documentation/, api/, changelog/ so it exercises the ENABLED id-based tab
+# band; the other versions have no tab dirs and stay in the DISABLED state.
+[[params.versions]]
+  version = "v3"
+  dropdown = "v3 (tabs demo)"
+  linkVersion = "v3"
+  url = "/test/v3"
   product = "test"
   productName = "Docs framework test fixture"
 

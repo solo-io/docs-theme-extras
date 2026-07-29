@@ -1,13 +1,13 @@
 ---
 title: Changelog
 weight: 40
-tab: Changelog
 description: Release notes for recent versions.
 ---
 
-<!-- Demo content for the tab-navigation prototype (solo-io/docs#3164). A single
-     top-level leaf pinned to the Changelog tab via `tab: Changelog`. Because it
-     is a leaf, clicking the Changelog tab lands directly here. -->
+<!-- Demo content for the tab-navigation prototype (solo-io/docs#3164).
+     Directory model: this dir is the "Changelog" tab (docTabs id =
+     "changelog"). It holds a single page, so clicking the Changelog tab lands
+     on this section index. -->
 
 Release notes for recent versions, newest first.
 

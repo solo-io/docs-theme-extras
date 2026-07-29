@@ -58,42 +58,102 @@
         {{- if .default -}}{{- $defaultTab = .name -}}{{- end -}}
       {{- end -}}
 
-      {{- /* ---- Active tab: the tab of the current page's top-level
+      {{- /* Two ways a tab can claim its pages:
+
+             DIRECTORY MODE — a tab carries `id = "<dir>"`, the name of a
+             top-level content directory under the version root. Every page in
+             that directory belongs to the tab, and the sidebar (see
+             sidebar.html) roots the left nav INSIDE that directory, so the
+             directory's own node never appears — it *is* the tab. Content is
+             fully partitioned by directory, one dir per tab (the default tab
+             gets a dir too). This is the preferred model.
+
+             LEGACY MODE — a tab carries no `id`; a top-level section/page opts
+             in with front matter `tab: "<name>"`, and untagged pages fall into
+             the default tab. Kept for back-compat with the original prototype.
+
+             A config is all-directory or all-legacy; `$idMode` picks which.
+             $lookupPath is the version root relative to contentDir (the shape
+             version-root.html already normalises), so site.GetPage resolves a
+             tab's directory the same way in OSS, enterprise, and local dev. */ -}}
+      {{- $lookupPath := $vr.lookupPath -}}
+      {{- $idMode := false -}}
+      {{- range $tabsCfg -}}{{- if .id -}}{{- $idMode = true -}}{{- end -}}{{- end -}}
+
+      {{- /* ---- Active tab ---------------------------------------------
+             Directory mode: the tab whose directory is the current page or an
+             ancestor of it (Page relationships, not URL strings). A page above
+             every tab dir — e.g. the version-root landing — keeps the default.
+             Legacy mode: the front-matter `tab` of the current page's top-level
              ancestor (or the page itself when it sits at the top level). */ -}}
       {{- $activeTab := $defaultTab -}}
-      {{- range $versionRoot.Pages -}}
-        {{- if or (eq .RelPermalink $context.RelPermalink) ($context.IsDescendant .) -}}
-          {{- $activeTab = .Params.tab | default $defaultTab -}}
+      {{- if $idMode -}}
+        {{- range $tabsCfg -}}
+          {{- $name := .name -}}
+          {{- with .id -}}
+            {{- with site.GetPage (printf "%s%s" $lookupPath .) -}}
+              {{- if or (eq .RelPermalink $context.RelPermalink) ($context.IsDescendant .) -}}
+                {{- $activeTab = $name -}}
+              {{- end -}}
+            {{- end -}}
+          {{- end -}}
+        {{- end -}}
+      {{- else -}}
+        {{- range $versionRoot.Pages -}}
+          {{- if or (eq .RelPermalink $context.RelPermalink) ($context.IsDescendant .) -}}
+            {{- $activeTab = .Params.tab | default $defaultTab -}}
+          {{- end -}}
         {{- end -}}
       {{- end -}}
 
-      {{- /* ---- Build the ordered, non-empty tab list ----------------- */ -}}
+      {{- /* ---- Build the ordered, non-empty tab list -----------------
+             Directory mode: a tab is present when its directory exists. Legacy
+             mode: present when at least one top-level page opts into it. */ -}}
       {{- $tabs := slice -}}
       {{- range $tabsCfg -}}
         {{- $name := .name -}}
-        {{- $items := slice -}}
-        {{- range $versionRoot.Pages -}}
-          {{- if eq (.Params.tab | default $defaultTab) $name -}}
-            {{- $items = $items | append . -}}
+        {{- $id := .id | default "" -}}
+        {{- $present := false -}}
+        {{- $href := "" -}}
+        {{- if ne $id "" -}}
+          {{- with site.GetPage (printf "%s%s" $lookupPath $id) -}}
+            {{- $present = true -}}
+            {{- $href = .RelPermalink -}}
+          {{- end -}}
+        {{- else -}}
+          {{- $items := slice -}}
+          {{- range $versionRoot.Pages -}}
+            {{- if eq (.Params.tab | default $defaultTab) $name -}}
+              {{- $items = $items | append . -}}
+            {{- end -}}
+          {{- end -}}
+          {{- if gt (len $items) 0 -}}
+            {{- $present = true -}}
+            {{- /* Link the tab to its first top-level item's own page — the
+                   first entry in the tab's left nav — rather than drilling to
+                   the first leaf. Clicking "Reference" should land on the
+                   Reference section landing, not jump several levels into its
+                   first subsection. A leaf first item links to itself. */ -}}
+            {{- $href = (index $items 0).RelPermalink -}}
           {{- end -}}
         {{- end -}}
-        {{- if gt (len $items) 0 -}}
-          {{- /* Link the tab to its first top-level item's own page — the first
-                 entry in the tab's left nav — rather than drilling to the first
-                 leaf. Clicking "Reference" should land on the Reference section
-                 landing, not jump several levels into its first subsection. A
-                 leaf first item links to itself. */ -}}
-          {{- $href := (index $items 0).RelPermalink -}}
-          {{- $tabs = $tabs | append (dict "name" $name "href" $href) -}}
+        {{- if $present -}}
+          {{- $tabs = $tabs | append (dict "name" $name "href" $href "id" $id) -}}
         {{- end -}}
       {{- end -}}
+
+      {{- /* Resolve the active tab's directory id from the present-tab list (so
+             a configured-but-empty tab can't win) for the sidebar to root at. */ -}}
+      {{- $activeId := "" -}}
+      {{- range $tabs -}}{{- if eq .name $activeTab -}}{{- $activeId = .id -}}{{- end -}}{{- end -}}
 
       {{- /* Share with the sidebar regardless of count so it can decide. The
              tab list travels too, so the sidebar can render the mobile drawer's
              tab-chip row (the band itself is hidden below the desktop-sidebar
-             breakpoint). */ -}}
+             breakpoint). `activeId` is the directory the sidebar roots at in
+             directory mode (empty in legacy mode → sidebar filters instead). */ -}}
       {{- $enabled := ge (len $tabs) 2 -}}
-      {{- $context.Store.Set "docTabs" (dict "enabled" $enabled "active" $activeTab "default" $defaultTab "tabs" $tabs) -}}
+      {{- $context.Store.Set "docTabs" (dict "enabled" $enabled "active" $activeTab "activeId" $activeId "default" $defaultTab "tabs" $tabs) -}}
 
       {{- if $enabled -}}
         <div class="docs-tabs-band hx:print:hidden">

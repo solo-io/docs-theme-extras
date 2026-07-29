@@ -341,17 +341,20 @@ test.describe("section-index pager (PR 2389 regression guard)", () => {
     const inner = pagerMatch![1];
     const hrefs = [...inner.matchAll(/<a[^>]+href="([^"]+)"/g)].map((m) => m[1]);
     expect(hrefs.length, "pager has no <a> children").toBeGreaterThan(0);
-    // Every pager href on /v2/ should point at a sibling section landing
-    // (v1, main, etc.) — never at a non-existent path. Strip baseURL and
-    // expect it to match one of the configured sibling versions.
+    // Every pager href on /v2/ should point at a sibling section landing that
+    // actually exists in the build (v1, main, v3, …) — never at a non-existent
+    // path (the PR 2389 regression). Resolve each href to its built index.html
+    // rather than matching a hardcoded version list, so new sibling versions
+    // (e.g. the v3 tabs-demo) don't require touching this guard.
     const baseAbs = "/" + target.baseURL.replace(/^\/+|\/+$/g, "");
-    const siblingVersions = target.versions.filter((v) => v !== "v2");
+    const baseStrip = target.baseURL.replace(/^\/+|\/+$/g, "");
     for (const href of hrefs) {
-      const rel = href.replace(baseAbs, "").replace(/\/$/, "").replace(/^\/+/, "");
+      const rel = href.replace(baseAbs, "").replace(/^\/+|\/+$/g, "");
+      const idx = path.join(target.builtRoot, baseStrip, rel, "index.html");
       expect(
-        siblingVersions,
-        `pager href ${href} should point at a sibling section`,
-      ).toContain(rel);
+        fs.existsSync(idx),
+        `pager href ${href} should point at a real built sibling section landing`,
+      ).toBe(true);
     }
   });
 });

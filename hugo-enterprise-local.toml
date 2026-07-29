@@ -169,10 +169,10 @@ pageContextMode = "siteParams"
   product = "test"
   productName = "Docs framework test fixture"
 
-# v3 is the tab-navigation demo version (issue solo-io/docs#3164). It is added
-# to the LOCAL dev configs only (not hugo-oss.toml / hugo-enterprise.toml), so
-# `make server-oss` / `server-enterprise` show the tabbed nav while the test
-# build stays byte-for-byte unaffected.
+# v3 is the tab-navigation demo version (issue solo-io/docs#3164). It is also
+# declared (and mounted) in hugo-oss.toml / hugo-enterprise.toml so the CI test
+# build exercises the id-based tab band; kept here too so `make server-oss` /
+# `server-enterprise` render it for local preview.
 [[params.versions]]
   version = "v3"
   dropdown = "v3 (tabs demo)"
@@ -183,21 +183,28 @@ pageContextMode = "siteParams"
 
 # ── Tab navigation (PROTOTYPE — issue solo-io/docs#3164) ──────────────────
 # Declares the tab bar rendered by layouts/_partials/docs-tabs.html. The list
-# is ordered; `default = true` marks the tab that top-level sections fall into
-# when they carry no `tab` front matter. A version with fewer than 2 non-empty
-# tabs renders no band (v1/v2/main here), which is the "without tabs" view.
+# is ordered; `default = true` marks the tab that's active on pages above every
+# tab directory (e.g. the version-root landing).
+#
+# Directory model: each tab's `id` names a top-level content directory under the
+# version root; every page in that directory is the tab, and the left nav is
+# rooted INSIDE the directory, so the directory's own node never appears (this
+# is what removes the "tab name shown twice" duplication). The tabs-demo v3 tree
+# is partitioned this way — documentation/, api/, changelog/. A version with
+# fewer than 2 tab directories renders no band (v1/v2/main here), which is the
+# "without tabs" view.
 [[params.docTabs]]
   name = "Documentation"
+  id = "documentation"
   default = true
 
 [[params.docTabs]]
   name = "API Reference"
-
-[[params.docTabs]]
-  name = "Reference"
+  id = "api"
 
 [[params.docTabs]]
   name = "Changelog"
+  id = "changelog"
 
 # Section-keyed versions used by tests/version-cards.spec.ts — kept in
 # sync with hugo-enterprise.toml so `make server-enterprise` matches the

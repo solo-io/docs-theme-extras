@@ -43,12 +43,18 @@
        only at depth 0. */ -}}
 {{- $tabsEnabled := false -}}
 {{- $activeTab := "" -}}
+{{- $activeId := "" -}}
 {{- $defaultTab := "" -}}
 {{- $docTabsList := slice -}}
 {{- with $context.Store.Get "docTabs" -}}
   {{- if .enabled -}}
     {{- $tabsEnabled = true -}}
     {{- $activeTab = .active -}}
+    {{- /* Directory-mode tabs (docs-tabs.html) set activeId to the tab's
+           content directory; the sidebar roots the tree there so the directory
+           node itself never renders. Empty ⇒ legacy mode: keep filtering the
+           full tree by front-matter `tab` at depth 0. */ -}}
+    {{- $activeId = .activeId -}}
     {{- $defaultTab = .default -}}
     {{- $docTabsList = .tabs -}}
   {{- end -}}
@@ -358,8 +364,18 @@
               <button type="button" class="sidebar-mobile-scroll-arrow sidebar-mobile-scroll-next" aria-label="Scroll sections right" hidden>&rsaquo;</button>
             </div>
           {{- end -}}
+          {{- /* Directory-mode tabs root the tree INSIDE the active tab's dir
+                 so the dir's own node never shows; legacy mode roots at the
+                 version root and lets render-sidebar-tree filter depth 0 by
+                 `tab`. Passing tabsEnabled=false in directory mode disables that
+                 depth-0 filter — rooting already scopes the tree. */ -}}
+          {{- $idMode := ne $activeId "" -}}
+          {{- $navRoot := $docsSection -}}
+          {{- if $idMode -}}
+            {{- with site.GetPage (printf "%s%s" $vr.lookupPath $activeId) -}}{{- $navRoot = . -}}{{- end -}}
+          {{- end -}}
           <nav class="sidebar-nav" data-tab-panel="{{ $activeTab }}">
-            {{- template "render-sidebar-tree" (dict "page" $docsSection "current" $context "versionPrefix" $versionPrefix "depth" 0 "tabsEnabled" $tabsEnabled "activeTab" $activeTab "defaultTab" $defaultTab) -}}
+            {{- template "render-sidebar-tree" (dict "page" $navRoot "current" $context "versionPrefix" $versionPrefix "depth" 0 "tabsEnabled" (and $tabsEnabled (not $idMode)) "activeTab" $activeTab "defaultTab" $defaultTab) -}}
           </nav>
           {{- /* Mobile only: pre-render the OTHER tabs' trees as hidden panels
                  so tapping a tab in the drawer swaps the link structure in place
@@ -371,8 +387,14 @@
           {{- if and $tabsEnabled $docTabsList -}}
             {{- range $docTabsList -}}
               {{- if ne .name $activeTab -}}
+                {{- $panelId := .id | default "" -}}
+                {{- $panelIdMode := ne $panelId "" -}}
+                {{- $panelRoot := $docsSection -}}
+                {{- if $panelIdMode -}}
+                  {{- with site.GetPage (printf "%s%s" $vr.lookupPath $panelId) -}}{{- $panelRoot = . -}}{{- end -}}
+                {{- end -}}
                 <nav class="sidebar-nav sidebar-mobile-tree-panel" data-tab-panel="{{ .name }}" aria-hidden="true">
-                  {{- template "render-sidebar-tree" (dict "page" $docsSection "current" $context "versionPrefix" $versionPrefix "depth" 0 "tabsEnabled" $tabsEnabled "activeTab" .name "defaultTab" $defaultTab) -}}
+                  {{- template "render-sidebar-tree" (dict "page" $panelRoot "current" $context "versionPrefix" $versionPrefix "depth" 0 "tabsEnabled" (and $tabsEnabled (not $panelIdMode)) "activeTab" .name "defaultTab" $defaultTab) -}}
                 </nav>
               {{- end -}}
             {{- end -}}

@@ -2,21 +2,23 @@ import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import { TEST_PRODUCT_ROOT, readFixture } from "./helpers/fixture";
-import { target } from "./helpers/target";
 
 // Tab navigation band (issue solo-io/docs#3164), rendered by
 // layouts/_partials/docs-tabs.html and scoped by layouts/partials/sidebar.html.
 //
-// The fixture exercises BOTH states in one build:
-//   ENABLED  — the `main` version tags two top-level pages into a "Reference"
-//              tab (everything/rebased stay in the default "Documentation"
-//              tab), so main has >=2 non-empty tabs → the band renders and the
-//              left nav is scoped to the active tab.
-//   DISABLED — v1/v2 leave their pages untagged, so every top-level page falls
-//              into the single default tab → the band is suppressed and the
-//              full tree renders, exactly as before docTabs existed.
+// DIRECTORY MODE (the shipped model). A tab carries `id = "<dir>"`, the name of
+// a top-level content directory under the version root; the left nav is rooted
+// INSIDE that directory, so the directory's own node never appears — the tab IS
+// the directory. The fixture exercises BOTH states in one build:
+//   ENABLED  — the `v3` (tabs-demo) version partitions its docs into three tab
+//              directories (documentation/, api/, changelog/), so it has >=2 tab
+//              dirs → the band renders and the left nav is scoped to the active
+//              tab's directory.
+//   DISABLED — main/v1/v2 have none of those directories, so no tab is present
+//              → the band is suppressed and the full tree renders, exactly as
+//              before docTabs existed.
 //
-// Fixture-specific (depends on the bundled test content + the docTabs config in
+// Fixture-specific (depends on the bundled v3 tree + the docTabs config in
 // hugo-oss.toml / hugo-enterprise.toml). Against a consumer build these files
 // won't exist, so each test skips itself — the same no-op-on-consumer pattern
 // as the rest of the suite.
@@ -27,14 +29,22 @@ const BAND = "docs-tabs-band";
 const DRAWER_TABS = "sidebar-mobile-tab-row";
 
 // Pull the "<nav class="sidebar-nav">…</nav>" block out of a built page so we
-// can assert which top-level entries the sidebar lists.
+// can assert which entries the sidebar lists. The canonical active-tab nav is
+// `class="sidebar-nav"` exactly (plus a data-tab-panel attribute); the other
+// tabs' hidden mobile panels are `class="sidebar-nav sidebar-mobile-tree-panel"`,
+// which this does NOT match, so the assertions read only the active tab's tree.
 function sidebarNav(html: string): string {
-  // The canonical active-tab nav is `class="sidebar-nav"` exactly (now carries a
-  // data-tab-panel attribute); the other tabs' hidden mobile panels are
-  // `class="sidebar-nav sidebar-mobile-tree-panel"`, which this does NOT match,
-  // so the scoping assertions still read only the active tab's tree.
   const m = html.match(/<nav class="sidebar-nav"[^>]*>([\s\S]*?)<\/nav>/);
   return m ? m[1] : "";
+}
+
+// The hrefs of the sidebar links in the active-tab nav. Used to assert exact
+// membership — substring checks are ambiguous because a child href
+// (/v3/api/resources/) contains its parent dir's path (/v3/api/).
+function sidebarLinks(html: string): string[] {
+  return [...sidebarNav(html).matchAll(/<a href="([^"]+)"\s+class="sidebar-link/g)].map(
+    (m) => m[1],
+  );
 }
 
 // Pull the tab band's inner markup so we can read the tab labels + active tab.
@@ -59,87 +69,100 @@ function readIfExists(p: string): string | null {
   return fs.existsSync(p) ? readFixture(p) : null;
 }
 
-test.describe("tab navigation — ENABLED (main version, >=2 tabs)", () => {
-  const docsPage = fixturePath("main", "everything", "index.html");
-  const refPage = fixturePath("main", "enterprise-kgateway-traffic-policy", "index.html");
+test.describe("tab navigation — ENABLED (v3, directory/id tabs)", () => {
+  const apiPage = fixturePath("v3", "api", "authentication", "index.html");
+  const docsPage = fixturePath("v3", "documentation", "getting-started", "index.html");
 
-  test("renders the band with the configured tabs, active tab reflecting the page", () => {
+  test("renders the band with the configured tabs, in config order", () => {
     const html = readIfExists(docsPage);
-    test.skip(html === null, "fixture main/everything not built");
-    expect(html, "no tab band on a version with >=2 non-empty tabs").toContain(BAND);
-    // Config declares Documentation (default) + Reference; both have >=1 page
-    // in main, so both render, in config order.
-    expect(bandTabs(html!)).toEqual(["Documentation", "Reference"]);
-    // everything has no `tab`, so it lands in the default tab.
-    expect(activeTab(html!)).toBe("Documentation");
+    test.skip(html === null, "fixture v3/documentation/getting-started not built");
+    expect(html, "no tab band on a version with >=2 tab directories").toContain(BAND);
+    // Config declares Documentation (default) + API Reference + Changelog; each
+    // is a directory in v3, so all three render, in config order.
+    expect(bandTabs(html!)).toEqual(["Documentation", "API Reference", "Changelog"]);
   });
 
-  test("left nav is scoped to the active tab's pages", () => {
-    const html = readIfExists(docsPage);
-    test.skip(html === null, "fixture main/everything not built");
-    const nav = sidebarNav(html!);
-    // Documentation-tab siblings are present …
-    expect(nav, "everything missing from its own tab's nav").toContain(
-      '/test/main/everything/',
-    );
-    expect(nav, "rebased missing from the Documentation tab").toContain(
-      '/test/main/rebased/',
-    );
-    // … and the Reference-tab pages are hidden while Documentation is active.
-    expect(
-      nav,
-      "Reference-tab page leaked into the Documentation left nav (scoping failed)",
-    ).not.toContain('/test/main/enterprise-kgateway-traffic-policy/');
-    expect(nav, "Reference-tab page (trailing-step) leaked into the Documentation nav").not.toContain(
-      '/test/main/trailing-step/',
-    );
+  test("active tab reflects the directory the page lives in", () => {
+    const apiHtml = readIfExists(apiPage);
+    test.skip(apiHtml === null, "fixture v3/api/authentication not built");
+    expect(activeTab(apiHtml!)).toBe("API Reference");
+
+    const docsHtml = readIfExists(docsPage);
+    test.skip(docsHtml === null, "fixture v3/documentation/getting-started not built");
+    expect(activeTab(docsHtml!)).toBe("Documentation");
   });
 
-  test("switching to a Reference-tab page flips the active tab and the nav scope", () => {
-    const html = readIfExists(refPage);
-    test.skip(html === null, "fixture main/enterprise-kgateway-traffic-policy not built");
-    expect(activeTab(html!)).toBe("Reference");
-    const nav = sidebarNav(html!);
-    expect(nav, "Reference page missing from its own tab's nav").toContain(
-      '/test/main/enterprise-kgateway-traffic-policy/',
+  test("left nav is rooted INSIDE the active tab's directory (no directory node, scoped)", () => {
+    const html = readIfExists(apiPage);
+    test.skip(html === null, "fixture v3/api/authentication not built");
+    const links = sidebarLinks(html!);
+    // The api directory's own pages are listed …
+    expect(links, "api tab's pages missing from its own left nav").toEqual(
+      expect.arrayContaining(["/test/v3/api/resources/", "/test/v3/api/authentication/"]),
     );
-    expect(nav, "trailing-step missing from the Reference tab").toContain(
-      '/test/main/trailing-step/',
+    // … the directory node itself is NOT a wrapper entry (this is the fix: the
+    // tab name isn't repeated as a folder in the sidebar) …
+    expect(links, 'the "api" directory leaked into the nav as a wrapper node').not.toContain(
+      "/test/v3/api/",
     );
-    expect(nav, "Documentation-tab page leaked into the Reference left nav").not.toContain(
-      '/test/main/everything/',
+    // … and the other tabs' directories are absent (scoping).
+    for (const href of links) {
+      expect(href, `a non-API-Reference page leaked into the API nav: ${href}`).toMatch(
+        /^\/test\/v3\/api\//,
+      );
+    }
+  });
+
+  test("default (Documentation) tab roots inside documentation/ with no wrapper node", () => {
+    const html = readIfExists(docsPage);
+    test.skip(html === null, "fixture v3/documentation/getting-started not built");
+    const links = sidebarLinks(html!);
+    expect(links, "documentation sections missing from the default tab").toEqual(
+      expect.arrayContaining([
+        "/test/v3/documentation/getting-started/",
+        "/test/v3/documentation/concepts/",
+      ]),
     );
+    expect(links, 'the "documentation" directory leaked in as a wrapper node').not.toContain(
+      "/test/v3/documentation/",
+    );
+    // API Reference + Changelog pages stay out of the Documentation nav.
+    for (const href of links) {
+      expect(href, `a non-Documentation page leaked into the Documentation nav: ${href}`).toMatch(
+        /^\/test\/v3\/documentation\//,
+      );
+    }
   });
 
   test("mobile drawer carries the tab chips (band is hidden below the sidebar breakpoint)", () => {
     const html = readIfExists(docsPage);
-    test.skip(html === null, "fixture main/everything not built");
+    test.skip(html === null, "fixture v3/documentation/getting-started not built");
     expect(html, "mobile drawer tab-chip row missing when tabs are enabled").toContain(
       DRAWER_TABS,
     );
   });
 });
 
-test.describe("tab navigation — DISABLED (untagged version, single default tab)", () => {
-  const v1Page = fixturePath("v1", "everything", "index.html");
+test.describe("tab navigation — DISABLED (versions with no tab directories)", () => {
+  const mainPage = fixturePath("main", "everything", "index.html");
 
-  test("no band renders when the version has fewer than 2 non-empty tabs", () => {
-    const html = readIfExists(v1Page);
-    test.skip(html === null, "fixture v1/everything not built");
-    expect(html, "band rendered on a version with no tab grouping").not.toContain(BAND);
-    expect(html, "mobile tab-chip row rendered on an untagged version").not.toContain(
+  test("no band renders when the version has fewer than 2 tab directories", () => {
+    const html = readIfExists(mainPage);
+    test.skip(html === null, "fixture main/everything not built");
+    expect(html, "band rendered on a version with no tab directories").not.toContain(BAND);
+    expect(html, "mobile tab-chip row rendered on a version with no tab dirs").not.toContain(
       DRAWER_TABS,
     );
   });
 
   test("left nav renders the full tree, unscoped", () => {
-    const html = readIfExists(v1Page);
-    test.skip(html === null, "fixture v1/everything not built");
+    const html = readIfExists(mainPage);
+    test.skip(html === null, "fixture main/everything not built");
     const nav = sidebarNav(html!);
     // Every top-level page is present — nothing is filtered out by a tab.
     for (const slug of ["everything", "rebased", "enterprise-kgateway-traffic-policy"]) {
       expect(nav, `${slug} missing from the unscoped left nav`).toContain(
-        `/test/v1/${slug}/`,
+        `/test/main/${slug}/`,
       );
     }
   });
