@@ -33,7 +33,16 @@ export default defineConfig({
   // infra noise, not a content bug — a fresh-page retry clears it, while a
   // real error still fails both attempts.
   retries: 1,
-  workers: process.env.CI ? 4 : undefined,
+  // CI worker count is tunable via PW_WORKERS. With the brand-matrix split
+  // (see .github/workflows/test.yml) each runner handles a single brand, so
+  // the browser-heavy projects can use more workers than the old 4. Dial back
+  // via PW_WORKERS if a runner shows OOM/flakiness. Local runs stay on
+  // Playwright's default (half the cores).
+  workers: process.env.PW_WORKERS
+    ? Number(process.env.PW_WORKERS)
+    : process.env.CI
+      ? 4
+      : undefined,
   reporter: process.env.CI
     ? [["list"], ["html", { open: "never" }], ["github"]]
     : [["list"], ["html", { open: "never" }]],
@@ -93,16 +102,24 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
       testMatch: /cross-browser\.spec\.ts$/,
     },
-    {
-      name: "cross-browser-firefox",
-      use: { ...devices["Desktop Firefox"] },
-      testMatch: /cross-browser\.spec\.ts$/,
-    },
-    {
-      name: "cross-browser-webkit",
-      use: { ...devices["Desktop Safari"] },
-      testMatch: /cross-browser\.spec\.ts$/,
-    },
+    // Firefox + WebKit are the expensive engines to install and run. On PRs
+    // CI sets CROSS_BROWSER=chromium to skip them (chromium already covers the
+    // cross-browser spec); the full three-engine sweep runs on push:main and
+    // workflow_dispatch. Locally (CROSS_BROWSER unset) all three always run.
+    ...(process.env.CROSS_BROWSER === "chromium"
+      ? []
+      : [
+          {
+            name: "cross-browser-firefox",
+            use: { ...devices["Desktop Firefox"] },
+            testMatch: /cross-browser\.spec\.ts$/,
+          },
+          {
+            name: "cross-browser-webkit",
+            use: { ...devices["Desktop Safari"] },
+            testMatch: /cross-browser\.spec\.ts$/,
+          },
+        ]),
     // Browser-based crawl: open every built page and assert no uncaught JS
     // exceptions, console.error calls, or 4xx responses on JS/CSS resources.
     // Distinct from the fixture-page-only "browser" project — this one crawls
