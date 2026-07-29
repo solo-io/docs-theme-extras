@@ -22,7 +22,7 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
-## [v0.1.22] — 2026-07-28
+## [v0.1.22] — 2026-07-29
 
 ### Fix — remap OSS→enterprise version numbers inside percent-form `{{% version %}}` blocks in reused content (`layouts/_shortcodes/reuse.html`)
 
