@@ -7,6 +7,13 @@
        whether they hit the .md URL or click "Copy as Markdown". */ -}}
 {{- $html := .Content -}}
 
+{{- /* Pull the footnotes block off the end of .Content so it can be re-appended
+       AFTER the section child-link list below (see the shared partial for why).
+       No-op on pages without footnotes. */ -}}
+{{- $fn := partial "utils/md-footnote-split.html" $html -}}
+{{- $html = $fn.html -}}
+{{- $fnHTML := $fn.footnote -}}
+
 {{- /* Section cards → plain link list. The shortcode and the auto-card
        partial both emit <a class="section-card"><span class="section-card-title"> /
        <p class="section-card-title">; collapse either form to <p><a>. */ -}}
@@ -72,13 +79,23 @@
   {{- $md = replace $md (printf "XMERMAIDPLACEHOLDER%dX" $i) (printf "```mermaid\n%s\n```" $code) 1 -}}
 {{- end -}}
 
+{{- /* Section-index pages: append child pages as a plain markdown link list,
+       then the footnotes block pulled off above. Placed here — before the
+       smart-punctuation, URL-rewrite, and entity-decode passes below — so the
+       child descriptions and footnote text get the same normalization as the
+       body. See utils/md-section-child-links.html for the child selection. */ -}}
+{{- $md = print $md (partial "utils/md-section-child-links.html" .) -}}
+{{- with $fnHTML -}}
+  {{- $md = printf "%s\n\n%s" $md ($fnHTML | transform.HTMLToMarkdown) -}}
+{{- end -}}
+
 {{- /* Remove empty heading-permalink anchors. */ -}}
 {{- $md = $md | replaceRE `\[\]\(#[^)]+\)` "" -}}
 
 {{- /* Normalize smart punctuation to ASCII so the markdown is
        easier to diff and friendlier to non-Unicode-aware consumers. */ -}}
-{{- $md = $md | replaceRE `[""]` `"` -}}
-{{- $md = $md | replaceRE `['']` `'` -}}
+{{- $md = $md | replaceRE `[“”]` `"` -}}
+{{- $md = $md | replaceRE `[‘’]` `'` -}}
 {{- $md = $md | replaceRE `…` `...` -}}
 {{- $md = $md | replaceRE `–` `-` -}}
 {{- $md = $md | replaceRE `—` `--` -}}

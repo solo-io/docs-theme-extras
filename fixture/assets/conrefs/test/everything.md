@@ -157,6 +157,25 @@ GitHub `[!NOTE]` styling can't live inside a table cell — GFM-alert syntax is 
 | ------- | ----------- |
 | `MARKER_BRNOTE_CELL_KEY` | MARKER_BRNOTE_CELL_DESC The names look similar but are not the same. <br><br>**Note**: MARKER_BRNOTE_CELL_BODY. The `secrets-store.csi.x-k8s.io` API group is not the `secrets-store.csi.k8s.io` CSI driver name; pass `--set apiVersion` to override it.|
 
+### Reused inside a tab in a numbered list
+
+A GitHub callout that lives in a `reuse` snippet and is pulled into a percent-form `tab` shortcode which itself sits indented inside a numbered step — the real shape in agentgateway's `agentgateway-setup.md`/`prereq.md` (reuse `kind-loadbalancer-tip.md` inside a "Cloud Provider LoadBalancer" tab). It's a double markdown render: `reuse` pre-renders the callout to HTML, then the percent-form tab runs that HTML through Goldmark again. If the alert partial emits a blank line or indents its inner `<div>`s, the second pass — offset by the list item's indent — terminates the HTML block and the body crosses CommonMark's 4-space code threshold, leaking the wrapper into a `<pre>`. The alert is emitted on one contiguous line to survive this. The reused body deliberately mixes a paragraph, a list, and a fenced code block so the guard covers multi-block bodies too. (This whole page is itself reached via `reuse` from the content page, which supplies the outer render.)
+
+1. MARKER_REUSE_TAB_BEFORE. A step before the tabs.
+
+   {{< tabs >}}
+   {{% tab name="Cloud Provider LoadBalancer" %}}
+   {{< reuse "conrefs/test/callout-reuse-tab.md" >}}
+
+   MARKER_REUSE_TAB_TRAILING. A sentence after the callout, still inside the tab.
+   {{% /tab %}}
+   {{% tab name="Port-forward" %}}
+   MARKER_REUSE_TAB_OTHER. The other tab.
+   {{% /tab %}}
+   {{< /tabs >}}
+
+2. MARKER_REUSE_TAB_AFTER. A step after the tabs.
+
 ## Cards
 
 {{< cards >}}

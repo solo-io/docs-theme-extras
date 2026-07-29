@@ -10,6 +10,12 @@
        themeExtras.prodHost > site.BaseURL host > empty). */ -}}
 {{- $html := .Content -}}
 {{- $prodHost := partial "utils/prod-host.html" . -}}
+{{- /* Pull the footnotes block off the end of .Content so it can be re-appended
+       AFTER the section child-link list below (see the shared partial for why).
+       No-op on pages without footnotes. */ -}}
+{{- $fn := partial "utils/md-footnote-split.html" $html -}}
+{{- $html = $fn.html -}}
+{{- $fnHTML := $fn.footnote -}}
 {{- /* Convert Hextra card links to simple <p><a> links before markdown conversion,
        otherwise transform.HTMLToMarkdown drops them entirely.
        Matches: <a class="hextra-card..."><span class="card-title">Title</span></a>
@@ -94,6 +100,18 @@
 {{- end -}}
 {{- range $i, $code := $mermaids -}}
   {{- $md = replace $md (printf "XMERMAIDPLACEHOLDER%dX" $i) (printf "```mermaid\n%s\n```" $code) 1 -}}
+{{- end -}}
+{{- /* Section-index pages: append child pages as a plain markdown link list,
+       then the footnotes block pulled off above. Placed here — BEFORE the
+       entity-decode and smart-punctuation passes below — so the child
+       descriptions and footnote text get the same ASCII normalization as the
+       body, and BEFORE the link-rewrite passes so the dev `//localhost` child
+       permalinks get absolutized. See utils/md-section-child-links.html. */ -}}
+{{- $md = print $md (partial "utils/md-section-child-links.html" .) -}}
+{{- /* Re-append the footnotes (hr already stripped) after the child list, so
+       the copied order matches the rendered page: body → cards → footnotes. */ -}}
+{{- with $fnHTML -}}
+  {{- $md = printf "%s\n\n%s" $md ($fnHTML | transform.HTMLToMarkdown) -}}
 {{- end -}}
 {{- /* transform.HTMLToMarkdown leaves HTML entities (`&gt;`, `&lt;`,
        `&amp;`, `&quot;`, etc.) encoded. Decode them so the copied markdown

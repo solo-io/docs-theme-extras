@@ -8,6 +8,7 @@
         {{ partial "breadcrumb.html" (dict "page" . "enable" true) }}
         {{ partial "version-banner.html" . }}
         <div class="content">
+          {{ partial "docs-llms-directive.html" . }}
           {{ if .Title }}
           <div class="hx:flex hx:flex-col hx:sm:flex-row hx:items-start hx:sm:items-center hx:sm:justify-between hx:gap-4 hx:mb-4">
             <h1 class="hx:mb-0">{{ .Title }}</h1>
