@@ -91,12 +91,19 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ env.PW_BROWSER_TAG }}-${{ hashFiles('package-lock.json') }}
 
+      # timeout-minutes guards the `sudo apt-get` that --with-deps/install-deps
+      # runs: on a bad runner it can hang on a dpkg lock or a stalled mirror.
+      # The browser download + apt normally finishes in <1min, so 5 is generous
+      # — a genuine hang fails the step fast (and is re-runnable) instead of
+      # burning the whole 15-min job budget.
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 5
         run: npx playwright install --with-deps ${{ env.PW_BROWSERS }}
 
       - name: Install Playwright OS deps (cache-hit path)
         if: steps.playwright-cache.outputs.cache-hit == 'true'
+        timeout-minutes: 5
         run: npx playwright install-deps ${{ env.PW_BROWSERS }}
 
       # Override HUGO=hugo160 (the local convention) with HUGO=hugo (what
