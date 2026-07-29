@@ -9,7 +9,7 @@
 {{- $hasMd := $outputs.markdown | default true -}}
 {{- $llmsHref := partial "utils/llms-href.html" . -}}
 {{- if or $llmsHref $hasMd -}}
-<p class="sr-only">
+<p class="hx:sr-only">
   {{- with $llmsHref -}}
     For the complete documentation index, see <a href="{{ . }}">llms.txt</a>.
   {{- end }}
