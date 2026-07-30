@@ -152,3 +152,76 @@ test.describe("table shortcode display modes", () => {
     );
   });
 });
+
+// Read the bare `.table-wrapper` (NOT `.solo-table`) that follows a heading —
+// a plain markdown reference table, which render-table.html tags
+// `.table-capped` when it has 3+ columns. Mirrors `probe` above but targets the
+// wrapper directly since capped reference tables aren't wrapped by the `table`
+// shortcode.
+async function probeWrapper(
+  page: import("@playwright/test").Page,
+  headingId: string,
+) {
+  return page.evaluate((id) => {
+    const anchor = document.getElementById(id);
+    const heading = anchor ? anchor.closest("h1, h2, h3, h4, h5, h6") : null;
+    let scope: Element | null = heading ? heading.nextElementSibling : null;
+    while (
+      scope &&
+      !(scope.classList && scope.classList.contains("table-wrapper"))
+    ) {
+      scope = scope.nextElementSibling;
+    }
+    if (!scope) return null;
+    const wrapper = scope as HTMLElement;
+    // The long registry token lives in the 2nd cell (Registry column).
+    const tokenCell = wrapper.querySelector(
+      "tbody td:nth-child(2)",
+    ) as HTMLElement | null;
+    return {
+      className: wrapper.className,
+      clientW: wrapper.clientWidth,
+      scrollW: wrapper.scrollWidth,
+      overflowX: getComputedStyle(wrapper).overflowX,
+      tokenCellWhiteSpace: tokenCell
+        ? getComputedStyle(tokenCell).whiteSpace
+        : null,
+      tokenCellMaxWidth: tokenCell ? getComputedStyle(tokenCell).maxWidth : null,
+    };
+  }, headingId);
+}
+
+// A capped reference table holding a long, break-free registry token (the
+// agentgateway airgap `kgateway-image-versions.md` shape). At phone width the
+// `@media (max-width: 767px)` rule must switch it from char-per-line folding to
+// horizontal scroll. Runs at 375px (iPhone SE width).
+test.describe("capped reference table on mobile scrolls instead of char-folding", () => {
+  test.skip(!IS_FIXTURE_TARGET, "fixture-only page");
+  test.use({ viewport: { width: 375, height: 800 } });
+
+  test("wrapper scrolls horizontally and the long token does not wrap", async ({
+    page,
+  }) => {
+    await page.goto(PAGE);
+    const r = await probeWrapper(page, "capped-table-long-unbreakable-token");
+    expect(r, ".table-wrapper for the capped mobile table not found").not.toBeNull();
+    expect(r!.className, "table is not flagged .table-capped").toContain(
+      "table-capped",
+    );
+    expect(r!.overflowX, "wrapper is not horizontally scrollable").toMatch(
+      /auto|scroll/,
+    );
+    expect(
+      r!.tokenCellWhiteSpace,
+      "capped cell still wraps at mobile width (should be nowrap)",
+    ).toBe("nowrap");
+    expect(
+      r!.tokenCellMaxWidth,
+      "capped cell max-width not lifted at mobile width",
+    ).toBe("none");
+    expect(
+      r!.scrollW > r!.clientW + 1,
+      `capped table did not overflow into a scroll at 375px (scrollW ${r!.scrollW} <= clientW ${r!.clientW})`,
+    ).toBe(true);
+  });
+});
