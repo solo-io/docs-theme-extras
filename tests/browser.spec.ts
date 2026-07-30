@@ -122,6 +122,28 @@ test.describe("version dropdown lists the configured versions", () => {
   });
 });
 
+test.describe("mobile drawer re-opens after a section/version switch", () => {
+  // The section/version chips are real links to a different content tree, so
+  // tapping them reloads the page. mobile-nav.js flags the tap in sessionStorage
+  // and re-opens the drawer on the next load, so a reader can pick section ->
+  // version -> topic without the drawer closing between selections. This checks
+  // the reopen-on-load half directly (setting the flag is a trivial click
+  // handler), which avoids racing the drawer's open animation.
+  test("the reopen flag opens the drawer on load, then is consumed (one-shot)", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 }); // below the xl drawer breakpoint
+    await page.goto(EVERYTHING);
+    const panel = page.locator(".sidebar-mobile-panel");
+    await expect(panel).not.toHaveClass(/mobile-sidebar-open/); // starts closed
+    await page.evaluate(() => sessionStorage.setItem("soloDrawerReopen", "1"));
+    await page.reload();
+    await expect(panel, "drawer did not re-open after a section/version switch").toHaveClass(
+      /mobile-sidebar-open/,
+    );
+    const flag = await page.evaluate(() => sessionStorage.getItem("soloDrawerReopen"));
+    expect(flag, "reopen flag not cleared — the drawer would re-open on every load").toBeNull();
+  });
+});
+
 test.describe("mermaid renders as SVG", () => {
   test("everything page produces an svg under each pre.mermaid", async ({ page }) => {
     await page.goto(EVERYTHING);

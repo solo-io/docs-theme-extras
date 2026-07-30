@@ -160,3 +160,40 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 })();
+
+/* Keep the mobile drawer open across a section/version switch. Unlike the tab
+   chips (same-page, swapped client-side above), the section (Kubernetes /
+   Standalone) and version chips are real links to a DIFFERENT content tree, so
+   tapping them reloads the page — which would close the drawer mid-selection.
+   Instead we flag the tap and re-open the drawer on the next load, so a reader
+   can pick section -> version -> topic without the drawer closing between
+   selections. Topic links and tab chips don't set the flag, so tapping a topic
+   still closes the drawer. */
+(function () {
+  var KEY = 'soloDrawerReopen';
+  document.addEventListener('DOMContentLoaded', function () {
+    // Re-open the drawer if we just arrived from a section/version switch.
+    try {
+      if (sessionStorage.getItem(KEY)) {
+        sessionStorage.removeItem(KEY);
+        var panel = document.querySelector('.sidebar-mobile-panel');
+        if (panel && window.innerWidth < 1280) {
+          panel.classList.add('mobile-sidebar-open');
+          var overlay = document.querySelector('.sidebar-mobile-overlay');
+          if (overlay) overlay.classList.add('active');
+        }
+      }
+    } catch (e) {}
+    // Flag section/version chip taps so the reload re-opens the drawer. Let the
+    // link navigate normally (no preventDefault).
+    var chips = document.querySelectorAll(
+      '.sidebar-mobile-section-link, .sidebar-mobile-version-link'
+    );
+    for (var i = 0; i < chips.length; i++) {
+      chips[i].addEventListener('click', function () {
+        if (window.innerWidth >= 1280) return;
+        try { sessionStorage.setItem(KEY, '1'); } catch (e) {}
+      });
+    }
+  });
+})();
