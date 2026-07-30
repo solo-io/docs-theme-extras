@@ -660,6 +660,14 @@ Confirm the resource exists, then move on.
 | MARKER_TABLE_ROW1A | MARKER_TABLE_ROW1B | row 1 cell C |
 | row 2 cell A | row 2 cell B | row 2 cell C |
 
+### Capped table long unbreakable token
+
+Reproduces the agentgateway airgap `kgateway-image-versions.md` pattern: a 3+ column reference table (so render-table tags it `.table-capped`) whose cell holds a long, break-free registry token. On phone-width viewports the old `overflow-wrap: anywhere` cap folded the token one character per line (vertical text) instead of letting the wrapper scroll. The `@media (max-width: 767px)` rule in docs-theme-extras.css switches capped tables to `width:max-content` + `nowrap` so the wrapper scrolls horizontally. `table-display.spec.ts` probes this at 375px.
+
+| Component | Registry | Repository |
+| --- | --- | --- |
+| MARKER_TABLE_CAPPED_MOBILE | us-docker.pkg.dev/solo-public/enterprise-agentgateway | agentgateway-enterprise |
+
 ### Version shortcode wrapping a table row
 
 Reproduces the kgateway k8sgwapi-exp.md pattern: a markdown table where authors try to gate an entire row with a version shortcode. Both forms are broken — the percent form spills the row outside the table as a paragraph, and the angle-bracket form wraps the whole pipe-string in a single `<td>` cell so the cell delimiters never get parsed. Tests pin both failure shapes as fail-pending so a future fix flips them green. A third table below shows the working pattern (per-cell conditionals with pipes outside the shortcode tags).
