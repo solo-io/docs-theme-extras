@@ -713,14 +713,16 @@ pre.mermaid:not([data-processed]) {
 .dark .docs-tabs-band {
   border-bottom-color: rgba(255, 255, 255, 0.06);
 }
+/* The band's page-width container (.docs-tabs-inner, added in docs-tabs.html)
+   matches the content column's max-width + centering, so the tab row aligns
+   with the sidebar/content rather than the viewport edge. */
 .docs-tabs {
   display: flex;
   align-items: stretch;
   gap: 1.5rem;
-  /* Left-aligned; inset to sit roughly above the sidebar's text column. */
-  padding: 0 1.5rem;
-  max-width: var(--hextra-max-page-width, 100%);
-  margin: 0 auto;
+  /* Left inset = the sidebar's text inset (nav-wrapper 1rem + link 0.75rem), so
+     the tab labels line up with the left-nav items. */
+  padding: 0 1.75rem;
   /* Let a long tab set scroll rather than wrap or overflow the viewport. */
   overflow-x: auto;
   scrollbar-width: none;

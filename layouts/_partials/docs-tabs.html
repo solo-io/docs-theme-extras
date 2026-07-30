@@ -109,15 +109,22 @@
       {{- $context.Store.Set "docTabs" (dict "enabled" $enabled "active" $activeTab "activeId" $activeId "tabs" $tabs) -}}
 
       {{- if $enabled -}}
+        {{- /* The full-bleed band centers its tabs inside the SAME page-width
+               container the content column uses (utils/page-width), so the tab
+               row's left edge lines up with the sidebar/content instead of the
+               viewport edge. Using the shared partial keeps them aligned for
+               every page.width (wide / full / default). */ -}}
         <div class="docs-tabs-band hx:print:hidden">
-          <nav class="docs-tabs" aria-label="{{ (T "sectionTabs") | default "Section navigation" }}">
-            {{- range $tabs -}}
-              {{- $isActive := eq .name $activeTab -}}
-              <a href="{{ .href }}"
-                 class="docs-tab{{ if $isActive }} docs-tab-active{{ end }}"
-                 {{ if $isActive }}aria-current="true"{{ end }}>{{ .name }}</a>
-            {{- end -}}
-          </nav>
+          <div class="docs-tabs-inner hx:mx-auto {{ partial "utils/page-width" $context }}">
+            <nav class="docs-tabs" aria-label="{{ (T "sectionTabs") | default "Section navigation" }}">
+              {{- range $tabs -}}
+                {{- $isActive := eq .name $activeTab -}}
+                <a href="{{ .href }}"
+                   class="docs-tab{{ if $isActive }} docs-tab-active{{ end }}"
+                   {{ if $isActive }}aria-current="true"{{ end }}>{{ .name }}</a>
+              {{- end -}}
+            </nav>
+          </div>
         </div>
       {{- end -}}
     {{- end -}}
