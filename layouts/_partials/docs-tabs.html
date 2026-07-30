@@ -1,35 +1,38 @@
 {{- /*
-  docs-tabs.html — PROTOTYPE tab-navigation band (issue solo-io/docs#3164).
+  docs-tabs.html — tab-navigation band (issue solo-io/docs#3164).
 
   Renders a horizontal row of tabs BETWEEN the top navbar and the
-  sidebar/content row. Each tab scopes the left nav to a subset of the
-  version's top-level sections, the way Mintlify / Portkey group concepts so
-  the left nav stays short. Left-aligned, its own band (Portkey style).
+  sidebar/content row. Each tab scopes the left nav to one top-level content
+  directory of the current version, the way Mintlify / Portkey group concepts
+  so the left nav stays short. Left-aligned, its own band (Portkey style).
 
-  Model (hybrid, matches the discussion on #3164):
+  Model (directory-based):
     - Config declares the tab bar: an ordered `[[params.docTabs]]` list, each
-      with a `name` and optional `default = true`. This is version-agnostic
-      (the labels rarely change), so one block per product covers every
-      version.
-    - Front matter assigns pages to tabs: a top-level section/page carries
-      `tab: "<name>"`. Anything without a `tab` falls into the default tab
-      (the one flagged `default`, else the first).
+      with a `name` (display label), an `id` (a top-level content directory
+      under the version root), and optional `default = true`. This is
+      version-agnostic (the labels rarely change), so one block per product
+      covers every version.
+    - A tab owns every page in its `id` directory. The sidebar (sidebar.html)
+      roots the left nav INSIDE that directory, so the directory's own node
+      never appears — it *is* the tab. Content is fully partitioned by
+      directory, one dir per tab (the default tab gets a dir too).
 
-  Opt-in / backward compatible:
-    - No `params.docTabs`  → this partial emits nothing and records
-      "disabled" in the page store, so the sidebar renders the whole tree
-      exactly as before. (This is why the fixture's test build, which sets no
-      docTabs, is completely unaffected.)
-    - Fewer than 2 non-empty tabs in the current version → same as disabled.
-      A single-tab band would add chrome without slimming anything, and it
-      lets a version that hasn't been organised into tabs keep today's nav.
+  Opt-in:
+    - No `params.docTabs`  → this partial emits nothing and records "disabled"
+      in the page store, so the sidebar renders the whole version tree as if
+      the feature didn't exist.
+    - Fewer than 2 present tab directories in the current version → same as
+      disabled. A single-tab band would add chrome without slimming anything,
+      and it lets a version that hasn't been organised into tabs keep the plain
+      full-tree nav.
 
   Sharing with the sidebar:
-    We compute the active tab here and stash it (plus the enabled flag and the
-    default tab name) on the page store. The sidebar partial reads it back and
-    filters its depth-0 items, so the version-root detection lives in one
-    place per render. single.html / list.html call this partial BEFORE the
-    sidebar, so the store is populated first.
+    We compute the active tab here and stash it — plus the enabled flag, the
+    active tab's directory id, and the ordered tab list — on the page store.
+    The sidebar reads it back and roots its tree at the active tab's directory,
+    so the version-root detection lives in one place per render. single.html /
+    list.html call this partial BEFORE the sidebar, so the store is populated
+    first.
 
   Version-root detection is shared with the sidebar via
   utils/version-root.html, so both agree on which version tree the page is in.
@@ -52,108 +55,58 @@
     {{- $versionRoot := $vr.docsSection -}}
 
     {{- if $versionRoot -}}
-      {{- /* ---- Default tab name -------------------------------------- */ -}}
+      {{- /* $lookupPath is the version root relative to contentDir (the shape
+             version-root.html already normalises), so site.GetPage resolves a
+             tab's directory the same way in OSS, enterprise, and local dev. */ -}}
+      {{- $lookupPath := $vr.lookupPath -}}
+
+      {{- /* ---- Default tab name: active when the page sits above every tab
+             directory (e.g. the version-root landing). ------------------ */ -}}
       {{- $defaultTab := (index $tabsCfg 0).name -}}
       {{- range $tabsCfg -}}
         {{- if .default -}}{{- $defaultTab = .name -}}{{- end -}}
       {{- end -}}
 
-      {{- /* Two ways a tab can claim its pages:
-
-             DIRECTORY MODE — a tab carries `id = "<dir>"`, the name of a
-             top-level content directory under the version root. Every page in
-             that directory belongs to the tab, and the sidebar (see
-             sidebar.html) roots the left nav INSIDE that directory, so the
-             directory's own node never appears — it *is* the tab. Content is
-             fully partitioned by directory, one dir per tab (the default tab
-             gets a dir too). This is the preferred model.
-
-             LEGACY MODE — a tab carries no `id`; a top-level section/page opts
-             in with front matter `tab: "<name>"`, and untagged pages fall into
-             the default tab. Kept for back-compat with the original prototype.
-
-             A config is all-directory or all-legacy; `$idMode` picks which.
-             $lookupPath is the version root relative to contentDir (the shape
-             version-root.html already normalises), so site.GetPage resolves a
-             tab's directory the same way in OSS, enterprise, and local dev. */ -}}
-      {{- $lookupPath := $vr.lookupPath -}}
-      {{- $idMode := false -}}
-      {{- range $tabsCfg -}}{{- if .id -}}{{- $idMode = true -}}{{- end -}}{{- end -}}
-
-      {{- /* ---- Active tab ---------------------------------------------
-             Directory mode: the tab whose directory is the current page or an
-             ancestor of it (Page relationships, not URL strings). A page above
-             every tab dir — e.g. the version-root landing — keeps the default.
-             Legacy mode: the front-matter `tab` of the current page's top-level
-             ancestor (or the page itself when it sits at the top level). */ -}}
+      {{- /* ---- Active tab: the tab whose directory is the current page or an
+             ancestor of it (Page relationships, not URL strings, so the
+             OSS / enterprise / local-dev URL shapes all work). ---------- */ -}}
       {{- $activeTab := $defaultTab -}}
-      {{- if $idMode -}}
-        {{- range $tabsCfg -}}
-          {{- $name := .name -}}
-          {{- with .id -}}
-            {{- with site.GetPage (printf "%s%s" $lookupPath .) -}}
-              {{- if or (eq .RelPermalink $context.RelPermalink) ($context.IsDescendant .) -}}
-                {{- $activeTab = $name -}}
-              {{- end -}}
+      {{- range $tabsCfg -}}
+        {{- $name := .name -}}
+        {{- with .id -}}
+          {{- with site.GetPage (printf "%s%s" $lookupPath .) -}}
+            {{- if or (eq .RelPermalink $context.RelPermalink) ($context.IsDescendant .) -}}
+              {{- $activeTab = $name -}}
             {{- end -}}
-          {{- end -}}
-        {{- end -}}
-      {{- else -}}
-        {{- range $versionRoot.Pages -}}
-          {{- if or (eq .RelPermalink $context.RelPermalink) ($context.IsDescendant .) -}}
-            {{- $activeTab = .Params.tab | default $defaultTab -}}
           {{- end -}}
         {{- end -}}
       {{- end -}}
 
-      {{- /* ---- Build the ordered, non-empty tab list -----------------
-             Directory mode: a tab is present when its directory exists. Legacy
-             mode: present when at least one top-level page opts into it. */ -}}
+      {{- /* ---- Ordered list of present tabs (those whose `id` directory
+             exists). Each tab links to its directory landing. A tab with no
+             `id`, or whose directory is missing, is skipped. ------------- */ -}}
       {{- $tabs := slice -}}
       {{- range $tabsCfg -}}
         {{- $name := .name -}}
-        {{- $id := .id | default "" -}}
-        {{- $present := false -}}
-        {{- $href := "" -}}
-        {{- if ne $id "" -}}
-          {{- with site.GetPage (printf "%s%s" $lookupPath $id) -}}
-            {{- $present = true -}}
-            {{- $href = .RelPermalink -}}
+        {{- $id := .id -}}
+        {{- with $id -}}
+          {{- with site.GetPage (printf "%s%s" $lookupPath .) -}}
+            {{- $tabs = $tabs | append (dict "name" $name "href" .RelPermalink "id" $id) -}}
           {{- end -}}
-        {{- else -}}
-          {{- $items := slice -}}
-          {{- range $versionRoot.Pages -}}
-            {{- if eq (.Params.tab | default $defaultTab) $name -}}
-              {{- $items = $items | append . -}}
-            {{- end -}}
-          {{- end -}}
-          {{- if gt (len $items) 0 -}}
-            {{- $present = true -}}
-            {{- /* Link the tab to its first top-level item's own page — the
-                   first entry in the tab's left nav — rather than drilling to
-                   the first leaf. Clicking "Reference" should land on the
-                   Reference section landing, not jump several levels into its
-                   first subsection. A leaf first item links to itself. */ -}}
-            {{- $href = (index $items 0).RelPermalink -}}
-          {{- end -}}
-        {{- end -}}
-        {{- if $present -}}
-          {{- $tabs = $tabs | append (dict "name" $name "href" $href "id" $id) -}}
         {{- end -}}
       {{- end -}}
 
       {{- /* Resolve the active tab's directory id from the present-tab list (so
-             a configured-but-empty tab can't win) for the sidebar to root at. */ -}}
+             a configured-but-missing tab can't win) for the sidebar to root at. */ -}}
       {{- $activeId := "" -}}
       {{- range $tabs -}}{{- if eq .name $activeTab -}}{{- $activeId = .id -}}{{- end -}}{{- end -}}
 
       {{- /* Share with the sidebar regardless of count so it can decide. The
              tab list travels too, so the sidebar can render the mobile drawer's
              tab-chip row (the band itself is hidden below the desktop-sidebar
-             breakpoint). `activeId` is the directory the sidebar roots at in
-             directory mode (empty in legacy mode → sidebar filters instead). */ -}}
+             breakpoint). `activeId` is the directory the sidebar roots at. */ -}}
       {{- $enabled := ge (len $tabs) 2 -}}
-      {{- $context.Store.Set "docTabs" (dict "enabled" $enabled "active" $activeTab "activeId" $activeId "default" $defaultTab "tabs" $tabs) -}}
+      {{- $context.Store.Set "docTabs" (dict "enabled" $enabled "active" $activeTab "activeId" $activeId "tabs" $tabs) -}}
 
       {{- if $enabled -}}
         <div class="docs-tabs-band hx:print:hidden">

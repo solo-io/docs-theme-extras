@@ -36,26 +36,20 @@
 {{- /* Tab-navigation scoping (issue solo-io/docs#3164). The docs-tabs.html
        band partial runs first (single.html / list.html call it before the
        sidebar) and records the active tab on the page store. When enabled, the
-       sidebar shows only the current tab's top-level sections; when the store
-       is absent or reports disabled (no params.docTabs, or <2 non-empty tabs
-       in this version), $tabsEnabled stays false and the whole tree renders as
-       before. These values are threaded into render-sidebar-tree and applied
-       only at depth 0. */ -}}
+       sidebar roots the tree INSIDE the active tab's content directory
+       ($activeId), so the left nav shows only that tab's pages and the
+       directory's own node never appears. When the store is absent or reports
+       disabled (no params.docTabs, or <2 present tab dirs in this version),
+       $tabsEnabled stays false and the whole version tree renders as before. */ -}}
 {{- $tabsEnabled := false -}}
 {{- $activeTab := "" -}}
 {{- $activeId := "" -}}
-{{- $defaultTab := "" -}}
 {{- $docTabsList := slice -}}
 {{- with $context.Store.Get "docTabs" -}}
   {{- if .enabled -}}
     {{- $tabsEnabled = true -}}
     {{- $activeTab = .active -}}
-    {{- /* Directory-mode tabs (docs-tabs.html) set activeId to the tab's
-           content directory; the sidebar roots the tree there so the directory
-           node itself never renders. Empty ⇒ legacy mode: keep filtering the
-           full tree by front-matter `tab` at depth 0. */ -}}
     {{- $activeId = .activeId -}}
-    {{- $defaultTab = .default -}}
     {{- $docTabsList = .tabs -}}
   {{- end -}}
 {{- end -}}
@@ -364,18 +358,16 @@
               <button type="button" class="sidebar-mobile-scroll-arrow sidebar-mobile-scroll-next" aria-label="Scroll sections right" hidden>&rsaquo;</button>
             </div>
           {{- end -}}
-          {{- /* Directory-mode tabs root the tree INSIDE the active tab's dir
-                 so the dir's own node never shows; legacy mode roots at the
-                 version root and lets render-sidebar-tree filter depth 0 by
-                 `tab`. Passing tabsEnabled=false in directory mode disables that
-                 depth-0 filter — rooting already scopes the tree. */ -}}
-          {{- $idMode := ne $activeId "" -}}
+          {{- /* When tabs are enabled, root the tree INSIDE the active tab's
+                 directory so the directory's own node never appears. If that
+                 dir can't be resolved (e.g. the default tab's dir is absent on
+                 this version), fall back to the whole version root. */ -}}
           {{- $navRoot := $docsSection -}}
-          {{- if $idMode -}}
-            {{- with site.GetPage (printf "%s%s" $vr.lookupPath $activeId) -}}{{- $navRoot = . -}}{{- end -}}
+          {{- with $activeId -}}
+            {{- with site.GetPage (printf "%s%s" $vr.lookupPath .) -}}{{- $navRoot = . -}}{{- end -}}
           {{- end -}}
           <nav class="sidebar-nav" data-tab-panel="{{ $activeTab }}">
-            {{- template "render-sidebar-tree" (dict "page" $navRoot "current" $context "versionPrefix" $versionPrefix "depth" 0 "tabsEnabled" (and $tabsEnabled (not $idMode)) "activeTab" $activeTab "defaultTab" $defaultTab) -}}
+            {{- template "render-sidebar-tree" (dict "page" $navRoot "current" $context "versionPrefix" $versionPrefix "depth" 0) -}}
           </nav>
           {{- /* Mobile only: pre-render the OTHER tabs' trees as hidden panels
                  so tapping a tab in the drawer swaps the link structure in place
@@ -387,14 +379,12 @@
           {{- if and $tabsEnabled $docTabsList -}}
             {{- range $docTabsList -}}
               {{- if ne .name $activeTab -}}
-                {{- $panelId := .id | default "" -}}
-                {{- $panelIdMode := ne $panelId "" -}}
                 {{- $panelRoot := $docsSection -}}
-                {{- if $panelIdMode -}}
-                  {{- with site.GetPage (printf "%s%s" $vr.lookupPath $panelId) -}}{{- $panelRoot = . -}}{{- end -}}
+                {{- with .id -}}
+                  {{- with site.GetPage (printf "%s%s" $vr.lookupPath .) -}}{{- $panelRoot = . -}}{{- end -}}
                 {{- end -}}
                 <nav class="sidebar-nav sidebar-mobile-tree-panel" data-tab-panel="{{ .name }}" aria-hidden="true">
-                  {{- template "render-sidebar-tree" (dict "page" $panelRoot "current" $context "versionPrefix" $versionPrefix "depth" 0 "tabsEnabled" (and $tabsEnabled (not $panelIdMode)) "activeTab" .name "defaultTab" $defaultTab) -}}
+                  {{- template "render-sidebar-tree" (dict "page" $panelRoot "current" $context "versionPrefix" $versionPrefix "depth" 0) -}}
                 </nav>
               {{- end -}}
             {{- end -}}
@@ -434,7 +424,7 @@
         {{- end -}}
         <div class="sidebar-nav-wrapper">
           <nav class="sidebar-nav">
-            {{- template "render-sidebar-tree" (dict "page" $navRoot "current" $context "versionPrefix" "" "depth" 0 "tabsEnabled" $tabsEnabled "activeTab" $activeTab "defaultTab" $defaultTab) -}}
+            {{- template "render-sidebar-tree" (dict "page" $navRoot "current" $context "versionPrefix" "" "depth" 0) -}}
           </nav>
         </div>
       </aside>
@@ -448,25 +438,19 @@
   {{- $current := .current -}}
   {{- $versionPrefix := .versionPrefix -}}
   {{- $depth := .depth | default 0 -}}
-  {{- $tabsEnabled := .tabsEnabled | default false -}}
-  {{- $activeTab := .activeTab | default "" -}}
-  {{- $defaultTab := .defaultTab | default "" -}}
   {{- $maxDepth := 4 -}}
 
   {{- if gt $depth $maxDepth -}}{{- return -}}{{- end -}}
 
+  {{- /* Tab scoping is handled by the caller: when tabs are enabled the tree is
+         rooted inside the active tab's directory, so no per-item filtering is
+         needed here — this renders the whole subtree of whatever root it's
+         given. */ -}}
   {{- $children := slice -}}
   {{- range $page.Pages -}}
     {{- $include := true -}}
     {{- if ne $versionPrefix "" -}}
       {{- $include = hasPrefix .RelPermalink $versionPrefix -}}
-    {{- end -}}
-    {{- /* Tab scoping is a top-level (depth 0) concern only: keep an item when
-           its tab (front-matter `tab`, else the default tab) matches the active
-           tab. Deeper levels are never filtered, so a tab's subtree renders in
-           full. */ -}}
-    {{- if and $include $tabsEnabled (eq $depth 0) -}}
-      {{- $include = eq (.Params.tab | default $defaultTab) $activeTab -}}
     {{- end -}}
     {{- if $include -}}{{- $children = $children | append . -}}{{- end -}}
   {{- end -}}
