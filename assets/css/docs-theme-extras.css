@@ -696,6 +696,11 @@ pre.mermaid:not([data-processed]) {
   width: 100%;
   border-bottom: 1px solid #f0f1f3;
   background: transparent;
+  /* A little room above the tab row so the band isn't jammed against the
+     navbar's divider. The space below the tabs is the .docs-tab padding, whose
+     bottom edge lands on the band's hairline (the active underline sits on it),
+     so vertical breathing room is added here (top) and on .docs-tab (both). */
+  padding-top: 0.5rem;
 }
 /* Below the desktop-sidebar breakpoint (xl, 1280px) the persistent sidebar
    becomes the slide-in drawer, so the band is hidden and the tabs render as a
@@ -726,7 +731,7 @@ pre.mermaid:not([data-processed]) {
 .docs-tab {
   display: inline-flex;
   align-items: center;
-  padding: 0.875rem 0.125rem;
+  padding: 1.25rem 0.125rem;
   font-size: 0.9375rem;
   font-weight: 500;
   line-height: 1.2;
