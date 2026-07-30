@@ -62,12 +62,15 @@ document.addEventListener('DOMContentLoaded', function () {
   }, true);
 });
 
-/* Mobile version / section (tab) chip rows scroll horizontally. Show the
-   < / > arrow for a direction only when there's more off-screen that way, and
-   center the active chip the first time the row gains width so it never starts
-   hidden. The drawer is display:none until opened, so widths are 0 until then;
-   a ResizeObserver recomputes when the row first gains width. */
+/* Mobile drawer wiring: the chip-row scrollers, the tab structure-swap, and the
+   AJAX section/version swap. All three are bound by bindDrawer(root) so they
+   keep working after an AJAX swap replaces the drawer's contents. */
 (function () {
+  /* Chip rows (version / tab / section) scroll horizontally. Show the < / >
+     arrow for a direction only when there's more off-screen that way, and center
+     the active chip the first time the row gains width so it never starts hidden.
+     The drawer is display:none until opened, so widths are 0 until then; a
+     ResizeObserver recomputes when the row first gains width. */
   function wireScroller(scroller) {
     var track = scroller.querySelector('[data-scroll-track]');
     var prev = scroller.querySelector('.sidebar-mobile-scroll-prev');
@@ -75,12 +78,13 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!track || !prev || !next) return;
     var centered = false;
     function update() {
+      if (!track.isConnected) return; // an AJAX swap may have detached this row
       var max = track.scrollWidth - track.clientWidth;
       prev.hidden = track.scrollLeft <= 1;
       next.hidden = track.scrollLeft >= max - 1;
     }
     function centerActive() {
-      if (centered || !track.clientWidth) return;
+      if (centered || !track.clientWidth || !track.isConnected) return;
       var active = track.querySelector(
         '.sidebar-mobile-version-active, .sidebar-mobile-tab-active'
       );
@@ -117,18 +121,12 @@ document.addEventListener('DOMContentLoaded', function () {
     centerActive();
     update();
   }
-  document.addEventListener('DOMContentLoaded', function () {
-    var scrollers = document.querySelectorAll('.sidebar-mobile-scroller');
-    for (var i = 0; i < scrollers.length; i++) wireScroller(scrollers[i]);
-  });
-})();
 
-/* Mobile tab structure-swap: in the drawer, tapping a tab shows that tab's
-   pre-rendered tree in place instead of navigating to its landing page. The
-   canonical .sidebar-nav holds the active tab; the other tabs' trees are
-   .sidebar-mobile-tree-panel siblings. Only intercepts below the sidebar
-   breakpoint — on desktop these chips are hidden and the tab band navigates. */
-(function () {
+  /* Tab structure-swap: in the drawer, tapping a tab shows that tab's
+     pre-rendered tree in place instead of navigating. The canonical .sidebar-nav
+     holds the active tab; the other tabs' trees are .sidebar-mobile-tree-panel
+     siblings. Below the sidebar breakpoint only — on desktop these chips are
+     hidden and the tab band navigates. */
   function activate(name) {
     var canonical = document.querySelector('.sidebar-nav[data-tab-panel]:not(.sidebar-mobile-tree-panel)');
     if (!canonical) return;
@@ -149,51 +147,62 @@ document.addEventListener('DOMContentLoaded', function () {
       );
     }
   }
-  document.addEventListener('DOMContentLoaded', function () {
-    var links = document.querySelectorAll('.sidebar-mobile-tab-link');
-    for (var i = 0; i < links.length; i++) {
-      links[i].addEventListener('click', function (e) {
-        if (window.innerWidth >= 1280) return; // desktop: let the tab band navigate
-        e.preventDefault();
-        activate(this.getAttribute('data-tab-target'));
-      });
-    }
-  });
-})();
+  function onTabClick(e) {
+    if (window.innerWidth >= 1280) return; // desktop: let the tab band navigate
+    e.preventDefault();
+    activate(this.getAttribute('data-tab-target'));
+  }
 
-/* Keep the mobile drawer open across a section/version switch. Unlike the tab
-   chips (same-page, swapped client-side above), the section (Kubernetes /
-   Standalone) and version chips are real links to a DIFFERENT content tree, so
-   tapping them reloads the page — which would close the drawer mid-selection.
-   Instead we flag the tap and re-open the drawer on the next load, so a reader
-   can pick section -> version -> topic without the drawer closing between
-   selections. Topic links and tab chips don't set the flag, so tapping a topic
-   still closes the drawer. */
-(function () {
-  var KEY = 'soloDrawerReopen';
-  document.addEventListener('DOMContentLoaded', function () {
-    // Re-open the drawer if we just arrived from a section/version switch.
-    try {
-      if (sessionStorage.getItem(KEY)) {
-        sessionStorage.removeItem(KEY);
-        var panel = document.querySelector('.sidebar-mobile-panel');
-        if (panel && window.innerWidth < 1280) {
-          panel.classList.add('mobile-sidebar-open');
-          var overlay = document.querySelector('.sidebar-mobile-overlay');
-          if (overlay) overlay.classList.add('active');
-        }
-      }
-    } catch (e) {}
-    // Flag section/version chip taps so the reload re-opens the drawer. Let the
-    // link navigate normally (no preventDefault).
-    var chips = document.querySelectorAll(
+  /* AJAX section/version swap: the section (Kubernetes/Standalone) and version
+     chips point to a DIFFERENT content tree than the current page, so — unlike
+     the tab chips — their trees aren't already in the DOM. Rather than navigate
+     (which would close the drawer mid-selection), fetch the target page, lift
+     its drawer nav, and swap it in place so the reader can keep picking section
+     -> version -> topic. Any failure falls back to plain navigation, so the chip
+     always does something. Below the sidebar breakpoint only. */
+  function swapDrawer(href, panel) {
+    panel.classList.add('drawer-loading');
+    fetch(href, { credentials: 'same-origin' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('status ' + r.status);
+        return r.text();
+      })
+      .then(function (html) {
+        var next = new DOMParser()
+          .parseFromString(html, 'text/html')
+          .querySelector('.sidebar-mobile-panel');
+        if (!next) throw new Error('no drawer in response');
+        panel.innerHTML = next.innerHTML;
+        panel.classList.remove('drawer-loading');
+        bindDrawer(panel);
+      })
+      .catch(function () { window.location.href = href; });
+  }
+  function onSectionVersionClick(e) {
+    if (window.innerWidth >= 1280) return; // desktop: chips are hidden; navigate
+    var href = this.getAttribute('href');
+    var panel = document.querySelector('.sidebar-mobile-panel');
+    if (!href || !panel) return; // no target/drawer: let the link navigate
+    e.preventDefault();
+    swapDrawer(href, panel);
+  }
+
+  /* (Re)bind every interactive piece within a drawer root. Runs on load and
+     again after each AJAX swap (which replaces the drawer's innerHTML, dropping
+     the previous listeners). */
+  function bindDrawer(root) {
+    var scrollers = root.querySelectorAll('.sidebar-mobile-scroller');
+    for (var i = 0; i < scrollers.length; i++) wireScroller(scrollers[i]);
+    var tabs = root.querySelectorAll('.sidebar-mobile-tab-link');
+    for (var j = 0; j < tabs.length; j++) tabs[j].addEventListener('click', onTabClick);
+    var chips = root.querySelectorAll(
       '.sidebar-mobile-section-link, .sidebar-mobile-version-link'
     );
-    for (var i = 0; i < chips.length; i++) {
-      chips[i].addEventListener('click', function () {
-        if (window.innerWidth >= 1280) return;
-        try { sessionStorage.setItem(KEY, '1'); } catch (e) {}
-      });
-    }
+    for (var k = 0; k < chips.length; k++) chips[k].addEventListener('click', onSectionVersionClick);
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var panel = document.querySelector('.sidebar-mobile-panel');
+    if (panel) bindDrawer(panel);
   });
 })();

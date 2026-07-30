@@ -122,25 +122,34 @@ test.describe("version dropdown lists the configured versions", () => {
   });
 });
 
-test.describe("mobile drawer re-opens after a section/version switch", () => {
-  // The section/version chips are real links to a different content tree, so
-  // tapping them reloads the page. mobile-nav.js flags the tap in sessionStorage
-  // and re-opens the drawer on the next load, so a reader can pick section ->
-  // version -> topic without the drawer closing between selections. This checks
-  // the reopen-on-load half directly (setting the flag is a trivial click
-  // handler), which avoids racing the drawer's open animation.
-  test("the reopen flag opens the drawer on load, then is consumed (one-shot)", async ({ page }) => {
+test.describe("mobile drawer: AJAX section/version swap", () => {
+  // Section (Kubernetes/Standalone) and version chips point to a DIFFERENT
+  // content tree, so tapping them fetches that tree's drawer nav and swaps it in
+  // place — no reload — so a reader can keep picking section -> version -> topic
+  // without the drawer closing. (mobile-nav.js falls back to navigation if the
+  // fetch fails.) Exercised here with a version switch; section chips use the
+  // same handler (and the fixture is single-section, so it has no section row).
+  test("tapping a version chip swaps the drawer in place without navigating", async ({ page }) => {
+    test.skip(target.versions.length < 2, "needs 2+ versions to switch");
     await page.setViewportSize({ width: 390, height: 844 }); // below the xl drawer breakpoint
-    await page.goto(EVERYTHING);
+    await page.goto(EVERYTHING); // e.g. /test/v2/everything/
+    // Open the drawer directly (avoids depending on a specific trigger element).
+    await page.evaluate(() => (window as unknown as { toggleMobileSidebar: () => void }).toggleMobileSidebar());
     const panel = page.locator(".sidebar-mobile-panel");
-    await expect(panel).not.toHaveClass(/mobile-sidebar-open/); // starts closed
-    await page.evaluate(() => sessionStorage.setItem("soloDrawerReopen", "1"));
-    await page.reload();
-    await expect(panel, "drawer did not re-open after a section/version switch").toHaveClass(
-      /mobile-sidebar-open/,
-    );
-    const flag = await page.evaluate(() => sessionStorage.getItem("soloDrawerReopen"));
-    expect(flag, "reopen flag not cleared — the drawer would re-open on every load").toBeNull();
+    await expect(panel).toHaveClass(/mobile-sidebar-open/);
+    // The current version is active before the swap (not the one we'll switch to).
+    await expect(panel.locator(".sidebar-mobile-version-active")).not.toHaveText(FIRST_VERSION);
+    const startUrl = page.url();
+    // Tap a different version's chip → AJAX fetch + in-place swap.
+    await panel
+      .locator(`.sidebar-mobile-version-link[href*="/${FIRST_VERSION}/"]`)
+      .first()
+      .click();
+    // The swapped-in drawer shows the target version as active …
+    await expect(panel.locator(".sidebar-mobile-version-active")).toHaveText(FIRST_VERSION);
+    // … we did NOT navigate (URL unchanged), and the drawer stayed open.
+    expect(page.url()).toBe(startUrl);
+    await expect(panel).toHaveClass(/mobile-sidebar-open/);
   });
 });
 

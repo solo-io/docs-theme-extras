@@ -2227,6 +2227,13 @@ details[open].hextra-search-other-versions > summary::before {
   padding: 1.1875rem 1rem 1rem;
   flex-grow: 1;
 }
+/* Brief dim + input-lock while the AJAX section/version swap (mobile-nav.js)
+   fetches the target drawer and swaps it in. */
+.sidebar-mobile-panel.drawer-loading .sidebar-nav-wrapper {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
 .sidebar-nav {
   display: flex;
   flex-direction: column;
