@@ -82,6 +82,20 @@ test.describe("tab navigation — ENABLED (v3, directory/id tabs)", () => {
     expect(bandTabs(html!)).toEqual(["Documentation", "API Reference", "Changelog"]);
   });
 
+  test("band centers its tabs in the page-width container so they align with the content column", () => {
+    // The full-bleed band wraps the tab row in `.docs-tabs-inner`, which reuses
+    // the same utils/page-width class the content column uses, so the tab row's
+    // left edge lines up with the sidebar/content rather than the viewport edge.
+    // Without the inner wrapper the tabs sit flush against the viewport.
+    const html = readIfExists(docsPage);
+    test.skip(html === null, "fixture v3/documentation/getting-started not built");
+    const band = html!.match(/<div class="docs-tabs-band[^>]*>([\s\S]*?<nav class="docs-tabs)/);
+    expect(band, "tab band markup not found").not.toBeNull();
+    expect(band![1], "band does not wrap its tabs in the .docs-tabs-inner page-width container").toMatch(
+      /docs-tabs-inner[^"]*hx:max-w-/,
+    );
+  });
+
   test("active tab reflects the directory the page lives in", () => {
     const apiHtml = readIfExists(apiPage);
     test.skip(apiHtml === null, "fixture v3/api/authentication not built");

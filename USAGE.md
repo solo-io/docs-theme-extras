@@ -144,50 +144,71 @@ interaction JS), and the `docs-tabs*` / `sidebar-mobile-tab*` rules in
 
 ## Enabling
 
-Declare the tabs, in display order, under `params.docTabs`. Mark one as the
-default; if none is marked, the first entry is the default.
+Declare the tabs, in display order, under `params.docTabs`. Each tab has a
+`name` (the label) and an `id` — the name of a **top-level content directory
+under the version root** whose pages that tab owns. Mark one tab as the default;
+if none is marked, the first entry is the default.
 
 ```toml
 [[params.docTabs]]
   name = "Documentation"
-  default = true
+  id = "documentation"   # owns content/<…>/<version>/documentation/**
 [[params.docTabs]]
   name = "API Reference"
+  id = "api"
 [[params.docTabs]]
   name = "Changelog"
+  id = "changelog"
 ```
 
-Tabs render **only when a version has two or more non-empty tabs.** An empty tab
-is dropped, and a version that ends up with fewer than two populated tabs shows
-its full, unscoped left nav (the feature is effectively off for that version).
-So tabs roll out per version as you tag pages — no per-version config change is
-needed.
+The config is version-agnostic — one block per product covers every version.
+Tabs render **only for a version that has two or more of these directories
+present.** A version with fewer than two tab directories shows its full,
+unscoped left nav (the feature is effectively off there), so tabs roll out per
+version as you add the directories — no per-version config change is needed.
 
-## Assigning pages to tabs
+## Partitioning content into tab directories
 
-Tabs are populated by the version's **top-level** sections and pages. Assign one
-to a tab with `tab:` front matter; anything untagged falls into the default tab.
+A tab **owns every page inside its `id` directory**. Partition a version's
+content into one directory per tab:
 
-```yaml
----
-title: API Reference
-tab: API Reference   # this top-level section and its descendants live in that tab
----
+```
+content/en/<product>/<version>/
+  documentation/          # default tab
+    _index.md
+    getting-started/…
+  api/                    # "API Reference" tab
+    _index.md
+    authentication.md
+  changelog/              # "Changelog" tab
+    _index.md
 ```
 
-- The **active tab** is the tab of the current page's top-level ancestor (or the
-  page itself, when it sits at the top level).
-- The left-nav tree is **scoped to the active tab at depth 0** — only that tab's
-  top-level sections show; levels below the top are unfiltered.
-- Each tab links to its **first top-level item's own page** — the first entry in
-  that tab's left nav — which is that section's landing page (or the page itself
-  when the first item is a leaf), not a deeper first-leaf page.
+- The **active tab** is the tab whose directory is the current page or an
+  ancestor of it (resolved by page relationships, not URL strings, so OSS /
+  enterprise / local-dev URL shapes all resolve the same). A page that sits
+  above every tab directory — e.g. the version-root landing — falls into the
+  default tab.
+- The left-nav tree is **rooted inside the active tab's directory**, so the
+  directory's own node never appears in the nav (it *is* the tab) and only that tab's pages show.
+- Each tab links to its **directory landing** (`_index`).
+- A tab whose directory holds only its landing (no child pages) still lists that
+  landing in the nav, so a single-page tab stays clickable — this matters on
+  mobile, where the drawer chips swap panels client-side rather than navigating,
+  so an empty panel would be a dead chip.
+
+> [!NOTE]
+> The former front-matter `tab:` key (the v0.1.21 prototype) is no longer read.
+> Tab membership is now determined entirely by which `id` directory a page lives
+> in.
 
 ## Desktop: the tab band
 
 At and above the sidebar breakpoint (`xl`, 1280px) the tabs render as a band
-across the top of the content area (`.docs-tabs-band`). Clicking a tab navigates
-to that tab's first page.
+across the top of the content area (`.docs-tabs-band`). The row is centered in
+the same page-width container as the content column (`.docs-tabs-inner`), so it
+lines up with the sidebar/content rather than the viewport edge. Clicking a tab
+navigates to that tab's directory landing.
 
 ## Mobile: tabs in the slide-out drawer
 
