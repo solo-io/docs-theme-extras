@@ -2139,22 +2139,31 @@ details[open].hextra-search-other-versions > summary::before {
   left: 0;
   justify-content: flex-start;
   padding-left: 0.25rem;
-  background: linear-gradient(to right, #fff 60%, rgba(255, 255, 255, 0));
 }
 .sidebar-mobile-scroll-next {
   right: 0;
   justify-content: flex-end;
   padding-right: 0.25rem;
-  background: linear-gradient(to left, #fff 60%, rgba(255, 255, 255, 0));
 }
 .dark .sidebar-mobile-scroll-arrow {
   color: rgb(209, 213, 219);
 }
-.dark .sidebar-mobile-scroll-prev {
-  background: linear-gradient(to right, rgb(17, 24, 39) 60%, rgba(17, 24, 39, 0));
+/* Fade the chip row's content toward whichever edge can still scroll, so tab /
+   version text dissolves BEFORE it reaches the < / > arrows instead of sliding
+   under and overlapping them. A mask fades the actual content to transparent
+   (unlike a solid arrow background, which leaves partially-covered text and
+   needs a dark-mode variant). mobile-nav.js toggles .scroll-fade-* per edge as
+   the row scrolls, so the first/last chip isn't faded when that edge is at rest
+   (no arrow there either). --scroll-fade-* default to 0 → no fade. */
+[data-scroll-track] {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--scroll-fade-l, 0px), #000 calc(100% - var(--scroll-fade-r, 0px)), transparent 100%);
+          mask-image: linear-gradient(to right, transparent 0, #000 var(--scroll-fade-l, 0px), #000 calc(100% - var(--scroll-fade-r, 0px)), transparent 100%);
 }
-.dark .sidebar-mobile-scroll-next {
-  background: linear-gradient(to left, rgb(17, 24, 39) 60%, rgba(17, 24, 39, 0));
+[data-scroll-track].scroll-fade-start {
+  --scroll-fade-l: 2.25rem;
+}
+[data-scroll-track].scroll-fade-end {
+  --scroll-fade-r: 2.25rem;
 }
 .sidebar-mobile-version-group {
   flex-basis: 100%;

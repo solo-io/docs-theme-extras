@@ -80,8 +80,16 @@ document.addEventListener('DOMContentLoaded', function () {
     function update() {
       if (!track.isConnected) return; // an AJAX swap may have detached this row
       var max = track.scrollWidth - track.clientWidth;
-      prev.hidden = track.scrollLeft <= 1;
-      next.hidden = track.scrollLeft >= max - 1;
+      var atStart = track.scrollLeft <= 1;
+      var atEnd = track.scrollLeft >= max - 1;
+      prev.hidden = atStart;
+      next.hidden = atEnd;
+      // Fade the row's content toward whichever edge can still scroll, so the
+      // tab / version text dissolves before it reaches the < / > arrows instead
+      // of sliding under and overlapping them (CSS masks on the .scroll-fade-*
+      // classes).
+      track.classList.toggle('scroll-fade-start', !atStart);
+      track.classList.toggle('scroll-fade-end', !atEnd);
     }
     function centerActive() {
       if (centered || !track.clientWidth || !track.isConnected) return;
