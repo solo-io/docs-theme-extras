@@ -134,6 +134,30 @@ test.describe("tab navigation — ENABLED (v3, directory/id tabs)", () => {
     }
   });
 
+  test("a single-page tab still lists its landing so it stays clickable (incl. mobile drawer)", () => {
+    // Changelog's directory holds only its _index (no child pages). Without the
+    // depth-0 fallback in render-sidebar-tree, the left nav — and the mobile
+    // drawer's Changelog panel — would be empty and the tab unreachable on
+    // mobile (drawer chips swap panels client-side instead of navigating).
+    const clHtml = readIfExists(fixturePath("v3", "changelog", "index.html"));
+    test.skip(clHtml === null, "fixture v3/changelog not built");
+    expect(activeTab(clHtml!)).toBe("Changelog");
+    expect(sidebarLinks(clHtml!), "single-page tab rendered an empty left nav").toContain(
+      "/test/v3/changelog/",
+    );
+    // And from another tab's page, the pre-rendered Changelog mobile panel must
+    // also carry the link (that's the panel the drawer chip reveals).
+    const docsHtml = readIfExists(docsPage);
+    test.skip(docsHtml === null, "fixture v3/documentation/getting-started not built");
+    const panel = docsHtml!.match(
+      /<nav class="sidebar-nav sidebar-mobile-tree-panel" data-tab-panel="Changelog"[^>]*>([\s\S]*?)<\/nav>/,
+    );
+    expect(panel, "Changelog mobile panel not rendered").not.toBeNull();
+    expect(panel![1], "Changelog mobile panel has no link to tap").toContain(
+      '/test/v3/changelog/',
+    );
+  });
+
   test("mobile drawer carries the tab chips (band is hidden below the sidebar breakpoint)", () => {
     const html = readIfExists(docsPage);
     test.skip(html === null, "fixture v3/documentation/getting-started not built");

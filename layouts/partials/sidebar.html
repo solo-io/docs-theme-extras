@@ -524,5 +524,38 @@
         </li>
       {{- end -}}
     </ul>
+  {{- else if eq $depth 0 -}}
+    {{- /* Single-page tab: the tab's directory holds only its landing (_index)
+           with no child pages, so the loop above renders nothing. Without this
+           the left nav — and the mobile drawer's panel for this tab — would be
+           empty, leaving the tab unreachable on mobile (the drawer chips swap
+           panels client-side rather than navigating). Emit a link to the landing
+           itself so the tab always has something to click. Guarded to depth 0
+           (the tree root); a genuinely empty subsection deeper down still
+           renders nothing. */ -}}
+    {{- $navLabel := $page.LinkTitle | default $page.Title -}}
+    {{- $icon := $page.Params.icon | default "" -}}
+    {{- $isActive := eq $page.RelPermalink $current.RelPermalink -}}
+    <ul class="sidebar-list sidebar-list-depth-0">
+      <li class="hx:relative">
+        <div class="sidebar-link-wrapper">
+          <a href="{{ $page.RelPermalink }}"
+             class="sidebar-link {{ if $isActive }}sidebar-active-item{{ end }}"
+             {{ if $isActive }}aria-current="page"{{ end }}>
+            {{- with $icon -}}
+              {{- $svgIconPath := printf "static/%s" (replaceRE "^/" "" .) -}}
+              {{- if and (findRE `\.svg$` .) (fileExists $svgIconPath) -}}
+                {{- readFile $svgIconPath | replaceRE "<svg" `<svg class="sidebar-icon sidebar-icon-svg" aria-hidden="true"` | safeHTML -}}
+              {{- else if index site.Data.icons . -}}
+                {{- partial "utils/icon.html" (dict "name" . "attributes" `class="sidebar-icon" aria-hidden="true"`) -}}
+              {{- else -}}
+                <i class="material-icons sidebar-icon" aria-hidden="true">{{ . }}</i>
+              {{- end -}}
+            {{- end -}}
+            <span class="hx:flex-1">{{ $navLabel }}</span>
+          </a>
+        </div>
+      </li>
+    </ul>
   {{- end -}}
 {{- end -}}
