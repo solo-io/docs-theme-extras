@@ -27,6 +27,16 @@ import { target } from "./helpers/target";
 // A revert to the angle-only regex leaves the percent block gated on `v2oss`;
 // since no page version equals `v2oss`, the gated row disappears from v2 and
 // this spec fails.
+//
+// keepVersion guard: the conref ALSO carries a `keepVersion="true"` row gated on
+// the same `v2oss` token. keepVersion means "these are already the enterprise
+// tokens — do NOT remap them", so that row's `include-if` must stay `v2oss` and,
+// since no page version equals `v2oss`, it renders on NO page. Without the
+// keepVersion protection in reuse.html the (broadened, both-forms) remap rewrites
+// its `v2oss → v2` too — exactly like the plain gated row — and the row wrongly
+// appears on v2. The KEEP assertions below fail in that case. This is the shape
+// that regressed kgateway's github-branch.md httpbin URLs (keepVersion
+// enterprise tokens shifted by the remap).
 
 const IS_FIXTURE_TARGET = target.name.startsWith("docs-theme-extras-fixture");
 
@@ -35,6 +45,7 @@ const V1_PAGE = path.join(TEST_PRODUCT_ROOT, "v1/version-remap/index.html");
 
 const ALWAYS = "MARKER_REMAP_ALWAYS_KEY";
 const GATED = "MARKER_REMAP_GATED_KEY";
+const KEEP = "MARKER_REMAP_KEEP_KEY";
 
 // The rendered article body only, minus the copy-as-markdown <script> embed
 // (raw markdown that would false-positive on the leak/token checks).
@@ -60,8 +71,14 @@ test.describe("reuse.html OSS→enterprise version remap (percent-form block)", 
     const body = bodyHtml(V2_PAGE);
     const rows = tableRows(body);
 
-    // header + ungated + gated = 3 rows.
-    expect(rows.length, "expected header + 2 data rows on v2").toBe(3);
+    // header + ungated + gated = 3 rows. The keepVersion row must NOT be here:
+    // keepVersion prevents the remap, so its token stays `v2oss` and it renders
+    // on no page. If it leaked in (remap ignored keepVersion) this would be 4.
+    expect(rows.length, "expected header + 2 data rows on v2 (keepVersion row excluded)").toBe(3);
+    expect(
+      body,
+      "keepVersion row leaked onto v2 — the OSS→enterprise remap wrongly rewrote its v2oss token to v2 instead of honoring keepVersion",
+    ).not.toContain(KEEP);
     expect(body).toContain(ALWAYS);
     expect(
       body,
@@ -85,6 +102,10 @@ test.describe("reuse.html OSS→enterprise version remap (percent-form block)", 
       body,
       "gated row leaked onto v1 — the remapped include-if should not match v1",
     ).not.toContain(GATED);
+    expect(
+      body,
+      "keepVersion row leaked onto v1 — its v2oss token should match no page",
+    ).not.toContain(KEEP);
     expect(tableRows(body).length, "expected header + 1 data row on v1").toBe(2);
   });
 
