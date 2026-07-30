@@ -24,11 +24,12 @@
   {{- with .Site.LanguagePrefix -}}
     {{- $relURL = replace $relURL (printf "%s/" .) "/" -}}
   {{- end -}}
-  {{- with findRE `(?:kgateway|agentgateway|gateway|envoy)/(\d+\.\d+\.x|latest|main)` $relURL 1 -}}
+  {{- /* Versions are either `X.Y.x` (2.3.x) or fully qualified `X.Y.Z` (2026.7.1, LTS). */ -}}
+  {{- with findRE `(?:kgateway|agentgateway|gateway|envoy)/(\d+\.\d+\.(?:x|\d+)|latest|main)` $relURL 1 -}}
     {{- $ver = replaceRE `^.*/` "" (index . 0) -}}
   {{- end -}}
   {{- if not $ver -}}
-    {{- with findRE `^/(\d+\.\d+\.x|latest|main)` $relURL 1 -}}
+    {{- with findRE `^/(\d+\.\d+\.(?:x|\d+)|latest|main)` $relURL 1 -}}
       {{- $ver = index . 0 | strings.TrimPrefix "/" -}}
     {{- end -}}
   {{- end -}}
