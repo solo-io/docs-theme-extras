@@ -22,7 +22,7 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
-## [Unreleased]
+## [v0.1.24] — 2026-07-31
 
 ### Fix — infer fully qualified (LTS) versions in `link-hextra` (`layouts/_shortcodes/link-hextra.html`, `tests/link-hextra-lts-version.spec.ts`)
 
