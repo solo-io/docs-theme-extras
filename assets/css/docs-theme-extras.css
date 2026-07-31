@@ -80,6 +80,35 @@
   color: #d1d5db;
 }
 
+/* Links in the banner text (markdown links in [[params.versions]].banner).
+   The banner renders outside `.content` (docs/single.html, docs/list.html),
+   so the `.content a` rules — weight above, brand color in
+   brand-{oss,enterprise}.css — never reach it, and Tailwind's preflight reset
+   (`a { color: inherit; text-decoration: inherit }`) leaves the anchor
+   painted in the banner's own body color with no underline. That is a link
+   which is clickable but indistinguishable from the surrounding sentence.
+   Paint from the brand's runtime primary var, which both brand layers
+   redefine under `.dark`, and underline unconditionally so the affordance
+   still reads on the tinted banner background. */
+.version-banner a {
+  color: var(--theme-primary);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.version-banner a:hover {
+  color: var(--theme-primary-hover, var(--theme-primary));
+  text-decoration: none;
+}
+
+/* --theme-primary-hover is defined only in the brand layers' `:root`, not
+   their `.dark` block. Reusing the light-mode hover on the dark banner would
+   darken the link toward the background, so hold the resting color instead. */
+:where(.dark, .dark *) .version-banner a:hover {
+  color: var(--theme-primary);
+}
+
 /* ── Alerts and callouts ─────────────────────────────────────────────── */
 /* Matches old docs-theme-lotus alert styling with Material Icons */
 .solo-alert {

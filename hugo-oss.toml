@@ -210,7 +210,7 @@ pageContextMode = "siteParams"
   dropdown = "main (dev)"
   linkVersion = "main"
   url = "/test/main"
-  banner = "This version of the documentation is currently under development. "
+  banner = "This version of the documentation is currently under development. See the [v2 docs](/test/v2/) or the [upstream project](https://github.com/solo-io/docs)."
   product = "test"
   productName = "Docs framework test fixture"
 
