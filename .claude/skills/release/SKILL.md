@@ -44,9 +44,17 @@ grep "docs-theme-extras vX.Y.Z h1:" go.sum   # hash should match across all repo
 
 Notes:
 - `hugo mod get` leaves the **old version's lines in `go.sum`**. They're harmless
-  (go.sum keeps historical hashes). Only run `hugo160 mod tidy` to prune them if
-  asked — tidy can also churn the *other* module pins (`kgateway.dev`,
-  `ambientmesh.io`) in the `docs` repo, so don't do it unopted.
+  (go.sum keeps historical hashes) and the build resolves fine. If a clean go.sum
+  matters, remove the two stale `vX.Y.(Z-1)` lines **by hand** — do NOT reach for
+  `tidy`.
+- **Never run `hugo160 mod tidy` (or `go mod tidy`) to prune the pin.** In the
+  `docs` hub these modules (`docs-theme-extras`, `kgateway.dev`, `ambientmesh.io`)
+  are declared as **Hugo module imports in the hugo config, not Go source
+  imports**, so the Go tooling treats them as unused and `tidy` **deletes the
+  entire `require` block** — not just churn, it drops all three pins and breaks the
+  build. Same trap applies to any consumer whose extras pin is `// indirect`. If
+  you run it by reflex, `git checkout go.mod go.sum` and redo with `hugo mod get`
+  only.
 - Leave the changes local. Do **not** commit or push consumer-repo changes
   automatically — that's a user action (see the push rule below).
 
@@ -54,7 +62,7 @@ Notes:
 
 Tag convention: `vX.Y.Z-beta.N`. Betas increment `N` (`-beta.1`, `-beta.2`, …);
 the final release drops the suffix (`vX.Y.Z`). Both beta and final tags are cut
-the same way, from the current release branch (e.g. `kkb-release-next`).
+the same way, from the current release branch (e.g. `release-next`).
 
 **Pushing a tag is the ONLY push Claude is allowed to do on its own.** Everything
 else (branch commits, `git push` of branches, opening PRs) waits for an explicit
