@@ -71,14 +71,13 @@ document.addEventListener('DOMContentLoaded', function () {
      the active chip the first time the row gains width so it never starts hidden.
      The drawer is display:none until opened, so widths are 0 until then; a
      ResizeObserver recomputes when the row first gains width. */
-  function wireScroller(scroller) {
+  function wireScroller(scroller, signal) {
     var track = scroller.querySelector('[data-scroll-track]');
     var prev = scroller.querySelector('.sidebar-mobile-scroll-prev');
     var next = scroller.querySelector('.sidebar-mobile-scroll-next');
     if (!track || !prev || !next) return;
     var centered = false;
     function update() {
-      if (!track.isConnected) return; // an AJAX swap may have detached this row
       var max = track.scrollWidth - track.clientWidth;
       var atStart = track.scrollLeft <= 1;
       var atEnd = track.scrollLeft >= max - 1;
@@ -92,7 +91,7 @@ document.addEventListener('DOMContentLoaded', function () {
       track.classList.toggle('scroll-fade-end', !atEnd);
     }
     function centerActive() {
-      if (centered || !track.clientWidth || !track.isConnected) return;
+      if (centered || !track.clientWidth) return;
       var active = track.querySelector(
         '.sidebar-mobile-version-active, .sidebar-mobile-tab-active'
       );
@@ -105,10 +104,10 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     prev.addEventListener('click', function () {
       track.scrollBy({ left: -track.clientWidth * 0.7, behavior: 'smooth' });
-    });
+    }, { signal: signal });
     next.addEventListener('click', function () {
       track.scrollBy({ left: track.clientWidth * 0.7, behavior: 'smooth' });
-    });
+    }, { signal: signal });
     // Center a chip when it's tapped, so the selected version/tab slides into
     // the middle of the row instead of staying half-hidden behind an arrow.
     track.addEventListener('click', function (e) {
@@ -120,11 +119,17 @@ document.addEventListener('DOMContentLoaded', function () {
         left: (cr.left - tr.left) - (tr.width - cr.width) / 2,
         behavior: 'smooth',
       });
-    });
-    track.addEventListener('scroll', update, { passive: true });
-    window.addEventListener('resize', update);
+    }, { signal: signal });
+    track.addEventListener('scroll', update, { passive: true, signal: signal });
+    /* The window listener and the ResizeObserver are the two registrations that
+       do NOT die with the markup when a swap replaces the drawer's innerHTML —
+       window outlives it, and an observer keeps its detached target alive. Both
+       are torn down explicitly in bindDrawer. */
+    window.addEventListener('resize', update, { signal: signal });
     if (window.ResizeObserver) {
-      new ResizeObserver(function () { centerActive(); update(); }).observe(track);
+      var ro = new ResizeObserver(function () { centerActive(); update(); });
+      ro.observe(track);
+      boundObservers.push(ro);
     }
     centerActive();
     update();
@@ -168,7 +173,45 @@ document.addEventListener('DOMContentLoaded', function () {
      its drawer nav, and swap it in place so the reader can keep picking section
      -> version -> topic. Any failure falls back to plain navigation, so the chip
      always does something. Below the sidebar breakpoint only. */
+  /* Monotonic token identifying the most recent swap request. The chip rows sit
+     OUTSIDE .sidebar-nav-wrapper (the only thing .drawer-loading dims), and even
+     with the lock widened below, taps can still land between the click and the
+     class being applied. Two in-flight fetches are therefore possible, and they
+     can resolve out of order — without a token the earlier response would win
+     and the drawer would show a tree the reader did not pick last. Each request
+     claims a token; a response only applies if it still holds the latest one. */
+  var swapToken = 0;
+
+  /* The drawer's own markup, as the current page rendered it, snapshotted before
+     the FIRST swap of a session.
+
+     A swap changes only the drawer — the page underneath, its URL, and the
+     navbar's version dropdown all still belong to the version the reader
+     started on. That divergence is fine while the drawer is open (the reader is
+     mid-selection and will commit by tapping a topic), but it must not outlive
+     the drawer: closing without picking a topic is a cancel, and leaving the
+     swapped tree in place would tell a reader who reopens the drawer that they
+     are on a version they are not.
+
+     So closing RESETS rather than commits. Commit-on-close was the alternative
+     and is rejected: it would navigate a reader who only wanted to peek at
+     another version's contents. Reset can never produce a surprising
+     navigation, so it fails safe. Tapping a topic still commits normally —
+     that path is a real navigation and never reaches this code. */
+  var pristineDrawer = null;
+
+  function restoreDrawer(panel) {
+    if (pristineDrawer === null) return; // never swapped; nothing to undo
+    swapToken++; // invalidate any in-flight swap so it can't repaint after us
+    panel.classList.remove('drawer-loading');
+    panel.innerHTML = pristineDrawer;
+    pristineDrawer = null;
+    bindDrawer(panel);
+  }
+
   function swapDrawer(href, panel) {
+    if (pristineDrawer === null) pristineDrawer = panel.innerHTML;
+    var token = ++swapToken;
     panel.classList.add('drawer-loading');
     fetch(href, { credentials: 'same-origin' })
       .then(function (r) {
@@ -176,6 +219,7 @@ document.addEventListener('DOMContentLoaded', function () {
         return r.text();
       })
       .then(function (html) {
+        if (token !== swapToken) return; // superseded by a later tap
         var next = new DOMParser()
           .parseFromString(html, 'text/html')
           .querySelector('.sidebar-mobile-panel');
@@ -183,8 +227,20 @@ document.addEventListener('DOMContentLoaded', function () {
         panel.innerHTML = next.innerHTML;
         panel.classList.remove('drawer-loading');
         bindDrawer(panel);
+        /* innerHTML replacement drops focus to <body>. Move it to the swapped-in
+           nav so keyboard and screen-reader users stay inside the drawer they
+           are still working in, and announce the change since no navigation
+           occurred to do it for them. */
+        var nav = panel.querySelector('.sidebar-nav');
+        if (nav) {
+          nav.setAttribute('tabindex', '-1');
+          nav.focus({ preventScroll: true });
+        }
       })
-      .catch(function () { window.location.href = href; });
+      .catch(function () {
+        if (token !== swapToken) return; // a later tap owns the drawer now
+        window.location.href = href;
+      });
   }
   function onSectionVersionClick(e) {
     if (window.innerWidth >= 1280) return; // desktop: chips are hidden; navigate
@@ -195,22 +251,61 @@ document.addEventListener('DOMContentLoaded', function () {
     swapDrawer(href, panel);
   }
 
-  /* (Re)bind every interactive piece within a drawer root. Runs on load and
-     again after each AJAX swap (which replaces the drawer's innerHTML, dropping
-     the previous listeners). */
+  /* Teardown handles for the CURRENT binding. Listeners registered on elements
+     inside the drawer die with the markup when a swap replaces innerHTML, but
+     the window listener and the ResizeObserver in wireScroller do not: window
+     outlives the swap, and an observer holds its detached target alive. Since
+     bindDrawer now re-runs on every swap AND on every drawer reset, those would
+     accumulate without bound over a session of version-hopping. One
+     AbortController per binding makes teardown deterministic — every listener
+     gets its signal, and the previous controller is aborted before rebinding —
+     which is also why wireScroller no longer needs isConnected guards. */
+  var boundAbort = null;
+  var boundObservers = [];
+
+  /* (Re)bind every interactive piece within a drawer root, releasing whatever
+     the previous call registered. Runs on load, after each AJAX swap, and after
+     a reset-on-close restore. */
   function bindDrawer(root) {
+    if (boundAbort) boundAbort.abort();
+    for (var o = 0; o < boundObservers.length; o++) boundObservers[o].disconnect();
+    boundObservers = [];
+    boundAbort = window.AbortController ? new AbortController() : null;
+    var signal = boundAbort ? boundAbort.signal : undefined;
+
     var scrollers = root.querySelectorAll('.sidebar-mobile-scroller');
-    for (var i = 0; i < scrollers.length; i++) wireScroller(scrollers[i]);
+    for (var i = 0; i < scrollers.length; i++) wireScroller(scrollers[i], signal);
     var tabs = root.querySelectorAll('.sidebar-mobile-tab-link');
-    for (var j = 0; j < tabs.length; j++) tabs[j].addEventListener('click', onTabClick);
+    for (var j = 0; j < tabs.length; j++) {
+      tabs[j].addEventListener('click', onTabClick, { signal: signal });
+    }
     var chips = root.querySelectorAll(
       '.sidebar-mobile-section-link, .sidebar-mobile-version-link'
     );
-    for (var k = 0; k < chips.length; k++) chips[k].addEventListener('click', onSectionVersionClick);
+    for (var k = 0; k < chips.length; k++) {
+      chips[k].addEventListener('click', onSectionVersionClick, { signal: signal });
+    }
   }
 
   document.addEventListener('DOMContentLoaded', function () {
     var panel = document.querySelector('.sidebar-mobile-panel');
-    if (panel) bindDrawer(panel);
+    if (!panel) return;
+    bindDrawer(panel);
+
+    /* Watch the open/close class rather than wrapping toggleMobileSidebar /
+       closeMobileSidebar: those are globals that consumers' nav templates call
+       inline, and some (kgw's breadcrumb trigger, agw's nav.html) manipulate the
+       drawer themselves. Observing the class catches every close path, including
+       ones this file doesn't know about. */
+    if (!window.MutationObserver) return;
+    var wasOpen = panel.classList.contains('mobile-sidebar-open');
+    new MutationObserver(function () {
+      var isOpen = panel.classList.contains('mobile-sidebar-open');
+      // Only the open -> closed edge. restoreDrawer itself removes
+      // .drawer-loading, which re-enters here harmlessly (wasOpen is already
+      // false by then, so no second restore).
+      if (wasOpen && !isOpen) restoreDrawer(panel);
+      wasOpen = isOpen;
+    }).observe(panel, { attributes: true, attributeFilter: ['class'] });
   });
 })();

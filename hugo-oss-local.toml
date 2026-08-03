@@ -151,6 +151,14 @@ pageContextMode = "siteParams"
 
 [[params.versions]]
   version = "v1"
+  # Second ossVersion mapping, used only by the keepVersion collision probe in
+  # conrefs/test/version-remap.md: it makes the token `v3` — which is also a
+  # real version in this fixture — remap to `v1`. That is the production shape
+  # that broke kgateway's github-branch.md (a keepVersion block whose enterprise
+  # token collides with another entry's ossVersion). `v3` is used in no other
+  # include-if/exclude-if in the fixture, so the mapping is inert everywhere
+  # else. See tests/reuse-version-remap.spec.ts.
+  ossVersion = "v3"
   dropdown = "v1"
   linkVersion = "v1"
   url = "/v1"
@@ -162,7 +170,11 @@ pageContextMode = "siteParams"
   dropdown = "main (dev)"
   linkVersion = "main"
   url = "/main"
-  banner = "This version of the documentation is currently under development. See the [v2 docs](/test/v2/) or the [upstream project](https://github.com/solo-io/docs)."
+# The -local configs serve at baseURL "/" (the production ones use "/test"),
+  # so the internal banner link must be root-relative WITHOUT the /test prefix or
+  # it 404s in `make server-oss` — which reads as exactly the "banner link is
+  # broken" report this banner styling exists to prevent.
+  banner = "This version of the documentation is currently under development. See the [v2 docs](/v2/) or the [upstream project](https://github.com/solo-io/docs)."
   product = "test"
   productName = "Docs framework test fixture"
 

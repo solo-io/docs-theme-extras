@@ -1099,22 +1099,35 @@ hr.footnotes-sep,
 .table-wrapper.table-capped td {
   max-width: 24rem;
 }
-/* On phone-width viewports, `table-layout:auto; width:100%` shrinks every
-   column to a few characters, and the `overflow-wrap: anywhere` above then
-   folds an unbreakable token (registry URL, dotted key) ONE CHARACTER PER
-   LINE instead of overflowing — so the wrapper's `overflow-x:auto` never
-   scrolls. Below the breakpoint, size the table to its content and stop
-   char-folding so the wrapper scrolls horizontally, the standard mobile
-   pattern for wide reference tables. Breakpoint matches main.css. */
+/* At phone width, `table-layout:auto; width:100%` squeezes every column of a
+   capped table toward nothing, and `overflow-wrap: anywhere` above then folds
+   the content ONE CHARACTER PER LINE into a vertical strip. Measured at 375px
+   on the fixture's two capped tables: the registry token rendered at 1
+   character per line over 50 lines, and the prose Description cell at 1
+   character per line over 146 lines.
+
+   The fix is a ONE-KEYWORD change. `anywhere` and `break-word` differ in
+   exactly the property that matters: `anywhere` lets a cell's intrinsic
+   MIN-CONTENT width collapse to a single glyph (which is what lets the column
+   be squeezed that far), while `break-word` leaves min-content at the longest
+   unbreakable token. A table can never lay out narrower than its min-content,
+   so `break-word` gives every column a real floor. Measured at 375px with this
+   rule: token 13 chars/line over 4 lines, prose 10 chars/line over 21 lines,
+   and NO horizontal scroll on either.
+
+   Do NOT reach for `white-space: nowrap` here. `.table-capped` is applied to
+   EVERY 3+ column table (render-table.html) — the
+   `Field | Type | Default | Description` shape whose Description column holds
+   prose: across kgateway-oss 25% of capped-table cells exceed 60 characters
+   and the longest runs ~2750. Forcing those onto one line measured 209
+   chars/line on a single 1459px line at a 5.7x-viewport scroll here, and 33x
+   on the real agentgateway airgap / CRD shapes. Prose must keep wrapping;
+   only the collapse floor needed fixing. `tests/table-display.spec.ts` pins
+   both halves. Breakpoint matches main.css. */
 @media (max-width: 767px) {
-  .table-wrapper.table-capped table {
-    width: max-content;
-  }
   .table-wrapper.table-capped th,
   .table-wrapper.table-capped td {
-    max-width: none;
-    white-space: nowrap;
-    overflow-wrap: normal;
+    overflow-wrap: break-word;
   }
 }
 .dark .table-wrapper th,
@@ -2284,7 +2297,14 @@ details[open].hextra-search-other-versions > summary::before {
   flex-grow: 1;
 }
 /* Brief dim + input-lock while the AJAX section/version swap (mobile-nav.js)
-   fetches the target drawer and swaps it in. */
+   fetches the target drawer and swaps it in. This must cover
+   .sidebar-mobile-header as well as the tree: the section and version chips
+   live in the header, ABOVE .sidebar-nav-wrapper, so locking only the wrapper
+   left the very controls that start a swap clickable during one — a dimmed
+   tree with live chips above it, and two racing fetches. (mobile-nav.js also
+   carries a request token so a superseded response can never win, since a tap
+   can still land before this class is applied.) */
+.sidebar-mobile-panel.drawer-loading .sidebar-mobile-header,
 .sidebar-mobile-panel.drawer-loading .sidebar-nav-wrapper {
   opacity: 0.45;
   pointer-events: none;

@@ -12,14 +12,20 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Supersede in-progress runs on the same ref: a new push to a PR branch (or
-# to main) cancels its own older, still-running run instead of stacking a
-# second one. Keyed on github.ref so each PR cancels only its own runs, never
-# another PR's. A hung run (see the install-step timeout below) is likewise
-# cleared by the next push rather than lingering to the job timeout.
+# Supersede in-progress runs on the same PR: a new push to a PR branch cancels
+# its own older, still-running run instead of stacking a second one. Keyed on
+# github.ref so each PR cancels only its own runs, never another PR's. A hung
+# run (see the install-step timeout below) is likewise cleared by the next push
+# rather than lingering to the job timeout.
+#
+# Deliberately NOT applied to push:main. Cancellation there is keyed on the
+# branch, not the commit, so two merges in quick succession would cancel the
+# first one's run — leaving a merged commit on main with no completed sweep.
+# Main is also the only place some coverage is guaranteed to have run, so its
+# runs must be allowed to finish.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -29,7 +35,7 @@ env:
   NODE_VERSION: '20'
 
 jobs:
-  test-all:
+  brand:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -43,16 +49,21 @@ jobs:
         brand: [oss, enterprise]
 
     env:
-      # On PRs, run only chromium for the cross-browser spec and install only
-      # the chromium binary — firefox + webkit are the slow engines to fetch
-      # and run, and chromium already covers the spec. The full three-engine
-      # sweep runs on push:main and workflow_dispatch.
-      CROSS_BROWSER: ${{ github.event_name == 'pull_request' && 'chromium' || 'all' }}
-      PW_BROWSERS: ${{ github.event_name == 'pull_request' && 'chromium' || 'chromium firefox webkit' }}
-      PW_BROWSER_TAG: ${{ github.event_name == 'pull_request' && 'chromium' || 'all' }}
-      # Each runner now handles a single brand, so the browser-heavy projects
-      # can use more workers than the old shared-job count of 4.
-      PW_WORKERS: '6'
+      # All three engines run on PRs, not just on main. cross-browser.spec.ts is
+      # a single 11-test file, the binaries come from the actions/cache below, so
+      # the marginal cost next to a ~1600-test suite is small — and a PR is where
+      # someone actually reads a failure. Restricting it to push:main would make
+      # main the only place an engine-specific regression can surface, i.e. after
+      # merge. If PR wall-clock needs trimming later, take it from the install
+      # step, not from dropping engines.
+      PW_BROWSERS: 'chromium firefox webkit'
+      # ubuntu-latest is a 4-core runner for public repos. The brand matrix above
+      # already halves wall-clock by giving each brand its own runner; also
+      # raising the worker count oversubscribes those cores, and firefox is the
+      # engine that shows it first (observed locally as page.goto timeouts on the
+      # everything page under high parallelism, clean at low). Keep this at or
+      # below the core count.
+      PW_WORKERS: '4'
 
     steps:
       - uses: actions/checkout@v7
@@ -89,16 +100,16 @@ jobs:
       - name: Install npm dependencies
         run: npm ci || npm install
 
-      # Cache key includes the browser set (PW_BROWSER_TAG) so the PR
-      # chromium-only cache and the main all-engines cache never collide — a
-      # main run must not restore a chromium-only cache and then skip fetching
-      # firefox/webkit on the cache-hit path.
+      # Every run installs the same three engines now, so the key needs no
+      # browser-set component (the PW_BROWSER_TAG split existed only to keep a
+      # PR's chromium-only cache from being restored by a main run that needed
+      # all three).
       - name: Cache Playwright browsers
         id: playwright-cache
         uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ env.PW_BROWSER_TAG }}-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
 
       # timeout-minutes guards the `sudo apt-get` that --with-deps/install-deps
       # runs: on a bad runner it can hang on a dpkg lock or a stalled mirror.
@@ -139,3 +150,22 @@ jobs:
             .build-enterprise.log
           retention-days: 7
           if-no-files-found: ignore
+
+  # Single stable status context for branch protection. The matrix above reports
+  # as "brand (oss)" / "brand (enterprise)", so requiring those directly would
+  # mean re-pointing branch protection every time the matrix changes shape. This
+  # job collapses them into one required check named `test-all` — the name the
+  # rule already used before the matrix split.
+  #
+  # `if: always()` so this runs even when a matrix leg fails; the step then
+  # asserts the aggregate result, and `cancelled`/`skipped` fail too (only a
+  # literal success passes).
+  test-all:
+    needs: [brand]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assert every brand leg succeeded
+        run: |
+          echo "brand result: ${{ needs.brand.result }}"
+          [ "${{ needs.brand.result }}" = "success" ]

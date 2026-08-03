@@ -102,10 +102,12 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
       testMatch: /cross-browser\.spec\.ts$/,
     },
-    // Firefox + WebKit are the expensive engines to install and run. On PRs
-    // CI sets CROSS_BROWSER=chromium to skip them (chromium already covers the
-    // cross-browser spec); the full three-engine sweep runs on push:main and
-    // workflow_dispatch. Locally (CROSS_BROWSER unset) all three always run.
+    // Firefox + WebKit are the expensive engines to install and run, so
+    // CROSS_BROWSER=chromium drops them and leaves chromium covering the spec.
+    // This is an OPT-IN escape hatch for a fast local iteration loop — CI does
+    // NOT set it. Every CI run (PR and push:main alike) sweeps all three, so an
+    // engine-specific regression is caught before merge rather than after; see
+    // the PW_BROWSERS comment in .github/workflows/test.yml.
     ...(process.env.CROSS_BROWSER === "chromium"
       ? []
       : [

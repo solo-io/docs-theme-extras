@@ -201,6 +201,14 @@ pageContextMode = "siteParams"
 
 [[params.versions]]
   version = "v1"
+  # Second ossVersion mapping, used only by the keepVersion collision probe in
+  # conrefs/test/version-remap.md: it makes the token `v3` — which is also a
+  # real version in this fixture — remap to `v1`. That is the production shape
+  # that broke kgateway's github-branch.md (a keepVersion block whose enterprise
+  # token collides with another entry's ossVersion). `v3` is used in no other
+  # include-if/exclude-if in the fixture, so the mapping is inert everywhere
+  # else. See tests/reuse-version-remap.spec.ts.
+  ossVersion = "v3"
   dropdown = "v1"
   linkVersion = "v1"
   url = "/test/v1"

@@ -42,10 +42,17 @@ const IS_FIXTURE_TARGET = target.name.startsWith("docs-theme-extras-fixture");
 
 const V2_PAGE = path.join(TEST_PRODUCT_ROOT, "v2/version-remap/index.html");
 const V1_PAGE = path.join(TEST_PRODUCT_ROOT, "v1/version-remap/index.html");
+const V3_PAGE = path.join(TEST_PRODUCT_ROOT, "v3/version-remap/index.html");
 
 const ALWAYS = "MARKER_REMAP_ALWAYS_KEY";
 const GATED = "MARKER_REMAP_GATED_KEY";
 const KEEP = "MARKER_REMAP_KEEP_KEY";
+// The collision pair. The v1 entry sets ossVersion = "v3", so the remap
+// rewrites the token `v3` to `v1`. Both rows below carry that same token and
+// differ ONLY in keepVersion, so together they isolate the guard: the plain row
+// must move to v1, the keepVersion row must stay on v3.
+const COLLIDE_PLAIN = "MARKER_REMAP_COLLIDE_PLAIN";
+const COLLIDE_KEEP = "MARKER_REMAP_COLLIDE_KEEP";
 
 // The rendered article body only, minus the copy-as-markdown <script> embed
 // (raw markdown that would false-positive on the leak/token checks).
@@ -93,6 +100,11 @@ test.describe("reuse.html OSS→enterprise version remap (percent-form block)", 
     // attributes on <td> (the first column carries a white-space style) and be
     // quote-agnostic in case a consumer build is minified.
     expect(gatedRow).toMatch(/<td\b[^>]*>\s*<code>MARKER_REMAP_GATED_KEY<\/code>\s*<\/td>/);
+
+    // Neither collision row belongs on v2: the plain one remaps v3 to v1, the
+    // keepVersion one stays v3.
+    expect(body, `${COLLIDE_PLAIN} leaked onto v2`).not.toContain(COLLIDE_PLAIN);
+    expect(body, `${COLLIDE_KEEP} leaked onto v2`).not.toContain(COLLIDE_KEEP);
   });
 
   test("v1: the same row stays excluded (filtering still works after the remap)", () => {
@@ -106,7 +118,46 @@ test.describe("reuse.html OSS→enterprise version remap (percent-form block)", 
       body,
       "keepVersion row leaked onto v1 — its v2oss token should match no page",
     ).not.toContain(KEEP);
+    // The plain collision row DOES belong here: its `v3` token is v1's
+    // ossVersion, so the remap rewrites it to v1. This is the control that
+    // proves the collision mapping is actually live — without it, the
+    // keepVersion assertion on v3 could pass vacuously.
+    expect(
+      body,
+      `${COLLIDE_PLAIN} missing on v1 — the v3→v1 ossVersion remap did not fire, so the collision probe is inert`,
+    ).toContain(COLLIDE_PLAIN);
+    // …and the keepVersion row carrying the SAME token must not have followed
+    // it. This is the exact production shape from kgateway's github-branch.md.
+    expect(
+      body,
+      `${COLLIDE_KEEP} leaked onto v1 — reuse.html remapped a keepVersion token (v3→v1) instead of protecting it`,
+    ).not.toContain(COLLIDE_KEEP);
     expect(tableRows(body).length, "expected header + 1 data row on v1").toBe(2);
+  });
+
+  test("v3: the keepVersion row survives the colliding remap and renders on its own version", () => {
+    // The POSITIVE half. A negative-only assertion ("this row appears nowhere")
+    // is satisfied by the row being dropped for any reason at all — including
+    // the guard corrupting the block so version.html can no longer read its
+    // condition. This asserts the row lands where keepVersion says it should.
+    const body = bodyHtml(V3_PAGE);
+    expect(body).toContain(ALWAYS);
+    expect(
+      body,
+      `${COLLIDE_KEEP} missing on v3 — its keepVersion token was remapped away (or the guard's attribute rename was not restored)`,
+    ).toContain(COLLIDE_KEEP);
+    // It must be rendered prose, not a leaked shortcode tag or a raw token.
+    expect(body, "collision keepVersion block leaked its shortcode tag").not.toMatch(
+      /\{\{[<%]\s*\/?\s*version/,
+    );
+    expect(body).toMatch(
+      new RegExp(`<p>[^<]*${COLLIDE_KEEP}`),
+    );
+    // The plain block with the same token was remapped to v1, so not here.
+    expect(body, `${COLLIDE_PLAIN} leaked onto v3`).not.toContain(COLLIDE_PLAIN);
+    expect(body, "v2oss-gated rows should not reach v3").not.toContain(GATED);
+    expect(body, "v2oss keepVersion row should not reach v3").not.toContain(KEEP);
+    expect(tableRows(body).length, "expected header + 1 data row on v3").toBe(2);
   });
 
   test("no raw version shortcode or placeholder token leaks into the rendered body", () => {

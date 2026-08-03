@@ -367,7 +367,7 @@
             {{- with site.GetPage (printf "%s%s" $vr.lookupPath .) -}}{{- $navRoot = . -}}{{- end -}}
           {{- end -}}
           <nav class="sidebar-nav" data-tab-panel="{{ $activeTab }}">
-            {{- template "render-sidebar-tree" (dict "page" $navRoot "current" $context "versionPrefix" $versionPrefix "depth" 0) -}}
+            {{- template "render-sidebar-tree" (dict "page" $navRoot "current" $context "versionPrefix" $versionPrefix "depth" 0 "emptyRootLink" $tabsEnabled) -}}
           </nav>
           {{- /* Mobile only: pre-render the OTHER tabs' trees as hidden panels
                  so tapping a tab in the drawer swaps the link structure in place
@@ -384,7 +384,7 @@
                   {{- with site.GetPage (printf "%s%s" $vr.lookupPath .) -}}{{- $panelRoot = . -}}{{- end -}}
                 {{- end -}}
                 <nav class="sidebar-nav sidebar-mobile-tree-panel" data-tab-panel="{{ .name }}" aria-hidden="true">
-                  {{- template "render-sidebar-tree" (dict "page" $panelRoot "current" $context "versionPrefix" $versionPrefix "depth" 0) -}}
+                  {{- template "render-sidebar-tree" (dict "page" $panelRoot "current" $context "versionPrefix" $versionPrefix "depth" 0 "emptyRootLink" true) -}}
                 </nav>
               {{- end -}}
             {{- end -}}
@@ -438,6 +438,10 @@
   {{- $current := .current -}}
   {{- $versionPrefix := .versionPrefix -}}
   {{- $depth := .depth | default 0 -}}
+  {{- /* Only a tab root asks for the empty-subtree fallback below. Defaults
+         false so the non-tab sidebars keep rendering nothing for a childless
+         root, exactly as before docTabs existed. */ -}}
+  {{- $emptyRootLink := .emptyRootLink | default false -}}
   {{- $maxDepth := 4 -}}
 
   {{- if gt $depth $maxDepth -}}{{- return -}}{{- end -}}
@@ -524,7 +528,7 @@
         </li>
       {{- end -}}
     </ul>
-  {{- else if eq $depth 0 -}}
+  {{- else if and $emptyRootLink (eq $depth 0) -}}
     {{- /* Single-page tab: the tab's directory holds only its landing (_index)
            with no child pages, so the loop above renders nothing. Without this
            the left nav — and the mobile drawer's panel for this tab — would be
