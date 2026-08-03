@@ -47,6 +47,13 @@ function sidebarLinks(html: string): string[] {
   );
 }
 
+// The class list of the sidebar <aside> — where the per-tab `hideSidebar` flag
+// lands as a `sidebar-desktop-hidden` marker.
+function sidebarAside(html: string): string {
+  const m = html.match(/<aside class="(sidebar-container[^"]*)"/);
+  return m ? m[1] : "";
+}
+
 // Pull the tab band's inner markup so we can read the tab labels + active tab.
 function tabBand(html: string): string {
   const m = html.match(/<nav class="docs-tabs"[^>]*>([\s\S]*?)<\/nav>/);
@@ -170,6 +177,36 @@ test.describe("tab navigation — ENABLED (v3, directory/id tabs)", () => {
     expect(panel![1], "Changelog mobile panel has no link to tap").toContain(
       '/test/v3/changelog/',
     );
+  });
+
+  test("hideSidebar marks ONLY the flagged tab's pages for the desktop-only nav hide", () => {
+    // Per-tab `hideSidebar = true` (set on Changelog in hugo-*.toml) drops the
+    // left nav at the desktop breakpoint and up. sidebar.html's job is just the
+    // marker class — the hiding is CSS, asserted in docs-tabs-sidebar.spec.ts.
+    // What matters here is that the flag follows the ACTIVE tab: the same
+    // config must NOT mark a page owned by a tab that didn't set it.
+    const clHtml = readIfExists(fixturePath("v3", "changelog", "index.html"));
+    test.skip(clHtml === null, "fixture v3/changelog not built");
+    expect(
+      sidebarAside(clHtml!),
+      "hideSidebar tab's aside is not marked sidebar-desktop-hidden",
+    ).toContain("sidebar-desktop-hidden");
+    // Still the drawer below the breakpoint — the panel class and the chips have
+    // to survive, or the tab is a dead end on mobile.
+    expect(
+      sidebarAside(clHtml!),
+      "hideSidebar dropped the mobile drawer panel class",
+    ).toContain("sidebar-mobile-panel");
+    expect(clHtml, "hideSidebar tab lost its mobile tab-chip row").toContain(DRAWER_TABS);
+
+    for (const page of [apiPage, docsPage]) {
+      const html = readIfExists(page);
+      test.skip(html === null, `fixture ${page} not built`);
+      expect(
+        sidebarAside(html!),
+        "a tab that never set hideSidebar was marked sidebar-desktop-hidden",
+      ).not.toContain("sidebar-desktop-hidden");
+    }
   });
 
   test("mobile drawer carries the tab chips (band is hidden below the sidebar breakpoint)", () => {

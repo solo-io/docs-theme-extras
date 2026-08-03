@@ -161,6 +161,9 @@ if none is marked, the first entry is the default.
   id = "changelog"
 ```
 
+Each tab also takes an optional `hideSidebar` — see
+[Hiding the left nav on a tab](#hiding-the-left-nav-on-a-tab-hidesidebar).
+
 The config is version-agnostic — one block per product covers every version.
 Tabs render **only for a version that has two or more of these directories
 present.** A version with fewer than two tab directories shows its full,
@@ -231,6 +234,51 @@ page as hidden panels (`.sidebar-mobile-tree-panel`), so each page in a tabbed
 version carries all of that version's tab trees in its HTML. On a version with
 large per-tab trees this adds page weight — a deliberate trade for no-navigation
 tab switching on mobile.
+
+## Hiding the left nav on a tab (`hideSidebar`)
+
+Not every tab needs a tree. A tab that owns a single page — a one-page changelog,
+one generated API reference, a single "what's new" — renders a one-item left nav
+next to it, which spends a 16rem column on a link to the page you are already on.
+Set `hideSidebar = true` on that tab to drop the nav:
+
+```toml
+[[params.docTabs]]
+  name = "Documentation"
+  id = "documentation"
+  default = true
+[[params.docTabs]]
+  name = "Changelog"
+  id = "changelog"
+  hideSidebar = true     # no left nav on this tab's pages, desktop only
+```
+
+- **Per-tab, not per-site.** The flag applies to the pages the tab owns. The
+  other tabs keep their nav, and switching back to one restores it.
+- **Desktop only, deliberately.** At and above the sidebar breakpoint (`xl`,
+  1280px) the nav is hidden and the article reclaims the column, so the page
+  reads wider. **Below `xl` the drawer always renders in full**, because there
+  the sidebar *is* the drawer — the only route to the tab chips, the version
+  chips, and the other tabs' trees. Hiding it on a phone would leave the reader
+  with no way off the page.
+- **The tab band stays.** The band is what gets a reader from a nav-less tab back
+  to one that has a nav, so it renders as usual.
+- **Default is off.** Omit the key (or set `false`) and the tab keeps its nav —
+  the behavior of every tab before this flag existed, so adding it changes
+  nothing until a tab opts in.
+
+Mechanically, the flag is resolved for the *active* tab and travels on the page
+store; `sidebar.html` turns it into a `sidebar-desktop-hidden` class on the
+`<aside>`, and a single rule inside `@media (min-width: 1280px)` in
+[`docs-theme-extras.css`](./assets/css/docs-theme-extras.css) does the hiding. The
+markup is always emitted — that is what keeps the drawer intact — so the suppression
+cannot leak below the breakpoint.
+
+> [!NOTE]
+> The content column shifts left and widens when the nav is hidden, so clicking
+> into a `hideSidebar` tab moves the article. That is the point of the flag (the
+> column is reclaimed rather than left blank), but it does mean the text's left
+> edge is not in the same place on every tab. The tab band itself does not move.
 
 ---
 

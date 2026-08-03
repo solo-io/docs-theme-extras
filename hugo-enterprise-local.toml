@@ -217,6 +217,14 @@ pageContextMode = "siteParams"
 [[params.docTabs]]
   name = "Changelog"
   id = "changelog"
+  # Drop the left nav on this tab's pages at the desktop-sidebar breakpoint and
+  # up: changelog/ holds only its landing, so the desktop nav would be a
+  # one-item tree next to a full-width article. Absent (or false) on the other
+  # two tabs, which keep their nav — the default, so existing consumers are
+  # unaffected. Mobile is never affected: below the breakpoint the panel IS the
+  # slide-out drawer (tab chips, version chips, the other tabs' trees), so it
+  # always renders. Exercises tests/docs-tabs.spec.ts + docs-tabs-sidebar.spec.ts.
+  hideSidebar = true
 
 # Section-keyed versions used by tests/version-cards.spec.ts — kept in
 # sync with hugo-enterprise.toml so `make server-enterprise` matches the

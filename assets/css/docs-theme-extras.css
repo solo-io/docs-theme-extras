@@ -2362,6 +2362,26 @@ details[open].hextra-search-other-versions > summary::before {
     scrollbar-color: oklch(55.55% 0 0 / 0.4) transparent;
     scrollbar-gutter: stable;
   }
+  /* Per-tab opt-out: a docTabs tab with `hideSidebar = true` (issue
+     solo-io/docs#3164) drops the left nav on ITS pages from the desktop
+     breakpoint up, so a tab whose content is a single page (a changelog, one
+     generated API reference) gives the column back to the article instead of
+     showing a one-item tree. Set by sidebar.html on the versioned <aside>.
+
+     Desktop-only by construction: this rule lives inside the min-width query,
+     so below it the `.sidebar-mobile-panel` rules — which force
+     `display: flex !important` — still own the layout and the slide-out drawer
+     renders in full. That matters because the drawer is the ONLY way to reach
+     the tab chips, the version chips, and the other tabs' trees on mobile;
+     hiding it there would strand the reader on the current page.
+
+     `display: none` (not `visibility`/width) so the flex row reclaims the
+     16rem column. Two classes (0,2,0) outrank both `.sidebar-container`'s
+     `display: flex` above and the aside's `hx:xl:block` utility, so it wins
+     regardless of stylesheet order. */
+  .sidebar-container.sidebar-desktop-hidden {
+    display: none;
+  }
 }
 
 /* Tree lists. Depth 0 sits at the section root; deeper levels indent under

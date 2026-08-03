@@ -40,10 +40,20 @@
        ($activeId), so the left nav shows only that tab's pages and the
        directory's own node never appears. When the store is absent or reports
        disabled (no params.docTabs, or <2 present tab dirs in this version),
-       $tabsEnabled stays false and the whole version tree renders as before. */ -}}
+       $tabsEnabled stays false and the whole version tree renders as before.
+
+       $hideDesktopNav is the active tab's `hideSidebar = true`. It suppresses
+       the left nav at the desktop-sidebar breakpoint and up ONLY: the panel is
+       still rendered in full, and below that breakpoint it's the slide-out
+       drawer — the only route to the tab chips, the version chips, and the
+       other tabs' trees — so mobile always shows it. All this does here is add
+       the `sidebar-desktop-hidden` marker class; the hiding is a CSS rule
+       inside `@media (min-width: 1280px)` in docs-theme-extras.css. Doing it in
+       CSS rather than by skipping the markup is what keeps the drawer intact. */ -}}
 {{- $tabsEnabled := false -}}
 {{- $activeTab := "" -}}
 {{- $activeId := "" -}}
+{{- $hideDesktopNav := false -}}
 {{- $docTabsList := slice -}}
 {{- with $context.Store.Get "docTabs" -}}
   {{- if .enabled -}}
@@ -51,6 +61,7 @@
     {{- $activeTab = .active -}}
     {{- $activeId = .activeId -}}
     {{- $docTabsList = .tabs -}}
+    {{- if .hideSidebar -}}{{- $hideDesktopNav = true -}}{{- end -}}
   {{- end -}}
 {{- end -}}
 {{- /* When the sidebar is disabled but the caller still wants the column's
@@ -119,7 +130,7 @@
     {{- $docsSection := $vr.docsSection -}}
 
     {{- if $docsSection -}}
-      <aside class="sidebar-container hextra-sidebar-container sidebar-mobile-panel hx:order-first hx:w-64 hx:shrink-0 hx:hidden hx:xl:block hx:print:hidden">
+      <aside class="sidebar-container hextra-sidebar-container sidebar-mobile-panel{{ if $hideDesktopNav }} sidebar-desktop-hidden{{ end }} hx:order-first hx:w-64 hx:shrink-0 hx:hidden hx:xl:block hx:print:hidden">
 
         {{- /* Mobile-only product logo, pinned to the top of the slide-out
                drawer where the navbar logo would be (the drawer overlays the

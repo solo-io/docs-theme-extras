@@ -60,7 +60,12 @@
        subpage are left alone so re-routing can't double up the path. */ -}}
 {{- if in $path "reference/api" -}}
   {{- $curProduct := .Site.Params.currentProduct | default "" -}}
-  {{- $alreadyRouted := or (in $path "reference/api/kgateway") (in $path "reference/api/solo") (in $path "reference/api/portal") (in $path "reference/api/waf") (in $path "reference/api/api") (in $path "reference/api/kubernetes") -}}
+  {{- /* `reference/api-kubespec` is a sibling section, not the single-page
+         reference/api, so the substring match above catches it by accident.
+         Treating it as already-routed leaves paths like
+         /reference/api-kubespec/policies/ intact instead of mangling them into
+         /reference/api/api-kubespec/policies/. */ -}}
+  {{- $alreadyRouted := or (in $path "reference/api/kgateway") (in $path "reference/api/solo") (in $path "reference/api/portal") (in $path "reference/api/waf") (in $path "reference/api/api") (in $path "reference/api/kubernetes") (in $path "reference/api-") -}}
   {{- if not $alreadyRouted -}}
     {{- if or (eq $product "envoy") (eq $curProduct "kgateway") -}}
       {{- $path = replace $path "reference/api" "/reference/api/kgateway" -}}
@@ -68,6 +73,16 @@
       {{- $path = replace $path "reference/api" "/reference/api/api" -}}
     {{- end -}}
   {{- end -}}
+{{- end -}}
+
+{{- /* Route the OSS agentgateway CEL reference to the enterprise one. OSS splits
+       the CEL reference into /reference/cel/variables/ and
+       /reference/cel/yaml-and-examples/; the enterprise docs serve a single
+       /reference/cel/ page that carries the same anchors (for example
+       #functions-policy-all). Gated on the rebase-injected product so the OSS
+       site, which has no product param, keeps its own paths. */ -}}
+{{- if and (eq $product "agentgateway") (in $path "reference/cel/") -}}
+  {{- $path = replaceRE `reference/cel/(variables|yaml-and-examples)/?` "reference/cel/" $path -}}
 {{- end -}}
 
 {{- if or (eq .Site.BaseURL "/") (in .Site.BaseURL "localhost") -}}
