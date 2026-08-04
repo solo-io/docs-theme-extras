@@ -80,6 +80,35 @@
   color: #d1d5db;
 }
 
+/* Links in the banner text (markdown links in [[params.versions]].banner).
+   The banner renders outside `.content` (docs/single.html, docs/list.html),
+   so the `.content a` rules — weight above, brand color in
+   brand-{oss,enterprise}.css — never reach it, and Tailwind's preflight reset
+   (`a { color: inherit; text-decoration: inherit }`) leaves the anchor
+   painted in the banner's own body color with no underline. That is a link
+   which is clickable but indistinguishable from the surrounding sentence.
+   Paint from the brand's runtime primary var, which both brand layers
+   redefine under `.dark`, and underline unconditionally so the affordance
+   still reads on the tinted banner background. */
+.version-banner a {
+  color: var(--theme-primary);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.version-banner a:hover {
+  color: var(--theme-primary-hover, var(--theme-primary));
+  text-decoration: none;
+}
+
+/* --theme-primary-hover is defined only in the brand layers' `:root`, not
+   their `.dark` block. Reusing the light-mode hover on the dark banner would
+   darken the link toward the background, so hold the resting color instead. */
+:where(.dark, .dark *) .version-banner a:hover {
+  color: var(--theme-primary);
+}
+
 /* ── Alerts and callouts ─────────────────────────────────────────────── */
 /* Matches old docs-theme-lotus alert styling with Material Icons */
 .solo-alert {
@@ -696,6 +725,11 @@ pre.mermaid:not([data-processed]) {
   width: 100%;
   border-bottom: 1px solid #f0f1f3;
   background: transparent;
+  /* A little room above the tab row so the band isn't jammed against the
+     navbar's divider. The space below the tabs is the .docs-tab padding, whose
+     bottom edge lands on the band's hairline (the active underline sits on it),
+     so vertical breathing room is added here (top) and on .docs-tab (both). */
+  padding-top: 0.5rem;
 }
 /* Below the desktop-sidebar breakpoint (xl, 1280px) the persistent sidebar
    becomes the slide-in drawer, so the band is hidden and the tabs render as a
@@ -708,14 +742,16 @@ pre.mermaid:not([data-processed]) {
 .dark .docs-tabs-band {
   border-bottom-color: rgba(255, 255, 255, 0.06);
 }
+/* The band's page-width container (.docs-tabs-inner, added in docs-tabs.html)
+   matches the content column's max-width + centering, so the tab row aligns
+   with the sidebar/content rather than the viewport edge. */
 .docs-tabs {
   display: flex;
   align-items: stretch;
   gap: 1.5rem;
-  /* Left-aligned; inset to sit roughly above the sidebar's text column. */
-  padding: 0 1.5rem;
-  max-width: var(--hextra-max-page-width, 100%);
-  margin: 0 auto;
+  /* Left inset = the sidebar's text inset (nav-wrapper 1rem + link 0.75rem), so
+     the tab labels line up with the left-nav items. */
+  padding: 0 1.75rem;
   /* Let a long tab set scroll rather than wrap or overflow the viewport. */
   overflow-x: auto;
   scrollbar-width: none;
@@ -726,7 +762,7 @@ pre.mermaid:not([data-processed]) {
 .docs-tab {
   display: inline-flex;
   align-items: center;
-  padding: 0.875rem 0.125rem;
+  padding: 1.25rem 0.125rem;
   font-size: 0.9375rem;
   font-weight: 500;
   line-height: 1.2;
@@ -1062,6 +1098,37 @@ hr.footnotes-sep,
 .table-wrapper.table-capped th,
 .table-wrapper.table-capped td {
   max-width: 24rem;
+}
+/* At phone width, `table-layout:auto; width:100%` squeezes every column of a
+   capped table toward nothing, and `overflow-wrap: anywhere` above then folds
+   the content ONE CHARACTER PER LINE into a vertical strip. Measured at 375px
+   on the fixture's two capped tables: the registry token rendered at 1
+   character per line over 50 lines, and the prose Description cell at 1
+   character per line over 146 lines.
+
+   The fix is a ONE-KEYWORD change. `anywhere` and `break-word` differ in
+   exactly the property that matters: `anywhere` lets a cell's intrinsic
+   MIN-CONTENT width collapse to a single glyph (which is what lets the column
+   be squeezed that far), while `break-word` leaves min-content at the longest
+   unbreakable token. A table can never lay out narrower than its min-content,
+   so `break-word` gives every column a real floor. Measured at 375px with this
+   rule: token 13 chars/line over 4 lines, prose 10 chars/line over 21 lines,
+   and NO horizontal scroll on either.
+
+   Do NOT reach for `white-space: nowrap` here. `.table-capped` is applied to
+   EVERY 3+ column table (render-table.html) — the
+   `Field | Type | Default | Description` shape whose Description column holds
+   prose: across kgateway-oss 25% of capped-table cells exceed 60 characters
+   and the longest runs ~2750. Forcing those onto one line measured 209
+   chars/line on a single 1459px line at a 5.7x-viewport scroll here, and 33x
+   on the real agentgateway airgap / CRD shapes. Prose must keep wrapping;
+   only the collapse floor needed fixing. `tests/table-display.spec.ts` pins
+   both halves. Breakpoint matches main.css. */
+@media (max-width: 767px) {
+  .table-wrapper.table-capped th,
+  .table-wrapper.table-capped td {
+    overflow-wrap: break-word;
+  }
 }
 .dark .table-wrapper th,
 .dark .table-wrapper td {
@@ -2132,22 +2199,31 @@ details[open].hextra-search-other-versions > summary::before {
   left: 0;
   justify-content: flex-start;
   padding-left: 0.25rem;
-  background: linear-gradient(to right, #fff 60%, rgba(255, 255, 255, 0));
 }
 .sidebar-mobile-scroll-next {
   right: 0;
   justify-content: flex-end;
   padding-right: 0.25rem;
-  background: linear-gradient(to left, #fff 60%, rgba(255, 255, 255, 0));
 }
 .dark .sidebar-mobile-scroll-arrow {
   color: rgb(209, 213, 219);
 }
-.dark .sidebar-mobile-scroll-prev {
-  background: linear-gradient(to right, rgb(17, 24, 39) 60%, rgba(17, 24, 39, 0));
+/* Fade the chip row's content toward whichever edge can still scroll, so tab /
+   version text dissolves BEFORE it reaches the < / > arrows instead of sliding
+   under and overlapping them. A mask fades the actual content to transparent
+   (unlike a solid arrow background, which leaves partially-covered text and
+   needs a dark-mode variant). mobile-nav.js toggles .scroll-fade-* per edge as
+   the row scrolls, so the first/last chip isn't faded when that edge is at rest
+   (no arrow there either). --scroll-fade-* default to 0 → no fade. */
+[data-scroll-track] {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--scroll-fade-l, 0px), #000 calc(100% - var(--scroll-fade-r, 0px)), transparent 100%);
+          mask-image: linear-gradient(to right, transparent 0, #000 var(--scroll-fade-l, 0px), #000 calc(100% - var(--scroll-fade-r, 0px)), transparent 100%);
 }
-.dark .sidebar-mobile-scroll-next {
-  background: linear-gradient(to left, rgb(17, 24, 39) 60%, rgba(17, 24, 39, 0));
+[data-scroll-track].scroll-fade-start {
+  --scroll-fade-l: 2.25rem;
+}
+[data-scroll-track].scroll-fade-end {
+  --scroll-fade-r: 2.25rem;
 }
 .sidebar-mobile-version-group {
   flex-basis: 100%;
@@ -2220,6 +2296,20 @@ details[open].hextra-search-other-versions > summary::before {
   padding: 1.1875rem 1rem 1rem;
   flex-grow: 1;
 }
+/* Brief dim + input-lock while the AJAX section/version swap (mobile-nav.js)
+   fetches the target drawer and swaps it in. This must cover
+   .sidebar-mobile-header as well as the tree: the section and version chips
+   live in the header, ABOVE .sidebar-nav-wrapper, so locking only the wrapper
+   left the very controls that start a swap clickable during one — a dimmed
+   tree with live chips above it, and two racing fetches. (mobile-nav.js also
+   carries a request token so a superseded response can never win, since a tap
+   can still land before this class is applied.) */
+.sidebar-mobile-panel.drawer-loading .sidebar-mobile-header,
+.sidebar-mobile-panel.drawer-loading .sidebar-nav-wrapper {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
 .sidebar-nav {
   display: flex;
   flex-direction: column;
@@ -2271,6 +2361,26 @@ details[open].hextra-search-other-versions > summary::before {
     scrollbar-width: thin;
     scrollbar-color: oklch(55.55% 0 0 / 0.4) transparent;
     scrollbar-gutter: stable;
+  }
+  /* Per-tab opt-out: a docTabs tab with `hideSidebar = true` (issue
+     solo-io/docs#3164) drops the left nav on ITS pages from the desktop
+     breakpoint up, so a tab whose content is a single page (a changelog, one
+     generated API reference) gives the column back to the article instead of
+     showing a one-item tree. Set by sidebar.html on the versioned <aside>.
+
+     Desktop-only by construction: this rule lives inside the min-width query,
+     so below it the `.sidebar-mobile-panel` rules — which force
+     `display: flex !important` — still own the layout and the slide-out drawer
+     renders in full. That matters because the drawer is the ONLY way to reach
+     the tab chips, the version chips, and the other tabs' trees on mobile;
+     hiding it there would strand the reader on the current page.
+
+     `display: none` (not `visibility`/width) so the flex row reclaims the
+     16rem column. Two classes (0,2,0) outrank both `.sidebar-container`'s
+     `display: flex` above and the aside's `hx:xl:block` utility, so it wins
+     regardless of stylesheet order. */
+  .sidebar-container.sidebar-desktop-hidden {
+    display: none;
   }
 }
 

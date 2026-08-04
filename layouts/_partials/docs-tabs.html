@@ -1,35 +1,50 @@
 {{- /*
-  docs-tabs.html — PROTOTYPE tab-navigation band (issue solo-io/docs#3164).
+  docs-tabs.html — tab-navigation band (issue solo-io/docs#3164).
 
   Renders a horizontal row of tabs BETWEEN the top navbar and the
-  sidebar/content row. Each tab scopes the left nav to a subset of the
-  version's top-level sections, the way Mintlify / Portkey group concepts so
-  the left nav stays short. Left-aligned, its own band (Portkey style).
+  sidebar/content row. Each tab scopes the left nav to one top-level content
+  directory of the current version, the way Mintlify / Portkey group concepts
+  so the left nav stays short. Left-aligned, its own band (Portkey style).
 
-  Model (hybrid, matches the discussion on #3164):
+  Model (directory-based):
     - Config declares the tab bar: an ordered `[[params.docTabs]]` list, each
-      with a `name` and optional `default = true`. This is version-agnostic
-      (the labels rarely change), so one block per product covers every
-      version.
-    - Front matter assigns pages to tabs: a top-level section/page carries
-      `tab: "<name>"`. Anything without a `tab` falls into the default tab
-      (the one flagged `default`, else the first).
+      with a `name` (display label), an `id` (a top-level content directory
+      under the version root), and optional `default = true` /
+      `hideSidebar = true`. This is version-agnostic (the labels rarely
+      change), so one block per product covers every version.
+    - A tab owns every page in its `id` directory. The sidebar (sidebar.html)
+      roots the left nav INSIDE that directory, so the directory's own node
+      never appears — it *is* the tab. Content is fully partitioned by
+      directory, one dir per tab (the default tab gets a dir too).
 
-  Opt-in / backward compatible:
-    - No `params.docTabs`  → this partial emits nothing and records
-      "disabled" in the page store, so the sidebar renders the whole tree
-      exactly as before. (This is why the fixture's test build, which sets no
-      docTabs, is completely unaffected.)
-    - Fewer than 2 non-empty tabs in the current version → same as disabled.
-      A single-tab band would add chrome without slimming anything, and it
-      lets a version that hasn't been organised into tabs keep today's nav.
+  Per-tab `hideSidebar`:
+    A tab whose content doesn't need a tree (a one-page changelog, a single
+    generated API reference) can set `hideSidebar = true`, which drops the left
+    nav on that tab's pages at the desktop-sidebar breakpoint and up, so the
+    article gets the column back instead of showing a one-item nav. It is a
+    DESKTOP-ONLY suppression: below the breakpoint the sidebar IS the slide-out
+    drawer — the only way to reach the tab chips, the version chips, and the
+    other tabs' trees — so the drawer always renders in full. The flag travels
+    on the page store as `hideSidebar` (resolved for the ACTIVE tab) and
+    sidebar.html turns it into a `sidebar-desktop-hidden` class; the hiding
+    itself is CSS, gated on `@media (min-width: 1280px)`.
+
+  Opt-in:
+    - No `params.docTabs`  → this partial emits nothing and records "disabled"
+      in the page store, so the sidebar renders the whole version tree as if
+      the feature didn't exist.
+    - Fewer than 2 present tab directories in the current version → same as
+      disabled. A single-tab band would add chrome without slimming anything,
+      and it lets a version that hasn't been organised into tabs keep the plain
+      full-tree nav.
 
   Sharing with the sidebar:
-    We compute the active tab here and stash it (plus the enabled flag and the
-    default tab name) on the page store. The sidebar partial reads it back and
-    filters its depth-0 items, so the version-root detection lives in one
-    place per render. single.html / list.html call this partial BEFORE the
-    sidebar, so the store is populated first.
+    We compute the active tab here and stash it — plus the enabled flag, the
+    active tab's directory id, and the ordered tab list — on the page store.
+    The sidebar reads it back and roots its tree at the active tab's directory,
+    so the version-root detection lives in one place per render. single.html /
+    list.html call this partial BEFORE the sidebar, so the store is populated
+    first.
 
   Version-root detection is shared with the sidebar via
   utils/version-root.html, so both agree on which version tree the page is in.
@@ -52,59 +67,97 @@
     {{- $versionRoot := $vr.docsSection -}}
 
     {{- if $versionRoot -}}
-      {{- /* ---- Default tab name -------------------------------------- */ -}}
+      {{- /* $lookupPath is the version root relative to contentDir (the shape
+             version-root.html already normalises), so site.GetPage resolves a
+             tab's directory the same way in OSS, enterprise, and local dev. */ -}}
+      {{- $lookupPath := $vr.lookupPath -}}
+
+      {{- /* ---- Default tab name: active when the page sits above every tab
+             directory (e.g. the version-root landing). ------------------ */ -}}
       {{- $defaultTab := (index $tabsCfg 0).name -}}
       {{- range $tabsCfg -}}
         {{- if .default -}}{{- $defaultTab = .name -}}{{- end -}}
       {{- end -}}
 
-      {{- /* ---- Active tab: the tab of the current page's top-level
-             ancestor (or the page itself when it sits at the top level). */ -}}
+      {{- /* ---- Active tab: the tab whose directory is the current page or an
+             ancestor of it (Page relationships, not URL strings, so the
+             OSS / enterprise / local-dev URL shapes all work). ---------- */ -}}
       {{- $activeTab := $defaultTab -}}
-      {{- range $versionRoot.Pages -}}
-        {{- if or (eq .RelPermalink $context.RelPermalink) ($context.IsDescendant .) -}}
-          {{- $activeTab = .Params.tab | default $defaultTab -}}
+      {{- range $tabsCfg -}}
+        {{- $name := .name -}}
+        {{- with .id -}}
+          {{- with site.GetPage (printf "%s%s" $lookupPath .) -}}
+            {{- if or (eq .RelPermalink $context.RelPermalink) ($context.IsDescendant .) -}}
+              {{- $activeTab = $name -}}
+            {{- end -}}
+          {{- end -}}
         {{- end -}}
       {{- end -}}
 
-      {{- /* ---- Build the ordered, non-empty tab list ----------------- */ -}}
+      {{- /* ---- Ordered list of present tabs (those whose `id` directory
+             exists). Each tab links to its directory landing. A tab with no
+             `id`, or whose directory is missing, is skipped. ------------- */ -}}
       {{- $tabs := slice -}}
       {{- range $tabsCfg -}}
         {{- $name := .name -}}
-        {{- $items := slice -}}
-        {{- range $versionRoot.Pages -}}
-          {{- if eq (.Params.tab | default $defaultTab) $name -}}
-            {{- $items = $items | append . -}}
+        {{- $id := .id -}}
+        {{- /* Captured outside the `with` blocks below, which rebind `.` to the
+               resolved Page. Absent → false, so a tab that doesn't set the flag
+               keeps the left nav (the pre-existing behavior for every tab). A
+               plain truth test, not `isset`/`default`: `.hideSidebar | default
+               false` would also be false for an explicit `false`, but Hugo's
+               `default` treats a false value as unset, so relying on it invites
+               the classic bool-default trap. */ -}}
+        {{- $hideSidebar := false -}}
+        {{- if .hideSidebar -}}{{- $hideSidebar = true -}}{{- end -}}
+        {{- with $id -}}
+          {{- with site.GetPage (printf "%s%s" $lookupPath .) -}}
+            {{- $tabs = $tabs | append (dict "name" $name "href" .RelPermalink "id" $id "hideSidebar" $hideSidebar) -}}
           {{- end -}}
         {{- end -}}
-        {{- if gt (len $items) 0 -}}
-          {{- /* Link the tab to its first top-level item's own page — the first
-                 entry in the tab's left nav — rather than drilling to the first
-                 leaf. Clicking "Reference" should land on the Reference section
-                 landing, not jump several levels into its first subsection. A
-                 leaf first item links to itself. */ -}}
-          {{- $href := (index $items 0).RelPermalink -}}
-          {{- $tabs = $tabs | append (dict "name" $name "href" $href) -}}
+      {{- end -}}
+
+      {{- /* Resolve the active tab's directory id from the present-tab list (so
+             a configured-but-missing tab can't win) for the sidebar to root at,
+             plus that tab's `hideSidebar` flag. Reading it off the present-tab
+             list rather than the raw config means a tab whose directory is
+             absent in this version can't suppress the nav for a page it doesn't
+             own. */ -}}
+      {{- $activeId := "" -}}
+      {{- $hideSidebar := false -}}
+      {{- range $tabs -}}
+        {{- if eq .name $activeTab -}}
+          {{- $activeId = .id -}}
+          {{- $hideSidebar = .hideSidebar -}}
         {{- end -}}
       {{- end -}}
 
       {{- /* Share with the sidebar regardless of count so it can decide. The
              tab list travels too, so the sidebar can render the mobile drawer's
              tab-chip row (the band itself is hidden below the desktop-sidebar
-             breakpoint). */ -}}
+             breakpoint). `activeId` is the directory the sidebar roots at, and
+             `hideSidebar` says whether THIS tab drops the left nav on desktop
+             (the drawer is unaffected). */ -}}
       {{- $enabled := ge (len $tabs) 2 -}}
-      {{- $context.Store.Set "docTabs" (dict "enabled" $enabled "active" $activeTab "default" $defaultTab "tabs" $tabs) -}}
+      {{- $context.Store.Set "docTabs" (dict "enabled" $enabled "active" $activeTab "activeId" $activeId "hideSidebar" $hideSidebar "tabs" $tabs) -}}
 
       {{- if $enabled -}}
+        {{- /* The full-bleed band centers its tabs inside the SAME page-width
+               container the content column uses (utils/page-width), so the tab
+               row's left edge lines up with the sidebar/content instead of the
+               viewport edge. Using the shared partial keeps them aligned for
+               every page.width (wide / full / default). */ -}}
         <div class="docs-tabs-band hx:print:hidden">
-          <nav class="docs-tabs" aria-label="{{ (T "sectionTabs") | default "Section navigation" }}">
-            {{- range $tabs -}}
-              {{- $isActive := eq .name $activeTab -}}
-              <a href="{{ .href }}"
-                 class="docs-tab{{ if $isActive }} docs-tab-active{{ end }}"
-                 {{ if $isActive }}aria-current="true"{{ end }}>{{ .name }}</a>
-            {{- end -}}
-          </nav>
+          <div class="docs-tabs-inner hx:mx-auto {{ partial "utils/page-width" $context }}">
+            <nav class="docs-tabs" aria-label="{{ (T "sectionTabs") | default "Section navigation" }}">
+              {{- range $tabs -}}
+                {{- $isActive := eq .name $activeTab -}}
+                <a href="{{ .href }}"
+                   class="docs-tab{{ if $isActive }} docs-tab-active{{ end }}"
+                   {{ if $isActive }}aria-current="true"{{ end }}>{{ .name }}</a>
+              {{- end -}}
+            </nav>
+          </div>
         </div>
       {{- end -}}
     {{- end -}}

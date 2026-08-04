@@ -12,6 +12,21 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Supersede in-progress runs on the same PR: a new push to a PR branch cancels
+# its own older, still-running run instead of stacking a second one. Keyed on
+# github.ref so each PR cancels only its own runs, never another PR's. A hung
+# run (see the install-step timeout below) is likewise cleared by the next push
+# rather than lingering to the job timeout.
+#
+# Deliberately NOT applied to push:main. Cancellation there is keyed on the
+# branch, not the commit, so two merges in quick succession would cancel the
+# first one's run — leaving a merged commit on main with no completed sweep.
+# Main is also the only place some coverage is guaranteed to have run, so its
+# runs must be allowed to finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
@@ -20,9 +35,35 @@ env:
   NODE_VERSION: '20'
 
 jobs:
-  test-all:
+  brand:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
+    # The two brand layers are independent, so run them as parallel matrix
+    # jobs instead of sequentially in one `make test-all`. Wall-clock ~halves
+    # at the cost of a second runner. fail-fast off so an OSS failure doesn't
+    # cancel the enterprise job (and vice versa) — you want both reports.
+    strategy:
+      fail-fast: false
+      matrix:
+        brand: [oss, enterprise]
+
+    env:
+      # All three engines run on PRs, not just on main. cross-browser.spec.ts is
+      # a single 11-test file, the binaries come from the actions/cache below, so
+      # the marginal cost next to a ~1600-test suite is small — and a PR is where
+      # someone actually reads a failure. Restricting it to push:main would make
+      # main the only place an engine-specific regression can surface, i.e. after
+      # merge. If PR wall-clock needs trimming later, take it from the install
+      # step, not from dropping engines.
+      PW_BROWSERS: 'chromium firefox webkit'
+      # ubuntu-latest is a 4-core runner for public repos. The brand matrix above
+      # already halves wall-clock by giving each brand its own runner; also
+      # raising the worker count oversubscribes those cores, and firefox is the
+      # engine that shows it first (observed locally as page.goto timeouts on the
+      # everything page under high parallelism, clean at low). Keep this at or
+      # below the core count.
+      PW_WORKERS: '4'
 
     steps:
       - uses: actions/checkout@v7
@@ -59,6 +100,10 @@ jobs:
       - name: Install npm dependencies
         run: npm ci || npm install
 
+      # Every run installs the same three engines now, so the key needs no
+      # browser-set component (the PW_BROWSER_TAG split existed only to keep a
+      # PR's chromium-only cache from being restored by a main run that needed
+      # all three).
       - name: Cache Playwright browsers
         id: playwright-cache
         uses: actions/cache@v6
@@ -66,26 +111,32 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
 
+      # timeout-minutes guards the `sudo apt-get` that --with-deps/install-deps
+      # runs: on a bad runner it can hang on a dpkg lock or a stalled mirror.
+      # The browser download + apt normally finishes in <1min, so 5 is generous
+      # — a genuine hang fails the step fast (and is re-runnable) instead of
+      # burning the whole 15-min job budget.
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium firefox webkit
+        timeout-minutes: 5
+        run: npx playwright install --with-deps ${{ env.PW_BROWSERS }}
 
       - name: Install Playwright OS deps (cache-hit path)
         if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps
+        timeout-minutes: 5
+        run: npx playwright install-deps ${{ env.PW_BROWSERS }}
 
       # Override HUGO=hugo160 (the local convention) with HUGO=hugo (what
-      # peaceiris/actions-hugo installs the binary as). Run both brand
-      # variants. test-all chains build-oss + test-oss + build-enterprise
-      # + test-enterprise.
-      - name: Run test-all
-        run: HUGO=hugo make test-all
+      # peaceiris/actions-hugo installs the binary as). Each matrix job runs a
+      # single brand: test-<brand> chains build-<brand> + test-<brand>.
+      - name: Run test-${{ matrix.brand }}
+        run: HUGO=hugo make test-${{ matrix.brand }}
 
       - name: Upload Playwright HTML report on failure
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.brand }}
           path: playwright-report
           retention-days: 7
 
@@ -93,9 +144,28 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: hugo-build-logs
+          name: hugo-build-logs-${{ matrix.brand }}
           path: |
             .build-oss.log
             .build-enterprise.log
           retention-days: 7
           if-no-files-found: ignore
+
+  # Single stable status context for branch protection. The matrix above reports
+  # as "brand (oss)" / "brand (enterprise)", so requiring those directly would
+  # mean re-pointing branch protection every time the matrix changes shape. This
+  # job collapses them into one required check named `test-all` — the name the
+  # rule already used before the matrix split.
+  #
+  # `if: always()` so this runs even when a matrix leg fails; the step then
+  # asserts the aggregate result, and `cancelled`/`skipped` fail too (only a
+  # literal success passes).
+  test-all:
+    needs: [brand]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assert every brand leg succeeded
+        run: |
+          echo "brand result: ${{ needs.brand.result }}"
+          [ "${{ needs.brand.result }}" = "success" ]

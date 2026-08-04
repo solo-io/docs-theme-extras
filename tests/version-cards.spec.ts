@@ -162,6 +162,9 @@ const FIXTURE_BLOCKS = [
       { href: `${FIXTURE_BASE}/v2/`, title: "v2 (current)" },
       { href: `${FIXTURE_BASE}/v1/`, title: "v1" },
       { href: `${FIXTURE_BASE}/main/`, title: "main (dev)" },
+      // v3 = the tab-navigation demo version (issue solo-io/docs#3164), last in
+      // the top-level params.versions list, so it renders as the final card.
+      { href: `${FIXTURE_BASE}/v3/`, title: "v3 (tabs demo)" },
     ],
   },
   {
