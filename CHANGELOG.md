@@ -22,7 +22,7 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
-## [v0.1.25] — 2026-08-03
+## [v0.1.25] — 2026-08-04
 
 ### Change — `docTabs` moves from a front-matter `tab` model to a content-directory (`id`) model (`layouts/_partials/docs-tabs.html`, `layouts/partials/sidebar.html`, `hugo-*.toml`, `USAGE.md`)
 
