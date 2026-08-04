@@ -66,6 +66,16 @@ document.addEventListener('DOMContentLoaded', function () {
    AJAX section/version swap. All three are bound by bindDrawer(root) so they
    keep working after an AJAX swap replaces the drawer's contents. */
 (function () {
+  /* The drawer exists only below the sidebar breakpoint (xl). At or above it the
+     same aside IS the desktop sidebar, the chip rows are display:none, and every
+     drawer behavior here has to stand down. Kept in one place because three
+     handlers and the resize watcher all have to agree with the CSS bound in
+     docs-theme-extras.css (`@media (max-width: 1279px)`). */
+  var DRAWER_MAX = 1280;
+  function isDesktop() {
+    return window.innerWidth >= DRAWER_MAX;
+  }
+
   /* Chip rows (version / tab / section) scroll horizontally. Show the < / >
      arrow for a direction only when there's more off-screen that way, and center
      the active chip the first time the row gains width so it never starts hidden.
@@ -161,7 +171,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
   function onTabClick(e) {
-    if (window.innerWidth >= 1280) return; // desktop: let the tab band navigate
+    if (isDesktop()) return; // desktop: let the tab band navigate
     e.preventDefault();
     activate(this.getAttribute('data-tab-target'));
   }
@@ -200,6 +210,15 @@ document.addEventListener('DOMContentLoaded', function () {
      that path is a real navigation and never reaches this code. */
   var pristineDrawer = null;
 
+  /* How long a swap fetch may hang before the chip gives up and navigates.
+     .drawer-loading dims the header and nav wrapper and turns off their pointer
+     events, and there is no spinner, so an indefinite wait on a bad phone
+     network reads as a drawer that simply stopped working. (Not a hard trap —
+     the overlay is a sibling of the panel, so tap-outside still closes — but
+     the reader has to discover that.) An abort lands in the same catch as any
+     other failure, which navigates, so the chip always does something. */
+  var SWAP_TIMEOUT_MS = 5000;
+
   function restoreDrawer(panel) {
     if (pristineDrawer === null) return; // never swapped; nothing to undo
     swapToken++; // invalidate any in-flight swap so it can't repaint after us
@@ -213,12 +232,28 @@ document.addEventListener('DOMContentLoaded', function () {
     if (pristineDrawer === null) pristineDrawer = panel.innerHTML;
     var token = ++swapToken;
     panel.classList.add('drawer-loading');
-    fetch(href, { credentials: 'same-origin' })
+    /* AbortController + setTimeout rather than AbortSignal.timeout: the latter
+       is newer than the APIs this file already feature-detects (AbortController,
+       MutationObserver, ResizeObserver), and a manual timer degrades to "no
+       timeout" where the constructor is missing instead of throwing on a
+       property that isn't there. The timer is cleared once the body has been
+       read, so the budget covers headers AND body — a response that starts
+       streaming and then stalls still falls back. */
+    var ctl = window.AbortController ? new AbortController() : null;
+    var timer = ctl
+      ? setTimeout(function () {
+          ctl.abort();
+        }, SWAP_TIMEOUT_MS)
+      : null;
+    var opts = { credentials: 'same-origin' };
+    if (ctl) opts.signal = ctl.signal;
+    fetch(href, opts)
       .then(function (r) {
         if (!r.ok) throw new Error('status ' + r.status);
         return r.text();
       })
       .then(function (html) {
+        if (timer) clearTimeout(timer);
         if (token !== swapToken) return; // superseded by a later tap
         var next = new DOMParser()
           .parseFromString(html, 'text/html')
@@ -238,12 +273,13 @@ document.addEventListener('DOMContentLoaded', function () {
         }
       })
       .catch(function () {
+        if (timer) clearTimeout(timer);
         if (token !== swapToken) return; // a later tap owns the drawer now
         window.location.href = href;
       });
   }
   function onSectionVersionClick(e) {
-    if (window.innerWidth >= 1280) return; // desktop: chips are hidden; navigate
+    if (isDesktop()) return; // desktop: chips are hidden; navigate
     var href = this.getAttribute('href');
     var panel = document.querySelector('.sidebar-mobile-panel');
     if (!href || !panel) return; // no target/drawer: let the link navigate
@@ -291,6 +327,24 @@ document.addEventListener('DOMContentLoaded', function () {
     var panel = document.querySelector('.sidebar-mobile-panel');
     if (!panel) return;
     bindDrawer(panel);
+
+    /* Crossing UP past the breakpoint with the drawer open (tablet rotation, a
+       desktop window drag) has to end the drawer session. Two reasons, and the
+       swap makes the first one worse:
+         - A swapped tree would otherwise persist as the DESKTOP sidebar, while
+           the page, its URL, and the navbar version dropdown all still belong to
+           the version the reader started on — the drawer's temporary divergence
+           silently promoted to a permanent lie.
+         - `.sidebar-mobile-overlay.active` carries no media query, so the
+           full-screen scrim would stay over the desktop page.
+       closeMobileSidebar clears both classes, and clearing .mobile-sidebar-open
+       is the open -> closed edge the observer below watches, so the reset falls
+       out of the existing path rather than duplicating it. */
+    window.addEventListener('resize', function () {
+      if (isDesktop() && panel.classList.contains('mobile-sidebar-open')) {
+        closeMobileSidebar();
+      }
+    });
 
     /* Watch the open/close class rather than wrapping toggleMobileSidebar /
        closeMobileSidebar: those are globals that consumers' nav templates call

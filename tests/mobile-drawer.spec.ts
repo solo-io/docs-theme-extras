@@ -286,4 +286,59 @@ test.describe("mobile drawer: AJAX section/version swap", () => {
       `/${HOPS[0]}/`,
     );
   });
+
+  // A HANG is the failure the abort test above does not cover: route.abort()
+  // rejects immediately, so the catch runs even with no timeout. On a bad phone
+  // network the fetch neither resolves nor rejects, and .drawer-loading leaves
+  // the drawer dimmed and pointer-events:none with no spinner. SWAP_TIMEOUT_MS
+  // aborts it into the same navigate fallback.
+  test("a hanging fetch times out and falls back to navigating", async ({
+    page,
+  }) => {
+    const { chipFor } = await openDrawer(page);
+    const startUrl = page.url();
+
+    // Never fulfil, never abort — the background fetch just sits there. The
+    // real navigation that follows (resourceType "document") must still load.
+    await page.route(`**/${HOPS[0]}/**`, (route) => {
+      if (route.request().resourceType() !== "fetch") return route.continue();
+    });
+    await chipFor(HOPS[0]).click();
+
+    // Generous relative to the 5s budget: the assertion is "it gives up at
+    // all", not the exact deadline.
+    await page.waitForURL((u) => u.toString() !== startUrl, { timeout: 20000 });
+    expect(page.url(), "a hung fetch never fell back to navigation").toContain(
+      `/${HOPS[0]}/`,
+    );
+  });
+
+  // Widening past the breakpoint promotes the drawer back into the DESKTOP
+  // sidebar. A swap left in place there would show another version's tree while
+  // the page, URL and navbar dropdown still belong to the original — and the
+  // overlay, which has no media query of its own, would stay over the page.
+  test("widening past the breakpoint closes the drawer and drops the swap", async ({
+    page,
+  }) => {
+    const { panel, active, chipFor } = await openDrawer(page);
+    const ownHref = await active.getAttribute("href");
+
+    await chipFor(HOPS[0]).click();
+    await expectActiveVersion(active, HOPS[0]);
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+
+    await expect(
+      panel,
+      "drawer stayed open as the desktop sidebar",
+    ).not.toHaveClass(/mobile-sidebar-open/);
+    await expect(
+      page.locator(".sidebar-mobile-overlay"),
+      "the mobile scrim survived onto the desktop layout",
+    ).not.toHaveClass(/active/);
+    await expect(
+      active,
+      "the swapped tree became the desktop sidebar — it outlived the drawer",
+    ).toHaveAttribute("href", ownHref!);
+  });
 });

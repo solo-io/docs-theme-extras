@@ -461,6 +461,20 @@ brand-independent:
 - Enterprise (rebase `product=envoy`) routes to the kgateway subpage: [MARKER_APIREF_ENT]({{< link-hextra path="/reference/api/#TypeA" version="v2" product="envoy" >}})
 - Agentgateway routes to the api subpage: [MARKER_APIREF_AGW]({{< link-hextra path="/reference/api/#TypeA" version="v2" product="agentgateway" >}})
 - Already a subpage, not doubled up: [MARKER_APIREF_NODOUBLE]({{< link-hextra path="/reference/api/kgateway/#TypeA" version="v2" product="envoy" >}})
+- A `reference/api-*` sibling section is not the single-page reference, so it is left alone: [MARKER_APIREF_SIBLING]({{< link-hextra path="/reference/api-kubespec/policies/#TypeA" version="v2" product="agentgateway" >}})
+
+#### link-hextra reference/cel routing (agentgateway)
+
+The agentgateway OSS site splits its CEL reference into `/reference/cel/variables/`
+and `/reference/cel/yaml-and-examples/`; the enterprise docs serve one
+`/reference/cel/` page carrying the same anchors. `link-hextra` collapses the OSS
+subpage segment when the rebase-injected `product` is `agentgateway`, and leaves
+the path alone otherwise:
+
+- Agentgateway collapses the variables subpage: [MARKER_CELREF_AGW]({{< link-hextra path="/reference/cel/variables/#functions-policy-all" version="v2" product="agentgateway" >}})
+- Agentgateway collapses the yaml-and-examples subpage: [MARKER_CELREF_AGW_YAML]({{< link-hextra path="/reference/cel/yaml-and-examples/#examples" version="v2" product="agentgateway" >}})
+- Already the single page, unchanged: [MARKER_CELREF_AGW_PLAIN]({{< link-hextra path="/reference/cel/#functions-policy-all" version="v2" product="agentgateway" >}})
+- No agentgateway signal, left untouched: [MARKER_CELREF_OSS]({{< link-hextra path="/reference/cel/variables/#functions-policy-all" version="v2" >}})
 
 ## Lists (3-level ordered and unordered)
 
