@@ -461,6 +461,20 @@ brand-independent:
 - Enterprise (rebase `product=envoy`) routes to the kgateway subpage: [MARKER_APIREF_ENT]({{< link-hextra path="/reference/api/#TypeA" version="v2" product="envoy" >}})
 - Agentgateway routes to the api subpage: [MARKER_APIREF_AGW]({{< link-hextra path="/reference/api/#TypeA" version="v2" product="agentgateway" >}})
 - Already a subpage, not doubled up: [MARKER_APIREF_NODOUBLE]({{< link-hextra path="/reference/api/kgateway/#TypeA" version="v2" product="envoy" >}})
+- A `reference/api-*` sibling section is not the single-page reference, so it is left alone: [MARKER_APIREF_SIBLING]({{< link-hextra path="/reference/api-kubespec/policies/#TypeA" version="v2" product="agentgateway" >}})
+
+#### link-hextra reference/cel routing (agentgateway)
+
+The agentgateway OSS site splits its CEL reference into `/reference/cel/variables/`
+and `/reference/cel/yaml-and-examples/`; the enterprise docs serve one
+`/reference/cel/` page carrying the same anchors. `link-hextra` collapses the OSS
+subpage segment when the rebase-injected `product` is `agentgateway`, and leaves
+the path alone otherwise:
+
+- Agentgateway collapses the variables subpage: [MARKER_CELREF_AGW]({{< link-hextra path="/reference/cel/variables/#functions-policy-all" version="v2" product="agentgateway" >}})
+- Agentgateway collapses the yaml-and-examples subpage: [MARKER_CELREF_AGW_YAML]({{< link-hextra path="/reference/cel/yaml-and-examples/#examples" version="v2" product="agentgateway" >}})
+- Already the single page, unchanged: [MARKER_CELREF_AGW_PLAIN]({{< link-hextra path="/reference/cel/#functions-policy-all" version="v2" product="agentgateway" >}})
+- No agentgateway signal, left untouched: [MARKER_CELREF_OSS]({{< link-hextra path="/reference/cel/variables/#functions-policy-all" version="v2" >}})
 
 ## Lists (3-level ordered and unordered)
 
@@ -659,6 +673,23 @@ Confirm the resource exists, then move on.
 | -------- | -------- | -------- |
 | MARKER_TABLE_ROW1A | MARKER_TABLE_ROW1B | row 1 cell C |
 | row 2 cell A | row 2 cell B | row 2 cell C |
+
+### Capped table long unbreakable token
+
+Reproduces the agentgateway airgap `kgateway-image-versions.md` pattern: a 3+ column reference table (so render-table tags it `.table-capped`) whose cell holds a long, break-free registry token. On phone-width viewports the `overflow-wrap: anywhere` cap folded the token one character per line (vertical text) instead of letting the wrapper scroll, because `anywhere` drops the cell's intrinsic min-content width to a single glyph. The `@media (max-width: 767px)` rule in docs-theme-extras.css switches capped cells to `overflow-wrap: break-word`, which leaves min-content at the full token, so the column keeps the token's width and the wrapper scrolls. `table-display.spec.ts` probes this at 375px.
+
+| Component | Registry | Repository |
+| --- | --- | --- |
+| MARKER_TABLE_CAPPED_MOBILE | us-docker.pkg.dev/solo-public/enterprise-agentgateway | agentgateway-enterprise |
+
+### Capped table prose description column
+
+The counterpart to the table above, and the reason the mobile rule must not use `white-space: nowrap`. This is the ordinary `Field | Type | Default | Description` reference shape that `.table-capped` is applied to en masse — across kgateway-oss, 25% of capped-table cells exceed 60 characters and the longest runs ~2750. Those Description cells must keep wrapping at phone width; forcing them onto one line turns a routine reference table into a multi-thousand-pixel horizontal scroll. `table-display.spec.ts` asserts at 375px that these cells still wrap and that the table stays within a sane multiple of the viewport.
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| MARKER_TABLE_CAPPED_PROSE | integer | 1 | The number of gateway proxy replicas to deploy. Increase this value to scale the data plane horizontally for higher throughput, or set it to zero to temporarily disable the proxy without deleting the resource. |
+| spec.gateway.logLevel | string | info | Controls the verbosity of the proxy log stream. Raising this above info produces a large volume of output and should be reserved for short debugging sessions on a single replica. |
 
 ### Version shortcode wrapping a table row
 

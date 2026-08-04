@@ -29,6 +29,9 @@ import { TEST_PAGES, readFixture } from "./helpers/fixture";
 //   - product=envoy: routed to the kgateway subpage
 //   - product=agentgateway: routed to the api subpage
 //   - an already-subpaged link is not doubled up
+//   - a `reference/api-*` SIBLING section is not caught by the substring match
+//   - agentgateway: an OSS `reference/cel/<subpage>/` path collapses to the
+//     single enterprise `/reference/cel/` page, and only for that product
 
 const REUSE_PAGE = "v2/everything";
 
@@ -36,6 +39,11 @@ const OSS = "MARKER_APIREF_OSS";
 const ENT = "MARKER_APIREF_ENT";
 const AGW = "MARKER_APIREF_AGW";
 const NODOUBLE = "MARKER_APIREF_NODOUBLE";
+const SIBLING = "MARKER_APIREF_SIBLING";
+const CEL_AGW = "MARKER_CELREF_AGW";
+const CEL_AGW_YAML = "MARKER_CELREF_AGW_YAML";
+const CEL_AGW_PLAIN = "MARKER_CELREF_AGW_PLAIN";
+const CEL_OSS = "MARKER_CELREF_OSS";
 
 // Strip the copy-as-markdown <script> block before searching — it embeds the
 // raw markdown source (the literal shortcode calls and marker names), which
@@ -91,5 +99,50 @@ test.describe("link-hextra reference/api routing (reuse page)", () => {
     // Guard the specific failure mode: the replace must not re-prepend the
     // subpage segment (…/reference/api/kgateway/kgateway/…).
     expect(href).not.toContain("kgateway/kgateway");
+  });
+
+  // `reference/api-kubespec` is a sibling SECTION, not the single-page
+  // reference/api, but "reference/api" is a substring of it — so the routing
+  // used to mangle it into /reference/api/api-kubespec/…, a URL that exists on
+  // no build. Seen in production on the enterprise agentgateway docs:
+  // /agentgateway/2026.7.1/security/backend-authn-cross-app-access/ linked to
+  // /agentgateway/2026.7.1/reference/api/api-kubespec/policies/.
+  test("a reference/api-* sibling section is not routed", () => {
+    const href = hrefForMarker(html(), SIBLING);
+    expect(href).toBe("/test/v2/reference/api-kubespec/policies/#TypeA");
+    expect(href).not.toContain("api/api-kubespec");
+  });
+});
+
+test.describe("link-hextra reference/cel routing (reuse page)", () => {
+  const page = reusePage();
+  test.skip(!page, `${REUSE_PAGE} not in this build (consumer target)`);
+  if (!page) return;
+
+  const html = () => visibleHtml(page.filePath);
+
+  test("product=agentgateway: the variables subpage collapses to reference/cel", () => {
+    expect(hrefForMarker(html(), CEL_AGW)).toBe(
+      "/test/v2/reference/cel/#functions-policy-all",
+    );
+  });
+
+  test("product=agentgateway: the yaml-and-examples subpage collapses too", () => {
+    expect(hrefForMarker(html(), CEL_AGW_YAML)).toBe(
+      "/test/v2/reference/cel/#examples",
+    );
+  });
+
+  test("product=agentgateway: a path already at reference/cel is unchanged", () => {
+    const href = hrefForMarker(html(), CEL_AGW_PLAIN);
+    expect(href).toBe("/test/v2/reference/cel/#functions-policy-all");
+    // The collapse must not eat the section itself (…/reference/#anchor).
+    expect(href).toContain("/reference/cel/");
+  });
+
+  test("no agentgateway signal: the OSS cel subpage path is left untouched", () => {
+    expect(hrefForMarker(html(), CEL_OSS)).toBe(
+      "/test/v2/reference/cel/variables/#functions-policy-all",
+    );
   });
 });

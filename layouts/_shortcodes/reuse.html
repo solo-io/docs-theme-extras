@@ -67,6 +67,23 @@
   {{- /* keepVersion: preserve version string, inject parent version, convert to {{% %}} */ -}}
   {{- $content = replaceRE `\{\{<\s*(version\s+(?:include|exclude)-if="[^"]+?")\s+keepVersion="true"\s*>}}` (printf `{{%% $1 version="%s" %%}}` $parentVersion) $content -}}
 
+  {{- /* Protect keepVersion blocks from the OSS→enterprise remap below.
+         keepVersion="true" means the author wrote the ENTERPRISE version
+         tokens directly (e.g. kgw-docs/versions/github-branch.md maps
+         include-if="2.3.x" → main), so the tokens must NOT be remapped as if
+         they were OSS versions. The keepVersion transform above tags these
+         blocks with the injected version="..." param, which distinguishes them
+         from genuine percent-form blocks (the get_cookie rows) that carry no
+         version= param and DO need remapping. Rename the condition attribute to
+         a remap-invisible token (no "clude-if" substring, so the remap regex
+         below can't match it), then restore it after the remap. rebase.html
+         avoids this because its remap regex is angle-only and keepVersion blocks
+         are percent-form; reuse.html matches both forms, so it needs this guard.
+         Symptom without it: kgw enterprise sample-app httpbin URLs rendered a
+         shifted/empty/doubled branch. */ -}}
+  {{- $content = replaceRE `(\{\{%\s*version\s+)include-if=("[^"]*"\s+version=")` "${1}kvincif=${2}" $content -}}
+  {{- $content = replaceRE `(\{\{%\s*version\s+)exclude-if=("[^"]*"\s+version=")` "${1}kvexcif=${2}" $content -}}
+
   {{- /* Two-pass OSS→enterprise version remapping from [[params.versions]].
          Pass 1 replaces OSS versions with indexed placeholders so overlapping
          version strings (e.g. OSS 2.2.x vs enterprise 2.2.x) never double-match.
@@ -91,6 +108,10 @@
       {{- $content = replace $content $ph $v.version -}}
     {{- end -}}
   {{- end -}}
+
+  {{- /* Restore the keepVersion condition attributes protected above. */ -}}
+  {{- $content = replace $content "kvincif=" "include-if=" -}}
+  {{- $content = replace $content "kvexcif=" "exclude-if=" -}}
 
   {{- /* Leave remaining {{< version >}} blocks in angle-bracket form so .Inner
          stays as raw markdown for version.html. The percent form ({{% %}}) would

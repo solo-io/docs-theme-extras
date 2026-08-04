@@ -36,21 +36,32 @@
 {{- /* Tab-navigation scoping (issue solo-io/docs#3164). The docs-tabs.html
        band partial runs first (single.html / list.html call it before the
        sidebar) and records the active tab on the page store. When enabled, the
-       sidebar shows only the current tab's top-level sections; when the store
-       is absent or reports disabled (no params.docTabs, or <2 non-empty tabs
-       in this version), $tabsEnabled stays false and the whole tree renders as
-       before. These values are threaded into render-sidebar-tree and applied
-       only at depth 0. */ -}}
+       sidebar roots the tree INSIDE the active tab's content directory
+       ($activeId), so the left nav shows only that tab's pages and the
+       directory's own node never appears. When the store is absent or reports
+       disabled (no params.docTabs, or <2 present tab dirs in this version),
+       $tabsEnabled stays false and the whole version tree renders as before.
+
+       $hideDesktopNav is the active tab's `hideSidebar = true`. It suppresses
+       the left nav at the desktop-sidebar breakpoint and up ONLY: the panel is
+       still rendered in full, and below that breakpoint it's the slide-out
+       drawer — the only route to the tab chips, the version chips, and the
+       other tabs' trees — so mobile always shows it. All this does here is add
+       the `sidebar-desktop-hidden` marker class; the hiding is a CSS rule
+       inside `@media (min-width: 1280px)` in docs-theme-extras.css. Doing it in
+       CSS rather than by skipping the markup is what keeps the drawer intact. */ -}}
 {{- $tabsEnabled := false -}}
 {{- $activeTab := "" -}}
-{{- $defaultTab := "" -}}
+{{- $activeId := "" -}}
+{{- $hideDesktopNav := false -}}
 {{- $docTabsList := slice -}}
 {{- with $context.Store.Get "docTabs" -}}
   {{- if .enabled -}}
     {{- $tabsEnabled = true -}}
     {{- $activeTab = .active -}}
-    {{- $defaultTab = .default -}}
+    {{- $activeId = .activeId -}}
     {{- $docTabsList = .tabs -}}
+    {{- if .hideSidebar -}}{{- $hideDesktopNav = true -}}{{- end -}}
   {{- end -}}
 {{- end -}}
 {{- /* When the sidebar is disabled but the caller still wants the column's
@@ -119,7 +130,7 @@
     {{- $docsSection := $vr.docsSection -}}
 
     {{- if $docsSection -}}
-      <aside class="sidebar-container hextra-sidebar-container sidebar-mobile-panel hx:order-first hx:w-64 hx:shrink-0 hx:hidden hx:xl:block hx:print:hidden">
+      <aside class="sidebar-container hextra-sidebar-container sidebar-mobile-panel{{ if $hideDesktopNav }} sidebar-desktop-hidden{{ end }} hx:order-first hx:w-64 hx:shrink-0 hx:hidden hx:xl:block hx:print:hidden">
 
         {{- /* Mobile-only product logo, pinned to the top of the slide-out
                drawer where the navbar logo would be (the drawer overlays the
@@ -358,8 +369,16 @@
               <button type="button" class="sidebar-mobile-scroll-arrow sidebar-mobile-scroll-next" aria-label="Scroll sections right" hidden>&rsaquo;</button>
             </div>
           {{- end -}}
+          {{- /* When tabs are enabled, root the tree INSIDE the active tab's
+                 directory so the directory's own node never appears. If that
+                 dir can't be resolved (e.g. the default tab's dir is absent on
+                 this version), fall back to the whole version root. */ -}}
+          {{- $navRoot := $docsSection -}}
+          {{- with $activeId -}}
+            {{- with site.GetPage (printf "%s%s" $vr.lookupPath .) -}}{{- $navRoot = . -}}{{- end -}}
+          {{- end -}}
           <nav class="sidebar-nav" data-tab-panel="{{ $activeTab }}">
-            {{- template "render-sidebar-tree" (dict "page" $docsSection "current" $context "versionPrefix" $versionPrefix "depth" 0 "tabsEnabled" $tabsEnabled "activeTab" $activeTab "defaultTab" $defaultTab) -}}
+            {{- template "render-sidebar-tree" (dict "page" $navRoot "current" $context "versionPrefix" $versionPrefix "depth" 0 "emptyRootLink" $tabsEnabled) -}}
           </nav>
           {{- /* Mobile only: pre-render the OTHER tabs' trees as hidden panels
                  so tapping a tab in the drawer swaps the link structure in place
@@ -371,8 +390,12 @@
           {{- if and $tabsEnabled $docTabsList -}}
             {{- range $docTabsList -}}
               {{- if ne .name $activeTab -}}
+                {{- $panelRoot := $docsSection -}}
+                {{- with .id -}}
+                  {{- with site.GetPage (printf "%s%s" $vr.lookupPath .) -}}{{- $panelRoot = . -}}{{- end -}}
+                {{- end -}}
                 <nav class="sidebar-nav sidebar-mobile-tree-panel" data-tab-panel="{{ .name }}" aria-hidden="true">
-                  {{- template "render-sidebar-tree" (dict "page" $docsSection "current" $context "versionPrefix" $versionPrefix "depth" 0 "tabsEnabled" $tabsEnabled "activeTab" .name "defaultTab" $defaultTab) -}}
+                  {{- template "render-sidebar-tree" (dict "page" $panelRoot "current" $context "versionPrefix" $versionPrefix "depth" 0 "emptyRootLink" true) -}}
                 </nav>
               {{- end -}}
             {{- end -}}
@@ -412,7 +435,7 @@
         {{- end -}}
         <div class="sidebar-nav-wrapper">
           <nav class="sidebar-nav">
-            {{- template "render-sidebar-tree" (dict "page" $navRoot "current" $context "versionPrefix" "" "depth" 0 "tabsEnabled" $tabsEnabled "activeTab" $activeTab "defaultTab" $defaultTab) -}}
+            {{- template "render-sidebar-tree" (dict "page" $navRoot "current" $context "versionPrefix" "" "depth" 0) -}}
           </nav>
         </div>
       </aside>
@@ -426,25 +449,23 @@
   {{- $current := .current -}}
   {{- $versionPrefix := .versionPrefix -}}
   {{- $depth := .depth | default 0 -}}
-  {{- $tabsEnabled := .tabsEnabled | default false -}}
-  {{- $activeTab := .activeTab | default "" -}}
-  {{- $defaultTab := .defaultTab | default "" -}}
+  {{- /* Only a tab root asks for the empty-subtree fallback below. Defaults
+         false so the non-tab sidebars keep rendering nothing for a childless
+         root, exactly as before docTabs existed. */ -}}
+  {{- $emptyRootLink := .emptyRootLink | default false -}}
   {{- $maxDepth := 4 -}}
 
   {{- if gt $depth $maxDepth -}}{{- return -}}{{- end -}}
 
+  {{- /* Tab scoping is handled by the caller: when tabs are enabled the tree is
+         rooted inside the active tab's directory, so no per-item filtering is
+         needed here — this renders the whole subtree of whatever root it's
+         given. */ -}}
   {{- $children := slice -}}
   {{- range $page.Pages -}}
     {{- $include := true -}}
     {{- if ne $versionPrefix "" -}}
       {{- $include = hasPrefix .RelPermalink $versionPrefix -}}
-    {{- end -}}
-    {{- /* Tab scoping is a top-level (depth 0) concern only: keep an item when
-           its tab (front-matter `tab`, else the default tab) matches the active
-           tab. Deeper levels are never filtered, so a tab's subtree renders in
-           full. */ -}}
-    {{- if and $include $tabsEnabled (eq $depth 0) -}}
-      {{- $include = eq (.Params.tab | default $defaultTab) $activeTab -}}
     {{- end -}}
     {{- if $include -}}{{- $children = $children | append . -}}{{- end -}}
   {{- end -}}
@@ -517,6 +538,39 @@
           {{- end -}}
         </li>
       {{- end -}}
+    </ul>
+  {{- else if and $emptyRootLink (eq $depth 0) -}}
+    {{- /* Single-page tab: the tab's directory holds only its landing (_index)
+           with no child pages, so the loop above renders nothing. Without this
+           the left nav — and the mobile drawer's panel for this tab — would be
+           empty, leaving the tab unreachable on mobile (the drawer chips swap
+           panels client-side rather than navigating). Emit a link to the landing
+           itself so the tab always has something to click. Guarded to depth 0
+           (the tree root); a genuinely empty subsection deeper down still
+           renders nothing. */ -}}
+    {{- $navLabel := $page.LinkTitle | default $page.Title -}}
+    {{- $icon := $page.Params.icon | default "" -}}
+    {{- $isActive := eq $page.RelPermalink $current.RelPermalink -}}
+    <ul class="sidebar-list sidebar-list-depth-0">
+      <li class="hx:relative">
+        <div class="sidebar-link-wrapper">
+          <a href="{{ $page.RelPermalink }}"
+             class="sidebar-link {{ if $isActive }}sidebar-active-item{{ end }}"
+             {{ if $isActive }}aria-current="page"{{ end }}>
+            {{- with $icon -}}
+              {{- $svgIconPath := printf "static/%s" (replaceRE "^/" "" .) -}}
+              {{- if and (findRE `\.svg$` .) (fileExists $svgIconPath) -}}
+                {{- readFile $svgIconPath | replaceRE "<svg" `<svg class="sidebar-icon sidebar-icon-svg" aria-hidden="true"` | safeHTML -}}
+              {{- else if index site.Data.icons . -}}
+                {{- partial "utils/icon.html" (dict "name" . "attributes" `class="sidebar-icon" aria-hidden="true"`) -}}
+              {{- else -}}
+                <i class="material-icons sidebar-icon" aria-hidden="true">{{ . }}</i>
+              {{- end -}}
+            {{- end -}}
+            <span class="hx:flex-1">{{ $navLabel }}</span>
+          </a>
+        </div>
+      </li>
     </ul>
   {{- end -}}
 {{- end -}}

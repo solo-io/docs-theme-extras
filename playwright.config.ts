@@ -33,7 +33,16 @@ export default defineConfig({
   // infra noise, not a content bug — a fresh-page retry clears it, while a
   // real error still fails both attempts.
   retries: 1,
-  workers: process.env.CI ? 4 : undefined,
+  // CI worker count is tunable via PW_WORKERS. With the brand-matrix split
+  // (see .github/workflows/test.yml) each runner handles a single brand, so
+  // the browser-heavy projects can use more workers than the old 4. Dial back
+  // via PW_WORKERS if a runner shows OOM/flakiness. Local runs stay on
+  // Playwright's default (half the cores).
+  workers: process.env.PW_WORKERS
+    ? Number(process.env.PW_WORKERS)
+    : process.env.CI
+      ? 4
+      : undefined,
   reporter: process.env.CI
     ? [["list"], ["html", { open: "never" }], ["github"]]
     : [["list"], ["html", { open: "never" }]],
@@ -86,23 +95,33 @@ export default defineConfig({
       name: "browser",
       use: { ...devices["Desktop Chrome"] },
       testMatch:
-        /browser\.spec\.ts$|contrast\.spec\.ts$|viewport\.spec\.ts$|brand\.spec\.ts$|theme-toggle\.spec\.ts$|mermaid-render\.spec\.ts$|sidebar-rail\.spec\.ts$|toc-layout\.spec\.ts$|alert-body\.spec\.ts$|back-to-top\.spec\.ts$|table-display\.spec\.ts$|reuse-image-dark-pair\.spec\.ts$/,
+        /browser\.spec\.ts$|contrast\.spec\.ts$|viewport\.spec\.ts$|brand\.spec\.ts$|theme-toggle\.spec\.ts$|mermaid-render\.spec\.ts$|sidebar-rail\.spec\.ts$|toc-layout\.spec\.ts$|alert-body\.spec\.ts$|back-to-top\.spec\.ts$|table-display\.spec\.ts$|reuse-image-dark-pair\.spec\.ts$|version-banner-link\.spec\.ts$|mobile-drawer\.spec\.ts$|docs-tabs-sidebar\.spec\.ts$/,
     },
     {
       name: "cross-browser-chromium",
       use: { ...devices["Desktop Chrome"] },
       testMatch: /cross-browser\.spec\.ts$/,
     },
-    {
-      name: "cross-browser-firefox",
-      use: { ...devices["Desktop Firefox"] },
-      testMatch: /cross-browser\.spec\.ts$/,
-    },
-    {
-      name: "cross-browser-webkit",
-      use: { ...devices["Desktop Safari"] },
-      testMatch: /cross-browser\.spec\.ts$/,
-    },
+    // Firefox + WebKit are the expensive engines to install and run, so
+    // CROSS_BROWSER=chromium drops them and leaves chromium covering the spec.
+    // This is an OPT-IN escape hatch for a fast local iteration loop — CI does
+    // NOT set it. Every CI run (PR and push:main alike) sweeps all three, so an
+    // engine-specific regression is caught before merge rather than after; see
+    // the PW_BROWSERS comment in .github/workflows/test.yml.
+    ...(process.env.CROSS_BROWSER === "chromium"
+      ? []
+      : [
+          {
+            name: "cross-browser-firefox",
+            use: { ...devices["Desktop Firefox"] },
+            testMatch: /cross-browser\.spec\.ts$/,
+          },
+          {
+            name: "cross-browser-webkit",
+            use: { ...devices["Desktop Safari"] },
+            testMatch: /cross-browser\.spec\.ts$/,
+          },
+        ]),
     // Browser-based crawl: open every built page and assert no uncaught JS
     // exceptions, console.error calls, or 4xx responses on JS/CSS resources.
     // Distinct from the fixture-page-only "browser" project — this one crawls

@@ -144,50 +144,74 @@ interaction JS), and the `docs-tabs*` / `sidebar-mobile-tab*` rules in
 
 ## Enabling
 
-Declare the tabs, in display order, under `params.docTabs`. Mark one as the
-default; if none is marked, the first entry is the default.
+Declare the tabs, in display order, under `params.docTabs`. Each tab has a
+`name` (the label) and an `id` — the name of a **top-level content directory
+under the version root** whose pages that tab owns. Mark one tab as the default;
+if none is marked, the first entry is the default.
 
 ```toml
 [[params.docTabs]]
   name = "Documentation"
-  default = true
+  id = "documentation"   # owns content/<…>/<version>/documentation/**
 [[params.docTabs]]
   name = "API Reference"
+  id = "api"
 [[params.docTabs]]
   name = "Changelog"
+  id = "changelog"
 ```
 
-Tabs render **only when a version has two or more non-empty tabs.** An empty tab
-is dropped, and a version that ends up with fewer than two populated tabs shows
-its full, unscoped left nav (the feature is effectively off for that version).
-So tabs roll out per version as you tag pages — no per-version config change is
-needed.
+Each tab also takes an optional `hideSidebar` — see
+[Hiding the left nav on a tab](#hiding-the-left-nav-on-a-tab-hidesidebar).
 
-## Assigning pages to tabs
+The config is version-agnostic — one block per product covers every version.
+Tabs render **only for a version that has two or more of these directories
+present.** A version with fewer than two tab directories shows its full,
+unscoped left nav (the feature is effectively off there), so tabs roll out per
+version as you add the directories — no per-version config change is needed.
 
-Tabs are populated by the version's **top-level** sections and pages. Assign one
-to a tab with `tab:` front matter; anything untagged falls into the default tab.
+## Partitioning content into tab directories
 
-```yaml
----
-title: API Reference
-tab: API Reference   # this top-level section and its descendants live in that tab
----
+A tab **owns every page inside its `id` directory**. Partition a version's
+content into one directory per tab:
+
+```
+content/en/<product>/<version>/
+  documentation/          # default tab
+    _index.md
+    getting-started/…
+  api/                    # "API Reference" tab
+    _index.md
+    authentication.md
+  changelog/              # "Changelog" tab
+    _index.md
 ```
 
-- The **active tab** is the tab of the current page's top-level ancestor (or the
-  page itself, when it sits at the top level).
-- The left-nav tree is **scoped to the active tab at depth 0** — only that tab's
-  top-level sections show; levels below the top are unfiltered.
-- Each tab links to its **first top-level item's own page** — the first entry in
-  that tab's left nav — which is that section's landing page (or the page itself
-  when the first item is a leaf), not a deeper first-leaf page.
+- The **active tab** is the tab whose directory is the current page or an
+  ancestor of it (resolved by page relationships, not URL strings, so OSS /
+  enterprise / local-dev URL shapes all resolve the same). A page that sits
+  above every tab directory — e.g. the version-root landing — falls into the
+  default tab.
+- The left-nav tree is **rooted inside the active tab's directory**, so the
+  directory's own node never appears in the nav (it *is* the tab) and only that tab's pages show.
+- Each tab links to its **directory landing** (`_index`).
+- A tab whose directory holds only its landing (no child pages) still lists that
+  landing in the nav, so a single-page tab stays clickable — this matters on
+  mobile, where the drawer chips swap panels client-side rather than navigating,
+  so an empty panel would be a dead chip.
+
+> [!NOTE]
+> The former front-matter `tab:` key (the v0.1.21 prototype) is no longer read.
+> Tab membership is now determined entirely by which `id` directory a page lives
+> in.
 
 ## Desktop: the tab band
 
 At and above the sidebar breakpoint (`xl`, 1280px) the tabs render as a band
-across the top of the content area (`.docs-tabs-band`). Clicking a tab navigates
-to that tab's first page.
+across the top of the content area (`.docs-tabs-band`). The row is centered in
+the same page-width container as the content column (`.docs-tabs-inner`), so it
+lines up with the sidebar/content rather than the viewport edge. Clicking a tab
+navigates to that tab's directory landing.
 
 ## Mobile: tabs in the slide-out drawer
 
@@ -210,6 +234,51 @@ page as hidden panels (`.sidebar-mobile-tree-panel`), so each page in a tabbed
 version carries all of that version's tab trees in its HTML. On a version with
 large per-tab trees this adds page weight — a deliberate trade for no-navigation
 tab switching on mobile.
+
+## Hiding the left nav on a tab (`hideSidebar`)
+
+Not every tab needs a tree. A tab that owns a single page — a one-page changelog,
+one generated API reference, a single "what's new" — renders a one-item left nav
+next to it, which spends a 16rem column on a link to the page you are already on.
+Set `hideSidebar = true` on that tab to drop the nav:
+
+```toml
+[[params.docTabs]]
+  name = "Documentation"
+  id = "documentation"
+  default = true
+[[params.docTabs]]
+  name = "Changelog"
+  id = "changelog"
+  hideSidebar = true     # no left nav on this tab's pages, desktop only
+```
+
+- **Per-tab, not per-site.** The flag applies to the pages the tab owns. The
+  other tabs keep their nav, and switching back to one restores it.
+- **Desktop only, deliberately.** At and above the sidebar breakpoint (`xl`,
+  1280px) the nav is hidden and the article reclaims the column, so the page
+  reads wider. **Below `xl` the drawer always renders in full**, because there
+  the sidebar *is* the drawer — the only route to the tab chips, the version
+  chips, and the other tabs' trees. Hiding it on a phone would leave the reader
+  with no way off the page.
+- **The tab band stays.** The band is what gets a reader from a nav-less tab back
+  to one that has a nav, so it renders as usual.
+- **Default is off.** Omit the key (or set `false`) and the tab keeps its nav —
+  the behavior of every tab before this flag existed, so adding it changes
+  nothing until a tab opts in.
+
+Mechanically, the flag is resolved for the *active* tab and travels on the page
+store; `sidebar.html` turns it into a `sidebar-desktop-hidden` class on the
+`<aside>`, and a single rule inside `@media (min-width: 1280px)` in
+[`docs-theme-extras.css`](./assets/css/docs-theme-extras.css) does the hiding. The
+markup is always emitted — that is what keeps the drawer intact — so the suppression
+cannot leak below the breakpoint.
+
+> [!NOTE]
+> The content column shifts left and widens when the nav is hidden, so clicking
+> into a `hideSidebar` tab moves the article. That is the point of the flag (the
+> column is reclaimed rather than left blank), but it does mean the text's left
+> edge is not in the same place on every tab. The tab band itself does not move.
 
 ---
 

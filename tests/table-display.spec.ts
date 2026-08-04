@@ -152,3 +152,145 @@ test.describe("table shortcode display modes", () => {
     );
   });
 });
+
+// Read the bare `.table-wrapper` (NOT `.solo-table`) that follows a heading —
+// a plain markdown reference table, which render-table.html tags
+// `.table-capped` when it has 3+ columns. Mirrors `probe` above but targets the
+// wrapper directly since capped reference tables aren't wrapped by the `table`
+// shortcode.
+async function probeWrapper(
+  page: import("@playwright/test").Page,
+  headingId: string,
+  col: number,
+) {
+  return page.evaluate(({ headingId: id, col }) => {
+    const anchor = document.getElementById(id);
+    const heading = anchor ? anchor.closest("h1, h2, h3, h4, h5, h6") : null;
+    let scope: Element | null = heading ? heading.nextElementSibling : null;
+    while (
+      scope &&
+      !(scope.classList && scope.classList.contains("table-wrapper"))
+    ) {
+      scope = scope.nextElementSibling;
+    }
+    if (!scope) return null;
+    const wrapper = scope as HTMLElement;
+    // Column index of the cell under test: the long registry token sits in the
+    // Registry column (2nd), the prose sentence in the Description column (4th).
+    const cell = wrapper.querySelector(
+      `tbody td:nth-child(${col})`,
+    ) as HTMLElement | null;
+    const cs = cell ? getComputedStyle(cell) : null;
+    // Count real line boxes via Range rects rather than height/line-height:
+    // computed line-height is "normal" on these cells, so the arithmetic form
+    // yields NaN. Distinct rect tops == rendered lines.
+    let cellLines: number | null = null;
+    if (cell) {
+      const range = document.createRange();
+      range.selectNodeContents(cell);
+      const tops = new Set(
+        [...range.getClientRects()]
+          .filter((r) => r.height > 0)
+          .map((r) => Math.round(r.top)),
+      );
+      cellLines = tops.size;
+    }
+    const chars = cell ? (cell.textContent || "").trim().length : 0;
+    return {
+      className: wrapper.className,
+      clientW: wrapper.clientWidth,
+      scrollW: wrapper.scrollWidth,
+      overflowX: getComputedStyle(wrapper).overflowX,
+      cellWhiteSpace: cs ? cs.whiteSpace : null,
+      cellOverflowWrap: cs ? cs.overflowWrap : null,
+      cellLines,
+      // Characters per rendered line. The single number that distinguishes the
+      // two failure modes this file guards: a char-per-line fold drives it
+      // toward 1, a nowrap override drives it to the full cell length.
+      cellCharsPerLine: cellLines ? Math.round(chars / cellLines) : null,
+    };
+  }, { headingId, col });
+}
+
+// Phone-width behavior of `.table-capped` (every 3+ column markdown table).
+// These two blocks bound it from BOTH sides at 375px (iPhone SE), because the
+// two plausible failure modes pull in opposite directions:
+//
+//   under-wide  — a cell folds one character per line (unreadable vertical
+//                 strip); this is what a `white-space: nowrap` fix was reaching
+//                 for, and what `overflow-wrap: anywhere` could in principle
+//                 cause since it lets min-content collapse to a single glyph.
+//   over-wide   — a cell is forced onto ONE line; measured on the real
+//                 agentgateway airgap / CRD shapes this produced an 11,133px
+//                 description cell and a 33x-viewport horizontal scroll.
+//
+// The shipped fix — `overflow-wrap: break-word` below 767px — clears both:
+// measured 13 chars/line (token) and 10 chars/line (prose) with no horizontal
+// scroll. Reverting to `anywhere` drops both to 1 char/line; switching to
+// `nowrap` drives prose to 209 chars/line at 5.7x the viewport. Both guards
+// must hold for any future change to this area.
+const MIN_CHARS_PER_LINE = 4; // below this a cell is a vertical strip
+const MAX_VIEWPORT_MULTIPLE = 3; // above this the table is a swipe marathon
+
+test.describe("capped reference table at phone width: unbreakable token", () => {
+  test.skip(!IS_FIXTURE_TARGET, "fixture-only page");
+  test.use({ viewport: { width: 375, height: 800 } });
+
+  // The agentgateway airgap `kgateway-image-versions.md` shape: a long,
+  // break-free registry token in a capped table.
+  test("a long registry token does not fold one character per line", async ({
+    page,
+  }) => {
+    await page.goto(PAGE);
+    const r = await probeWrapper(page, "capped-table-long-unbreakable-token", 2);
+    expect(r, ".table-wrapper for the capped token table not found").not.toBeNull();
+    expect(r!.className, "table is not flagged .table-capped").toContain(
+      "table-capped",
+    );
+    expect(r!.overflowX, "wrapper is not horizontally scrollable").toMatch(
+      /auto|scroll/,
+    );
+    expect(
+      r!.cellCharsPerLine,
+      `registry token rendered at ${r!.cellCharsPerLine} chars/line over ${r!.cellLines} lines at 375px — that is the char-per-line fold`,
+    ).toBeGreaterThanOrEqual(MIN_CHARS_PER_LINE);
+  });
+});
+
+test.describe("capped reference table at phone width: prose description", () => {
+  test.skip(!IS_FIXTURE_TARGET, "fixture-only page");
+  test.use({ viewport: { width: 375, height: 800 } });
+
+  // The `Field | Type | Default | Description` shape that `.table-capped` is
+  // applied to en masse. 25% of capped cells in kgateway-oss exceed 60 chars
+  // and the longest runs ~2750, so these must keep wrapping on a phone.
+  test("a prose description cell keeps wrapping and the table does not balloon", async ({
+    page,
+  }) => {
+    await page.goto(PAGE);
+    const r = await probeWrapper(page, "capped-table-prose-description-column", 4);
+    expect(r, ".table-wrapper for the capped prose table not found").not.toBeNull();
+    expect(r!.className, "table is not flagged .table-capped").toContain(
+      "table-capped",
+    );
+    expect(
+      r!.cellWhiteSpace,
+      "prose description cell is nowrap at phone width — a ~200-char sentence would render on one line",
+    ).not.toBe("nowrap");
+    expect(
+      r!.cellLines,
+      `prose description cell rendered on ${r!.cellLines} line(s) at 375px — it must wrap onto several`,
+    ).toBeGreaterThan(2);
+    // The prose column folds the same way the token does when the collapse
+    // floor is missing (measured 1 char/line over 146 lines before the fix).
+    expect(
+      r!.cellCharsPerLine,
+      `prose description cell rendered at ${r!.cellCharsPerLine} chars/line over ${r!.cellLines} lines at 375px — that is the char-per-line fold`,
+    ).toBeGreaterThanOrEqual(MIN_CHARS_PER_LINE);
+    const ratio = r!.scrollW / Math.max(1, r!.clientW);
+    expect(
+      ratio,
+      `capped prose table is ${ratio.toFixed(1)}x the viewport at 375px — prose is not wrapping`,
+    ).toBeLessThan(MAX_VIEWPORT_MULTIPLE);
+  });
+});
