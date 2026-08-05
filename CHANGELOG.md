@@ -26,17 +26,16 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 Work on the gating and reuse shortcodes producing markdown/HTML leaks in visible output — plus the consumer-override convergence that fixing it exposed.
 
-**Three of these entries need a paired change in `solo-io/docs`, and the ordering is not
-the same for all three.** A pin bump alone is not enough, and for two of them a pin bump
-alone makes things *worse*. Read the "REQUIRES A PAIRED CHANGE" notes below before tagging:
-the hub's `assets/css/custom.css` counter block must go **with** the ordered-list fix, while
-its `layouts/_shortcodes/reuse.html` must go **only after** the `reuse` fix is tagged, since
-no released module before this one carries the flatten.
+**`solo-io/docs` needs a paired change in the same PR as its pin bump.** A pin bump on its
+own is not enough here, and would leave the hub worse than before. The hub must delete, in
+the same PR:
 
-If this ships as more than one tag, the natural seam is between the callout fix and the
-`reuse` fix: everything above that line is self-contained, while everything below changes
-rendered output on consumers that have **no** override and so benefits from being
-bisectable on its own.
+- the ordered-list counter block in `assets/css/custom.css` (kept, it shadows the fix);
+- `layouts/_shortcodes/reuse.html` (its `flatten-rendered` call is now in the module);
+- `assets/css/main.css`, `assets/js/core/toc-scroll.js`, `assets/js/flexsearch.js`
+  (byte-identical duplicates of module files).
+
+No other consumer needs a paired change. Details in the individual entries below.
 
 ### Add — `OVERRIDES.md` and a re-runnable scanner for consumer files that shadow this module (`OVERRIDES.md`, `tests/helpers/scan-overrides.ts`)
 
