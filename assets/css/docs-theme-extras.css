@@ -410,36 +410,32 @@
   color: #d1d5db;
 }
 
-/* Nested ordered lists: lowercase letters.
-   `:not([start])` so that an explicit `<ol start="N">` continues the
-   counter from the prior sibling nested ol — needed when a list-item's
-   content includes a block (HTML pre, etc.) that Goldmark renders
-   outside the parent <li>, splitting one logical list into two
-   sibling <ol>s. Without this, item 9 after the split would render
-   as "a" instead of "i". */
-#content > .content ol ol:not([start]) {
-  counter-reset: sublistitem;
-}
+/* Nested ordered lists: lowercase letters; doubly-nested: lowercase roman.
+   These use the BUILT-IN `list-item` counter rather than a custom one, so the
+   HTML `start` attribute is honored for free: per the HTML Standard's list
+   rendering rules `ol` implies `counter-reset: list-item`, `<ol start="N">`
+   maps onto `counter-reset: list-item N-1`, and every `display: list-item`
+   element implies `counter-increment: list-item` (unaffected by the
+   `list-style: none` set above — the top-level rule already relies on this).
 
-#content > .content ol ol > li {
-  counter-increment: sublistitem list-item 0;
-}
+   That is what fixes numbering across a SPLIT list: when a numbered list is
+   interrupted by a block Goldmark renders outside the parent <li> — a
+   {{< tabs >}} block, a fenced code block, raw HTML — it emits two <ol>s and
+   puts `start="N"` on the second. Custom counters cannot see `start`, and
+   their scope only reaches FOLLOWING SIBLINGS, so when the two fragments end
+   up under different parent <li>s (the tabs case) the second restarted at "a".
+   solo-io/docs#3280 §2. Pure CSS, no JS shim, no number flip on load.
 
+   An explicit <ol start="1"> now correctly restarts at "a" (it continued the
+   previous letter before). Known engine gap: Chromium ignores <li value="N">
+   for counter(list-item); Goldmark never emits `value=`, so that is inert
+   here. */
 #content > .content ol ol > li::before {
-  content: counter(sublistitem, lower-alpha);
-}
-
-/* Doubly-nested ordered lists: lowercase roman numerals */
-#content > .content ol ol ol:not([start]) {
-  counter-reset: subsublistitem;
-}
-
-#content > .content ol ol ol > li {
-  counter-increment: subsublistitem list-item 0;
+  content: counter(list-item, lower-alpha);
 }
 
 #content > .content ol ol ol > li::before {
-  content: counter(subsublistitem, lower-roman);
+  content: counter(list-item, lower-roman);
 }
 
 /* ── Sidebar ─────────────────────────────────────────────────────────── */

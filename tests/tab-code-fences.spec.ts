@@ -83,11 +83,17 @@ test.describe("tab panel code fences with blank lines stay intact", () => {
       expect(proseIdx, `${PROSE} missing — tab panel not rendered`).toBeGreaterThan(-1);
 
       // Isolate the tab panel that contains the prose marker.
-      const panelStart = html.lastIndexOf('class="hextra-tab-panel', proseIdx);
-      expect(panelStart, "no .hextra-tab-panel preceding prose marker").toBeGreaterThan(-1);
+      // NOTE: the class is `hextra-tabs-panel` (plural). This spec sat in no
+      // playwright.config.ts testMatch allowlist for months, so it never ran and
+      // never noticed Hextra renaming it from `hextra-tab-panel`. Match the bare
+      // class name, not `class="…`, so it also survives an attribute-quote-
+      // stripping --minify build in a consumer.
+      const PANEL_CLASS = "hextra-tabs-panel";
+      const panelStart = html.lastIndexOf(PANEL_CLASS, proseIdx);
+      expect(panelStart, `no .${PANEL_CLASS} preceding prose marker`).toBeGreaterThan(-1);
 
       // Panel ends at the next sibling panel opening (if any).
-      const nextPanel = html.indexOf("hextra-tab-panel", proseIdx + PROSE.length);
+      const nextPanel = html.indexOf(PANEL_CLASS, proseIdx + PROSE.length);
       const panelHtml = nextPanel > -1
         ? html.slice(panelStart, nextPanel)
         : html.slice(panelStart);
