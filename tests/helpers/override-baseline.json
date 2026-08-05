@@ -1,0 +1,91 @@
+{
+  "_readme": [
+    "Frozen inventory of consumer files and CSS selectors that SHADOW this module.",
+    "Enforced by tests/override-parity.spec.ts as a one-way ratchet: anything new",
+    "fails, and anything removed from a consumer must also be removed here.",
+    "Regenerate the raw numbers with `node tests/helpers/scan-overrides.mjs`, but",
+    "do NOT bulk-overwrite this file \u2014 each line is an accepted exception, and the",
+    "point of the ratchet is that adding one is a deliberate, reviewed act.",
+    "Prose for every entry lives in OVERRIDES.md; the spec checks the two agree."
+  ],
+  "consumers": {
+    "docs": {
+      "samePath": [
+        "layouts/_shortcodes/card.html",
+        "layouts/_shortcodes/cards.html",
+        "layouts/_shortcodes/gloss.html",
+        "layouts/_shortcodes/table.html"
+      ],
+      "duplicatedSelectors": []
+    },
+    "kgateway-oss": {
+      "samePath": [
+        "layouts/_partials/navbar.html",
+        "layouts/_shortcodes/link-hextra.html",
+        "layouts/docs/list.html",
+        "layouts/docs/single.html"
+      ],
+      "duplicatedSelectors": [
+        "styles.css :: .hextra-toc"
+      ]
+    },
+    "agentgateway-oss-website": {
+      "samePath": [
+        "assets/js/flexsearch.js",
+        "layouts/_partials/navbar.html",
+        "layouts/_shortcodes/link-hextra.html",
+        "layouts/_shortcodes/openapi.html",
+        "layouts/_shortcodes/reuse.html",
+        "layouts/docs/list.html",
+        "layouts/docs/single.html",
+        "layouts/partials/announcement.html"
+      ],
+      "duplicatedSelectors": [
+        "custom.css :: .dark .hextra-tabs-toggle",
+        "custom.css :: .dark .hextra-tabs-toggle:hover",
+        "custom.css :: .dark .hextra-tabs-toggle[data-state=\"selected\"]",
+        "custom.css :: .dark .sidebar-link.sidebar-active-item",
+        "custom.css :: .hextra-tabs-toggle",
+        "custom.css :: .hextra-tabs-toggle:hover",
+        "custom.css :: .hextra-tabs-toggle[data-state=\"selected\"]",
+        "custom.css :: .nav-container",
+        "custom.css :: .section-cards",
+        "custom.css :: .sidebar-link.sidebar-active-item",
+        "custom.css :: .sidebar-nav",
+        "styles.css :: .hextra-toc"
+      ]
+    },
+    "agentregistry-oss-website": {
+      "samePath": [
+        "assets/css/main.css"
+      ],
+      "duplicatedSelectors": []
+    },
+    "kagent-oss-website": {
+      "samePath": [],
+      "duplicatedSelectors": [
+        "custom.css :: .dark .hextra-tabs-toggle",
+        "custom.css :: .dark .hextra-tabs-toggle:hover",
+        "custom.css :: .dark .hextra-tabs-toggle[data-state=\"selected\"]",
+        "custom.css :: .dark .sidebar-link.sidebar-active-item",
+        "custom.css :: .hextra-tabs-toggle",
+        "custom.css :: .hextra-tabs-toggle:hover",
+        "custom.css :: .hextra-tabs-toggle[data-state=\"selected\"]",
+        "custom.css :: .nav-container",
+        "custom.css :: .section-cards",
+        "custom.css :: .sidebar-link.sidebar-active-item",
+        "custom.css :: .sidebar-nav",
+        "custom.css :: :root",
+        "styles.css :: .hextra-toc"
+      ]
+    },
+    "ambientmesh.io": {
+      "samePath": [],
+      "duplicatedSelectors": [
+        "custom.css :: .hextra-toc",
+        "custom.css :: .nav-container",
+        "custom.css :: .sidebar-product-logo"
+      ]
+    }
+  }
+}

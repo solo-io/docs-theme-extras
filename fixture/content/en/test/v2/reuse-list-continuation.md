@@ -25,7 +25,7 @@ the list as an ordered-list fragment carrying a start attribute.
 reuse.html therefore flattens its output to one logical line via
 utils/flatten-rendered (newlines to the numeric entity for LF, which Goldmark
 does not decode). This page is the guard for that. The flatten lived only in
-the docs hub's local reuse.html override until v0.1.27; angle form is immune
+the docs hub's local reuse.html override until it was upstreamed; angle form is immune
 (its output is placeholder-substituted after Goldmark), which is why the gap
 went unnoticed -- the fixture only ever exercised angle form.
 .

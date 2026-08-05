@@ -186,8 +186,8 @@
        line break. utils/flatten-rendered also collapses Hextra's copy-button
        block and protects <script>/<style>.
 
-       This lived only in the docs hub's LOCAL reuse.html override until
-       v0.1.27, which is exactly the shadowing problem OVERRIDES.md describes —
+       This lived only in the docs hub's LOCAL reuse.html override until it was
+       upstreamed, which is exactly the shadowing problem OVERRIDES.md describes —
        the module and the override had silently diverged. Guarded by
        fixture/content/en/test/v2/reuse-list-continuation.md, which covers both
        forms. The override's other divergence, a lone-<p> unwrap, was verified

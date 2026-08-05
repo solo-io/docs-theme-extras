@@ -1,16 +1,16 @@
 # Consumer overrides that shadow this module
 
-Regenerate with `node tests/helpers/scan-overrides.mjs` from the repo root, with the
-consumer clones as siblings. Snapshot taken 2026-08-05 against `docs-theme-extras` at
-v0.1.26.
+Regenerate with `npm run scan:overrides` from the repo root, with the consumer clones as
+siblings. Snapshot taken 2026-08-05 against unreleased `docs-theme-extras` — see the
+Unreleased section of `CHANGELOG.md`.
 
 ## Why this file exists
 
 A change that is correct in extras can still be a regression on a consumer that carries
-its own copy of the thing being changed. That is not hypothetical — it happened in
-v0.1.26. The ordered-list counter fix was right in the module, but the docs hub duplicated
-those rules in `assets/css/custom.css`, and `custom.css` is concatenated **after** the
-module stylesheet, so an equal-specificity copy wins. With only the pin bumped, the hub got
+its own copy of the thing being changed. That is not hypothetical — it happened with the
+ordered-list counter fix in the Unreleased section. That fix was right in the module, but
+the docs hub duplicated those rules in `assets/css/custom.css`, and `custom.css` is
+concatenated **after** the module stylesheet, so an equal-specificity copy wins. With only the pin bumped, the hub got
 the theme's new `content: counter(list-item, …)` while the hub's own
 `counter-increment: … list-item 0` still pinned the counter — markers stopped incrementing
 entirely, which is worse than the bug being fixed. It was found by eye, on a real build,
@@ -40,14 +40,14 @@ which is mechanism 2.
 | kgateway-oss | 4 | 1 | 1 | 3 |
 | agentgateway-oss-website | 8 | 12 | 8 | 5 |
 | agentregistry-oss-website | 1 | 0 | 0 | 0 |
-| kagent-oss-website | 0 | 14 | 9 | 0 |
+| kagent-oss-website | 0 | 13 | 9 | 0 |
 | ambientmesh.io | 0 | 3 | 3 | 0 |
 
 ### docs — the big one
 
 **169 duplicated selectors in `custom.css`, 147 of them byte-identical to extras.** This is
 not a stray copy; it is a near-wholesale duplication of extras' CSS layer. The ordered-list
-block fixed in v0.1.26 was *one of these*.
+block fixed in that same batch was *one of these*.
 
 The 22 divergent ones share a single pattern: **the hub hardcodes hex colors where extras
 uses brand custom properties.**
@@ -71,7 +71,7 @@ than merely stale and need a judgment call, notably `.section-card-image` (extra
 
 Same-path template shadows: `card.html`, `cards.html`, `gloss.html`, `table.html`.
 
-**Resolved in v0.1.27:** the 169 duplicated selectors are gone (`custom.css` 26,997 →
+**Resolved (unreleased):** the 169 duplicated selectors are gone (`custom.css` 26,997 →
 5,008 bytes), the three byte-identical asset duplicates were deleted
 (`assets/css/main.css`, `assets/js/core/toc-scroll.js`, `assets/js/flexsearch.js`), and
 `layouts/_shortcodes/reuse.html` was deleted after its only live divergence — a
@@ -97,10 +97,18 @@ features do not render here at all. `link-hextra.html` is a 587B stub against ex
 
 ### agentgateway-oss-website
 
-Eight same-path shadows. `reuse.html` is the known stale 59-line fork (single-row-only
-table regex, no keepVersion, no version remap). `announcement.html` is a full fork
-(`agw-banner*`). `docs/single.html` again drops the badge/description contract.
-`flexsearch.js` is a near-copy that has drifted (20929B vs 20564B).
+Eight same-path shadows, the most of any consumer:
+
+| file | note |
+|---|---|
+| `layouts/_shortcodes/reuse.html` | stale 59-line fork: single-row-only table regex, no keepVersion, no version remap, no parent-version args |
+| `layouts/_shortcodes/link-hextra.html` | stub against extras' 6KB, same gap as kgateway-oss |
+| `layouts/_shortcodes/openapi.html` | product-specific; check whether it still needs to diverge |
+| `layouts/_partials/navbar.html` | 832B against extras' 20.9KB — a different navbar, not a tweak |
+| `layouts/partials/announcement.html` | full fork with its own `agw-banner*` vocabulary |
+| `layouts/docs/single.html` | drops the `page-badges` / `page-description` / `badge-*` contract |
+| `layouts/docs/list.html` | same contract gap on section landings |
+| `assets/js/flexsearch.js` | near-copy that has **drifted** (20929B vs 20564B). The hub's copy of this file was byte-identical and could simply be deleted; this one cannot, so it needs a real diff first |
 
 ### agentregistry-oss-website
 
@@ -111,18 +119,37 @@ intentional or is silently dropping theme CSS.
 ### kagent-oss-website and ambientmesh.io
 
 No same-path shadows and no contract divergences, but both redefine extras selectors in
-`custom.css` — kagent 14 (9 divergent, incl. `:root`, `.hextra-tabs-toggle*`,
+`custom.css` — kagent 13 (9 divergent, incl. `:root`, `.hextra-tabs-toggle*`,
 `.section-cards`), ambientmesh 3 (all divergent: `.hextra-toc`,
 `.sidebar-product-logo`, `.nav-container`). `.hextra-toc` is redefined divergently by
 **four** of the six consumers, which suggests extras' own rule may be the wrong default
 rather than four consumers each being wrong.
 
+## Enforcement
+
+This document is the prose half of a two-part inventory. The machine half is
+`tests/helpers/override-baseline.json`, and `tests/override-parity.spec.ts` holds the two
+together as a **one-way ratchet**:
+
+- a shadow that is not in the baseline **fails** — adding one has to be deliberate;
+- a baseline entry a consumer no longer has **also fails**, so the list shrinks as
+  consumers are cleaned up instead of silently going stale;
+- every consumer with accepted shadows must have a section here, and every same-path
+  shadow must be named **inside that consumer's own section** — a document-wide name match
+  was too weak, since `kgateway-oss` and `agentgateway-oss-website` both fork
+  `navbar.html` and one mention would have vacuously satisfied both.
+
+**The cross-repo half does not run in CI**, because it needs the consumer clones as
+siblings. It is a pre-release check for a developer machine. The scanner's own unit tests
+do run everywhere, since a false negative there disarms everything else.
+
 ## How to use this before shipping a theme change
 
-1. Re-run the scanner and confirm nothing new appeared.
+1. Run `npm run scan:overrides` and `npx playwright test --project=static --grep
+   "override-parity"`, and confirm nothing new appeared.
 2. For every file or selector the change touches, check this inventory for a shadow.
 3. If a shadow exists, the consumer needs a paired change in the same release — a pin bump
-   alone will not take effect, and may make things worse (see v0.1.26).
+   alone will not take effect, and may make things worse (see the ordered-list fix).
 4. Verify on a real consumer build, not only the fixture. See the verification standard in
    the Phase 3 plan: build all eight docs products plus kgw-oss and agw-oss against a local
    `replace`, sweep the built HTML for the invariants touched, and spot-check visually.

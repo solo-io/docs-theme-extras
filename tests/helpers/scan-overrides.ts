@@ -2,8 +2,8 @@
 // scan-overrides — inventory every way a consumer repo SHADOWS docs-theme-extras.
 //
 // Why this exists: a correct theme change can still be a regression on a consumer
-// that carries its own copy of the thing being changed. That happened in v0.1.26:
-// the ordered-list counter fix was right in extras, but the docs hub duplicated
+// that carries its own copy of the thing being changed. That happened with the
+// ordered-list counter fix: it was right in extras, but the docs hub duplicated
 // those rules in assets/css/custom.css, which loads AFTER the module stylesheet
 // and so won on equal specificity — leaving the hub worse than before the fix.
 // A filename diff could never have found it, because custom.css is a legitimate
@@ -16,8 +16,13 @@
 //      extras specs that match those classes silently cover only the fixture
 //
 // Usage (from the docs-theme-extras repo root, with sibling consumer clones):
-//   node tests/helpers/scan-overrides.mjs           # human-readable report
-//   node tests/helpers/scan-overrides.mjs --json    # machine-readable
+//   npm run scan:overrides            # human-readable report
+//   npm run scan:overrides -- --json  # machine-readable
+//
+// This module is import-only; the CLI entry point lives in scripts/, outside
+// playwright's testDir. It used to self-invoke via `import.meta.url`, which
+// forced the file to load as ESM while playwright transpiled it to CJS —
+// "exports is not defined in ES module scope" the moment a spec imported it.
 //
 // Consumers are resolved relative to the parent directory. Keep this list in
 // sync with .claude/skills/release (the repos whose pin gets bumped).
@@ -67,6 +72,24 @@ function walk(base, exts) {
   return out;
 }
 
+/* Split a selector group on TOP-LEVEL commas only. A naive `sel.split(",")`
+   tears functional pseudo-classes apart — `:where(.dark, .dark *)` became the
+   two bogus selectors `:where(.dark` and `.dark *)`, the first of which can
+   never match anything and the second of which is a false collision. Hextra
+   v0.12 emits `:where(.dark, .dark *)` heavily, so this is not an edge case. */
+function splitSelectorGroup(sel) {
+  const parts = [];
+  let depth = 0, buf = "";
+  for (const c of sel) {
+    if (c === "(" || c === "[") depth++;
+    else if (c === ")" || c === "]") depth--;
+    if (c === "," && depth === 0) { parts.push(buf); buf = ""; continue; }
+    buf += c;
+  }
+  parts.push(buf);
+  return parts;
+}
+
 /** Top-level selector -> normalized declaration bodies. Skips at-rules. */
 export function cssBlocks(file) {
   const src = fs.readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
@@ -80,7 +103,7 @@ export function cssBlocks(file) {
       if (--depth === 0) {
         if (sel && !sel.startsWith("@")) {
           const norm = body.replace(/\s+/g, " ").replace(/\s*([:;])\s*/g, "$1").trim().replace(/;$/, "");
-          for (const part of sel.split(",")) {
+          for (const part of splitSelectorGroup(sel)) {
             const k = part.trim().replace(/\s+/g, " ");
             if (k) out.set(k, [...(out.get(k) ?? []), norm]);
           }
@@ -154,19 +177,18 @@ export function scan() {
   return report;
 }
 
-if (process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]))) {
-  const r = scan();
-  if (process.argv.includes("--json")) {
-    console.log(JSON.stringify(r, null, 2));
-  } else {
-    for (const c of r) {
-      if (c.missing) { console.log(`\n## ${c.name}\n  (clone not found)`); continue; }
-      console.log(`\n## ${c.name}`);
-      console.log(`  same-path shadows       : ${c.samePath.length} (${c.samePath.filter((s) => s.identical).length} byte-identical)`);
-      console.log(`  duplicated selectors    : ${c.dupSame.length + c.dupDiff.length} (${c.dupDiff.length} DIVERGENT)`);
-      console.log(`  contract divergences    : ${c.contract.length}`);
-      for (const s of c.samePath) console.log(`     ${s.identical ? "=" : "~"} ${s.file}  ${s.extrasBytes}B/${s.consumerBytes}B`);
-      for (const d of c.dupDiff) console.log(`     DIVERGENT selector  ${d.file}  ${d.sel}`);
-    }
+/** Human-readable report. Kept here rather than in the CLI wrapper so the
+    formatting is covered by the same module the spec imports. */
+export function formatReport(r: ReturnType<typeof scan>): string {
+  const out: string[] = [];
+  for (const c of r) {
+    if (c.missing) { out.push(`\n## ${c.name}\n  (clone not found)`); continue; }
+    out.push(`\n## ${c.name}`);
+    out.push(`  same-path shadows       : ${c.samePath.length} (${c.samePath.filter((s) => s.identical).length} byte-identical)`);
+    out.push(`  duplicated selectors    : ${c.dupSame.length + c.dupDiff.length} (${c.dupDiff.length} DIVERGENT)`);
+    out.push(`  contract divergences    : ${c.contract.length}`);
+    for (const s of c.samePath) out.push(`     ${s.identical ? "=" : "~"} ${s.file}  ${s.extrasBytes}B/${s.consumerBytes}B`);
+    for (const d of c.dupDiff) out.push(`     DIVERGENT selector  ${d.file}  ${d.sel}`);
   }
+  return out.join("\n");
 }
