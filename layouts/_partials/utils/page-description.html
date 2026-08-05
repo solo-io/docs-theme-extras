@@ -15,14 +15,27 @@
        Logic otherwise mirrors the upstream partial: explicit `.Description`
        wins; home falls back to the site description; other pages fall back to
        the rendered page summary (already HTML, so it skips markdownify). */ -}}
+{{- $desc := "" -}}
 {{- with .Description -}}
-  {{- . | markdownify | plainify | htmlUnescape -}}
+  {{- $desc = . | markdownify | plainify | htmlUnescape -}}
 {{- else -}}
   {{- if .IsHome -}}
     {{- with .Site.Params.description -}}
-      {{- . | markdownify | plainify | htmlUnescape -}}
+      {{- $desc = . | markdownify | plainify | htmlUnescape -}}
     {{- end -}}
   {{- else -}}
-    {{- .Summary | plainify | htmlUnescape | chomp -}}
+    {{- $desc = .Summary | plainify | htmlUnescape -}}
   {{- end -}}
 {{- end -}}
+{{- /* Collapse all whitespace runs to single spaces.
+       A description is a single-line attribute value, but the summary path can
+       reach here carrying real newlines: `reuse.html` flattens its expansion to
+       one logical line by encoding newlines as `&#10;`, and `htmlUnescape`
+       above turns those straight back into literal newlines. The result was
+       multi-line `<meta name="description">` / `og:description` / JSON-LD
+       values. Front-matter descriptions can carry stray newlines too (a wrapped
+       YAML string), so normalize on every path rather than just the summary
+       one. Measured: this accounts for the metadata diff on 693 of 1160
+       kgateway-oss pages when that repo first picks up the flatten. */ -}}
+{{- $desc = $desc | replaceRE `\s+` " " -}}
+{{- trim $desc " " -}}

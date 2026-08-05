@@ -166,5 +166,34 @@
        into the middle of a code-block continuation line. RenderString wraps
        single-line content in a paragraph and emits a trailing newline. */ -}}
 {{- $rendered := $content | .Page.RenderString -}}
-{{- strings.TrimRight " \n\t" $rendered | safeHTML -}}
+{{- $rendered = strings.TrimRight " \n\t" $rendered -}}
+
+{{- /* Flatten to one logical line (newlines → &#10;) so a multi-line expansion
+       can't terminate a parent ordered list.
+
+       Only PERCENT form is at risk, and that is the whole reason this is here.
+       Hugo substitutes a shortcode's output at the call's source position; for
+       `2. {{%% reuse "…" %%}}` the first line lands at the list-item content
+       column but every later line lands at column 0, and Goldmark's list-item
+       continuation rule terminates the list there — closing </li>/</ol> early
+       and hoisting the snippet's tail into an <ol start="N"> fragment. Angle
+       form is immune (its output is placeholder-substituted AFTER Goldmark, so
+       the list is already parsed), which is why this went unnoticed upstream
+       for so long: the fixture only exercised angle form.
+
+       Goldmark does not decode HTML entities, so &#10; carries no block
+       meaning; browsers decode it to LF, and inside <pre> it still renders as a
+       line break. utils/flatten-rendered also collapses Hextra's copy-button
+       block and protects <script>/<style>.
+
+       This lived only in the docs hub's LOCAL reuse.html override until
+       v0.1.27, which is exactly the shadowing problem OVERRIDES.md describes —
+       the module and the override had silently diverged. Guarded by
+       fixture/content/en/test/v2/reuse-list-continuation.md, which covers both
+       forms. The override's other divergence, a lone-<p> unwrap, was verified
+       DEAD before deletion: .Page.RenderString with no options renders at
+       display:"inline", which does not wrap single-line content in <p> at all,
+       so its condition was unreachable. */ -}}
+{{- $rendered = partial "utils/flatten-rendered.html" $rendered -}}
+{{- $rendered | safeHTML -}}
 
