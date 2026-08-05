@@ -31,7 +31,17 @@
   The partial emits its result directly (no `{{ return }}`) so callers
   can pipe it through safeHTML in the conventional way.
 */ -}}
-{{- $rendered := printf "%s" . -}}
+{{- /* Input: either the rendered HTML directly, or a dict
+         { "html": <rendered>, "bypassPre": <bool> }
+       to override the <pre> bypass documented below. Default (and the plain
+       string form) keeps the bypass on. */ -}}
+{{- $bypassPre := true -}}
+{{- $in := . -}}
+{{- if reflect.IsMap . -}}
+  {{- $in = .html -}}
+  {{- if isset . "bypassPre" -}}{{- $bypassPre = .bypassPre -}}{{- end -}}
+{{- end -}}
+{{- $rendered := printf "%s" $in -}}
 {{- /* Pre-collapse Hextra's <div class="hextra-code-copy-btn-container">…
        </button></div> block to a single logical line before the global
        \n → &#10; replace below. Hextra's codeblock-copy-button partial emits
@@ -64,7 +74,7 @@
        (output: `&lt;`). Mirror the main-branch version.html bypass:
        when <pre is present, emit the rendered HTML untouched (after the
        copy-button collapse, which is safe for any context). */ -}}
-{{- if strings.Contains $rendered "<pre" -}}
+{{- if and $bypassPre (strings.Contains $rendered "<pre") -}}
 {{- $rendered | safeHTML -}}
 {{- else -}}
 {{- $protected := findRE `(?s)<(?:script|style)\b[^>]*>.*?</(?:script|style)>` $rendered -}}

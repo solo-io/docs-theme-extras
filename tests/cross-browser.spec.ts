@@ -248,12 +248,24 @@ test.describe("ordered-list markers honor <ol start> in every engine", () => {
 
       const actual = await page.screenshot({ clip });
       await li.evaluate((el) => el.setAttribute("data-marker-probe", "x"));
-      await page.addStyleTag({
-        content: `li[data-marker-probe="x"]::before { content: "${expected}" !important; }`,
-      });
-      const reference = await page.screenshot({ clip });
+      const shotWith = async (glyph: string) => {
+        const tag = await page.addStyleTag({
+          content: `li[data-marker-probe="x"]::before { content: "${glyph}" !important; }`,
+        });
+        const buf = await page.screenshot({ clip });
+        await tag.evaluate((n) => n.remove());
+        return buf;
+      };
+      const reference = await shotWith(expected);
+      // Negative control — see ordered-list-numbering.spec.ts. Without it an
+      // occluded or mis-clipped marker box passes vacuously.
+      const control = await shotWith(expected === "z" ? "y" : "z");
       await li.evaluate((el) => el.removeAttribute("data-marker-probe"));
 
+      expect(
+        control.equals(reference),
+        `${marker}: clip is occluded or mis-clipped — cannot measure`,
+      ).toBe(false);
       expect(
         actual.equals(reference),
         `${marker}: marker did not render as "${expected}"`,

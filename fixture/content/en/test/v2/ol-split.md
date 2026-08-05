@@ -94,3 +94,30 @@ nested list into two *sibling* `<ol>`s under the same parent `<li>`.
 2. MARKER_OLSPLIT_S4_TOP2. A fresh step whose nested list has no `start`.
 
    1. MARKER_OLSPLIT_S4_RESTART. Expect "a" — a nested list with no `start` restarts.
+
+## Shape 5 — nested list continued INSIDE a tab panel
+
+The real-world shape this fix exists for, and the one the original fixture
+missed: the continuation fragment lives inside a `{{</* tabs */>}}` panel, which is
+`display: none` until the reader activates it. `display: none` subtrees
+contribute nothing to CSS counters, so the marker has to be correct after the
+reveal, not just at load. Matches the DOM on
+/gateway/1.19.x/quickstart/ and /gateway/1.22.x/setup/listeners/tls-passthrough/
+(outer `ol > li > div.hextra-tabs > … > ol[start="3"] > li`).
+
+1. MARKER_OLSPLIT_S5_TOP. Top-level step whose sub-list continues inside tabs.
+
+   1. MARKER_OLSPLIT_S5_SUB_A. Expect "a".
+   2. MARKER_OLSPLIT_S5_SUB_B. Expect "b".
+
+   {{< tabs >}}
+   {{% tab name="Tab A" %}}
+   3. MARKER_OLSPLIT_S5_TABA_C. Expect "c", not "a".
+   4. MARKER_OLSPLIT_S5_TABA_D. Expect "d", not "b".
+   {{% /tab %}}
+   {{% tab name="Tab B" %}}
+   3. MARKER_OLSPLIT_S5_TABB_C. Expect "c" in the second tab too.
+   {{% /tab %}}
+   {{< /tabs >}}
+
+2. MARKER_OLSPLIT_S5_TOP2. Outer numbering must NOT be inflated by the nested items — expect "2", not "4" or "8".

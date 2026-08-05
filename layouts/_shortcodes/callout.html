@@ -106,6 +106,34 @@
   {{- end -}}
   {{- $iconMarkup = replace (printf "%s" $iconMarkup) "\n" "" -}}
   {{- $bodyHTML := cond (ne $body "") ($body | markdownify) "<p><em>Content not available</em></p>" -}}
-  {{- $bodyHTML = replace (printf "%s" $bodyHTML) "\n" "&#10;" -}}
+  {{- /* Flatten via utils/flatten-rendered rather than a bare
+         `replace "\n" "&#10;"`. What the partial adds that the bare replace
+         lacked: it pre-collapses Hextra's copy-button block (emitted with one
+         attribute per LINE) before flattening, and it protects <script>/<style>.
+         Without the pre-collapse a fenced body produced
+         `<button&#10;   class="hextra-code-copy-btn …"` — entities are NOT
+         decoded inside a start tag, so the parser read `&#10;` as a garbage
+         attribute name. Live symptom on
+         /gateway/1.21.x/portal/guides/use-frontend/view-apis/.
+
+         bypassPre:false is deliberate and load-bearing. The partial's default
+         is to emit <pre>-bearing HTML untouched, with REAL newlines, because in
+         version.html's re-parse context entity-ifying Chroma's inter-line
+         newlines made the PARENT apply CommonMark backslash-escaping to `\<`
+         inside the spans. callout is NOT that context, and inheriting the
+         bypass here costs the enclosing list: real newlines in a percent-form
+         callout body inside a list item re-enter the markdown stream on
+         multiple lines and terminate the <li> (measured: the fixture list split
+         into `<ol>` + `<ol start="2">`). With the smash restored the list stays
+         intact AND the code stays correct — verified that the `\` continuation
+         remains a Chroma `<span class="se">`, with no literal `</span>` text and
+         no `&lt;` escapes. So the failure the bypass guards does not occur here.
+
+         Both directions are break-tested in tests/callout-fence.spec.ts:
+         reverting to the bare replace fails the copy-button assertions while the
+         list assertion passes; leaving bypassPre on fails only the list one.
+         Angle form is unaffected either way — its output is substituted after
+         Goldmark runs, so newlines in it are never re-parsed. */ -}}
+  {{- $bodyHTML = partial "utils/flatten-rendered.html" (dict "html" $bodyHTML "bypassPre" false) -}}
   <div class="solo-alert {{ $colors }}" role="note"><div class="solo-alert-icon">{{ $iconMarkup | safeHTML }}</div><div class="solo-alert-body">{{ $bodyHTML | safeHTML }}</div></div>
 {{- end -}}

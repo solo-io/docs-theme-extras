@@ -71,13 +71,36 @@ async function expectMarker(page: Page, marker: string, expected: string) {
 
   const token = `expect-${marker}`;
   await li.evaluate((el, t) => el.setAttribute("data-marker-probe", t), token);
-  await page.addStyleTag({
-    content: `li[data-marker-probe="${token}"]::before { content: "${expected}" !important; }`,
-  });
-  const reference = await page.screenshot({ clip });
+
+  const shotWith = async (glyph: string) => {
+    const tag = await page.addStyleTag({
+      content: `li[data-marker-probe="${token}"]::before { content: "${glyph}" !important; }`,
+    });
+    const buf = await page.screenshot({ clip });
+    await tag.evaluate((n) => n.remove());
+    return buf;
+  };
+
+  const reference = await shotWith(expected);
+  // NEGATIVE CONTROL — this guard is not optional. If the clip region is
+  // occluded (a sticky navbar over the marker) or lands off-element, then
+  // forcing ANY glyph changes nothing and `actual.equals(reference)` is
+  // trivially true, so the assertion passes without measuring anything. A
+  // throwaway version of this script did exactly that and reported "b" for a
+  // marker that visibly renders "d". Forcing a glyph we know is wrong must
+  // CHANGE the pixels; if it doesn't, the measurement is unreliable, not green.
+  const wrong = expected === "x" ? "y" : "x";
+  const control = await shotWith(wrong);
 
   // Clean up so a later assertion on the same page isn't affected.
   await li.evaluate((el) => el.removeAttribute("data-marker-probe"));
+
+  expect(
+    control.equals(reference),
+    `${marker}: forcing "${wrong}" produced identical pixels to "${expected}" — ` +
+      `the marker box is occluded or mis-clipped, so this assertion cannot measure ` +
+      `anything. Fix the clip before trusting a pass.`,
+  ).toBe(false);
 
   expect(
     actual.equals(reference),
@@ -133,6 +156,38 @@ test.describe("ordered-list markers across a split list", () => {
   // the OLD custom-counter CSS; only shape 1 fails (SUB_C rendered "a"). These
   // three are here to prove the rewrite didn't cost anything, not to catch the
   // reported bug.
+  // THE REAL-WORLD SHAPE, and the one the first version of this fixture missed:
+  // the continuation fragment lives inside a tabs panel. The original scan for
+  // affected content looked for a column-0 tabs block in markdown SOURCE and
+  // found nothing — but on the docs hub these splits sit INSIDE tab panels
+  // (outer `ol > li > div.hextra-tabs > … > ol[start="3"] > li`), which that
+  // scan could not see. 22 such sites exist in the `gateway` product alone,
+  // e.g. /gateway/1.19.x/quickstart/ and
+  // /gateway/1.22.x/setup/listeners/tls-passthrough/.
+  //
+  // A tab panel is display:none until selected, and a display:none subtree
+  // contributes nothing to CSS counters — so the marker must be right after the
+  // reveal, not merely at load. Tab B is checked by clicking into it.
+  test("shape 5: nested list continues inside a tab panel", async ({ page }) => {
+    await expectMarker(page, "MARKER_OLSPLIT_S5_SUB_A", "a");
+    await expectMarker(page, "MARKER_OLSPLIT_S5_SUB_B", "b");
+    // Tab A is selected by default.
+    await expectMarker(page, "MARKER_OLSPLIT_S5_TABA_C", "c");
+    await expectMarker(page, "MARKER_OLSPLIT_S5_TABA_D", "d");
+    // The outer list must not be inflated by the nested items — the failure the
+    // docs hub's own custom.css guarded against ("8 instead of 3").
+    await expectMarker(page, "MARKER_OLSPLIT_S5_TOP", "1");
+    await expectMarker(page, "MARKER_OLSPLIT_S5_TOP2", "2");
+  });
+
+  test("shape 5: a revealed tab panel numbers correctly too", async ({ page }) => {
+    await page
+      .locator(".hextra-tabs-toggle", { hasText: "Tab B" })
+      .first()
+      .click();
+    await expectMarker(page, "MARKER_OLSPLIT_S5_TABB_C", "c");
+  });
+
   test("shape 4: doubly-nested split, and a no-start list restarts", async ({
     page,
   }) => {
