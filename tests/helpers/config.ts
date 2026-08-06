@@ -160,7 +160,10 @@ const DEFAULT_CHECKS: Checks = {
   headingShortcodeId: true,
   tabSyntax: true,
   includeForm: true,
-  condListOrder: true,
+  // Default OFF: the antipattern it guards was fixed by the gate refactor —
+  // `conditional-text` no longer renders inline-only. See the header of
+  // helpers/cond-list-order.ts for the re-measurement that retired it.
+  condListOrder: false,
   gateForm: true,
   cascadeType: true,
   consoleErrors: true,

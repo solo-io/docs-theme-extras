@@ -1,6 +1,26 @@
 // Source-side lint for the "conditional-text gated bullet is not last in its
 // list" antipattern.
 //
+// OBSOLETE AS OF THE GATE REFACTOR — kept, but DISABLED BY DEFAULT.
+//
+// The premise below describes the PRE-REFACTOR `conditional-text`, which
+// rendered its body in INLINE display mode only. That template no longer
+// exists: `conditional-text` now emits `.Inner` untouched, exactly like
+// `version`, so the failure this lint was written to catch cannot occur.
+//
+// Re-measured against the current templates on
+// `fixture/content/en/test/v2/cond-list-order-shape.md`, which reproduces the
+// exact antipattern (a gated bullet ahead of a plain sibling) in the three
+// shapes the rationale names — plain text, a markdown link, and bold — with the
+// gate both including and excluding. Every case renders as ONE contiguous list,
+// correctly renumbered, with no `<ol start=`, no literal `2.` marker, and no
+// leaked `](url)` or `**`. The 20 violations it reported on the docs hub are
+// therefore all stale.
+//
+// Left in place rather than deleted so the judgment is reversible: flip
+// `checks.condListOrder` back on if a real failing shape turns up.
+//
+// ORIGINAL RATIONALE, for reference:
 // `conditional-text` renders its body in INLINE display mode only (unlike
 // `version`, which has block / trailing-step handling). When a gated bullet
 // sits AHEAD of an always-shown bullet in the same list, the inline render

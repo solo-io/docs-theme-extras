@@ -38,7 +38,6 @@
         "layouts/_shortcodes/redirect.html",
         "layouts/_shortcodes/reuse-image-dark.html",
         "layouts/_shortcodes/reuse-image.html",
-        "layouts/_shortcodes/reuse.html",
         "layouts/docs/list.html",
         "layouts/docs/single.html"
       ],

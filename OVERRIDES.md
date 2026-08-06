@@ -97,7 +97,7 @@ features do not render here at all. `link-hextra.html` is a 587B stub against ex
 
 ### agentgateway-oss-website
 
-Ten same-path shadows, the most of any consumer. Three arrived on 2026-08-06 in the
+Nine same-path shadows, the most of any consumer. Three arrived on 2026-08-06 in the
 commit "Moved shortcodes to `_shortcodes`": those files already existed under the old
 `layouts/shortcodes/` path, where they did NOT collide with the module, and moving them made
 them shadow it. All three are stale forks substantially smaller than the module's versions,
@@ -114,7 +114,6 @@ be the reason the ratchet goes red.
 
 | file | note |
 |---|---|
-| `layouts/_shortcodes/reuse.html` | stale 59-line fork: single-row-only table regex, no keepVersion, no version remap, no parent-version args |
 | `layouts/_shortcodes/link-hextra.html` | stub against extras' 6KB, same gap as kgateway-oss |
 | `layouts/_shortcodes/openapi.html` | product-specific; check whether it still needs to diverge |
 | `layouts/_partials/navbar.html` | 832B against extras' 20.9KB — a different navbar, not a tweak |

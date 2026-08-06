@@ -6,6 +6,7 @@ import {
   extractImageRefs,
   isLocalImage,
   resolveImagePath,
+  decodeHtmlEntities,
   srcsetUrls,
   __test,
 } from "./helpers/missing-images";
@@ -110,6 +111,31 @@ test.describe("missing-images helpers", () => {
       path,
     );
     expect(p).toBe(path.resolve("/build/test/main/everything", "../shared/x.svg"));
+  });
+
+  // An attribute value is ENCODED text; the URL a browser requests is its
+  // decoded form. Hugo writes a `+` in a filename as `&#43;`, and not decoding
+  // it produced 242 false "missing image" reports on gloo-mesh-enterprise for
+  // files that were all present on disk.
+  test("resolveImagePath decodes HTML character references in the src", () => {
+    expect(
+      resolveImagePath("/img/ui-clusters-2.10&#43;.png", "/b/p/index.html", "/b", path),
+    ).toBe(path.join("/b", "img/ui-clusters-2.10+.png"));
+    expect(
+      resolveImagePath("/img/a&#x2B;b.png", "/b/p/index.html", "/b", path),
+    ).toBe(path.join("/b", "img/a+b.png"));
+  });
+
+  test("decodeHtmlEntities handles numeric, hex, and named forms", () => {
+    expect(decodeHtmlEntities("a&#43;b")).toBe("a+b");
+    expect(decodeHtmlEntities("a&#x2B;b")).toBe("a+b");
+    expect(decodeHtmlEntities("a&amp;b&lt;c&gt;d&quot;e&apos;f")).toBe(`a&b<c>d"e'f`);
+  });
+
+  // &amp; is decoded last so an escaped entity stays escaped instead of being
+  // decoded twice into the character it names.
+  test("decodeHtmlEntities does not double-decode an escaped entity", () => {
+    expect(decodeHtmlEntities("a&amp;#43;b")).toBe("a&#43;b");
   });
 
   test("resolveImagePath strips query string and fragment, decodes percent-encoding", () => {
