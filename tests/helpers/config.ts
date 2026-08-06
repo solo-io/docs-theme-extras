@@ -56,6 +56,13 @@ export type Checks = {
   // `tabTotal=`, nameless tabs) that renders labels as "Tab 0", "Tab 1", ….
   tabSyntax: boolean;
   includeForm: boolean;
+  // Source scan for a `conditional-text` gated bullet that is NOT last in its
+  // list. conditional-text renders inline-only, so a gated bullet followed by a
+  // plain sibling breaks the list continuation and the gated markdown survives
+  // as literal text. Catches the plain-text case the rendered-HTML leak scan
+  // cannot see (no link/bold/pipe signature to match on).
+  // See helpers/cond-list-order.ts.
+  condListOrder: boolean;
   cascadeType: boolean;
   // Browser-level crawl: open every built page in Chromium and fail on
   // uncaught JS exceptions, console.error calls, or HTTP 4xx on JS/CSS assets.
@@ -147,6 +154,7 @@ const DEFAULT_CHECKS: Checks = {
   headingShortcodeId: true,
   tabSyntax: true,
   includeForm: true,
+  condListOrder: true,
   cascadeType: true,
   consoleErrors: true,
   missingImages: true,

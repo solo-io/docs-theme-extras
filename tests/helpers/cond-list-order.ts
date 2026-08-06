@@ -92,9 +92,20 @@ function tokenize(source: string): Token[] {
     const depthEnteringLine = condDepth;
     condDepth = Math.max(0, condDepth + opens - closes);
 
+    // Two ways a line can be a list item:
+    //   1. it starts with a marker — `* foo`, possibly inside an open gate;
+    //   2. the INLINE PREFIX form — `{{% conditional-text … %}}* foo`, where the
+    //      opener comes first so the line does NOT start with a marker.
+    //
+    // Case 2 has to be its own branch. It was previously only consulted inside
+    // `if (hasMarker)`, which made it unreachable: a line cannot both start with
+    // a list marker and start with a shortcode. That left the exact shape this
+    // helper was written for — the `reference/release-notes.md` `[Changelog]`
+    // leak, authored as an inline prefix — undetectable.
     const hasMarker = LIST_MARKER.test(line);
-    if (hasMarker) {
-      const gated = depthEnteringLine > 0 || OPEN_THEN_MARKER.test(line);
+    const inlineGatedMarker = OPEN_THEN_MARKER.test(line);
+    if (hasMarker || inlineGatedMarker) {
+      const gated = depthEnteringLine > 0 || inlineGatedMarker;
       tokens.push({ type: "item", gated, line: i + 1, text: trimmed });
       continue;
     }
