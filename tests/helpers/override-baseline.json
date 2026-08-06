@@ -35,10 +35,12 @@
         "layouts/_partials/navbar.html",
         "layouts/_shortcodes/link-hextra.html",
         "layouts/_shortcodes/openapi.html",
+        "layouts/_shortcodes/redirect.html",
+        "layouts/_shortcodes/reuse-image-dark.html",
+        "layouts/_shortcodes/reuse-image.html",
         "layouts/_shortcodes/reuse.html",
         "layouts/docs/list.html",
-        "layouts/docs/single.html",
-        "layouts/partials/announcement.html"
+        "layouts/docs/single.html"
       ],
       "duplicatedSelectors": [
         "custom.css :: .dark .hextra-tabs-toggle",

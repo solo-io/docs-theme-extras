@@ -97,7 +97,20 @@ features do not render here at all. `link-hextra.html` is a 587B stub against ex
 
 ### agentgateway-oss-website
 
-Eight same-path shadows, the most of any consumer:
+Ten same-path shadows, the most of any consumer. Three arrived on 2026-08-06 in the
+commit "Moved shortcodes to `_shortcodes`": those files already existed under the old
+`layouts/shortcodes/` path, where they did NOT collide with the module, and moving them made
+them shadow it. All three are stale forks substantially smaller than the module's versions,
+so agw silently lost whatever those files have gained since the fork. They need a real diff,
+not a rubber stamp.
+
+**This consumer's shadow set depends on which branch the clone has checked out**, so the
+ratchet is only meaningful against a known branch. Over one working session the scanner saw
+the set change four times as the clone moved between `kkb-mcp-gaps` and `kkb-theme-upgrade`;
+`layouts/partials/announcement.html` exists on some branches and not others. The snapshot
+below is `kkb-theme-upgrade` at `3769c7c2`. **Re-run `npm run scan:overrides` against the
+release branch before trusting these counts**, and expect this consumer, not the module, to
+be the reason the ratchet goes red.
 
 | file | note |
 |---|---|
@@ -105,9 +118,11 @@ Eight same-path shadows, the most of any consumer:
 | `layouts/_shortcodes/link-hextra.html` | stub against extras' 6KB, same gap as kgateway-oss |
 | `layouts/_shortcodes/openapi.html` | product-specific; check whether it still needs to diverge |
 | `layouts/_partials/navbar.html` | 832B against extras' 20.9KB — a different navbar, not a tweak |
-| `layouts/partials/announcement.html` | full fork with its own `agw-banner*` vocabulary |
 | `layouts/docs/single.html` | drops the `page-badges` / `page-description` / `badge-*` contract |
 | `layouts/docs/list.html` | same contract gap on section landings |
+| `layouts/_shortcodes/redirect.html` | **appeared 2026-08-06**, 1470B vs extras' 2121B |
+| `layouts/_shortcodes/reuse-image-dark.html` | **appeared 2026-08-06**, 937B vs extras' 1635B |
+| `layouts/_shortcodes/reuse-image.html` | **appeared 2026-08-06**, 903B vs extras' 4412B — the largest gap of any shadow here |
 | `assets/js/flexsearch.js` | near-copy that has **drifted** (20929B vs 20564B). The hub's copy of this file was byte-identical and could simply be deleted; this one cannot, so it needs a real diff first |
 
 ### agentregistry-oss-website
