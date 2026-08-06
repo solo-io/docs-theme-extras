@@ -23,7 +23,12 @@ import { target } from "./helpers/target";
 // EXPECTED FAILURES ARE THE POINT. Shapes listed in KNOWN_BROKEN are real
 // defects found by this spec, marked `test.fail()` so they are pinned rather
 // than tolerated: if one starts passing, Playwright fails the run and the entry
-// must be removed. Flipping all of them is Phase 5's definition of done.
+// must be removed.
+//
+// Shape 07 is the one entry NOT expected to flip. Its HTML difference is
+// structural and permanent, and it costs a reader nothing — the two lists render
+// at identical height, which tests/loose-list-spacing.spec.ts measures and pins.
+// See its KNOWN_BROKEN note.
 
 const IS_FIXTURE_TARGET = target.name.startsWith("docs-theme-extras-fixture");
 const PAGE = path.join(TEST_PRODUCT_ROOT, "v2", "gate-transparency", "index.html");
@@ -37,8 +42,16 @@ const KNOWN_BROKEN: Record<string, string> = {
     "a gate around a MIDDLE list item makes the whole list loose — " +
     "`<li><p>step one</p></li>` instead of `<li>step one</li>`. Goldmark sees " +
     "the gate's blank-line-separated body as a loose-list signal, and every " +
-    "item in the list picks up a <p> wrapper, which is visible as extra " +
-    "vertical spacing on all three steps, not just the gated one.",
+    "item in the list picks up a <p> wrapper. " +
+    "NOT VISIBLE TO A READER, measured: both lists render at exactly 114px. " +
+    "Tailwind's preflight zeroes element margins and this theme never restores " +
+    "a typography margin on <p> inside <li>, so the wrapper costs nothing. " +
+    "tests/loose-list-spacing.spec.ts holds that, and will go red if a <p> " +
+    "margin ever comes back. An earlier note here claimed the spacing WAS " +
+    "visible; that came from measuring over file://, where the stylesheet 404s " +
+    "and the browser applies its own 1em <p> margins. It was never true of a " +
+    "real build. This entry stays because the HTML difference is real and this " +
+    "spec is an HTML comparison — do not weaken it to a visual check.",
 };
 
 function pairs(): { id: string; gated: string; baseline: string }[] {

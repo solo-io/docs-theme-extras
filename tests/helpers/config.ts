@@ -56,13 +56,6 @@ export type Checks = {
   // `tabTotal=`, nameless tabs) that renders labels as "Tab 0", "Tab 1", ….
   tabSyntax: boolean;
   includeForm: boolean;
-  // Source scan for a `conditional-text` gated bullet that is NOT last in its
-  // list. conditional-text renders inline-only, so a gated bullet followed by a
-  // plain sibling breaks the list continuation and the gated markdown survives
-  // as literal text. Catches the plain-text case the rendered-HTML leak scan
-  // cannot see (no link/bold/pipe signature to match on).
-  // See helpers/cond-list-order.ts.
-  condListOrder: boolean;
   // Source scan for a `version` / `conditional-text` gate authored in ANGLE
   // form. The gates emit .Inner untouched, which only re-enters the markdown
   // stream in percent form; angle-form output lands after Goldmark and survives
@@ -160,10 +153,6 @@ const DEFAULT_CHECKS: Checks = {
   headingShortcodeId: true,
   tabSyntax: true,
   includeForm: true,
-  // Default OFF: the antipattern it guards was fixed by the gate refactor —
-  // `conditional-text` no longer renders inline-only. See the header of
-  // helpers/cond-list-order.ts for the re-measurement that retired it.
-  condListOrder: false,
   gateForm: true,
   cascadeType: true,
   consoleErrors: true,

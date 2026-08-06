@@ -22,7 +22,6 @@
 // to see where the parser DECIDED an element lives, which is often not where the
 // source put it.
 
-import fs from "node:fs";
 import { parse, serialize } from "parse5";
 
 const MARKER = /\b(?:MARKER|COND)_[A-Z0-9_]+\b/g;
@@ -84,10 +83,6 @@ export function markerAncestorPaths(html: string): Map<string, string> {
 
   walk(doc, []);
   return out;
-}
-
-export function markerAncestorPathsForFile(file: string): Map<string, string> {
-  return markerAncestorPaths(fs.readFileSync(file, "utf8"));
 }
 
 /** Stable, diffable object form for snapshotting. */

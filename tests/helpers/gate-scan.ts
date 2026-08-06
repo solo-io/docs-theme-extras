@@ -64,35 +64,6 @@ function blank(src: string, start: number, end: number): string {
   return src.slice(0, start) + seg + src.slice(end);
 }
 
-/** Blank fenced code regions.
- *
- * NOT USED FOR SCANNING — kept only because other helpers import it.
- *
- * `scanFile` used to call this so that gates shown as EXAMPLES inside a code
- * block were not counted. That was wrong twice over:
- *
- *   1. Hugo expands shortcodes BEFORE Goldmark ever sees the markdown, so a
- *      gate inside a fence really does execute. The only form that does not is
- *      the escaped display form (see ESCAPED above), which is handled
- *      separately. Fenced gates are real invocations and belong in the count.
- *   2. The regex requires a closing fence line with nothing after the
- *      backticks, per CommonMark. The corpus is full of lines like
- *      ```` ```{{% /conditional-text %}} ````, which therefore do NOT close the
- *      fence, so the blank ran on to some later fence and swallowed the
- *      shortcode tags in between. That left openers unmatched and reported
- *      gates as nested when they were top-level (and, in one file, top-level
- *      when they were two levels deep inside `tabs`/`tab`).
- *
- * Measured: 41 gates across 18 files got the wrong depth from (2), and 485
- * real gates were dropped entirely by (1).
- */
-export function stripFences(src: string): string {
-  let out = src;
-  const fence = /^[ \t]{0,3}(```|~~~)[\s\S]*?^[ \t]{0,3}\1[ \t]*$/gm;
-  for (const m of src.matchAll(fence)) out = blank(out, m.index!, m.index! + m[0].length);
-  return out;
-}
-
 export type Gate = {
   file: string;
   line: number;
@@ -188,6 +159,45 @@ export function goNoGo(gates: Gate[]): Gate[] {
     pre-renders. These are a pre-existing bug list, not a normalization risk. */
 export function alreadyBroken(gates: Gate[]): Gate[] {
   return gates.filter((g) => g.depth >= 1 && g.form === "%" && isHazardous(g));
+}
+
+/** Shortcodes that EVALUATE `.Inner` but emit nothing, so a gate inside one can
+    never reach a reader and its form cannot matter. Today there is exactly one:
+    `downstream`, whose whole body is `{{- $_ := .Inner -}}` — it exists so an
+    OSS build can strip enterprise-only prose. Without this exemption the
+    ambientmesh.io content scan reports 4 hazards that render nowhere. */
+const DISCARDING_PARENTS = ["downstream"];
+
+/**
+ * Nested percent-form gates with a hazardous body, in source that NOTHING will
+ * normalize before it renders.
+ *
+ * `utils/gate-normalize-form.html` converts nested percent -> angle for every
+ * file pulled in through `reuse` or `rebase`, which is ~85% of all gate usage
+ * and all of `assets/`. A page authored directly in `content/` is rendered by
+ * Hugo with no such pass, so a nested percent gate there keeps the defect the
+ * normalizer exists to remove: Hugo pre-renders the body to HTML, and a
+ * pre-rendered list, heading or table fragment cannot re-flow into its
+ * surroundings — the bullet becomes a standalone `<ul>`, the heading is rendered
+ * before the outer pass and so never reaches the TOC.
+ *
+ * Single-line nested bodies are excluded by `isHazardous` via `classify`,
+ * because Hugo's own innerCleanupRegexp strips the `<p>` it would otherwise add.
+ *
+ * This replaces a runtime `warnf` that used to live in
+ * `layouts/_partials/utils/gate-emit.html`. That check read the RENDERED body
+ * and so could not distinguish a pre-rendered list from one the author typed as
+ * literal `<ul>` HTML; it scored 60 false positives and 0 true positives on a
+ * full istio build. The authored form is only recoverable here, in source.
+ */
+export function unnormalizedHazards(gates: Gate[]): Gate[] {
+  return gates.filter(
+    (g) =>
+      g.depth >= 1 &&
+      g.form === "%" &&
+      isHazardous(g) &&
+      !g.parents.split("/").some((p) => DISCARDING_PARENTS.includes(p)),
+  );
 }
 
 /** Indent hazard: a body whose minimum indent is >= opener column + 4.

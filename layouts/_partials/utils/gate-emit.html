@@ -29,16 +29,35 @@
        a no-op at best; leaving it alone also keeps the value in the exact state
        Hugo produced, which is what "transparent" means here.
 
-       NESTING DIAGNOSTIC. `.Parent` is the only nesting signal available at
-       runtime, and the corpus scan pinned the exact hazard: percent form at
-       depth >= 1 makes `.Inner` PRE-RENDERED HTML, and a multi-line
-       pre-rendered body cannot be re-flowed into its surroundings — a table
-       fragment arrives as <p>| a | b |</p>, a bullet as a self-contained <ul>
-       that will not merge into the parent list, a heading already rendered so
-       it never reaches the outer pass and vanishes from the TOC. Single-line
-       nested bodies are rescued by Hugo's own innerCleanupRegexp <p> stripping,
-       which is why the warning is scoped to multi-line. Measured on the corpus:
-       quiet for 508 safe nested gates, loud for the 41 hazardous ones. */ -}}
+       NO RUNTIME NESTING DIAGNOSTIC — REMOVED, AND DO NOT RE-ADD IT.
+
+       An earlier revision warned here when `.Parent` was set and `.Inner` was
+       multi-line and started with `<ul>`, `<ol>`, `<h1-6>` or a `<p>` full of
+       pipes, on the theory that only Hugo's pre-rendering of a nested percent
+       body could produce that shape.
+
+       It cannot tell those two apart, because THE SHAPE IS AMBIGUOUS. `.Inner`
+       starting with `<ul>` means either "Hugo rendered your markdown list" or
+       "the author literally typed <ul>", and by the time this partial runs the
+       markdown is gone either way. Measured on a full `istio` build: 60
+       warnings, 60 false positives, 0 true positives. Every one traced to
+       assets/conrefs/snippets/istio/version-alerts.md, where the bodies are
+       hand-written `<ul><li>…</li></ul>` — and where the normalizer had already
+       converted the nested gates to angle form, so `.Inner` held the author's
+       own bytes, exactly as intended.
+
+       The diagnostic was also obsolete. It was written when normalization ran
+       one way (angle -> percent) and left nested percent gates pre-rendered.
+       `utils/gate-normalize-form.html` is now bidirectional, so every gate that
+       arrives through `reuse` or `rebase` is in the right form before render and
+       the hazard is gone at the source. The only unnormalized path is a gate
+       authored directly in content/, and that is linted where the markdown still
+       exists: `unnormalizedHazards` in tests/helpers/gate-scan.ts, asserted by
+       tests/gate-form.spec.ts. Measured 0 across every consumer.
+
+       The general lesson, which is why this comment is long: a check that reads
+       rendered output cannot recover an authoring mistake that rendering erases.
+       Put it in the source scanner. */ -}}
 
 {{- /* `inner` is passed explicitly rather than read as `.sc.Inner`: Hugo
        statically scans the SHORTCODE template for a `.Inner` reference and
@@ -48,30 +67,6 @@
 {{- $sc := .sc -}}
 {{- $innerHTML := .inner -}}
 {{- $inner := printf "%s" $innerHTML -}}
-
-{{- /* The shape test is deliberately NARROW, and the first draft was not.
-       Matching any leading block tag (`p|div|table|ol|ul|pre|h[1-6]`) fired on
-       every `{{%% version %%}}{{< card … >}}{{%% /version %%}}` in the fixture:
-       the SOURCE there is a single line, but the card's rendered HTML is
-       multi-line, and at depth >= 1 the body arrives already rendered — so a
-       post-render multi-line test cannot tell the two apart.
-
-       Restricted to the shapes actually measured as broken: a list fragment
-       (`<ul>`/`<ol>`, which will not merge into a parent list), a heading
-       (rendered before the outer pass, so it vanishes from the TOC), and a
-       table-row fragment (which arrives as a `<p>` full of pipes). A
-       self-contained `<div>`, `<pre>` or `<table>` is a well-formed HTML block
-       and passes through intact, so it is not warned about.
-
-       Accepting false NEGATIVES here is the right trade: the source-level
-       scanner in tests/helpers/gate-scan.ts sees the real authored shape and is
-       the accurate instrument. This is a runtime backstop for content that
-       scanner does not walk. */ -}}
-{{- if and $sc.Parent (strings.Contains (strings.TrimRight "\n" (strings.TrimLeft "\n" $inner)) "\n") -}}
-  {{- if or (findRE `^\s*<(ul|ol|h[1-6])\b` $inner 1) (findRE `^\s*<p>[^<]*\|` $inner 1) -}}
-    {{- warnf "%s: a multi-line %q gate is nested inside %q, so Hugo pre-rendered its body to HTML before the shortcode ran. The body cannot be re-flowed into the surrounding markdown and will not merge with a parent list or table. Move the gate outside %q, or split it so each gate wraps whole blocks. See %s" $sc.Position $sc.Name $sc.Parent.Name $sc.Parent.Name $sc.Position -}}
-  {{- end -}}
-{{- end -}}
 
 {{- /* NESTED PRE-RENDERED BODIES ARE FLATTENED, top-level ones are not.
 

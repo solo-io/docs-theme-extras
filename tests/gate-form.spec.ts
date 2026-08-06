@@ -1,8 +1,14 @@
 import { test, expect } from "@playwright/test";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { findGateFormViolations } from "./helpers/gate-form";
-import { walkMarkdown } from "./helpers/gate-scan";
+import {
+  classify,
+  scanFile,
+  unnormalizedHazards,
+  walkMarkdown,
+} from "./helpers/gate-scan";
 import { target } from "./helpers/target";
 
 // Enforces the contract the gate refactor depends on: a `version` /
@@ -107,6 +113,93 @@ test.describe("gate-form lint helper", () => {
   });
 });
 
+// `scanFile` reads from disk (it is the corpus scanner), so these go through a
+// temp file rather than a string. Worth the ceremony: this predicate replaced a
+// runtime warnf that was wrong in a way only a body-shape test could be, and the
+// authored-HTML case below is the exact false positive that got it deleted.
+test.describe("unnormalizedHazards", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gate-scan-"));
+  const scan = (md: string) => {
+    const f = path.join(dir, `t${Math.abs(hash(md))}.md`);
+    fs.writeFileSync(f, md);
+    return unnormalizedHazards(scanFile(f));
+  };
+  const hash = (s: string) => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 7);
+
+  test("flags a nested percent gate wrapping a heading", () => {
+    expect(
+      scan(
+        [
+          `{{% conditional-text include-if="gme" %}}`,
+          `{{% version include-if="2.1.x" %}}`,
+          `### A heading`,
+          ``,
+          `Prose.`,
+          `{{% /version %}}`,
+          `{{% /conditional-text %}}`,
+        ].join("\n"),
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("does NOT flag the same gate in angle form", () => {
+    expect(
+      scan(
+        [
+          `{{% conditional-text include-if="gme" %}}`,
+          `{{< version include-if="2.1.x" >}}`,
+          `### A heading`,
+          ``,
+          `Prose.`,
+          `{{< /version >}}`,
+          `{{% /conditional-text %}}`,
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+
+  test("does NOT flag a top-level percent gate", () => {
+    expect(scan([`{{% version include-if="2.1.x" %}}`, `### A heading`, ``, `x`, `{{% /version %}}`].join("\n"))).toEqual([]);
+  });
+
+  // The false positive that ended the runtime diagnostic: a body the author
+  // wrote as literal HTML. There is no markdown to pre-render, so nothing is
+  // lost, and the rendered `.Inner` is indistinguishable from a pre-rendered
+  // list — which is why this can only be judged from source.
+  test("does NOT flag a nested gate whose body is authored HTML", () => {
+    expect(
+      scan(
+        [
+          `{{% conditional-text include-if="gm" %}}`,
+          `{{% version include-if="1.30.x" %}}`,
+          `<ul><li>One thing.</li>`,
+          `<li>Another thing.</li></ul>`,
+          `{{% /version %}}`,
+          `{{% /conditional-text %}}`,
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+
+  // `downstream` evaluates .Inner and emits nothing, so its contents never
+  // render and their form is unobservable.
+  test("does NOT flag a gate inside a discarding parent", () => {
+    expect(
+      scan(
+        [
+          `{{< downstream >}}`,
+          `{{% version include-if="1.30.x" %}}`,
+          `### A heading`,
+          ``,
+          `Prose.`,
+          `{{% /version %}}`,
+          `{{< /downstream >}}`,
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+});
+
 test.describe("source has no angle-form gates", () => {
   test.skip(!ENABLED, "gateForm check disabled in CONFIG");
   test.skip(SCAN_ROOTS.length === 0, "no scanRoots configured in CONFIG");
@@ -145,6 +238,41 @@ test.describe("source has no angle-form gates", () => {
         `({{%% version … %%}} / {{%% /version %%}}): the gate emits its body ` +
         `untouched, and angle-form output is substituted after markdown has ` +
         `been parsed, so the body survives as literal text.\n${all.slice(0, 50).join("\n")}`,
+    ).toEqual([]);
+  });
+
+  // The OTHER direction of the same rule. `gate-form` above catches angle at
+  // top level; this catches percent when nested. Both are what
+  // `utils/gate-normalize-form.html` fixes automatically in assets/, and both
+  // are unfixed in content/, which nothing normalizes.
+  test("scan configured source roots for nested percent-form hazards", () => {
+    const all: string[] = [];
+    let scanned = 0;
+    const reportRoot = target.configDir;
+    for (const root of SCAN_ROOTS) {
+      if (/(^|\/)assets(\/|$)/.test(root)) continue;
+      for (const file of walkMarkdown(root)) {
+        scanned++;
+        for (const g of unnormalizedHazards(scanFile(file))) {
+          all.push(
+            `  ${path.relative(reportRoot, g.file)}:${g.line}  nested in ${g.parents}  — ${classify(g)}`,
+          );
+        }
+      }
+    }
+
+    expect(
+      scanned,
+      `scanned 0 markdown files under ${JSON.stringify(SCAN_ROOTS)}`,
+    ).toBeGreaterThan(0);
+
+    expect(
+      all,
+      `Found ${all.length} nested percent-form gate(s) with a structural body. ` +
+        `At depth >= 1 percent form hands the shortcode PRE-RENDERED HTML, which ` +
+        `cannot merge into a parent list or table and, for a heading, never ` +
+        `reaches the TOC. Convert each to angle form ({{< version … >}}), or ` +
+        `move the gate outside its parent so it sits at top level.\n${all.slice(0, 50).join("\n")}`,
     ).toEqual([]);
   });
 });

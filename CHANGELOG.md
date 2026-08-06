@@ -272,6 +272,39 @@ No other consumer needs a paired change. Details in the individual entries below
   in `tests/gate-blockhtml.spec.ts` as eight cases compared by parse5 ancestor path, including
   the no-gate control.
 
+### Fix — drop the runtime nesting warning, which was 60-for-60 wrong on `istio`, and move the check to source (`layouts/_partials/utils/gate-emit.html`, `tests/helpers/gate-scan.ts`, `tests/gate-form.spec.ts`)
+
+- **Why.** An earlier revision of `gate-emit.html` warned when a gate had a `.Parent` and its
+  `.Inner` was multi-line and started with `<ul>`, `<ol>`, `<h1-6>` or a `<p>` full of pipes,
+  on the theory that only Hugo's pre-rendering of a nested percent body produces that shape.
+  It does not. **The shape is ambiguous:** `.Inner` starting with `<ul>` means either "Hugo
+  rendered your markdown list" or "the author typed `<ul>`", and by the time the partial runs
+  the markdown is gone either way. A full `istio` build emitted **60 warnings, 60 false
+  positives, 0 true positives.** Every one traced to
+  `assets/conrefs/snippets/istio/version-alerts.md`, whose bodies are hand-written
+  `<ul><li>…</li></ul>` — and where the normalizer had already put the nested gates in angle
+  form, so `.Inner` held the author's own bytes, exactly as intended. Observable on
+  [supported Istio versions](https://docs.solo.io/istio/latest/ambient/about/images/versions/),
+  which renders correctly under "Known Istio issues and version restrictions" while the build
+  that produced it logged the warning.
+- **It was also obsolete.** The warning was written when normalization ran one way
+  (angle → percent) and left nested percent gates pre-rendered. `gate-normalize-form.html` is
+  now bidirectional, so every gate arriving through `reuse` or `rebase` is in the right form
+  before render. The hazard is gone at the source, not merely reported.
+- **What replaces it.** `unnormalizedHazards` in `tests/helpers/gate-scan.ts`, asserted by
+  `tests/gate-form.spec.ts`. It covers the one path normalization cannot reach — a gate
+  authored directly in `content/`, which no `reuse`/`rebase` pass rewrites — and it judges the
+  **authored** body, so literal HTML is not mistaken for pre-rendered markdown. Gates inside
+  `downstream` are exempt: that shortcode evaluates `.Inner` and emits nothing, so its contents
+  never reach a reader. This is the symmetric partner to the existing angle-at-top-level lint;
+  together they enforce in `content/` exactly the rule the normalizer applies to `assets/`.
+- **Verified.** Rebuilt `istio` with the warning removed: `nested inside` count 60 → **0**,
+  and the check is not vacuous — five unit tests pin the predicate, including the authored-HTML
+  false positive that caused the removal and the `downstream` exemption. Current corpus count
+  is **0 hazards** across all six consumers' `content/` roots (`docs` 10 gates,
+  `ambientmesh.io` 85, `kgateway-oss` 3, the rest 0), so the lint lands as a ratchet with no
+  backlog to clear.
+
 ### Fix — `<meta name="description">` is no longer emitted with literal newlines in it (`layouts/_partials/utils/page-description.html`)
 
 - **Why.** A description is a single-line attribute value, but the summary fallback path
@@ -299,6 +332,39 @@ No other consumer needs a paired change. Details in the individual entries below
   substantive half of that repo's 285-page diff noted above — 210 pages whose only change
   is inside `<head>`, and no page changes outside it. 1,261 static + content tests pass.
   Takes effect when a consumer bumps its extras pin.
+
+### Test harness — delete the `cond-list-order` lint, whose antipattern the gate refactor made impossible (`tests/helpers/cond-list-order.ts`, `tests/cond-list-order.spec.ts`, `tests/helpers/config.ts`, `playwright.config.ts`, fixture)
+
+- **Why it existed.** Before the refactor, `conditional-text` rendered its body in INLINE
+  display mode only, unlike `version`, which had block and trailing-step handling. A gated
+  bullet placed AHEAD of an always-shown bullet in the same list therefore broke the list
+  continuation, and the gated bullet's markdown survived as literal text — the
+  `reference/release-notes.md` `[Changelog](url)` leak. The authoring rule was ordering: a
+  `conditional-text` bullet had to be the LAST item(s) of its list. The lint caught that at
+  the source, including the case the rendered-HTML leak scan cannot see — a PLAIN-TEXT gated
+  bullet placed first breaks the list silently, with no leak signature to match on.
+- **Why it is gone.** That template no longer exists. `conditional-text` emits `.Inner`
+  untouched, exactly like `version`, so the inline-only render that broke the list cannot
+  happen. Re-measured against the current templates on a fixture reproducing the exact
+  antipattern in all three shapes the rationale named — plain text, a markdown link, and bold
+   — with the gate both including and excluding: **every case renders as one contiguous list**,
+  correctly renumbered, with no `<ol start=`, no literal `2.` marker, and no leaked `](url)`
+  or `**`. The 20 violations it had reported on the docs hub were all stale.
+- **What was deleted.** The helper (193 lines), its spec (141 lines), four fixture files, the
+  `condListOrder` config key, and its `playwright.config.ts` allowlist entry. It had already
+  been disabled by default; this removes the inert code. The rationale is preserved in this
+  entry, which is the only copy — restore from git history if a real failing shape ever turns
+  up.
+- Also removed, all zero-caller: `stripFences` in `tests/helpers/gate-scan.ts` (orphaned when
+  the parser fix stopped `scanFile` calling it — see the four parser bugs below),
+  `_resetCrawlCache` in `tests/helpers/crawl.ts`, and `markerAncestorPathsForFile` in
+  `tests/helpers/ancestor-path.ts`.
+- No production page: harness-only, no rendered output changes. Observable indirectly on
+  [Gloo Mesh Enterprise release notes](https://docs.solo.io/gloo-mesh-enterprise/latest/reference/release-notes/),
+  the page whose `[Changelog](url)` leak motivated the lint and which now renders correctly.
+  Verified: both brands green with the files removed, and the deleted fixture page confirmed
+  absent from the `gate-containment.json` ancestor-path snapshot beforehand, so the baseline
+  did not move.
 
 ### Test harness — the shadow inventory becomes a one-way ratchet instead of a snapshot (`tests/override-parity.spec.ts`, `tests/helpers/override-baseline.json`, `tests/helpers/scan-overrides.ts`, `scripts/scan-overrides.mjs`, `playwright.config.ts`, `package.json`)
 
