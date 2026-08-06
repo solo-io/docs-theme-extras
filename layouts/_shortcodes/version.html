@@ -1,65 +1,15 @@
-{{- /* Local override of the version shortcode.
+{{- /* version — render the body only on the versions the author named.
 
-       Hugo doesn't expose whether a shortcode was called as {{% %}} or
-       {{< >}} from inside the template, so this override dispatches on
-       the SHAPE of .Inner to pick the right emit strategy:
-
-       - TRAILING-STEP PATTERN (numbered or bullet list item at column
-         0-3 of .Inner): the version block continues a parent ordered
-         or unordered list. The percent-form sidecar-manual-upgrade.md
-         conref relies on this. Emit .Inner raw so Hugo re-flows the
-         content through the surrounding markdown stream; that's the
-         only way the parent list's structure stays continuous past the
-         closer. Upstream's RenderString+flatten path produces a
-         self-contained <ol>/<ul>...</ol>/<ul> HTML block that Goldmark
-         treats as a block-HTML terminator, breaking the parent list
-         (the "md leak" this override fixes).
-
-       - NO-MARKDOWN PATTERN: .Inner has zero inline-formatting or list
-         markers (no **, backticks, [text](url), HTML tags, or
-         bullet/numbered list markers at column 0-3). Common for version
-         blocks invoked INSIDE a fenced code block, where .Inner is yaml
-         or shell text. RenderString would mangle this content — `#`
-         becomes <h1>, "true" becomes &ldquo;true&rdquo;, -- becomes
-         &ndash; — and that HTML gets escaped inside the fence,
-         showing as literal angle-bracket text to the reader. Emit raw
-         to keep the content as plain text. Detection is conservative:
-         it avoids single-asterisk and underscore emphasis to prevent
-         false positives in env-var names and shell glob patterns.
-
-       - EVERYTHING ELSE (inline markdown like {{< version >}}**bold**,
-         indented bullets/fences inside a deeper list-item continuation,
-         angle-form block content): use the upstream dedent +
-         RenderString + flatten approach. Required for any angle-bracket
-         caller with markdown content because angle-bracket output
-         bypasses markdown processing — raw .Inner would render bullets
-         and fences as literal text. Regression guard: solo-io/docs#2480.
-
-         The <pre>-bypass lives in utils/flatten-rendered.html now:
-         the partial early-returns when the rendered HTML contains
-         <pre, since Chroma's <span class="line">…</span>\n<span
-         class="line">…</span> chain breaks if the inter-span newlines
-         get replaced with &#10; entities — the parent's markdown
-         parser then treats the inline `<pre>` as inline HTML, applies
-         CommonMark backslash-escape to `\<` inside the spans, and
-         every "\" line-continuation marker renders as literal
-         "</span>" text. Keeping the original newlines lets the parent
-         re-recognize the `<pre>` as block HTML at column 0.
-
-       Condition-resolution logic mirrors the upstream template. */ -}}
+       CONDITION RESOLUTION is unchanged and is the bulk of this file: derive
+       the current version from the URL, match it against [[params.versions]],
+       and handle the keepVersion landing zone. What changed is the END: there
+       is now ONE emit site, `utils/gate-emit.html`, which emits `.Inner`
+       untouched. See that partial for why the four shape-guessing strategies
+       and utils/inner-shape.html are gone. Condition evaluation moved to
+       utils/gate-decide.html, shared with conditional-text. */ -}}
 
 {{- $versions := .Site.Params.versions -}}
 {{- $condition := "" -}}
-
-{{- /* Shape detection (trailing-step, dedent, hasMarkdown, block, row) is
-       centralized in utils/inner-shape so it stays in sync with conditional-text. */ -}}
-{{- $shape := partial "utils/inner-shape.html" . -}}
-{{- $isTrailingStep := $shape.isTrailingStep -}}
-{{- $isFencedBlock := $shape.isFencedBlock -}}
-{{- $inner := $shape.inner -}}
-{{- $hasMarkdown := $shape.hasMarkdown -}}
-{{- $isBlock := $shape.isBlock -}}
-{{- $isRowContent := $shape.isRowContent -}}
 
 {{- if $versions -}}
   {{- $version := .Page.FirstSection.RelPermalink -}}
@@ -111,90 +61,61 @@
   {{- end -}}
 {{- end -}}
 
+{{- $currentProduct := .Site.Params.currentProduct | default "" -}}
+{{- $emitted := false -}}
+
+{{- /* NORMAL PATH: the page resolved to a version. Match include-if/exclude-if
+       against BOTH the canonical version string (.version, e.g. "1.4.x") and
+       the stable linkVersion token (.linkVersion, e.g. "main"/"latest"), so
+       `include-if="main"` never needs a per-release bump. Mirrors the same
+       matching in the Python doc-test extractor (_evaluate_version_block). */ -}}
 {{- if ne $condition "" -}}
-  {{- $include := .Get "include-if" | default "" -}}
-  {{- $exclude := .Get "exclude-if" | default "" -}}
-  {{- $include_if := split $include "," -}}
-  {{- $exclude_if := split $exclude "," -}}
-  {{- $currentProduct := .Site.Params.currentProduct | default "" -}}
-  {{- $rendered := false -}}
   {{- range $versions -}}
-    {{- if in $condition .linkVersion -}}
-       {{- $versionToml := .version -}}
-       {{- $productMatches := or (not $currentProduct) (eq .product $currentProduct) -}}
-       {{- if and (in $include_if $versionToml) (in $exclude_if $versionToml) -}}
-         {{- errorf "Build condition %q appears in both include-if and exclude-if parameters" $condition -}}
-       {{- end -}}
-       {{- /* Match include-if/exclude-if against BOTH the canonical version
-              string (.version, e.g. "1.4.x") AND the stable linkVersion token
-              (.linkVersion, e.g. "main"/"latest"). The linkVersion is stable
-              across releases, so `include-if="main"` never needs a per-release
-              bump, unlike the rotating version number. Mirrors the same
-              matching in the Python doc-test extractor (_evaluate_version_block). */ -}}
-       {{- if isset $.Params "include-if" -}}
-         {{- if and (or (in $include_if $versionToml) (in $include_if .linkVersion)) $productMatches (not $rendered) -}}
-           {{- partial "utils/emit-inner.html" (dict "page" $.Page "rawInner" $.Inner "inner" $inner "isTrailingStep" $isTrailingStep "isFencedBlock" $isFencedBlock "isRowContent" $isRowContent "hasMarkdown" $hasMarkdown "isBlock" $isBlock) -}}
-           {{- $rendered = true -}}
-         {{- end -}}
-       {{- else if isset $.Params "exclude-if" -}}
-         {{- if and (not (or (in $exclude_if $versionToml) (in $exclude_if .linkVersion))) $productMatches (not $rendered) -}}
-           {{- partial "utils/emit-inner.html" (dict "page" $.Page "rawInner" $.Inner "inner" $inner "isTrailingStep" $isTrailingStep "isFencedBlock" $isFencedBlock "isRowContent" $isRowContent "hasMarkdown" $hasMarkdown "isBlock" $isBlock) -}}
-           {{- $rendered = true -}}
-         {{- end -}}
-       {{- end -}}
-    {{- end -}}
-  {{- end -}}
-{{- end -}}
-
-{{- if eq $condition "" -}}
-  {{- $include := .Get "include-if" | default "" -}}
-  {{- if ne $include "" -}}
-    {{- $versionImport := .Get "version" -}}
-    {{- $versionAdjusted := "" -}}
-    {{- range $versions -}}
-      {{- if not $versionAdjusted -}}
-        {{- if or (eq .version $versionImport) (eq .linkVersion $versionImport) -}}
-          {{- $versionAdjusted = .version -}}
-        {{- else if and .ossDir (eq .ossDir $versionImport) -}}
-          {{- $versionAdjusted = .version -}}
-        {{- end -}}
-      {{- end -}}
-    {{- end -}}
-    {{- $currentProduct := .Site.Params.currentProduct | default "" -}}
-    {{- $rendered := false -}}
-    {{- range $versions -}}
-      {{- $versionToml := .version -}}
+    {{- if and (in $condition .linkVersion) (not $emitted) -}}
       {{- $productMatches := or (not $currentProduct) (eq .product $currentProduct) -}}
-      {{- if and (in $include $versionToml) (in $include $versionAdjusted) $productMatches (not $rendered) -}}
-        {{- partial "utils/emit-inner.html" (dict "page" $.Page "rawInner" $.Inner "inner" $inner "isTrailingStep" $isTrailingStep "isFencedBlock" $isFencedBlock "isRowContent" $isRowContent "hasMarkdown" $hasMarkdown "isBlock" $isBlock) -}}
-        {{- $rendered = true -}}
+      {{- if $productMatches -}}
+        {{- if partial "utils/gate-decide.html" (dict "sc" $ "tokens" (slice .version .linkVersion)) -}}
+          {{- partial "utils/gate-emit.html" (dict "sc" $ "inner" $.Inner) -}}
+          {{- $emitted = true -}}
+        {{- end -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
 
-{{- if eq $condition "" -}}
-  {{- $exclude := .Get "exclude-if" | default "" -}}
-  {{- if ne $exclude "" -}}
-    {{- $versionImport := .Get "version" -}}
-    {{- $versionAdjusted := "" -}}
-    {{- range $versions -}}
-      {{- if not $versionAdjusted -}}
-        {{- if or (eq .version $versionImport) (eq .linkVersion $versionImport) -}}
-          {{- $versionAdjusted = .version -}}
-        {{- else if and .ossDir (eq .ossDir $versionImport) -}}
-          {{- $versionAdjusted = .version -}}
-        {{- end -}}
+{{- /* KEEPVERSION LANDING ZONE: no version resolved from the URL, but reuse.html
+       injected a `version="…"` param naming the parent's version. Resolve that
+       token to a canonical version (accepting .version, .linkVersion, or the OSS
+       directory name) and gate on it.
+
+       PRESERVED QUIRK, deliberately: an `exclude-if` block here emits nothing
+       when `version=` does not resolve. In the old code that fell out of a
+       substring test against an empty string; it is explicit now. There is no
+       fixture for it, so it is kept as-is rather than "fixed" blind — changing
+       it would silently start emitting content on every unresolvable
+       enterprise-only page. */ -}}
+{{- if and (eq $condition "") (not $emitted) -}}
+  {{- $versionImport := .Get "version" -}}
+  {{- $versionAdjusted := "" -}}
+  {{- range $versions -}}
+    {{- if not $versionAdjusted -}}
+      {{- if or (eq .version $versionImport) (eq .linkVersion $versionImport) -}}
+        {{- $versionAdjusted = .version -}}
+      {{- else if and .ossDir (eq .ossDir $versionImport) -}}
+        {{- $versionAdjusted = .version -}}
       {{- end -}}
     {{- end -}}
-    {{- $currentProduct := .Site.Params.currentProduct | default "" -}}
-    {{- $rendered := false -}}
+  {{- end -}}
+  {{- if $versionAdjusted -}}
     {{- range $versions -}}
-      {{- $versionToml := .version -}}
-      {{- $productMatches := or (not $currentProduct) (eq .product $currentProduct) -}}
-      {{- if and (not (or (in $exclude $versionToml) (in $exclude $versionAdjusted))) $productMatches (not $rendered) -}}
-        {{- partial "utils/emit-inner.html" (dict "page" $.Page "rawInner" $.Inner "inner" $inner "isTrailingStep" $isTrailingStep "isFencedBlock" $isFencedBlock "isRowContent" $isRowContent "hasMarkdown" $hasMarkdown "isBlock" $isBlock) -}}
-        {{- $rendered = true -}}
+      {{- if and (eq .version $versionAdjusted) (not $emitted) -}}
+        {{- $productMatches := or (not $currentProduct) (eq .product $currentProduct) -}}
+        {{- if $productMatches -}}
+          {{- if partial "utils/gate-decide.html" (dict "sc" $ "tokens" (slice .version .linkVersion)) -}}
+            {{- partial "utils/gate-emit.html" (dict "sc" $ "inner" $.Inner) -}}
+            {{- $emitted = true -}}
+          {{- end -}}
+        {{- end -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}

@@ -28,7 +28,10 @@ import { target } from "./helpers/target";
 const IS_FIXTURE_TARGET = target.name.startsWith("docs-theme-extras-fixture");
 const PAGE = path.join(TEST_PRODUCT_ROOT, "v2", "gate-transparency", "index.html");
 
-// Shape -> why it fails today. Both were found by this spec on first run.
+// Shape -> why it fails today. Both entries here were found by this spec on
+// its first run; shape 12 has since been FIXED by the gate refactor and removed
+// (the typographer no longer sees the body, because the gate stopped calling
+// RenderString on it at all).
 const KNOWN_BROKEN: Record<string, string> = {
   "07":
     "a gate around a MIDDLE list item makes the whole list loose — " +
@@ -36,12 +39,6 @@ const KNOWN_BROKEN: Record<string, string> = {
     "the gate's blank-line-separated body as a loose-list signal, and every " +
     "item in the list picks up a <p> wrapper, which is visible as extra " +
     "vertical spacing on all three steps, not just the gated one.",
-  "12":
-    "the typographer mangles `--` INSIDE inline code that passes through a " +
-    "gate: `<code>--flag value</code>` renders as `<code>–flag value</code>` " +
-    "with an en-dash. A CLI flag a reader copies is then wrong. extras already " +
-    "has `_partials/utils/harden-code-typography.html` for exactly this, wired " +
-    "into reuse/alert/callout — version.html never got it.",
 };
 
 function pairs(): { id: string; gated: string; baseline: string }[] {

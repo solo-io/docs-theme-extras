@@ -1,0 +1,218 @@
+{{- /* GATE-FORM-NORMALIZATION-v1 — nesting-aware, and BIDIRECTIONAL.
+
+       Takes a markdown string, returns it with every `version` /
+       `conditional-text` gate in the form that is correct for its position:
+
+         top level  ->  percent   {{%% version … %%}}
+         nested     ->  angle     {{< version … >}}
+
+       Both directions are converted, because both wrong forms damage content.
+
+       WHY THE RULE INVERTS WITH NESTING
+
+       `utils/gate-emit.html` emits `.Inner` untouched, so `.Inner` has to BE
+       raw markdown. What Hugo puts there depends on both the form and the
+       nesting (verified against hugo v0.160.1):
+
+         position                  percent form        angle form
+         top level (.Parent nil)   raw markdown        raw markdown
+         nested (.Parent set)      PRE-RENDERED HTML   raw markdown
+
+       At top level the two forms hold the same bytes, but only percent output
+       re-enters the markdown stream, so percent is the correct form there and
+       angle leaves the body as literal text (visible pipes, `**bold**`, `1.`
+       markers).
+
+       At depth >= 1 that flips. Percent hands the shortcode PRE-RENDERED HTML,
+       so raw-emitting it injects a finished `<ul>` / `<p>` / `<h2>` fragment
+       into a context expecting markdown — a gated bullet becomes a standalone
+       list instead of merging into its parent, and a gated heading is rendered
+       before the outer pass runs, so it never reaches the TOC. Angle form still
+       hands over raw markdown, which is what we want. So ANGLE IS CORRECT WHEN
+       NESTED, and converting it is the regression.
+
+       WHAT EACH DIRECTION FIXES, MEASURED
+
+       angle -> percent at top level: without it, 834 gates in the corpus emit
+       their bodies as literal text.
+
+       percent -> angle when nested: measured on a real
+       `gloo-mesh-enterprise` build, 50 pages change and every change is a
+       repair. The worst are copy-pasteable commands losing a character —
+       `kubectl apply -context $CTX` for `--context`, `meshctl logs
+       ext-auth-kubecontext` for `ext-auth --kubecontext`, and one fence where
+       the typographer turned `--` into a literal `&ndash;` entity. The rest are
+       malformed lists (`<ul></li></ul>`, `<ul></p>`) and swallowed spaces
+       (`isolation.For more information`).
+
+       No body-shape test separates the two populations: 49 of the top-level
+       gates have structural bodies too. Only nesting does, hence this walk.
+
+       HOW IT COMPUTES DEPTH WITHOUT A REGEX THAT CAN COUNT
+
+       Go's RE2 has no backreferences and no recursion, so a single regex cannot
+       mask paired-shortcode regions. Instead the content is split on `{{`,
+       which puts every shortcode tag at the head of a chunk, and the chunks are
+       walked in order against a stack. This mirrors `tests/helpers/gate-scan.ts`
+       deliberately: `tests/gate-normalize-parity.spec.ts` asserts the two agree
+       on which gates are top-level across the whole real corpus, so a paired
+       shortcode this walk mishandles shows up as a red test rather than as
+       silently mangled output.
+
+       Only names that appear in CLOSING form somewhere in the content push a
+       level — a self-closing shortcode is not a container.
+
+       Two spellings in the corpus that the obvious regexes get wrong, both
+       verified against hugo v0.160.1: `${{{% version %}}` (a shell expansion
+       flush against the tag, which puts three braces in a row and desyncs the
+       split), and Hextra's nested shortcode names (`filetree/container`,
+       `filetree/folder`, `filetree/file`) — if the name pattern excludes `/`
+       all three read as `filetree`, the self-closing `file` pushes a level
+       nothing pops, and every gate after the tree looks nested.
+
+       THE ALREADY-RENDERED-BODY EXCEPTION
+
+       Nesting is not the only way `.Inner` ends up holding HTML instead of
+       markdown. A body containing a `reuse` call holds that call's OUTPUT,
+       which is rendered, flattened HTML — and percent form splices it straight
+       into the markdown stream, where a block-level fragment inside a list item
+       terminates the list.
+
+       That failure has nothing to do with gates. Measured on
+       fixture/content/en/test/v2/gate-blockhtml.md: a bare
+       `2. {{%% reuse "block-snippet" %%}}` with NO gate at all breaks the list
+       exactly the same way, while the angle form of the same reuse is fine.
+       It is the pre-existing defect tracked as backlog 7i, and a gate in
+       percent form merely re-exposes it.
+
+       So the exception is narrow and follows from what percent is FOR: percent
+       exists to get a body's markdown parsed. When the body is nothing but
+       shortcode calls there is no markdown to parse, so converting can only
+       lose. Leave those gates in angle form.
+
+       Scoped to `reuse` and `rebase` specifically, because those pull in a
+       whole FILE and hand back a flattened block. `reuse-image` is deliberately
+       NOT in the list: it emits one inline element, so percent is harmless
+       there — and including it measurably broke the fixture's everything/rebased
+       parity, which is how the boundary was found.
+
+       Verified NOT to catch the shapes that genuinely need percent — a gate
+       wrapping a whole `3. …` list item, or a `| … |` table row, has markdown of
+       its own and keeps converting. */ -}}
+
+{{- $content := . -}}
+
+{{- $closed := slice -}}
+{{- range findRESubmatch `\{\{\{*[<%]\s*/\s*([a-zA-Z][\w\-/]*)` $content -}}
+  {{- $closed = $closed | append (index . 1) -}}
+{{- end -}}
+
+{{- $gates := slice "version" "conditional-text" -}}
+{{- $rendering := `\{\{[<%]\s*(?:reuse|rebase)[\s>%]` -}}
+{{- $chunks := split $content "{{" -}}
+{{- /* Collected and joined at the end rather than concatenated in the loop:
+       these conrefs run to tens of kilobytes and repeated string building is
+       quadratic. */ -}}
+{{- $pieces := slice (index $chunks 0) -}}
+{{- $stack := slice -}}
+
+{{- /* PASS 1 — find the depth-0 angle gates to leave alone (see the
+       already-rendered-body exception above). A single pass cannot decide this
+       at the opener, because the answer depends on text that has not been read
+       yet, so the body is characterized here and the decision is consulted in
+       pass 2 by chunk index. */ -}}
+{{- $keepAngle := slice -}}
+{{- $d := 0 -}}
+{{- $openAt := -1 -}}
+{{- $sawMarkdown := false -}}
+{{- $sawRendered := false -}}
+{{- range $i, $chunk := $chunks -}}
+  {{- if gt $i 0 -}}
+    {{- $h := findRESubmatch `^(\{*)([<%])\s*(/?)\s*([a-zA-Z][\w\-/]*)[^}]*?[%>]\}\}` $chunk 1 -}}
+    {{- if $h -}}
+      {{- $t := index $h 0 -}}
+      {{- $isCl := eq (index $t 3) "/" -}}
+      {{- $nm := index $t 4 -}}
+      {{- if $isCl -}}
+        {{- if gt $d 0 -}}{{- $d = sub $d 1 -}}{{- end -}}
+        {{- if and (ge $openAt 0) (eq $d 0) (in $gates $nm) -}}
+          {{- if and $sawRendered (not $sawMarkdown) -}}
+            {{- $keepAngle = $keepAngle | append $openAt | append $i -}}
+          {{- end -}}
+          {{- $openAt = -1 -}}
+        {{- end -}}
+      {{- else if in $closed $nm -}}
+        {{- if and (eq $d 0) (eq (index $t 2) "<") (in $gates $nm) -}}
+          {{- $openAt = $i -}}
+          {{- $sawMarkdown = false -}}
+          {{- $sawRendered = false -}}
+        {{- end -}}
+        {{- $d = add $d 1 -}}
+      {{- end -}}
+      {{- /* Everything after this chunk's tag is body text. Any non-whitespace
+             here means the body carries markdown of its own. */ -}}
+      {{- if and (ge $openAt 0) (ne $i $openAt) -}}
+        {{- if ne (trim (replaceRE `^(\{*)[<%][^}]*?[%>]\}\}` "" $chunk) " \n\t\r") "" -}}
+          {{- $sawMarkdown = true -}}
+        {{- end -}}
+      {{- end -}}
+      {{- if and (ge $openAt 0) (findRE $rendering (printf "{{%s" $chunk) 1) -}}
+        {{- $sawRendered = true -}}
+      {{- end -}}
+    {{- else if and (ge $openAt 0) (ne (trim $chunk " \n\t\r") "") -}}
+      {{- $sawMarkdown = true -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- range $i, $chunk := $chunks -}}
+  {{- if gt $i 0 -}}
+    {{- /* Identify the tag at the head of this chunk. A chunk that does not
+           start with a complete shortcode tag (stray braces, Go-template-looking
+           text) falls through untouched and does not disturb the stack. */ -}}
+    {{- $head := findRESubmatch `^(\{*)([<%])\s*(/?)\s*([a-zA-Z][\w\-/]*)[^}]*?[%>]\}\}` $chunk 1 -}}
+    {{- if $head -}}
+      {{- $m := index $head 0 -}}
+      {{- $form := index $m 2 -}}
+      {{- $isClose := eq (index $m 3) "/" -}}
+      {{- $name := index $m 4 -}}
+
+      {{- if $isClose -}}
+        {{- /* Pop to the LAST frame with this name and give the closer whatever
+               conversion its OPENER got. Recording the decision on the frame
+               rather than recomputing it here is what keeps an opener and its
+               closer in the same form even when the nesting is malformed. */ -}}
+        {{- $at := -1 -}}
+        {{- range $j, $f := $stack -}}
+          {{- if eq $f.name $name -}}{{- $at = $j -}}{{- end -}}
+        {{- end -}}
+        {{- if ge $at 0 -}}
+          {{- if (index $stack $at).conv -}}
+            {{- $chunk = replaceRE `^(\{*)<\s*/\s*(version|conditional-text)\s*>\}\}` "${1}% /${2} %}}" $chunk -}}
+          {{- end -}}
+          {{- if (index $stack $at).back -}}
+            {{- $chunk = replaceRE `^(\{*)%\s*/\s*(version|conditional-text)\s*%\}\}` "${1}< /${2} >}}" $chunk -}}
+          {{- end -}}
+          {{- $stack = first $at $stack -}}
+        {{- end -}}
+      {{- else if in $closed $name -}}
+        {{- /* conv = angle -> percent (top level); back = percent -> angle
+               (nested). At most one can fire; the closer replays whichever
+               did. */ -}}
+        {{- $conv := false -}}
+        {{- $back := false -}}
+        {{- if and (eq $form "<") (eq (len $stack) 0) (in $gates $name) (not (in $keepAngle $i)) -}}
+          {{- $conv = true -}}
+          {{- $chunk = replaceRE `^(\{*)<\s*(version|conditional-text)(\s[^}]*?)?\s*>\}\}` "${1}% ${2}${3} %}}" $chunk -}}
+        {{- else if and (eq $form "%") (gt (len $stack) 0) (in $gates $name) -}}
+          {{- $back = true -}}
+          {{- $chunk = replaceRE `^(\{*)%\s*(version|conditional-text)(\s[^}]*?)?\s*%\}\}` "${1}< ${2}${3} >}}" $chunk -}}
+        {{- end -}}
+        {{- $stack = $stack | append (dict "name" $name "conv" $conv "back" $back) -}}
+      {{- end -}}
+    {{- end -}}
+    {{- $pieces = $pieces | append "{{" | append $chunk -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return (delimit $pieces "") -}}

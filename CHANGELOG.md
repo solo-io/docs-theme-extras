@@ -35,7 +35,49 @@ the same PR:
 - `assets/css/main.css`, `assets/js/core/toc-scroll.js`, `assets/js/flexsearch.js`
   (byte-identical duplicates of module files).
 
+**`agentgateway-oss-website` also needs a paired change** — see the breaking entry below.
+Its `layouts/_shortcodes/reuse.html` is a stale 59-line fork that shadows the module, so it
+never applies the gate-form normalization. Measured: with the fork in place the site builds
+**598 markdown leaks**; deleting it takes the same build to **0** (152/152 content tests).
+
 No other consumer needs a paired change. Details in the individual entries below.
+
+### Breaking — the gating shortcodes emit `.Inner` untouched, and `reuse` / `rebase` now decide the shortcode form (`layouts/_shortcodes/{version,conditional-text,reuse,rebase}.html`, `layouts/_partials/utils/{gate-decide,gate-emit,gate-normalize-form}.html`)
+
+- **Why.** Hugo does not tell a shortcode whether it was called as `{{%% %%}}` or `{{< >}}`.
+  `version.html` and `conditional-text.html` therefore **guessed** the form from the shape of
+  `.Inner` — six regex heuristics in `utils/inner-shape.html` selecting one of four emit
+  strategies — while `reuse.html` and `rebase.html` regex-rewrote forms to nudge those
+  guesses. Every leak in [solo-io/docs#3280](https://github.com/solo-io/docs/issues/3280) is
+  either a misfired guess or a **double render**: content that was already rendered getting
+  parsed a second time.
+- **What changed.** One emit path. Both gates resolve their condition, then emit `.Inner`
+  exactly as Hugo handed it over, via the new `utils/gate-emit.html`. Condition evaluation
+  moved to the shared `utils/gate-decide.html`. `utils/{inner-shape,emit-inner,has-markdown}.html`
+  are **deleted** (218 lines, grep-confirmed zero callers in extras or any of the six
+  consumers). `version.html` goes 201 → 122 lines, `conditional-text.html` 211 → 25.
+- Raw emit only works if `.Inner` really is raw markdown, so choosing the form moved to
+  `utils/gate-normalize-form.html`, called by `reuse.html` and `rebase.html`. It puts each
+  gate in the form correct for its position — see the two Fix entries below for what each
+  direction repairs.
+- **Three condition-evaluation bugs fixed on the way**, all previously silent: setting both
+  `include-if` and `exclude-if` now `errorf`s instead of letting `include-if` quietly win and
+  hide the typo; comma-list entries are trimmed, so `include-if="a, b"` matches instead of
+  matching nothing; and membership is a slice test rather than a substring test, so
+  `include-if="2.4.x"` no longer matches version `12.4.x`.
+- **Consumer action.** A consumer that ships its own `reuse.html` or `rebase.html` gets no
+  normalization, so its gates emit raw markdown into a parsed stream and leak. Delete the
+  override, or port the block carrying the `GATE-FORM-NORMALIZATION-v1` sentinel into it.
+  `tests/override-parity.spec.ts` fails until one of those happens. This is why the change
+  is breaking rather than a patch.
+- **Verified.** 1779 fixture tests on both brands; all seven `solo-io/docs` products, plus
+  `kgateway-oss` (152/152) and `agentgateway-oss-website` (152/152 once its fork is
+  deleted). No product has a `markdown-leaks` failure. Every remaining consumer failure is a
+  pre-existing backlog item (the hub's `scanRoots` pointing at directories that do not
+  exist; the `build-test.log` Makefile mismatch; `missing-images`; the `keycloak.md` tables).
+- Production page showing the class of bug this removes:
+  [gloo-mesh-enterprise external-auth OPA BYO](https://docs.solo.io/gloo-mesh-enterprise/latest/security/external-auth/opa/opa-byo/)
+  — see the Fix entry below for what is wrong on it.
 
 ### Add — `OVERRIDES.md` and a re-runnable scanner for consumer files that shadow this module (`OVERRIDES.md`, `tests/helpers/scan-overrides.ts`)
 
@@ -173,6 +215,63 @@ No other consumer needs a paired change. Details in the individual entries below
   byte-identical duplicates of module files: `assets/css/main.css`,
   `assets/js/core/toc-scroll.js`, `assets/js/flexsearch.js`.
 
+### Fix — a gate nested inside another shortcode stops corrupting copy-pasteable commands and list markup (`layouts/_partials/utils/gate-normalize-form.html`)
+
+- **Why.** At nesting depth 0 the two shortcode forms hold the same bytes, but at depth ≥ 1
+  they do not: Hugo hands a **percent-form** gate PRE-RENDERED HTML while angle form still
+  hands over raw markdown. Raw-emitting pre-rendered HTML into a markdown context damages it,
+  and because the rule *inverts* with nesting, the old blanket "angle → percent" rewrite made
+  the nested cases worse. No body-shape test separates the two populations — 49 top-level
+  gates have structural bodies too. Only nesting does.
+- **What changed.** The normalizer computes nesting depth and converts in both directions:
+  angle → percent at top level, percent → angle when nested. Go's RE2 cannot count nesting,
+  so it splits the content on `{{` and walks the chunks against a stack.
+- **What it repairs, measured on a real `gloo-mesh-enterprise` build:** 50 pages, every change
+  a repair. The worst are copy-pasteable commands that had lost a character. On
+  [external-auth OPA BYO](https://docs.solo.io/gloo-mesh-enterprise/latest/security/external-auth/opa/opa-byo/)
+  production currently serves `kubectl apply &ndash;context $REMOTE_CONTEXT1-f - <<EOF` — a
+  literal en-dash HTML entity where `--` belongs, and the context value fused to the next
+  flag. On [external-auth basic](https://docs.solo.io/gloo-mesh-enterprise/latest/security/external-auth/basic/)
+  it is `meshctl logs ext-auth-kubecontext` for `ext-auth --kubecontext`. The rest are
+  malformed lists (`<ul></li></ul>`, `<ul></p>`) on
+  [external-auth OPA about](https://docs.solo.io/gloo-mesh-enterprise/latest/security/external-auth/opa/about/)
+  and [system requirements](https://docs.solo.io/gloo-mesh-enterprise/latest/setup/prepare/system-requirements/),
+  and swallowed spaces (`isolation.For more information`) on
+  [workspace setup example](https://docs.solo.io/gloo-mesh-enterprise/latest/setup/prod/workspaces/about/setup-example/).
+- **Verified.** Diffed a full minified `gloo-mesh-enterprise` build with and without the
+  nesting rule and reviewed all 50 changed pages by hand; none regressed. `kgateway-oss`
+  produced zero differing HTML pages, confirming the change is inert where nothing is nested.
+
+### Fix — a gate whose body is an already-rendered `reuse` no longer terminates the list it sits in (`layouts/_partials/utils/gate-normalize-form.html`, `tests/helpers/gate-form.ts`)
+
+- **Why.** Nesting is not the only way `.Inner` ends up holding HTML instead of markdown. A
+  body containing a `reuse` call holds that call's **output**, which is rendered and
+  flattened — and percent form splices it into the markdown stream, where a block-level
+  fragment inside a list item ends the list and swallows the following steps.
+- **This entry prevents a regression rather than repairing a live defect.** Production is
+  correct today on
+  [header manipulation](https://docs.solo.io/gloo-mesh-enterprise/latest/traffic_management/header-manipulation/)
+  — step 3 and its nested sub-steps render as a proper list. Converting these gates put
+  **105 markdown leaks** on `gloo-mesh-enterprise`, and that page is where the first six
+  showed up: step 3 collapsed out of the numbered list into escaped plain text. Verify by
+  comparing that page before and after the pin bump.
+- **This is not a gate defect.** The control case in the fixture is a bare
+  `2. {{%% reuse "block-snippet" %%}}` with **no gate at all**, and it breaks identically —
+  the pre-existing `reuse` behavior tracked in the Phase 7 backlog as 7i. A gate in percent
+  form merely re-exposes it.
+- **What changed.** The normalizer leaves a top-level angle gate alone when its body is
+  nothing but shortcode calls and one of them is `reuse`/`rebase`. This follows from what
+  percent is *for*: percent exists to get a body's markdown parsed, and when there is no
+  markdown to parse, converting can only lose. 49 gates corpus-wide. Shapes that genuinely
+  need percent — a gate wrapping a whole `3. …` step, or a `| … |` table row — have markdown
+  of their own and keep converting. `reuse-image` is deliberately excluded: it emits one
+  inline element, and including it measurably broke the fixture's everything/rebased parity.
+- The `gate-form` source lint applies the same predicate. If it did not, these gates would be
+  a permanent red line with no valid repair, since converting them is what breaks them.
+- **Verified.** `gloo-mesh-enterprise` goes from 105 leaks to **0 across 2,350 pages**. Pinned
+  in `tests/gate-blockhtml.spec.ts` as eight cases compared by parse5 ancestor path, including
+  the no-gate control.
+
 ### Fix — `<meta name="description">` is no longer emitted with literal newlines in it (`layouts/_partials/utils/page-description.html`)
 
 - **Why.** A description is a single-line attribute value, but the summary fallback path
@@ -248,6 +347,74 @@ No other consumer needs a paired change. Details in the individual entries below
   `docs/assets/css/custom.css` fails with exactly that selector named, so the check
   demonstrably catches the bug it was written for. Full suites green on both brands,
   1718 passed each.
+
+### Test harness — a measurement baseline for the gate refactor, and four parser bugs it exposed (`tests/helpers/gate-scan.ts`, `tests/helpers/ancestor-path.ts`, `tests/{gate-containment,gate-transparency,cond-list-order,versioning}.spec.ts`, `scripts/scan-gates.mjs`)
+
+- **Why.** The gate refactor changes how ~4,000 gates render. The existing
+  `versioning.spec.ts` compared the `everything` and `rebased` fixture pages *to each other*
+  over 10 tag names, which is blind to a symmetric regression and cannot see container
+  ejection at all — it counts `<li>` without knowing which `<ol>` the `<li>` is in. There was
+  no absolute baseline to refactor against.
+- **What changed.**
+  - `tests/helpers/gate-scan.ts` + `npm run scan:gates` — the corpus scanner, classifying
+    every gate by nesting depth and body shape.
+  - `tests/gate-containment.spec.ts` — a **parse5** ancestor-path snapshot (1,060 markers,
+    32 pages). This is the tool the issue asks for: diagnose container ejection with a real
+    HTML parser, not by counting `<div>`s. `parse5` is the first HTML parser in this repo.
+  - `tests/gate-transparency.spec.ts` + a 14-shape fixture — asserts a gated block renders
+    **byte-identically** to the same content with the tags deleted. Authored against the
+    pre-refactor templates with the failures pinned `test.fail()`, so the pinned list *was*
+    the bug inventory.
+  - `versioning.spec.ts` widened from 10 tags to 19 and scoped to `.content` — whole-page
+    comparison was unsound, since chrome links differ between two URLs.
+  - `tests/cond-list-order.spec.ts` wires up a source lint that existed but that **no spec
+    imported**. Turning it on revealed its `OPEN_THEN_MARKER` branch was unreachable, so the
+    shape it was written for had never been detectable.
+- **Four parser bugs in the scanner, which mean the first corpus numbers were wrong.** Found
+  by cross-checking it against an independent implementation over 14,884 files:
+  1. it stripped fenced code before scanning, but **Hugo expands shortcodes before Goldmark**,
+    so a gate in a fence really does run — 485 real gates dropped. Worse, the fence regex
+    requires a bare closing line, and the corpus is full of ``` ```{{% /conditional-text %}} ```,
+    so the blank ran on and swallowed the tags between, giving 41 gates the wrong depth;
+  2. `${{{% version %}}` — a shell expansion flush against a tag — went unrecognized;
+  3. `{{%/ version %}}` (slash before the space), which Hugo accepts, was invisible as a
+    closer, so every gate after it in that file read as nested;
+  4. Hextra's nested shortcode names (`filetree/container`, `filetree/folder`,
+    `filetree/file`) all collapsed to `filetree`, so the self-closing one pushed a level
+    nothing popped and every gate after a file tree read as nested.
+- Corrected totals: **4,268 gates, 3,547 top-level, 721 nested**, 10 go/no-go, 16
+  already-broken — against 3,900 / 3,303 / 597 / 13 / 28 before.
+- No production page: harness-only, no rendered output changes. Verified by re-running the
+  scanner against the corrected implementation and by the parity spec below.
+
+### Test harness — the form normalizer is checked against an independent parse over the real corpus (`tests/helpers/gate-normalize.ts`, `tests/{gate-normalize,gate-normalize-corpus,gate-blockhtml,gate-form}.spec.ts`, `fixture/layouts/_shortcodes/gate-normalize-probe.html`)
+
+- **Why.** `utils/gate-normalize-form.html` decides the form for every gate on every page, and
+  it does so with a cheap parse — split on `{{`, walk the chunks against a stack — because
+  RE2 cannot count nesting. A cheap parse that is wrong somewhere silently mangles content,
+  and the only honest way to know it is right is to run it over real content.
+- **What changed.** Three layers, each catching what the others cannot:
+  1. unit tests on the decision logic, including the shell-brace and slash-before-space
+     spellings and the reuse-body exception;
+  2. a fixture page rendering 17 cases through the **real Go template** (via a fixture-only
+     probe shortcode) and comparing to the TypeScript port, so the port cannot drift from
+     the thing it models;
+  3. `gate-normalize-corpus.spec.ts` — the walk's depth against `gate-scan.ts`'s independent
+     tokenizer across every markdown file in the sibling consumer clones. **4,268 gates,
+     14,884 files, 0 disagreements.**
+- The corpus spec deliberately does **not** filter its roots by existence: a configured root
+  that is not on disk must reach the "walked 0 files" assertion and fail loudly. That check
+  is what surfaced the docs hub pointing `scanRoots` at two directories that have never
+  existed, leaving six source lints passing vacuously over 11,025 unread files.
+- `tests/gate-blockhtml.spec.ts` pins the rendered-body boundary, authored in `content/` on
+  purpose — an earlier version routed the cases through `reuse`, which normalizes the form
+  before rendering, so the angle cases silently became percent and the distinction under
+  test disappeared.
+- `tests/gate-form.spec.ts` lints `content/` for angle-form gates (assets are normalized, so
+  they cannot be wrong). Real violations fixed: `kgateway-oss` `install/sample-app.md` across
+  `main`/`latest`/`2.3.x`.
+- No production page: harness-only. Verified by break-testing each layer, and by the
+  consumer sweep recorded in the breaking entry above.
 
 ### Test harness — re-enable `tab-code-fences.spec.ts`, which had been silently dead, and fix the stale selector it was hiding (`playwright.config.ts`, `tests/tab-code-fences.spec.ts`)
 

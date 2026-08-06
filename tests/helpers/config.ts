@@ -63,6 +63,12 @@ export type Checks = {
   // cannot see (no link/bold/pipe signature to match on).
   // See helpers/cond-list-order.ts.
   condListOrder: boolean;
+  // Source scan for a `version` / `conditional-text` gate authored in ANGLE
+  // form. The gates emit .Inner untouched, which only re-enters the markdown
+  // stream in percent form; angle-form output lands after Goldmark and survives
+  // as literal text. content/ only — reuse/rebase normalize assets/ before
+  // render. See helpers/gate-form.ts.
+  gateForm: boolean;
   cascadeType: boolean;
   // Browser-level crawl: open every built page in Chromium and fail on
   // uncaught JS exceptions, console.error calls, or HTTP 4xx on JS/CSS assets.
@@ -155,6 +161,7 @@ const DEFAULT_CHECKS: Checks = {
   tabSyntax: true,
   includeForm: true,
   condListOrder: true,
+  gateForm: true,
   cascadeType: true,
   consoleErrors: true,
   missingImages: true,

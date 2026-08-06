@@ -43,7 +43,17 @@ const SKIP_DIRS = new Set([
 
 // A shortcode tag in either form. The `[^}]|\}(?!\})` body lets a single `}`
 // appear inside args (e.g. a CSS-ish value) without ending the match early.
-const TAG = /\{\{([<%])\s*(\/?)([a-zA-Z][\w-]*)((?:[^}]|\}(?!\}))*?)\s*([%>])\}\}/gs;
+// The `\{*` after the delimiter absorbs a shell expansion written flush against
+// the tag — `${{{% version %}}` occurs in the corpus — which would otherwise
+// leave the tag unrecognized. The `\s*` AFTER the slash matters too: the corpus
+// contains `{{%/ version %}}`, which Hugo accepts as a closer (verified on a
+// fixture page against hugo v0.160.1); without it the closer is invisible and
+// every gate after it in the file reports as nested. And the name allows `/`
+// because Hextra ships nested shortcodes (`filetree/container`,
+// `filetree/folder`, `filetree/file`); without it all three read as one name
+// `filetree`, the self-closing `file` pushes a level that nothing pops, and
+// every gate after the tree reports as nested.
+const TAG = /\{\{\{*([<%])\s*(\/?)\s*([a-zA-Z][\w\-/]*)((?:[^}]|\}(?!\}))*?)\s*([%>])\}\}/gs;
 // The escaped DISPLAY form `{{</* version */>}}`, used on pages that document
 // the shortcodes. Not a real invocation, so it must not be counted.
 const ESCAPED = /\{\{[<%]\/\*.*?\*\/[%>]\}\}/gs;
@@ -54,7 +64,28 @@ function blank(src: string, start: number, end: number): string {
   return src.slice(0, start) + seg + src.slice(end);
 }
 
-/** Blank fenced code regions so gates shown as EXAMPLES are not counted. */
+/** Blank fenced code regions.
+ *
+ * NOT USED FOR SCANNING — kept only because other helpers import it.
+ *
+ * `scanFile` used to call this so that gates shown as EXAMPLES inside a code
+ * block were not counted. That was wrong twice over:
+ *
+ *   1. Hugo expands shortcodes BEFORE Goldmark ever sees the markdown, so a
+ *      gate inside a fence really does execute. The only form that does not is
+ *      the escaped display form (see ESCAPED above), which is handled
+ *      separately. Fenced gates are real invocations and belong in the count.
+ *   2. The regex requires a closing fence line with nothing after the
+ *      backticks, per CommonMark. The corpus is full of lines like
+ *      ```` ```{{% /conditional-text %}} ````, which therefore do NOT close the
+ *      fence, so the blank ran on to some later fence and swallowed the
+ *      shortcode tags in between. That left openers unmatched and reported
+ *      gates as nested when they were top-level (and, in one file, top-level
+ *      when they were two levels deep inside `tabs`/`tab`).
+ *
+ * Measured: 41 gates across 18 files got the wrong depth from (2), and 485
+ * real gates were dropped entirely by (1).
+ */
 export function stripFences(src: string): string {
   let out = src;
   const fence = /^[ \t]{0,3}(```|~~~)[\s\S]*?^[ \t]{0,3}\1[ \t]*$/gm;
@@ -86,7 +117,6 @@ export function scanFile(file: string): Gate[] {
   }
   let src = raw;
   for (const m of raw.matchAll(ESCAPED)) src = blank(src, m.index!, m.index! + m[0].length);
-  src = stripFences(src);
 
   const tags = [...src.matchAll(TAG)].map((m) => ({
     start: m.index!,
@@ -110,7 +140,7 @@ export function scanFile(file: string): Gate[] {
     }
     if (!closed.has(t.name)) continue;
     if (GATES.includes(t.name)) {
-      const closeRe = new RegExp(`\\{\\{[<%]\\s*/${t.name}\\s*[%>]\\}\\}`);
+      const closeRe = new RegExp(`\\{\\{\\{*[<%]\\s*/\\s*${t.name}\\s*[%>]\\}\\}`);
       const rest = src.slice(t.end);
       const mc = rest.match(closeRe);
       const body = mc ? rest.slice(0, mc.index) : "";

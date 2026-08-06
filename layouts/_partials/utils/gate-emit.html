@@ -1,0 +1,136 @@
+{{- /* gate-emit — the ONE emit path for `version` and `conditional-text`.
+
+       It emits `.Inner` exactly as Hugo handed it over, and does nothing else.
+       That is the whole point of the refactor, so it is worth stating why the
+       four previous strategies are gone.
+
+       Hugo does not expose whether a shortcode was called as {{%% %%}} or
+       {{< >}}. The old templates therefore GUESSED the form from the shape of
+       `.Inner` — six regex heuristics in utils/inner-shape.html — and picked
+       one of four emit strategies. Every leak in solo-io/docs#3280 is either a
+       misfired guess or a DOUBLE RENDER: content that RenderString had already
+       turned into HTML being handed back to Goldmark to parse again.
+
+       Emitting raw makes the whole class structurally impossible. Verified
+       against hugo v0.160.1: at top level, `.Inner` is raw markdown in BOTH
+       forms, and a percent-form gate that raw-emits produces output
+       byte-identical to the same body with the tags deleted.
+
+       THE CONTRACT THIS DEPENDS ON: the gate must be in PERCENT form, so its
+       output re-enters the markdown stream. Angle form substitutes after
+       Goldmark has run, so raw markdown would survive as literal text. Two
+       mechanisms keep that true:
+         - reuse.html and rebase.html normalize angle -> percent before
+           rendering (search GATE-FORM-NORMALIZATION-v1);
+         - `tests/gate-form.spec.ts` fails the build on an angle-form gate
+           authored directly in content/.
+
+       No `safeHTML`. `.Inner` is already `template.HTML`, so piping it would be
+       a no-op at best; leaving it alone also keeps the value in the exact state
+       Hugo produced, which is what "transparent" means here.
+
+       NESTING DIAGNOSTIC. `.Parent` is the only nesting signal available at
+       runtime, and the corpus scan pinned the exact hazard: percent form at
+       depth >= 1 makes `.Inner` PRE-RENDERED HTML, and a multi-line
+       pre-rendered body cannot be re-flowed into its surroundings — a table
+       fragment arrives as <p>| a | b |</p>, a bullet as a self-contained <ul>
+       that will not merge into the parent list, a heading already rendered so
+       it never reaches the outer pass and vanishes from the TOC. Single-line
+       nested bodies are rescued by Hugo's own innerCleanupRegexp <p> stripping,
+       which is why the warning is scoped to multi-line. Measured on the corpus:
+       quiet for 508 safe nested gates, loud for the 41 hazardous ones. */ -}}
+
+{{- /* `inner` is passed explicitly rather than read as `.sc.Inner`: Hugo
+       statically scans the SHORTCODE template for a `.Inner` reference and
+       errors with "does not evaluate .Inner ... yet a closing tag was provided"
+       if it cannot see one. It does not look through partials, so the call
+       sites must name `.Inner` themselves. */ -}}
+{{- $sc := .sc -}}
+{{- $innerHTML := .inner -}}
+{{- $inner := printf "%s" $innerHTML -}}
+
+{{- /* The shape test is deliberately NARROW, and the first draft was not.
+       Matching any leading block tag (`p|div|table|ol|ul|pre|h[1-6]`) fired on
+       every `{{%% version %%}}{{< card … >}}{{%% /version %%}}` in the fixture:
+       the SOURCE there is a single line, but the card's rendered HTML is
+       multi-line, and at depth >= 1 the body arrives already rendered — so a
+       post-render multi-line test cannot tell the two apart.
+
+       Restricted to the shapes actually measured as broken: a list fragment
+       (`<ul>`/`<ol>`, which will not merge into a parent list), a heading
+       (rendered before the outer pass, so it vanishes from the TOC), and a
+       table-row fragment (which arrives as a `<p>` full of pipes). A
+       self-contained `<div>`, `<pre>` or `<table>` is a well-formed HTML block
+       and passes through intact, so it is not warned about.
+
+       Accepting false NEGATIVES here is the right trade: the source-level
+       scanner in tests/helpers/gate-scan.ts sees the real authored shape and is
+       the accurate instrument. This is a runtime backstop for content that
+       scanner does not walk. */ -}}
+{{- if and $sc.Parent (strings.Contains (strings.TrimRight "\n" (strings.TrimLeft "\n" $inner)) "\n") -}}
+  {{- if or (findRE `^\s*<(ul|ol|h[1-6])\b` $inner 1) (findRE `^\s*<p>[^<]*\|` $inner 1) -}}
+    {{- warnf "%s: a multi-line %q gate is nested inside %q, so Hugo pre-rendered its body to HTML before the shortcode ran. The body cannot be re-flowed into the surrounding markdown and will not merge with a parent list or table. Move the gate outside %q, or split it so each gate wraps whole blocks. See %s" $sc.Position $sc.Name $sc.Parent.Name $sc.Parent.Name $sc.Position -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* NESTED PRE-RENDERED BODIES ARE FLATTENED, top-level ones are not.
+
+       Transparency is a claim about RAW MARKDOWN: emit what the author wrote
+       and let the one outer pass render it. At depth >= 1 in percent form the
+       body is not raw markdown — Hugo already rendered it to HTML — so there is
+       nothing to be transparent about, and emitting multi-line HTML back into
+       the markdown stream lets Goldmark paragraph-wrap it. Measured: a gated
+       `{{< card >}}` inside `{{< cards >}}` came back as
+       `div.section-cards > p > a`, putting a stray <p> in the card grid.
+
+       Flattening to one logical line (newlines -> `&#10;`, which Goldmark does
+       not decode) removes the block-level signal that triggers the wrap. This
+       is the same treatment reuse.html gives its expansion, for the same
+       reason.
+
+       Scoped by `.Parent` AND a leading `<`, so a top-level gate — the 85% case
+       and the one transparency is about — is never touched. */ -}}
+{{- /* A nested pre-rendered body that is ONE paragraph is unwrapped.
+
+       At depth >= 1 in percent form Hugo renders the body before the shortcode
+       runs, and a body on its own source line comes back wrapped:
+       `{{%% version %%}}{{< card … >}}{{%% /version %%}}` inside `{{< cards >}}`
+       arrives as `<p><a class="section-card">…</a></p>`. Emitting that verbatim
+       puts a stray paragraph inside the card grid — measured as
+       `div.section-cards > p > a`.
+
+       The old code dropped the wrapper by accident: it ran the body back
+       through `RenderString` with `display: "inline"`, which absorbed it. That
+       is also what Hugo itself does for SINGLE-LINE nested percent bodies via
+       innerCleanupRegexp; this only extends the same treatment to a body whose
+       single paragraph happens to span lines, so it follows Hugo's own
+       precedent rather than inventing a rule.
+
+       Strictly one paragraph: exactly one `<p>` in the whole body, opening at
+       the start and closing at the end. A multi-paragraph or mixed-block body
+       keeps every wrapper it was given. */ -}}
+{{- /* NOT DONE, and the attempt is recorded so it is not retried blind:
+       stripping one leading and one trailing newline from `.Inner`.
+
+       Motivation was real. A block gate written on its own lines gives `.Inner`
+       a newline at each end, those land next to the source's own newlines and
+       produce BLANK lines, and between list items a blank line is CommonMark's
+       loose-list signal — so gating one step wraps every `<li>` in `<p>` and
+       adds vertical spacing to all of them. That is transparency shape 07.
+
+       Measured result of the trim: fixture failures went 6 -> 11. The newline
+       is exactly what puts a list marker or a table row at column 0, so
+       removing it broke `version-table-row` (multi-row blocks stopped merging
+       into their table and leaked literal pipes) and `version-nested-list`
+       (bullets landed in `<pre>` instead of `<li>`). Trading a structural
+       regression for a cosmetic one is not a fix. Shape 07 stays pinned. */ -}}
+{{- $unwrapped := $innerHTML -}}
+{{- if and $sc.Parent (findRE `^\s*<p>[\s\S]*</p>\s*$` $inner 1) -}}
+  {{- if eq (len (findRE `<p[ >]` $inner)) 1 -}}
+    {{- $unwrapped = ($inner | replaceRE `^\s*<p>` "" | replaceRE `</p>\s*$` "") | safeHTML -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* The `-}}` suppresses this file's own trailing newline, so the partial
+       contributes EXACTLY the body and nothing else. */ -}}
+{{ $unwrapped -}}
