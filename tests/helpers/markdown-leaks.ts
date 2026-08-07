@@ -189,6 +189,25 @@ const ESCAPED_HTML =
 // bounded to 60 inner chars to stay on one logical run.
 const RAW_BOLD = /\*\*[^\s*][^*\n]{0,60}\*\*/g;
 
+// Emphasis that collapsed to EMPTY, e.g. `****` or `____`.
+//
+// RAW_BOLD above cannot see this: it requires at least one non-space character
+// between the delimiters, so the collapsed form slips straight through. That
+// gap was not theoretical — the fixture shipped
+// `**{{% version include-if="v2" %}}X{{% /version %}}**`, and on v1, where the
+// gate excludes, both the reuse and rebase pipelines rendered
+// `The setting **** is v2-only` with four literal asterisks visible on the page.
+//
+// CommonMark does not treat `****` as empty-strong; it emits the characters. So
+// any run of 4+ asterisks or underscores in visible text is a leak, and in
+// practice it always means a gate was placed INSIDE an inline construct rather
+// than around it. `tests/gate-inline-form.spec.ts` catches the cause at source;
+// this catches the symptom in anything already built.
+//
+// Bounded to 4-8 delimiters so a horizontal rule (`___`, which is 3 and is
+// stripped as expected markdown anyway) and long ASCII art dividers do not fire.
+const EMPTY_EMPHASIS = /(?:\*{4,8}|_{4,8})/g;
+
 // Hugo's internal shortcode placeholder token. It only ever appears in output
 // when a shortcode failed to be replaced (a render/ordering bug), so any
 // occurrence in visible HTML is a real leak. Case-insensitive: Hugo has used
@@ -257,6 +276,7 @@ export function findMarkdownLeaks(
   scan(CODE_FENCE, "code-fence");
   scan(ESCAPED_HTML, "escaped-html");
   scan(RAW_BOLD, "raw-bold");
+  scan(EMPTY_EMPHASIS, "empty-emphasis");
   scan(UNCLOSED_COMMENT, "unclosed-comment");
 
   return leaks;

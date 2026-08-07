@@ -39,18 +39,33 @@ extras set at least one property in common. A selector they merely share the NAM
 duplication and is not counted; see the note under kagent/ambientmesh for why that
 distinction mattered.
 
-| consumer | same-path shadows | duplicated selectors | of which divergent | contract divergences |
-|---|---|---|---|---|
-| docs | 4 | 0 | 0 | 1 |
-| kgateway-oss | 4 | 0 | 0 | 3 |
-| agentgateway-oss-website | 7 | 0 | 0 | 4 |
-| agentregistry-oss-website | 1 | 0 | 0 | 0 |
-| kagent-oss-website | 0 | 0 | 0 | 0 |
-| ambientmesh.io | 0 | 1 | 1 | 0 |
+"Same-path shadows" now EXCLUDES extension-slot overrides, which are counted separately
+and are not drift — see "Extension slots" below. Folding the two together would have shown
+agentgateway-oss going from 5 shadows to 8 at the exact moment it stopped forking two
+layouts, which is the opposite of the signal this table is for.
+
+| consumer | same-path shadows | slot overrides (OK) | duplicated selectors | of which divergent | contract divergences |
+|---|---|---|---|---|---|
+| docs | 2 | 0 | 0 | 0 | 1 |
+| kgateway-oss | 1 | 2 | 0 | 0 | 1 |
+| agentgateway-oss-website | 3 | 5 | 0 | 0 | 2 |
+| agentregistry-oss-website | 0 | 0 | 0 | 0 | 0 |
+| kagent-oss-website | 0 | 0 | 0 | 0 | 0 |
+| ambientmesh.io | 0 | 0 | 1 | 1 | 0 |
+
+## Extension slots
+
+`layouts/partials/docs/{chrome-top,chrome-bottom,width-class,content-class,after-title}.html`
+are OVERRIDE POINTS. A consumer replacing one is using the module correctly; a consumer
+replacing `layouts/docs/single.html` is not. The distinction is the whole reason the slots
+were added — a forked layout silently stops receiving new module features, which cost
+kgateway.dev a visible page subtitle on 856 pages. Full contract in `USAGE.md`.
 
 For history, the counts before this round of cleanup were: docs 8 shadows / 169 duplicated
 selectors, kgateway-oss 4 / 1, agentgateway-oss 9 / 12, agentregistry 1 / 0, kagent 0 / 13,
-ambientmesh 0 / 3. **CSS duplication is now zero everywhere except one deliberate brand
+ambientmesh 0 / 3. Unsanctioned template shadows are now **6 across all six consumers**,
+down from 22: 2 on docs, 1 on kgateway-oss, 3 on agentgateway-oss, 0 elsewhere. Every one
+that remains has a measured verdict saying why it stays. **CSS duplication is now zero everywhere except one deliberate brand
 font.** What remains is same-path template shadows, which are a separate and harder problem
 — several are load-bearing, not stale.
 
@@ -80,7 +95,57 @@ than merely stale and need a judgment call, notably `.section-card-image` (extra
 `.solo-footer-inner` (extras adds `text-align:center`) and `.dark .solo-footer`
 (transparent vs dark background).
 
-Same-path template shadows: `card.html`, `cards.html`, `gloss.html`, `table.html`.
+Same-path template shadows: `card.html`, `cards.html`. (`gloss.html` and `table.html` were
+deleted in v0.2.0-beta.3 — see below.)
+
+| shadow | measured verdict |
+|---|---|
+| `layouts/_shortcodes/card.html` | **KEEP — deleting BREAKS THE BUILD.** Its own header comment says why: "Hextra's card uses utils/icon.html (SVG lookup) but docs uses Material Icons font." The hub passes Material Icons names (`open_in_new`, `rocket`) and renders `<i class="material-icons">`; extras looks the name up in `site.Data.icons` and `errorf`s when absent. The hub's `data/icons.yaml` has **2 entries**, both product logos. Deleting produced `ERROR icon "open_in_new" not found` and a failed build. Same shape as the `link-hextra` forks: an adaptation to a different convention, not a stale copy |
+| `layouts/_shortcodes/cards.html` | **KEEP.** Pairs with `card.html`; same icon contract |
+
+**Resolved (v0.2.0-beta.3):**
+
+- `layouts/_shortcodes/gloss.html` deleted. Functionally identical to extras' but **not
+  flattened**, so it injected newline runs into the middle of sentences. Measured on a
+  before/after `PRODUCT=kgateway` build: **29 pages differ, every edit pure whitespace** —
+  42 removals of `&#10;&#10;&#10;&#10;` and 18 of a stray space, zero content changes. The
+  visible wins are small but real: body text went from `you install the Solo Enterprise for
+  kgateway ⏎⏎⏎ control plane ⏎⏎⏎ in a Kubernetes cluster` to one clean sentence, and the
+  `<meta name="description">` on `2.1.x/about/architecture` went from `data plane . These`
+  to `data plane. These`. This is the same flatten rationale as `reuse.html` and `alert.html`.
+- `layouts/_shortcodes/table.html` deleted. All **18** hub call sites pass no argument, so
+  there is no collision with extras' `mode=` parameter (the hub's took a positional CSS
+  class; extras' takes `wrap`/`nowrap`/`equal`). **12 pages change**, all
+  `gateway/*/reference/helm/*_helm_chart_values`, and the change is real markup:
+  `<div class="hx:overflow-x-auto">` becomes
+  `<div class="solo-table solo-table--wrap" style="--solo-table-cols: 4">`. Scroll is
+  preserved either way — `.table-wrapper` already carries `overflow-x: auto`, and the inner
+  `.table-wrapper` is present in both builds — so the net effect is that cells stop being
+  capped at 24rem and fill the body width, which is exactly what `wrap` mode documents.
+  **Flag for the visual pass**: this is the one item in this batch that changes appearance
+  rather than whitespace.
+
+**SEPARATE FINDING — the glossary feature is DEAD on the docs hub.** Not caused by the
+deletion above, and not fixed by it. Both `gloss.html` versions look the key up in
+`site.Data.glossary` and fall back to plain text on a miss. `kgateway.dev` ships
+`data/glossary.yaml`, but the hub's module import declares **explicit mounts**
+(`content/docs`, `assets/kgw-docs/*`), and explicit mounts REPLACE the defaults — so the
+module's `data/` is never mounted and every lookup misses. Measured in production:
+`docs.solo.io/kgateway/latest/about/architecture/` has **0** `glossary-term` spans and **0**
+tooltips; the same page on `kgateway.dev` has **4** of each. So 26 terms that carry hover
+definitions on the OSS site render as bare text on the hub, with no error and no missing
+content — just a missing affordance. This is the same trap already recorded for the solo
+icon. Fix is one mount (`source = "data"`, `target = "data"`) in `hugo-kgateway.toml`, plus
+`hugo-gateway.toml` and `hugo-agentregistry.toml` which import the same module — but it needs
+a check that the merged `data/` does not collide with the hub's own keys, so it is its own
+change. Deliberately left as a backlog item.
+
+**Not shadows at all, despite looking like candidates:** `icon.html` (394B) and
+`doc-test.html` (20B) have no counterpart in extras — extras' `icon` is a PARTIAL
+(`_partials/utils/icon.html`), not a shortcode. `icon` is **live** (4 uses arriving via the
+pinned kgateway.dev module, invisible to a grep of the hub's own tree). `doc-test` has 0 uses
+in the hub, its assets, the pinned kgateway.dev module and ambientmesh.io — but
+agentgateway.dev has **364**, so it is a cheap compatibility shim, not dead code. Keep both.
 
 **Resolved (unreleased):** the 169 duplicated selectors are gone (`custom.css` 26,997 →
 5,008 bytes), the three byte-identical asset duplicates were deleted
@@ -100,16 +165,44 @@ fixture-only-valid. This is exactly how `tab-code-fences.spec.ts` came to sit in
 
 ### kgateway-oss
 
-`navbar.html` is a full fork with its own class vocabulary (`nav-container`, `dropdown`,
-`github-white-icon`) rather than extras' (`hextra-nav-container`, `version-dropdown`,
-`solo-sidebar-trigger-tabletonly`). `docs/single.html` and `docs/list.html` are missing
-`page-badges`, `page-description`, `badge-*` and `section-card-badge` — so those extras
-features do not render here at all. `link-hextra.html` is a 587B stub against extras' 6KB.
+Three same-path shadows remain (four before `link-hextra.html` was deleted).
+
+| shadow | verdict |
+|---|---|
+| `layouts/_partials/navbar.html` | **KEEP.** 29,118B against extras' 20,921B — a full fork with its own class vocabulary (`nav-container`, `dropdown`, `github-white-icon`) rather than extras' (`hextra-nav-container`, `version-dropdown`, `solo-sidebar-trigger-tabletonly`). Deleting it is a visual redesign of the site header, not a cleanup |
+| `layouts/partials/docs/width-class.html` | **SLOT OVERRIDE — sanctioned.** Routes the wrapper class through `utils/page-width` so this site's `page.width: wide` is honoured |
+| `layouts/partials/docs/content-class.html` | **SLOT OVERRIDE — sanctioned.** `hx:max-w-6xl` content column |
+
+**Resolved (v0.2.0-beta.3):** `layouts/docs/single.html` and `layouts/docs/list.html`
+deleted, replaced by the two slot overrides above. The site **gained a visible page
+subtitle on 856 pages** it had silently been missing, plus
+`components/page-context-menu`, the `displayPagination` guard and the `page-badges`
+contract. (Its `<meta name="description">` was already correct — a different partial
+feeds that — so the gain is the rendered `<p class="page-description">`, not SEO.)
+Two other things moved on the way out: the inline breadcrumb-hiding `<style>` went to
+`assets/css/custom.css`, and the `/docs/envoy/` landing became
+`layouts/docs/landing.html`, selected by `layout: landing` in front matter, instead of
+an `if $isEnvoyIndex` branch keyed on a hardcoded path. That landing renders
+byte-identically apart from the stylesheet fingerprint. 154 content + 1,155 static +
+7 browser specs pass.
+
+Also noted while doing this: `layouts/docs/envoy/_index.html` and
+`layouts/docs/agentgateway/_index.html` are **dead files**. Hugo has no lookup path of
+the form `layouts/<section>/<subsection>/_index.html`, so neither has ever rendered.
+Left in place pending a separate cleanup.
+
+**Resolved (v0.2.0-beta.2):** `layouts/_shortcodes/link-hextra.html` deleted. The version-root
+fix in that release makes the 587B fork redundant. Verified by a before/after
+`hugo160 --gc --minify` build: **104 of 1,161 pages differ, 130 href changes, every one a
+trailing slash being ADDED** (`/quickstart/install` → `/quickstart/install/`, one fewer
+redirect) — zero links retargeted, zero link-count changes, and the remaining 438 non-HTML
+diffs are `llms.txt` timestamps plus the same slashes. 154 content + 1,155 static specs pass.
 
 ### agentgateway-oss-website
 
-Seven same-path shadows, the most of any consumer (nine before the image pair below was
-resolved). Three arrived on 2026-08-06 in the
+Three unsanctioned same-path shadows plus five sanctioned slot overrides (nine unsanctioned
+before the image pair, the two forks and the two docs layouts below were resolved). Three
+arrived on 2026-08-06 in the
 commit "Moved shortcodes to `_shortcodes`": those files already existed under the old
 `layouts/shortcodes/` path, where they did NOT collide with the module, and moving them made
 them shadow it.
@@ -131,13 +224,44 @@ carries a measured verdict instead of a byte count.
 
 | file | measured verdict |
 |---|---|
-| `layouts/_shortcodes/link-hextra.html` | **KEEP.** Deleting rewrites links on **913 pages** from `/docs/kubernetes/1.0.x/setup/gateway/` to `/latest/setup/gateway/` — a 404. extras assumes the hub's `/product/version/…`; agw is `/docs/<flavor>/<version>/…`. Not a stub, an adaptation |
-| `assets/js/flexsearch.js` | **UPSTREAMED — delete after the next pin bump.** The whole 20KB fork existed for one expression: extras read `site.Params.versions`, agw reads `site.Params.sections.*.versions` keyed on `linkVersion`. extras now walks both and keys on `linkVersion \| default .version`, matching what `utils/warn-missing-description.html` already did. Verified: with the fork removed and a local `replace`, agw's built search bundle is **byte-identical** to the fork's. Deleting it *before* the bump returns the site to an empty `visibleVersions` set, which disables the other-versions filter rather than erroring |
-| `layouts/_partials/navbar.html` | 832B against extras' 20.9KB. Deleting changes **1515 pages** and renders extras' full navbar with dropdowns — a visual redesign of the site header, not a cleanup |
-| `layouts/docs/single.html` | drops the `page-badges` / `badge-*` / `section-card-badge` contract, so those extras features cannot render here at all. Deleting changes **1092 pages** structurally. Real capability gap, but needs design work and visual review |
-| `layouts/docs/list.html` | same contract gap on section landings; **391 pages** |
+| `layouts/_partials/navbar.html` | **KEEP.** 832B against extras' 20.9KB. Deleting changes **1515 pages** and renders extras' full navbar with dropdowns — a visual redesign of the site header, not a cleanup |
+| `layouts/partials/docs/chrome-top.html` | **SLOT OVERRIDE — sanctioned.** The navbar-hiding CSS, `nav.html` and the announcement wrapper. This one file replaced two forked layouts |
+| `layouts/partials/docs/chrome-bottom.html` | **SLOT OVERRIDE — sanctioned.** `chatbot.html` |
+| `layouts/partials/docs/width-class.html` | **SLOT OVERRIDE — sanctioned.** `utils/page-width` plus the `agw-docs-topgap` hook class |
+| `layouts/partials/docs/content-class.html` | **SLOT OVERRIDE — sanctioned.** `hx:pt-2` rather than the default `hx:pt-6` |
+| `layouts/partials/docs/after-title.html` | **SLOT OVERRIDE — sanctioned.** `test-status-badge.html`. Inert today: that partial currently emits nothing on any page |
 | `layouts/_shortcodes/openapi.html` | **2 pages.** agw's fork emits a full standalone `<!doctype html>` document; extras emits an embedded fragment. Small enough to decide cheaply, not yet decided |
 | `layouts/_shortcodes/redirect.html` | **2 pages.** agw's emits a versionless target (`/docs/mcp/mcp-access/`); extras version-prefixes it (`/docs/kubernetes/1.1.x/mcp/mcp-access/`). Needs a check of which target actually resolves |
+
+**Resolved (v0.2.0-beta.3):** `layouts/docs/single.html` and `layouts/docs/list.html`
+deleted, replaced by the five slot overrides above. Verified feature-by-feature on a
+before/after `--gc --minify` build: the custom navbar (1,512 pages), chatbot (1,492),
+section cards (477 pages / 2,091 links / 510 grids) and page descriptions (841) all carry
+**identical counts**, and no page vanished. The hand-rolled section-card block in the old
+`list.html` was dropped in favour of the module's `auto-section-cards.html`, which is a
+strict superset of it (same markup and badges, plus SVG/data-icon support). The inline
+`padding-top: 2.5rem` moved to `assets/css/custom.css` behind an `agw-docs-topgap` hook
+class supplied by the width-class slot — note that if this site ever enables docTabs, the
+module emits an inline `padding-top` on the same element and inline wins, so that rule
+needs revisiting at that point. 1,705 content + static + browser specs pass.
+
+**Resolved (v0.2.0-beta.2) — the two forks that were previously marked KEEP:**
+
+- `layouts/_shortcodes/link-hextra.html` (940B). Previously KEEP, because deleting it against
+  an older pin rewrote links on **913 pages** from `/docs/kubernetes/1.0.x/setup/gateway/` to
+  `/latest/setup/gateway/`, a 404. The version-root fix in beta.2 removes that. Verified by a
+  before/after `hugo160 --gc --minify` build: **356 of 1,516 pages differ, 535 href changes,
+  every one a trailing slash being ADDED** — zero links retargeted, zero link-count changes.
+- `assets/js/flexsearch.js` (20,929B). The entire fork existed for one expression: extras read
+  `site.Params.versions`, agw reads `site.Params.sections.*.versions` keyed on `linkVersion`.
+  extras now walks both and keys on `linkVersion | default .version`, matching what
+  `utils/warn-missing-description.html` already did. Verified: the built search bundle keeps
+  the **same fingerprint hash** with the fork gone, i.e. byte-identical output.
+
+1,699 content + static specs pass on the fork-free build, and the build's warning count is
+unchanged. Note that this repo's `Makefile` has **no `framework-test-content` target** (kgw
+has one), so the content project has to be run by hand from the extras checkout — worth
+adding.
 
 **Resolved 2026-08-07 — the image shortcodes, which had to move as a set:**
 `reuse-image.html` and `reuse-image-dark.html` were deleted, along with the
@@ -153,9 +277,34 @@ dark, in both directions.
 
 ### agentregistry-oss-website
 
-Cleanest — zero duplicated selectors, zero contract divergences. One same-path shadow:
-`assets/css/main.css` at 1863B against extras' 13368B. Worth checking whether that is
-intentional or is silently dropping theme CSS.
+**Now completely clean: zero of everything** — no same-path shadows, no duplicated
+selectors, no contract divergences, no slot overrides.
+
+**Resolved (v0.2.0-beta.3), and the premise was backwards.** This entry used to read
+"`assets/css/main.css` at 1863B against extras' 13368B — worth checking whether that is
+intentional or is silently dropping theme CSS." It was neither. The two files have nothing to
+do with each other:
+
+- agentregistry's is a **Tailwind entry point** (`@import "tailwindcss"`, `@source
+  "hugo_stats.json"`, brand keyframes, HSL design tokens), read by that repo's own
+  `layouts/_partials/css.html`. **No other consumer ships a `css.html`, and neither does
+  Hextra 0.12.3** (its entry is `assets/css/styles.css`; it has no `main.css` at all). So
+  agentregistry is not overriding a theme file — it is supplying the only file that reads
+  that path.
+- extras' was **668 lines of marketing CSS** (proxima-nova, 4rem `h1`, `.p-lead`) dating from
+  the "First draft" commit, and **loaded by no template in any of the seven repos or in
+  Hextra.** Verified by grepping every `resources.Get`/`Match` call for CSS across all of
+  them: every lookup is by explicit path and none is `css/main.css` except agentregistry's.
+
+So the fix was to delete **extras'** copy, not to touch agentregistry's. Verified by build:
+the fixture is unchanged (0 non-`llms.txt` diffs) and agentregistry's build differs only in
+11 `llms.txt` timestamps — **0 HTML pages, 0 CSS files**, with its own Tailwind bundle keeping
+the identical fingerprint `main.7a32dc4c…css`. The docs hub had already deleted its
+byte-identical copy of the same dead file, with no effect, which corroborates this.
+
+**Lesson worth keeping:** a byte-count gap between two files at the same path is not evidence
+of drift. These two shared a filename and nothing else. Same mistake shape as the `link-hextra`
+"587B stub vs 6KB module file" reading, which also turned out to be wrong.
 
 ### kagent-oss-website and ambientmesh.io
 

@@ -77,7 +77,12 @@ No other consumer needs a paired change. Details in the individual entries below
   **0 of 769 HTML pages differ** (166 files differ, every one an `llms.txt` timestamp).
 - **Sequencing:** the two consumer forks can only be deleted AFTER a release carrying this
   fix and a pin bump to it. Deleting them against an older pin breaks 913 pages on
-  agentgateway.dev and 637 on kgateway.dev.
+  agentgateway.dev and 637 on kgateway.dev. **Both are now deleted**, against the
+  `v0.2.0-beta.2` pin, and both deletions were re-verified on a fresh before/after
+  `--gc --minify` build: agentgateway.dev **356 of 1,516 pages differ, 535 href changes**;
+  kgateway.dev **104 of 1,161 pages differ, 130 href changes**; **100% of those changes are a
+  trailing slash being added**, with zero links retargeted and zero link-count changes. The
+  remaining diffs are `llms.txt` build timestamps.
 - **The input contract is now tested and documented, which it was not.** This shortcode had
   16 tests across three files and **none of them covered what `path` may contain** — they
   pinned path REWRITING (`reference/api` → enterprise subpages, cel collapsing) and version
@@ -91,6 +96,266 @@ No other consumer needs a paired change. Details in the individual entries below
   fixture prose claiming it worked. `USAGE.md` now carries the parameter table, worked
   examples, and a "what does NOT work" table covering external URLs, cross-flavor links,
   wrong parameter names, and both slash traps.
+
+### Breaking — a reused snippet with a fenced code block no longer breaks the enclosing numbered list (`layouts/_partials/utils/flatten-rendered.html`, `layouts/_shortcodes/reuse.html`)
+
+- **Why.** `flatten-rendered` skipped its whole newline-encoding pass whenever the content
+  contained `<pre`, so a percent-form reuse of a snippet with a fenced code block returned REAL
+  newlines — which terminate the enclosing list item. Measured: `</ol>` count between step 1 and
+  step 3 went to **1** (list broken, step 3 restarting a new `<ol>`); with the pass enabled it is
+  **0**. The shape occurs **58 times in `solo-io/docs`** and once each in kgateway-oss and
+  agentgateway-oss-website.
+- **The plan said not to fix it this way. The plan was out of date.** Item 7i read *"do NOT fix
+  with `bypassPre: false` by analogy with `callout.html` … needs its own design"*, because the
+  bypass was documented as protecting Chroma output — flattening was said to turn `\`
+  line-continuations into literal `</span>` text via CommonMark backslash-escaping of `\<`.
+  Re-tested against the post-Phase-5 pipeline with a snippet containing the exact trigger
+  (`echo \<not-a-tag\>`, a `cat <<EOF` heredoc, trailing `\` continuations) and Chroma
+  genuinely active (**7 `<span class="line">` chains**, verified so the check is not vacuous):
+  the decoded code text is **byte-identical** with the bypass on and off, and `&lt;/span&gt;`
+  never appears. The warning predates the refactor that removed the re-parse causing it.
+- **But it did need a design, just a different one.** Turning the bypass off naively put a
+  literal `&#10;` inside heading TEXT on **23 headings** of the fixture's `everything` page —
+  extras' heading hook emits `<h2>Alerts<span id=…></span>\n    <a class="subheading-anchor">`,
+  and encoding that newline pollutes the TOC label, the copy-as-markdown payload and the
+  accessible name. My first repro snippet was too simple to catch it; the fixture's `presence`
+  spec did. So `<pre>` is now **protected with placeholders exactly as `<script>`/`<style>`
+  already were** — its newlines are content (the code's line breaks) while every other newline is
+  source formatting, and only the latter is collapsed.
+- **Verified.** All eight `gate-blockhtml` cases now keep their marker inside its list item;
+  four (A, C, E and G, including the no-gate control whose name was literally
+  *"breaks anyway — backlog 7i"*) were pinned as escaping and are flipped, which is what that
+  spec's failure message asks for. Extras **1831 passed** on both brands. `PRODUCT=kgateway`,
+  `gateway` and `istio` content suites: **170 passed** each.
+
+### Add — source lint: a gate must not sit inside an inline construct (`tests/helpers/gate-inline-form.ts`, `tests/gate-inline-form.spec.ts`)
+
+- **Why.** `**{{% version include-if="v2" %}}text{{% /version %}}**` renders as **four literal
+  asterisks** when the gate excludes — CommonMark does not treat `****` as empty-strong, it emits
+  the characters. Measured on the fixture: `The setting **** is v2-only`, on both the reuse and
+  rebase pipelines. Raw-emit does not fix this, because the delimiters were never inside the gate
+  to begin with.
+- **`markdown-leaks` was blind to it.** `RAW_BOLD` is `/\*\*[^\s*][^*\n]{0,60}\*\*/`, which
+  requires at least one character between the delimiters, so the collapsed-to-empty form slipped
+  through. An `empty-emphasis` pattern now catches the symptom; the new lint catches the cause at
+  source, with the offending line and column.
+- **It found a latent bug on its first real run.**
+  `assets/conrefs/snippets/istio/nodeport-peering.md:5` gates *inside* a bold label
+  (`**NodePort {{% version %}}(alpha){{% /version %}}…**`). No istio version currently falls
+  outside both gate lists, so nothing leaks today — but the next version added that isn't listed
+  would render `**NodePort **` literally. Restructured so the gates sit outside the bold;
+  rendering is unchanged on all four versions that use it (`1.28.x` → "NodePort (alpha)",
+  `1.29–1.31.x` → "NodePort (beta)").
+- Both the fixture's `version` and `conditional-text` cases moved to the supported form
+  (gate WRAPS the emphasis). Break-tested: reverting either one turns the lint and the leak
+  scanner red.
+
+### Fix — `copy-md-fidelity` counted markup inside HTML comments (`tests/helpers/copy-md.ts`, `tests/copy-md-fidelity.spec.ts`)
+
+- **Why.** Six `mangled-table` defects on
+  [gateway/*/security/extauth/oauth/keycloak](https://docs.solo.io/gateway/latest/security/extauth/oauth/keycloak/)
+  — "page renders a data table but its markdown has no GFM table row". It doesn't render one.
+  `assets/gateway-docs/pages/security/oauth-keycloak.md` ends with a 29-line draft wrapped in
+  `<!--If we add authorization code … -->`. Hugo expands shortcodes **before** markdown, so the
+  `{{< reuse >}}` inside the comment still runs and a fully-rendered `<table>` lands in the
+  output — **inside the comment**, where no reader will ever see it. Measured: the comment spans
+  bytes 240061–253253 and the table sits at 249032. The page markdown correctly omits it; the
+  scanner called that a defect.
+- **What changed.** `stripHtmlComments`, applied in `htmlHasDataTable`, `htmlHasMermaid` and
+  `cardDescriptions`. `PRODUCT=gateway` content goes from **1 failed / 156 passed to 160 passed**.
+  Four unit tests pin it, including that a real table elsewhere on the same page still counts.
+- **I got this wrong twice first, and both mistakes have the same shape.** Diagnosis one: "the
+  table is ejected 22KB downstream and renders after Cleanup" — no, the source puts it there
+  (`## Cleanup` is line 147, the reuse is line 176). Diagnosis two: "blank lines inside the
+  comment are breaking it", the known `html-comment-blank-line` shape — no, tested, stripping
+  every blank line changed nothing. Both came from reading the raw byte stream as if it were the
+  rendered document. Added to `tests/HAZARDS.md` as #7: **"present in the served bytes" is not
+  "rendered to the reader."**
+
+### Fix — content defects in `solo-io/docs` unblocked by the v0.1.26 `<ol start>` fix (no module change)
+
+- **The istio "Global Services" step was duplicated into every tab** as a workaround for the
+  pre-v0.1.26 bug where CSS counters ignored `<ol start>`. That fix shipped, so the workaround
+  is gone: **10 duplicate steps removed across 3 files and 8 source blocks**
+  (`assets/istio-docs/snippets/apps/{global,bookinfo-global}.md`,
+  `assets/istio-docs/pages/istio/apps/multi/global.md`). Verified on
+  [istio 1.31.x sidecar sample-apps](https://docs.solo.io/istio/1.31.x/sidecar/sample-apps/):
+  38 → 28 rendered steps, `<ol start="3">` now appears 10 times where it appeared 0 times, and
+  a parse5-style ancestor check confirms the surviving step sits in
+  `div/ol/li/ol[start=3]/li/p` — outside the tabs — rather than inside a tab panel.
+  Marker glyph verified by **pixel comparison with a negative control**: the rendered marker is
+  byte-identical to a forced `content:"c"` and differs from both `"a"` and `"3"`. (Per
+  `tests/HAZARDS.md` #3, `getComputedStyle(::before).content` cannot answer this — it returns
+  `counter(list-item, lower-alpha)` either way. My first clip captured empty space and the
+  negative control caught it.)
+- **A blank line after `{{< /tabs >}}` is mandatory**, and this was not in the original plan.
+  Collapsing the step without one renders it as **literal markdown** —
+  `</ol>3. Navigate to **Global Services**`, asterisks visible. So the duplication was working
+  around two problems, not just the `<ol start>` one.
+- **An `&lt;br /&gt;` leak on two kgateway API-reference pages** traced to a single stray
+  backslash: `applied.\<br />` in
+  `assets/{kgw-docs,conrefs}/pages/.../enterprise-kgateway_2.{1,2}.md`. The 2.3 file was already
+  correct, which is what made the diff obvious. `PRODUCT=kgateway` content tests go from
+  **1 failed / 156 passed to 157 passed**. Note the first fix attempt missed a **second copy of
+  the same file** under `assets/conrefs/pages/gateway/…`; the build was the only thing that
+  caught it.
+- **Two findings logged rather than fixed**, both pre-existing and neither caused by this work:
+  the gateway keycloak settings table renders ~22KB downstream of its source, after the Cleanup
+  section (plan item 7o — same container-ejection family as
+  [solo-io/docs#3280](https://github.com/solo-io/docs/issues/3280), and adding a trailing
+  newline does NOT fix it); and the API-reference generators emit literal `<br />` inside code
+  spans in **27 files**, so readers see the characters `<br />` printed in the docs (plan item
+  7p — belongs in the generator, not a bulk content edit).
+
+### Breaking — `assets/css/main.css` deleted from the module (dead code, loaded by nothing)
+
+- **Why.** 668 lines of marketing CSS (proxima-nova, 4rem `h1`, `.p-lead`) from the module's
+  "First draft" commit, **loaded by no template in any of the seven repos, nor by Hextra
+  0.12.3.** Verified by grepping every `resources.Get` / `resources.Match` CSS lookup across
+  all of them: each one is an explicit path, and none is `css/main.css` except
+  agentregistry-oss-website's — which resolves to that repo's OWN file, not this one.
+- **Marked breaking out of caution, not measurement.** Nothing observed loads it, but a
+  consumer outside these seven that did `resources.Get "css/main.css"` and relied on the
+  module's copy would lose it. Verified where it can be verified:
+  [agentregistry.dev](https://agentregistry.dev/docs/) builds with **0 HTML pages and 0 CSS
+  files changed** (11 `llms.txt` timestamps only), and its own Tailwind bundle keeps the
+  identical fingerprint `main.7a32dc4c…css`. The fixture is unchanged. The docs hub had
+  already deleted its byte-identical copy with no effect.
+- **This closes plan item 7e, whose premise was backwards.** That item read "agentregistry
+  overrides `assets/css/main.css` with 1,863B against extras' 13,368B — determine whether that
+  is deliberate or is silently dropping theme CSS." Neither. agentregistry's file is a
+  **Tailwind entry point** (`@import "tailwindcss"`, `@source "hugo_stats.json"`, brand
+  keyframes, HSL tokens) read by that repo's own `layouts/_partials/css.html` — and **no other
+  consumer ships a `css.html`, nor does Hextra 0.12.3**, whose entry is `styles.css`. It was
+  supplying the only file that reads that path, not shadowing a theme file. With the module's
+  copy gone, agentregistry-oss-website is at **zero same-path shadows, zero duplicated
+  selectors, zero contract divergences** — the first consumer completely clean.
+- **A byte-count gap between two same-named files is not evidence of drift.** These two shared
+  a filename and nothing else. Same mistake shape as reading `link-hextra` as a "587B stub vs
+  6KB module file", which was also wrong.
+
+### Fix — the docs hub's `gloss` shortcode injected blank lines mid-sentence (`solo-io/docs`, no module change)
+
+- **Why.** The hub carried its own `layouts/_shortcodes/gloss.html`, functionally identical to
+  the module's but **not flattened to a single line**. Every glossary term therefore emitted
+  newline runs into the surrounding prose. On
+  [docs.solo.io/kgateway/latest/install/helm/](https://docs.solo.io/kgateway/latest/install/helm/)
+  the source sentence rendered as `you install the Solo Enterprise for kgateway ⏎⏎⏎ control
+  plane ⏎⏎⏎ in a Kubernetes cluster`. HTML collapses that in the body, so it is invisible on
+  the page — but it is **not** collapsed everywhere: `2.1.x/about/architecture`'s
+  `<meta name="description">` shipped `data plane . These components`, with a space before the
+  period. Same flatten rationale already applied to `reuse.html` and `alert.html`.
+- **What changed.** Nothing in the module — the hub's shadow was **deleted** so the module's
+  already-correct version applies. Verified on a before/after `PRODUCT=kgateway` build:
+  **29 pages differ and every single edit is whitespace** — 42 removals of
+  `&#10;&#10;&#10;&#10;` and 18 of a stray space, **zero content changes**, checked by
+  normalising whitespace and confirming the files then match byte-for-byte.
+- **`table.html` deleted too, and this one is a visual change.** All 18 hub call sites pass no
+  argument, so there is no clash with the module's `mode=` parameter (the hub's took a
+  positional CSS class). **12 pages change**, all
+  `gateway/*/reference/helm/*_helm_chart_values`:
+  `<div class="hx:overflow-x-auto">` becomes `<div class="solo-table solo-table--wrap">`.
+  Horizontal scroll survives either way — `.table-wrapper` already carries `overflow-x: auto`
+  and is present in both builds — so the effect is that cells stop being capped at 24rem and
+  fill the body width, which is what `wrap` mode is documented to do. **Include these pages in
+  the visual pass.**
+- **`card.html` and `cards.html` must stay, and deleting them FAILS THE BUILD.** Not a judgment
+  call: `ERROR icon "open_in_new" not found`. The hub uses the Material Icons font and passes
+  font ligature names; the module looks names up in `site.Data.icons` as inline SVG and
+  `errorf`s on a miss. The hub's `icons.yaml` has two entries, both product logos. This is the
+  third "stale stub" in this effort that turned out to be a deliberate adaptation, after both
+  `link-hextra` forks.
+- **A grep of the hub's own tree is not enough to judge a hub shortcode.** `gloss` looked like
+  it had **zero** uses in `docs/content` and `docs/assets` — and would have, if that were the
+  whole corpus. It has 26, arriving through the pinned `kgateway.dev` module mount. `icon` has
+  4 by the same route and is live. Always count usage in the pinned modules a product imports,
+  not just the repo you are standing in.
+
+### Add — a `scanRoots` that reads nothing is now an error, not a silent pass (`tests/helpers/config.ts`, `tests/scan-roots.spec.ts`)
+
+- **Why.** `solo-io/docs` shipped `scanRoots = ["./content/en/test", "./assets/conrefs/test"]`
+  — the extras FIXTURE's paths, copy-pasted. Neither has ever existed in that repo. The
+  source-scanning specs skip only when `scanRoots` is **empty**, so two non-empty-but-wrong
+  entries sailed through and walked zero files. Six author-side lints (`curl-quotes`,
+  `tab-syntax`, `shortcode-args`, `heading-shortcode-id`, `include-form`, `cascade-type`)
+  passed **vacuously over 11,025 markdown files** for as long as the config existed.
+  Undetectable from outside: "walked nothing, found nothing" and "walked everything, found
+  nothing" are the same result.
+- **What changed.** `config.ts` throws if a `scanRoots` entry does not exist or is not a
+  directory. `tests/scan-roots.spec.ts` (3 tests) covers the case `config.ts` cannot see — a
+  root that exists but holds no markdown — and logs the corpus size so the number is visible
+  in CI output rather than assumed. Break-tested by pointing a throwaway config at a bad path.
+- **This is the third instance of the same bug class in this effort**, after `npx serve`
+  returning a directory listing for any URL whose last segment contains a dot, and
+  `getComputedStyle(el, "::before").content` returning the specified value rather than the
+  resolved glyph. **Any new scanner needs a "found at least N targets" self-check**, or it
+  certifies nothing while looking like it certifies everything.
+- **What it immediately found.** The hub's own roots were already fixed
+  (`solo-io/docs@71504016e`) and all six lints pass on its 11,025 files. But the two OSS
+  consumers scan only `./content/docs` and **never scanned `./assets`** — 297 conref files on
+  kgateway.dev and 392 on agentgateway.dev, which is exactly where reuse and gating problems
+  live. Widening both configs surfaced 24 deprecated tab usages and 3 unanchored shortcode
+  headings; all are fixed, and both repos are green at the wider scope (1,396 and 1,869 files).
+- **One of those was live on production.**
+  [docs.solo.io/kgateway/latest/…/max-headers-count/](https://docs.solo.io/kgateway/latest/traffic-management/header-control/max-headers-count/)
+  renders tabs labelled **"Tab 0"** and **"Tab 1"** instead of "Cloud Provider LoadBalancer"
+  and "Port-forward for local testing". Cause, confirmed by reading the templates rather than
+  guessing: the source uses the pre-0.12 `tabName=`, the hub's own `layouts/_shortcodes/tab.html`
+  does `{{ .Get "name" | default (printf "Tab %d" .Ordinal) }}` and never reads `tabName`, and
+  the hub's `tabs.html` never reads `items` either — so both label sources fall through.
+  Note kgateway.dev itself looked **fine**, because Hextra 0.12.3's own tabs still honours
+  `items=`; only the hub's override does not. Fixed at source (`name=`), which both
+  implementations honour.
+
+### Add — extension slots on the docs layouts, so a consumer stops forking `docs/single.html` and `docs/list.html` (`layouts/docs/{single,list}.html`, `layouts/partials/docs/*.html`)
+
+- **Why.** A consumer that needs to inject its own navbar, chatbot or page width
+  had no option but to copy the whole layout. Both OSS sites did, each for two or
+  three lines. The cost is invisible and compounding: **a forked layout stops
+  receiving every feature the module adds afterwards.** Measured on
+  [kgateway.dev](https://kgateway.dev/docs/envoy/latest/install/) — deleting its two
+  forks gained a visible page subtitle on **856 pages** that had silently been
+  missing it, plus `components/page-context-menu`, the `displayPagination` config
+  guard, `version-banner` and the `page-badges` contract. Nothing was broken; the
+  features simply never arrived. To be precise about the subtitle, since it is easy
+  to overstate: `<meta name="description">`, OpenGraph and JSON-LD were **already
+  correct** on those pages (a different partial feeds them). What was missing is the
+  rendered `<p class="page-description">` under the heading.
+- **What changed.** Five override points in `layouts/partials/docs/`:
+  `chrome-top.html` (above the tab band; defaults to the announcement banner),
+  `chrome-bottom.html` (below everything; defaults to nothing),
+  `width-class.html` and `content-class.html` (the two max-width class strings),
+  and `after-title.html` (inside `.content`, detail pages only). The docs layouts
+  also stopped emitting an empty announcement wrapper and a `padding-top: 0` style
+  attribute when neither applies.
+- **Byte-identical by construction, and verified.** Every slot call is glued to its
+  neighbouring tag so an empty slot adds no whitespace. Two docs-hub products built
+  before and after: **kgateway 0 of 770 HTML pages differ, istio 0 of 1,113** — all
+  diffs are `llms.txt` build timestamps. The first attempt was *not* byte-identical
+  (67 fixture pages differed on whitespace alone); the trim markers were rebalanced
+  until it was.
+- **Consumer action — already done in both OSS repos.** `kgateway-oss` and
+  `agentgateway-oss-website` deleted all four layout forks and now ship small slot
+  overrides instead. Two things moved out of the layouts on the way: kgateway.dev's
+  inline breadcrumb-hiding `<style>` and agentgateway.dev's inline
+  `padding-top: 2.5rem` both went to `assets/css/custom.css`, where styling belongs.
+  Verified feature-by-feature on agentgateway.dev's build: custom navbar, chatbot,
+  section cards (477 pages / 2,091 links / 510 grids) and page descriptions are all
+  **identical counts** before and after.
+- **One page needed a real layout, not a slot.** kgateway.dev's `/docs/envoy/`
+  landing hides the sidebar and TOC, and lived as an `if $isEnvoyIndex` branch keyed
+  on a hardcoded path inside the forked `list.html` — holding every other section
+  index hostage to one page. It is now `layouts/docs/landing.html`, selected by
+  `layout: landing` in front matter, and renders byte-identically apart from the
+  stylesheet fingerprint. Worth recording how nearly this was missed: an early check
+  grepped the built page for a CSS **comment** from that branch and found none, so
+  the branch looked like dead code. `--minify` strips CSS comments. The before/after
+  page diff is what caught it.
+- **The override scanner now separates slots from forks.** A slot override is the
+  mechanism working; a `layouts/docs/single.html` override is a defect. Counting
+  them together would have shown agentgateway.dev's shadow count going **up** (5 → 8)
+  at the moment it stopped forking two layouts, which trains everyone to ignore the
+  number. Real unsanctioned shadows: kgateway-oss 4 → **1**, agentgateway-oss 7 → **3**.
 
 ### Fix — search "Other versions" dropped `main` and `latest` on three production sites, and filtered nothing at all on a fourth (`assets/js/flexsearch.js`, `tests/search-visible-versions.spec.ts`)
 
@@ -126,9 +391,11 @@ No other consumer needs a paired change. Details in the individual entries below
   the one the fork produces, which is what makes the fork deletable. The remaining consumers
   (`ambientmesh.io`, `agentregistry`, `kagent`) declare no `linkVersion` at all, so the
   fallback leaves their output unchanged.
-- **Consumer action.** After a pin bump, `agentgateway-oss-website` can delete
-  `assets/js/flexsearch.js`. No other consumer has a fork of this file. Doing it *before* the
-  bump reverts that site to an inert filter.
+- **Consumer action — done.** `agentgateway-oss-website/assets/js/flexsearch.js` is deleted
+  against the `v0.2.0-beta.2` pin. No other consumer had a fork of this file. Confirmed
+  harmless by rebuilding: the search bundle keeps the **same fingerprint hash**, so the
+  output is byte-identical. (Doing this *before* the bump would have reverted that site to an
+  inert filter, which is why it waited.)
 - **The bug class, for next time.** This failed open, minified away its own identifier, and
   had no test — so a build looked healthy in every way while silently returning the wrong
   result set. `tests/search-visible-versions.spec.ts` (7 tests) now reads the set out of the

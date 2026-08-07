@@ -15,6 +15,14 @@ Two faces, one repo:
 > stock Hugo and Hextra (with links to the upstream docs), plus which Hextra
 > layout files this module shadows and how to maintain them.
 
+> [!WARNING]
+> Writing a scanner, crawler or measurement spec? Read
+> [tests/HAZARDS.md](./tests/HAZARDS.md) first. It catalogues ten ways a test in
+> this repo has passed while measuring **nothing** — each one a real incident, not
+> a hypothetical. The worst of them hid six lints walking zero of 11,025 files.
+> **Assert that your scanner found at least N targets**, or it certifies nothing
+> while looking like it certifies everything.
+
 ## Architecture
 
 ```
@@ -469,6 +477,10 @@ reload reuses the cached version.
 ├── USAGE.md                        Authoring + maintaining reference: shortcode
 │                                   and render-hook diffs vs Hugo/Hextra, plus
 │                                   the Hextra files this module shadows
+├── OVERRIDES.md                    Per-consumer inventory of files that shadow
+│                                   this module, with a measured verdict each
+├── tests/HAZARDS.md                Ways a test here can pass while measuring
+│                                   NOTHING. Read before writing a scanner
 ├── LICENSE                         Apache-2.0
 ├── MIGRATION_AUDIT.md              Phase-0 audit (kept for reference)
 │

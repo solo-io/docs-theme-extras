@@ -30,10 +30,36 @@ const norm = (s: string): string =>
 
 // ── HTML probes (did the construct exist on the page?) ──────────────────
 
+/**
+ * Drop `<!-- … -->` regions before probing.
+ *
+ * Content inside an HTML comment is IN the served file but is never rendered,
+ * so a probe that counts it reports a construct the reader cannot see.
+ *
+ * This is not hypothetical. `copy-md-fidelity` reported six `mangled-table`
+ * defects on `gateway/{1.17.x..1.22.x}/security/extauth/oauth/keycloak` —
+ * "page renders a data table but its markdown has no GFM table row". It does
+ * not. `assets/gateway-docs/pages/security/oauth-keycloak.md` ends with a
+ * 29-line draft section wrapped in `<!--If we add authorization code … -->`,
+ * and Hugo still expands the `{{< reuse >}}` inside it, so a fully-rendered
+ * `<table>` lands in the output **inside the comment** (measured: comment spans
+ * bytes 240061–253253, the table sits at 249032). The markdown correctly omits
+ * it, the reader correctly never sees it, and the scanner called that a defect.
+ *
+ * Chasing this produced two wrong diagnoses first — "the table is ejected 22KB
+ * downstream past two sections", then "blank lines are breaking the comment"
+ * (tested: removing them changes nothing). Both were artefacts of measuring the
+ * raw byte stream instead of the rendered document.
+ */
+export function stripHtmlComments(html: string): string {
+  return html.replace(/<!--[\s\S]*?-->/g, "");
+}
+
 // A real data table: <table> containing a <th>. Excludes Chroma's code
-// line-number table (class="lntable"), which is not content.
+// line-number table (class="lntable"), which is not content, and anything
+// inside an HTML comment, which the reader never sees.
 export function htmlHasDataTable(html: string): boolean {
-  const tables = html.match(/<table\b[\s\S]*?<\/table>/gi) ?? [];
+  const tables = stripHtmlComments(html).match(/<table\b[\s\S]*?<\/table>/gi) ?? [];
   return tables.some(
     (t) => !/class="[^"]*\blntable\b/.test(t) && /<th\b/i.test(t),
   );
@@ -41,7 +67,9 @@ export function htmlHasDataTable(html: string): boolean {
 
 // Hextra renders ```mermaid as <pre class="mermaid"> / <div class="mermaid">.
 export function htmlHasMermaid(html: string): boolean {
-  return /<(?:pre|div)\b[^>]*\bclass="[^"]*\bmermaid\b/i.test(html);
+  return /<(?:pre|div)\b[^>]*\bclass="[^"]*\bmermaid\b/i.test(
+    stripHtmlComments(html),
+  );
 }
 
 // Card descriptions live in `.section-card-desc`. Return their text so we can
@@ -49,8 +77,9 @@ export function htmlHasMermaid(html: string): boolean {
 export function cardDescriptions(html: string): string[] {
   const out: string[] = [];
   const re = /class="[^"]*\bsection-card-desc\b[^"]*"[^>]*>([\s\S]*?)<\//gi;
+  const src = stripHtmlComments(html);
   let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) !== null) {
+  while ((m = re.exec(src)) !== null) {
     const text = norm(m[1]);
     if (text) out.push(text);
   }

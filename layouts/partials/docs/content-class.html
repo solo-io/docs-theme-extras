@@ -1,0 +1,23 @@
+{{- /*
+  EXTENSION SLOT — the classes applied to the docs `<main id="content">` element,
+  covering both its max-width and its padding.
+
+  DEFAULT: `hextra-max-content-width hx:px-6 hx:pt-6 hx:md:px-12` — today's
+  behaviour, unchanged.
+
+  Both OSS consumers diverge here and this was one of the reasons they forked:
+  kgateway.dev uses `hx:max-w-6xl hx:px-6 hx:pt-6 hx:md:px-12`, and
+  agentgateway.dev uses the same but with `hx:pt-2`, because its custom navbar
+  changes the vertical rhythm above the content.
+
+  TO OVERRIDE: create `layouts/partials/docs/content-class.html` in the consumer
+  returning the full class string, e.g.
+
+      {{ return "hx:max-w-6xl hx:px-6 hx:pt-6 hx:md:px-12" }}
+
+  Note the path is `partials/`, not `_partials/`.
+
+  Must `return` a string; it is interpolated straight into a class attribute
+  alongside `hx:w-full hx:min-w-0`.
+*/ -}}
+{{- return "hextra-max-content-width hx:px-6 hx:pt-6 hx:md:px-12" -}}

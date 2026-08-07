@@ -1,10 +1,16 @@
-{{ define "main" }}
+{{- /*
+  Docs section-index page. See docs/single.html for the extension-slot
+  rationale; the same four slots apply here, with the same byte-identical
+  guarantee when they are empty. Keep the slot calls glued to their neighbouring
+  tags — moving one onto its own line injects whitespace and breaks that.
+*/ -}}
+{{ define "main" }}{{ partial "docs/chrome-top.html" . }}
   {{ partial "docs-tabs.html" . }}
-  <div class='hx:mx-auto hx:flex hextra-max-page-width'>
+  {{ $docTabs := .Store.Get "docTabs" }}<div class='hx:mx-auto hx:flex {{ partial "docs/width-class.html" . }}'{{ if and $docTabs $docTabs.enabled }} style="padding-top: 0.75rem;"{{ end }}>
     {{ partial "sidebar.html" (dict "context" .) }}
     {{ partial "toc.html" . }}
     <article class="hx:w-full hx:break-words hx:flex hx:min-h-[calc(100vh-var(--navbar-height))] hx:min-w-0 hx:justify-center hx:pb-8 hx:pr-[calc(env(safe-area-inset-right)-1.5rem)]">
-      <main id="content" class="hx:w-full hx:min-w-0 hextra-max-content-width hx:px-6 hx:pt-6 hx:md:px-12">
+      <main id="content" class="hx:w-full hx:min-w-0 {{ partial "docs/content-class.html" . }}">
         {{ partial "breadcrumb.html" (dict "page" . "enable" true) }}
         {{ partial "version-banner.html" . }}
         <div class="content">
@@ -47,5 +53,5 @@
         {{ partial "components/comments.html" . }}
       </main>
     </article>
-  </div>
+  </div>{{ partial "docs/chrome-bottom.html" . }}
 {{ end }}

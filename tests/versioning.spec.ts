@@ -400,21 +400,20 @@ test.describe("reuse and rebase pipelines produce equivalent content", () => {
       // fails, and so does one that stops diverging, so the list ratchets down
       // as Phase 5 lands.
       //
-      // Root cause found while widening, and it is a real leak, not noise. The
-      // fixture has `**{{% version include-if="v2" %}}…{{% /version %}}**`
-      // (a gate INSIDE a bold span). Where the gate excludes:
-      //   reuse   -> `<p>The setting **** is v2-only.</p>`  — literal asterisks
-      //              in visible output
-      //   rebase  -> `<p>The setting <strong></strong> is v2-only.</p>`
-      // Neither is right, and the reuse side is a visible markdown leak that
-      // `markdown-leaks` does NOT catch: RAW_BOLD is
-      // /\*\*[^\s*][^*\n]{0,60}\*\*/, which requires content between the
-      // delimiters, so the collapsed-to-empty case slips through.
+      // RESOLVED. The root cause was a gate placed INSIDE a bold span in the
+      // fixture: `**{{%% version include-if="v2" %%}}...{{%% /version %%}}**`. Where
+      // the gate excluded, the delimiters collapsed and BOTH pipelines rendered
+      // `The setting **** is v2-only` -- four literal asterisks in visible output.
+      // `markdown-leaks` was blind to it because RAW_BOLD requires content
+      // between the delimiters.
       //
-      // The `a`/`div`/`p` deltas trace to the same family — a gate collapsing
-      // inside an inline construct changes how many wrappers survive.
-      // Tracked in the plan's bug inventory; Phase 5's definition of done
-      // includes shrinking this set.
+      // Fixed three ways: the fixture moved to the supported form (gate WRAPS
+      // the emphasis), `tests/gate-inline-form.spec.ts` now lints the cause at
+      // source, and an `empty-emphasis` pattern in markdown-leaks catches the
+      // symptom in any already-built output.
+      //
+      // KNOWN_DIVERGENT is kept as a ratchet: a newly-divergent tag fails, and
+      // so does one that stops diverging, so the list only shrinks.
       const KNOWN_DIVERGENT = ["a", "div", "p", "strong"];
       const counts: Record<string, { everything: number; rebased: number }> = {};
       for (const tag of tags) {

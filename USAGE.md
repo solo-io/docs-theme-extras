@@ -383,6 +383,70 @@ A `# ours` comment at the top of every shadow file documents what was inserted
 vs. upstream. If you find a shadow without that header, treat it as a maintenance
 gap: either add the header or unshadow the file.
 
+## Extension slots — override these instead of forking a docs layout
+
+**If you are about to copy `layouts/docs/single.html` or `layouts/docs/list.html`
+into your repo, read this first.** Almost certainly you want a slot.
+
+Both OSS consumers used to fork those layouts, each for two or three injected
+lines. The cost is invisible and cumulative: a forked layout stops receiving
+everything the module adds afterwards. Measured, when kgateway.dev's forks were
+finally removed, the site gained a visible page subtitle on **856 pages** it had
+silently been missing, plus `components/page-context-menu`, the
+`displayPagination` config guard, `version-banner` and the `page-badges`
+contract. Nothing was broken; the features simply never arrived.
+
+Five partials exist purely so you do not have to fork. Each one defaults to
+today's exact output, so adding them changed **0 of 770** built HTML pages on
+the docs hub.
+
+| Slot | Renders | Default |
+|---|---|---|
+| `partials/docs/chrome-top.html` | very top of the page, above the tab band | the announcement banner, and only when one is configured |
+| `partials/docs/chrome-bottom.html` | very bottom, after the content wrapper closes | nothing |
+| `partials/docs/width-class.html` | max-width class on the page wrapper | `hextra-max-page-width` (100%) |
+| `partials/docs/content-class.html` | width + padding classes on `<main id="content">` | `hextra-max-content-width hx:px-6 hx:pt-6 hx:md:px-12` |
+| `partials/docs/after-title.html` | inside `.content`, after the title and description | nothing — **detail pages only**, not section indexes |
+
+Two things to get right:
+
+- **Path is `layouts/partials/docs/…`, not `layouts/_partials/docs/…`.** This
+  module keeps these under `partials/`, matching the existing `partials/docs/`
+  directory. An override in the wrong tree is silently ignored — no error, it
+  just never runs.
+- **Do not call a slot from its own override.** Your file wins the lookup, so
+  `{{ partial "docs/chrome-top.html" . }}` inside your `chrome-top.html` is
+  infinite recursion. To keep the default banner, call it by its own name:
+
+  ```gotemplate
+  {{ partial "docs/announcement-banner.html" . }}
+  {{ partial "my-custom-nav.html" . }}
+  ```
+
+Worked example — the whole of agentgateway.dev's `chrome-top.html`, which
+replaced two forked layouts:
+
+```gotemplate
+<style>.nav-container { display: none !important; }</style>
+{{ partial "nav.html" . }}
+<div class="w-full z-10 pt-10 lg:pt-20">
+  {{ partial "docs/announcement-banner.html" . }}
+</div>
+```
+
+`npm run scan:overrides` reports slot overrides separately from same-path
+shadows, because a slot override is the mechanism working and a layout fork is a
+defect. Do not "fix" a rising slot count.
+
+### What still needs a real layout
+
+A slot is for injecting chrome, not for restructuring the page. If one page
+needs a genuinely different layout — kgateway.dev's `/docs/envoy/` landing hides
+the sidebar and TOC entirely — give it its own layout file and select it from
+front matter (`layout: landing` → `layouts/docs/landing.html`). Branching inside
+a forked `list.html` on a hardcoded path, which is what that site did, holds
+every other section index hostage to one page.
+
 ## Top-level partials
 
 | File | Why it's shadowed | Diff target on Hextra upgrade |

@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   findCopyMdDefects,
   htmlHasDataTable,
+  stripHtmlComments,
   htmlHasMermaid,
   cardDescriptions,
   mdHasGfmTable,
@@ -34,6 +35,35 @@ test.describe("copy-md fidelity helpers", () => {
       htmlHasDataTable(`<table class="lntable"><tr><td>1</td></tr></table>`),
     ).toBe(false);
     expect(htmlHasDataTable("<p>no table</p>")).toBe(false);
+  });
+
+  // Regression guard for six false-positive `mangled-table` defects on
+  // gateway/*/security/extauth/oauth/keycloak. The source ends with a draft
+  // section wrapped in `<!--If we add authorization code … -->`; Hugo still
+  // expands the {{< reuse >}} inside it, so a fully-rendered <table> lands in
+  // the output INSIDE the comment. The reader never sees it and the markdown
+  // correctly omits it, so flagging it as a fidelity defect was wrong.
+  test("htmlHasDataTable ignores a table inside an HTML comment", () => {
+    const real = "<table><thead><tr><th>A</th></tr></thead></table>";
+    expect(htmlHasDataTable(`<!--draft\n${real}\n-->`)).toBe(false);
+    // ...but a real table elsewhere on the same page still counts.
+    expect(htmlHasDataTable(`<!--draft\n${real}\n-->${real}`)).toBe(true);
+  });
+
+  test("stripHtmlComments removes comment regions and leaves the rest", () => {
+    expect(stripHtmlComments("a<!--x-->b")).toBe("ab");
+    expect(stripHtmlComments("a<!--\nmulti\nline\n-->b")).toBe("ab");
+    // Two separate comments, not one greedy span swallowing the middle.
+    expect(stripHtmlComments("<!--1-->KEEP<!--2-->")).toBe("KEEP");
+    expect(stripHtmlComments("no comments here")).toBe("no comments here");
+  });
+
+  test("htmlHasMermaid and cardDescriptions also ignore commented-out markup", () => {
+    expect(htmlHasMermaid(`<!--<pre class="mermaid">graph</pre>-->`)).toBe(false);
+    expect(htmlHasMermaid(`<pre class="mermaid">graph</pre>`)).toBe(true);
+    expect(
+      cardDescriptions(`<!--<p class="section-card-desc">Hidden.</p>-->`),
+    ).toEqual([]);
   });
 
   test("mdHasGfmTable: true only when a delimiter row is present", () => {

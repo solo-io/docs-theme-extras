@@ -222,6 +222,36 @@ function emittedClasses(file) {
   return out;
 }
 
+/**
+ * Extension slots — partials a consumer is INVITED to replace.
+ *
+ * These are same-path overrides in the mechanical sense, but counting them as
+ * drift inverts the signal. The slots exist precisely so a consumer can inject
+ * its own navbar, chatbot, page width or status badge WITHOUT forking
+ * `layouts/docs/{single,list}.html` — and a fork is what actually causes harm,
+ * because it silently stops receiving every feature the module adds afterwards.
+ * That is how kgateway.dev came to be missing `page-description` on 856 pages.
+ *
+ * So a slot override is a success, and a `layouts/docs/single.html` override is
+ * a defect. Lumping them into one number would have meant agentgateway.dev's
+ * shadow count going UP (5 -> 8) at the exact moment it stopped forking two
+ * layouts, which would train everyone to ignore the number.
+ *
+ * Keep this list in sync with the files in `layouts/partials/docs/` that carry
+ * an "EXTENSION SLOT" header comment.
+ */
+const SLOT_OVERRIDES = new Set([
+  "layouts/partials/docs/chrome-top.html",
+  "layouts/partials/docs/chrome-bottom.html",
+  "layouts/partials/docs/width-class.html",
+  "layouts/partials/docs/content-class.html",
+  "layouts/partials/docs/after-title.html",
+]);
+
+export function isSlotOverride(file: string): boolean {
+  return SLOT_OVERRIDES.has(file);
+}
+
 export function scan() {
   const exLayouts = walk(path.join(ROOT, "layouts"), [".html"]);
   const exAssets = walk(path.join(ROOT, "assets"), [".css", ".js"]);
@@ -238,6 +268,7 @@ export function scan() {
     if (!fs.existsSync(base)) { report.push({ name, missing: true }); continue; }
 
     const samePath = [];
+    const slotOverrides = [];
     for (const [sub, ex] of [["layouts", exLayouts], ["assets", exAssets]]) {
       const cf = walk(path.join(base, sub), [".html", ".css", ".js"]);
       for (const rel of [...cf.keys()].sort()) {
@@ -245,7 +276,8 @@ export function scan() {
         if (rel === "css/custom.css") continue; // per-repo slot, by design
         const a = fs.readFileSync(ex.get(rel), "utf8");
         const b = fs.readFileSync(cf.get(rel), "utf8");
-        samePath.push({ file: `${sub}/${rel}`, identical: a === b, extrasBytes: a.length, consumerBytes: b.length });
+        const entry = { file: `${sub}/${rel}`, identical: a === b, extrasBytes: a.length, consumerBytes: b.length };
+        (isSlotOverride(entry.file) ? slotOverrides : samePath).push(entry);
       }
     }
 
@@ -276,7 +308,7 @@ export function scan() {
       const onlyConsumer = [...co].filter((c) => !ex.has(c)).sort();
       if (onlyExtras.length || onlyConsumer.length) contract.push({ file, onlyExtras, onlyConsumer });
     }
-    report.push({ name, samePath, noConflict, dupSame, dupDiff, contract });
+    report.push({ name, samePath, slotOverrides, noConflict, dupSame, dupDiff, contract });
   }
   return report;
 }
@@ -293,7 +325,9 @@ export function formatReport(r: ReturnType<typeof scan>): string {
     out.push(`  DIVERGENT selectors     : ${c.dupDiff.length} (a shared property actually differs)`);
     out.push(`  shared-name only        : ${c.noConflict.length} (no property in common — ignore)`);
     out.push(`  contract divergences    : ${c.contract.length}`);
+    out.push(`  slot overrides          : ${c.slotOverrides.length} (sanctioned — this is the mechanism working)`);
     for (const s of c.samePath) out.push(`     ${s.identical ? "=" : "~"} ${s.file}  ${s.extrasBytes}B/${s.consumerBytes}B`);
+    for (const s of c.slotOverrides) out.push(`     slot  ${s.file}`);
     for (const d of c.dupSame) {
       out.push(`     redundant  ${d.file}  ${d.sel}  [${d.equivalent.join(", ")}]`);
     }

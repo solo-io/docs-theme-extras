@@ -19,37 +19,26 @@
   "docs": {
    "samePath": [
     "layouts/_shortcodes/card.html",
-    "layouts/_shortcodes/cards.html",
-    "layouts/_shortcodes/gloss.html",
-    "layouts/_shortcodes/table.html"
+    "layouts/_shortcodes/cards.html"
    ],
    "duplicatedSelectors": []
   },
   "kgateway-oss": {
    "samePath": [
-    "layouts/_partials/navbar.html",
-    "layouts/_shortcodes/link-hextra.html",
-    "layouts/docs/list.html",
-    "layouts/docs/single.html"
+    "layouts/_partials/navbar.html"
    ],
    "duplicatedSelectors": []
   },
   "agentgateway-oss-website": {
    "samePath": [
-    "assets/js/flexsearch.js",
     "layouts/_partials/navbar.html",
-    "layouts/_shortcodes/link-hextra.html",
     "layouts/_shortcodes/openapi.html",
-    "layouts/_shortcodes/redirect.html",
-    "layouts/docs/list.html",
-    "layouts/docs/single.html"
+    "layouts/_shortcodes/redirect.html"
    ],
    "duplicatedSelectors": []
   },
   "agentregistry-oss-website": {
-   "samePath": [
-    "assets/css/main.css"
-   ],
+   "samePath": [],
    "duplicatedSelectors": []
   },
   "kagent-oss-website": {

@@ -1087,9 +1087,17 @@ Run the {{% conditional-text include-if="test" %}}`COND_IN_CODEPHRASE`{{% /condi
 
 ### Around bold text
 
-The setting **{{% version include-if="v2" %}}MARKER_VERSION_IN_BOLD{{% /version %}}** is v2-only.
+<!-- A gate must wrap the WHOLE inline construct, never sit inside one. With the
+     bold markers on the OUTSIDE and the gate within them, an excluded gate leaves
+     the two asterisk pairs adjacent and CommonMark renders four literal asterisks
+     — visible on the page. Guarded by tests/gate-inline-form.spec.ts and the
+     empty_emphasis pattern in tests/helpers/markdown-leaks.ts.
+     NOTE: do not write live shortcode syntax in a comment here. Hugo expands
+     shortcodes BEFORE markdown, so they run inside HTML comments too; an
+     argument-less one fails the build outright. -->
+The setting {{% version include-if="v2" %}}**MARKER_VERSION_IN_BOLD**{{% /version %}} is v2-only.
 
-The setting **{{% conditional-text include-if="test" %}}COND_IN_BOLD{{% /conditional-text %}}** is build-gated.
+The setting {{% conditional-text include-if="test" %}}**COND_IN_BOLD**{{% /conditional-text %}} is build-gated.
 
 ### Around heading text
 

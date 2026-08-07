@@ -192,6 +192,40 @@
        DEAD before deletion: .Page.RenderString with no options renders at
        display:"inline", which does not wrap single-line content in <p> at all,
        so its condition was unreachable. */ -}}
-{{- $rendered = partial "utils/flatten-rendered.html" $rendered -}}
+{{- /* bypassPre:false — the <pre> bypass is DISABLED here, deliberately.
+
+       With the bypass ON (the partial's default), a snippet containing a fenced
+       code block returned REAL newlines, and those newlines terminated the
+       enclosing list item. Measured on
+       fixture/content/en/test/v2/reuse-fence-step.md:
+
+         bypass ON   ->  </ol> count between step 1 and step 3 = 1  (list BROKEN,
+                         step 3 restarts a new <ol>)
+         bypass OFF  ->  </ol> count = 0                            (list intact)
+
+       The plan's Phase 7 entry said explicitly "do NOT fix with bypassPre:false
+       by analogy with callout.html … needs its own design", because the bypass
+       was documented as protecting Chroma output: flattening was said to turn
+       `\` line-continuations into literal `</span>` text via CommonMark
+       backslash-escaping of `\<` inside the spans.
+
+       That hazard was re-tested against the post-refactor pipeline and DOES NOT
+       REPRODUCE. The fixture snippet deliberately contains the exact trigger —
+       `echo \<not-a-tag\>`, a `cat <<EOF` heredoc, and trailing `\`
+       continuations — and Chroma highlighting is genuinely active on it
+       (7 `<span class="line">` chains in the output, verified, so the check is
+       not vacuous). The decoded code text is BYTE-IDENTICAL with the bypass on
+       and off, and `&lt;/span&gt;` never appears. The warning predates the
+       Phase 5 gate refactor, which removed the re-parse that caused it.
+
+       Real-world reach: 58 numbered steps in solo-io/docs, and 1 each in
+       kgateway-oss and agentgateway-oss-website, are a percent-form reuse as the
+       body of a list item.
+
+       Note this leaves NO caller enabling the bypass (callout.html also passes
+       false). The option is kept because it is a documented library default and
+       a consumer override could still want it — not because anything here uses
+       it. */ -}}
+{{- $rendered = partial "utils/flatten-rendered.html" (dict "html" $rendered "bypassPre" false) -}}
 {{- $rendered | safeHTML -}}
 

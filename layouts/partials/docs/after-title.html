@@ -1,0 +1,21 @@
+{{- /*
+  EXTENSION SLOT — content injected inside `.content`, after the page title and
+  description and before `.Content` itself.
+
+  DEFAULT: nothing.
+
+  Exists for per-page status furniture that has to sit above the body but inside
+  the prose column. agentgateway.dev uses it for `test-status-badge.html`, which
+  was the last thing keeping its `docs/single.html` a fork after the chrome
+  slots covered everything else.
+
+  RENDERED ON DETAIL PAGES ONLY (`docs/single.html`), not on section indexes.
+  That matches where the one real consumer wants it, and keeps section landings
+  from sprouting a badge they never had. If a list-page equivalent is ever
+  needed, add a separate slot rather than widening this one — silently changing
+  where an existing slot renders is the kind of surprise these slots exist to
+  prevent.
+
+  TO OVERRIDE: create `layouts/partials/docs/after-title.html` in the consumer.
+  Note `partials/`, not `_partials/`.
+*/ -}}

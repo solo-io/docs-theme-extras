@@ -370,6 +370,20 @@ echo hello
     );
   });
 
+  // Regression guard: RAW_BOLD requires a character between the delimiters, so
+  // the collapsed-to-empty form slipped through for as long as it existed. The
+  // fixture shipped `**{{% version %}}X{{% /version %}}**`, which on the excluded
+  // version rendered `The setting **** is v2-only` -- four visible asterisks.
+  test("flags emphasis that collapsed to empty (**** / ____)", () => {
+    const kinds = (h: string) => findMarkdownLeaks(h, "p.html").map((l) => l.kind);
+    expect(kinds("<p>The setting **** is v2-only</p>")).toContain("empty-emphasis");
+    expect(kinds("<p>a ____ b</p>")).toContain("empty-emphasis");
+    // Real bold is not empty-emphasis (RAW_BOLD's job, not this pattern's).
+    expect(kinds("<p>**real bold**</p>")).not.toContain("empty-emphasis");
+    // A 3-underscore horizontal rule must not fire.
+    expect(kinds("<p>___</p>")).not.toContain("empty-emphasis");
+  });
+
   test("flags a leaked Hugo shortcode placeholder", () => {
     const html = `<p>See HAHAHUGOSHORTCODE-0-HBHB for the value.</p>`;
     const leaks = findMarkdownLeaks(html);

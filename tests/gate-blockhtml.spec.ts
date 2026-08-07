@@ -26,18 +26,27 @@ import { parse as parse5 } from "parse5";
 type Case = {
   marker: string;
   what: string;
-  /** true = the marker must still be inside its <li>. */
+  /**
+   * true = the marker must still be inside its <li>.
+   *
+   * A, C, E and G were pinned FALSE until backlog item 7i was fixed: a
+   * percent-form reuse whose snippet contained a fenced code block returned real
+   * newlines (utils/flatten-rendered bypassed its flatten whenever `<pre` was
+   * present), and those newlines terminated the enclosing list item. All eight
+   * cases now stay in their list. If one of these regresses to false, the <pre>
+   * handling in utils/flatten-rendered.html is the place to look.
+   */
   staysInList: boolean;
 };
 
 const CASES: Case[] = [
-  { marker: "CASE_A_STEP_THREE", what: "conditional-text percent, body is only a block reuse", staysInList: false },
+  { marker: "CASE_A_STEP_THREE", what: "conditional-text percent, body is only a block reuse", staysInList: true },
   { marker: "CASE_B_STEP_THREE", what: "conditional-text angle, body is only a block reuse", staysInList: true },
-  { marker: "CASE_C_STEP_THREE", what: "conditional-text percent, text plus a block reuse", staysInList: false },
+  { marker: "CASE_C_STEP_THREE", what: "conditional-text percent, text plus a block reuse", staysInList: true },
   { marker: "CASE_D_STEP_THREE", what: "no gate, angle reuse (control: fine)", staysInList: true },
-  { marker: "CASE_E_STEP_THREE", what: "version percent, body is only a block reuse", staysInList: false },
+  { marker: "CASE_E_STEP_THREE", what: "version percent, body is only a block reuse", staysInList: true },
   { marker: "CASE_F_STEP_THREE", what: "version angle, body is only a block reuse", staysInList: true },
-  { marker: "CASE_G_STEP_THREE", what: "NO GATE, percent reuse (control: breaks anyway — backlog 7i)", staysInList: false },
+  { marker: "CASE_G_STEP_THREE", what: "NO GATE, percent reuse (control: 7i FIXED, now stays)", staysInList: true },
   { marker: "CASE_H_STEP_THREE", what: "conditional-text percent, INLINE reuse target", staysInList: true },
 ];
 
