@@ -211,9 +211,19 @@ them shadow it.
 ratchet is only meaningful against a known branch. Over one working session the scanner saw
 the set change four times as the clone moved between `kkb-mcp-gaps` and `kkb-theme-upgrade`;
 `layouts/partials/announcement.html` exists on some branches and not others. The snapshot
-below is `kkb-theme-upgrade` at `3769c7c2`. **Re-run `npm run scan:overrides` against the
+below is `kkb-theme-upgrade` at `dd7f0083`. **Re-run `npm run scan:overrides` against the
 release branch before trusting these counts**, and expect this consumer, not the module, to
 be the reason the ratchet goes red.
+
+That is exactly what happened on 2026-08-07. The snapshot was taken at `3769c7c2`, where
+`layouts/partials/announcement.html` had been deleted; `dd7f0083` then merged `origin/main`,
+which carried a *modification* to that file (`9317b55d`, "Remove Govern AI Costs workshop
+banner"). A modify/delete merge resolves in favour of the modification, so the override came
+back and the ratchet went red on a file no module change had touched. It is re-listed below
+rather than re-deleted: agw's copy is a real 3.1KB site-specific fork (the AAIF banner — a
+dismissible fixed bar, `localStorage` dismissal, and an `agw-has-banner` class that shifts
+the fixed navbars down) against extras' generic 1.5KB partial, so deleting it would drop the
+banner. Re-check this after the theme-upgrade branch merges.
 
 **SIZE IS NOT EVIDENCE OF STALENESS.** The rows below used to be described purely by byte
 gap, on the assumption that a fork much smaller than the module's file is an old copy to
@@ -225,13 +235,13 @@ carries a measured verdict instead of a byte count.
 | file | measured verdict |
 |---|---|
 | `layouts/_partials/navbar.html` | **KEEP.** 832B against extras' 20.9KB. Deleting changes **1515 pages** and renders extras' full navbar with dropdowns — a visual redesign of the site header, not a cleanup |
+| `layouts/partials/announcement.html` | **KEEP.** 3,092B against extras' 1,509B. Not a stale copy: it is the AAIF banner — a dismissible fixed bar with `localStorage` dismissal and an `agw-has-banner` class that offsets the fixed navbars. Resurrected by the `origin/main` merge at `dd7f0083`; see the branch note above |
 | `layouts/partials/docs/chrome-top.html` | **SLOT OVERRIDE — sanctioned.** The navbar-hiding CSS, `nav.html` and the announcement wrapper. This one file replaced two forked layouts |
 | `layouts/partials/docs/chrome-bottom.html` | **SLOT OVERRIDE — sanctioned.** `chatbot.html` |
 | `layouts/partials/docs/width-class.html` | **SLOT OVERRIDE — sanctioned.** `utils/page-width` plus the `agw-docs-topgap` hook class |
 | `layouts/partials/docs/content-class.html` | **SLOT OVERRIDE — sanctioned.** `hx:pt-2` rather than the default `hx:pt-6` |
 | `layouts/partials/docs/after-title.html` | **SLOT OVERRIDE — sanctioned.** `test-status-badge.html`. Inert today: that partial currently emits nothing on any page |
 | `layouts/_shortcodes/openapi.html` | **2 pages.** agw's fork emits a full standalone `<!doctype html>` document; extras emits an embedded fragment. Small enough to decide cheaply, not yet decided |
-| `layouts/_shortcodes/redirect.html` | **2 pages.** agw's emits a versionless target (`/docs/mcp/mcp-access/`); extras version-prefixes it (`/docs/kubernetes/1.1.x/mcp/mcp-access/`). Needs a check of which target actually resolves |
 
 **Resolved (v0.2.0-beta.3):** `layouts/docs/single.html` and `layouts/docs/list.html`
 deleted, replaced by the five slot overrides above. Verified feature-by-feature on a

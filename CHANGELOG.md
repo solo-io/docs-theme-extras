@@ -150,6 +150,48 @@ No other consumer needs a paired change. Details in the individual entries below
   (gate WRAPS the emphasis). Break-tested: reverting either one turns the lint and the leak
   scanner red.
 
+### Fix — reference tables no longer cut off their last column (`assets/css/docs-theme-extras.css`, fixture, `tests/table-display.spec.ts`)
+
+- **Why.** On
+  [gateway 1.22.x open_source_helm_chart_values](https://docs.solo.io/gateway/1.22.x/reference/helm/open_source_helm_chart_values/)
+  the Description column is cut off mid-word — "The container image's hash digest (e",
+  "consumed when v" — on every row. Measured at a 1440px viewport: the table box is 832px
+  wide while its four columns end at 1250px, so 115px of the last column paints outside the
+  box. Worse, `.table-wrapper` reports `scrollWidth == clientWidth` and will not scroll, so
+  the wrapper built to reveal that overflow does nothing; the reader has to find and drag a
+  scrollbar on the `<table>` itself.
+- **Root cause.** Hextra's typography layer renders content tables `display: block`. A
+  `display: block` element is not a table box, so of the two declarations extras sets right
+  next to it, `width: 100%` sized the *block* while the anonymous table inside sized to its
+  own content and spilled out, and `table-layout` did not apply at all. Both had been inert
+  since they were written.
+- **What changed.** `.table-wrapper table` now also sets `display: table`. The columns are
+  laid out inside `width: 100%`, nothing paints outside the box, and where content genuinely
+  cannot fit, `.table-wrapper`'s `overflow-x: auto` scrolls as designed. This is containment,
+  not restyling: **column widths are byte-for-byte unchanged** (262/86/223/375 before and
+  after on that page, at 1440px, 768px and 375px alike).
+- **Scale.** A 40-page sample of the docs hub found **169 tables** painting outside their
+  box, most of them plain markdown tables rather than `table`-shortcode ones. After the fix,
+  a 120-page / **4,425-table** sweep across `gateway`, `kgateway`, `istio`,
+  `gloo-mesh-gateway` and `gloo-mesh-enterprise` finds **0**, with 225 wrappers now
+  scrolling legitimately.
+- **Two rejected alternatives, both measured.** (1) Stripping render-table.html's inline
+  `white-space: nowrap` from short cells removed the overflow but let `overflow-wrap:
+  anywhere` collapse the short columns — the `Type` column rendered `b/o/o/l` down four
+  lines and the long dotted keys went from 3 lines to 10. (2) Capping cells at `max-width:
+  20rem` fixed this page and only this page; the value was tuned to one table at one
+  viewport.
+- **Verified.** New fixture section (four columns, short leading cells, long prose
+  Description — the exact shape that broke) plus two specs in `table-display.spec.ts`. Both
+  break-tested: removing `display: table` turns them red. Phone-width check across 50 pages
+  and **68,562 cells** at 375px found no page-level horizontal scroll and 2 marginally
+  narrow cells, both identical on production. Full fixture suite green on both brands;
+  content scanners green on all five hub products.
+- **Note on the earlier `wrap` mode wording.** A comment in the CSS used to call the inline
+  `white-space: nowrap` on short cells "harmless, they're short by definition". That was the
+  wrong suspect for this bug but the comment is now corrected rather than deleted, so the
+  measurement does not have to be redone.
+
 ### Fix — `copy-md-fidelity` counted markup inside HTML comments (`tests/helpers/copy-md.ts`, `tests/copy-md-fidelity.spec.ts`)
 
 - **Why.** Six `mangled-table` defects on

@@ -741,6 +741,19 @@ The `table` shortcode with `mode="wrap"`: fills the body width and wraps content
 | `timeout` | A fairly long description that should wrap within the body width rather than forcing the table wider than the page or scrolling horizontally. |
 {{% /table %}}
 
+### Table shortcode wrap mode with short cells
+
+The real regression shape: four columns, so render-table.html also tags it `.table-capped`, and the first three columns hold cells of 30 characters or fewer, which render-table.html would otherwise stamp with an inline `white-space: nowrap`. Those cells used to hold a min-content floor that pushed the Description column off the right edge. `table-display.spec.ts` asserts zero horizontal overflow here.
+
+{{% table mode="wrap" %}}
+| Option | Type | Default Value | Description |
+| ------ | ---- | ------------- | ----------- |
+| `gateway.image.registryPrefix` | map[string]interface{} | quay.io/solo-io/gloo-envoy | The image registry prefix for the container that runs in the gateway proxy deployment. |
+| `gateway.image.pullPolicyName` | map[string]interface{} | quay.io/solo-io/gloo-envoy | Enable the Kubernetes Gateway integration controller for this installation. |
+| `gatewayParameters.image.tag` | string | | The image tag for the container that runs in the gateway proxy deployment. |
+| `gatewayParameters.image.digest` | string | | The container image's hash digest, for example `sha256:12345...`, consumed when the variant is standard. If the image does not have a distroless variant, this field contains the digest for the standard image variant instead. |
+{{% /table %}}
+
 ### Table shortcode nowrap mode
 
 The `table` shortcode with `mode="nowrap"`: columns sized to content, no wrapping, wrapper scrolls when wider than the body.
@@ -749,6 +762,7 @@ The `table` shortcode with `mode="nowrap"`: columns sized to content, no wrappin
 | Command | Description |
 | ------- | ----------- |
 | `kubectl get pods -n agentgateway -o wide --show-labels --field-selector=status.phase=Running` | Sized to content, no wrapping. |
+| `kubectl get pods` | Short cell. |
 {{% /table %}}
 
 ### Table shortcode equal mode

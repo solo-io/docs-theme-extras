@@ -33,7 +33,7 @@
    "samePath": [
     "layouts/_partials/navbar.html",
     "layouts/_shortcodes/openapi.html",
-    "layouts/_shortcodes/redirect.html"
+    "layouts/partials/announcement.html"
    ],
    "duplicatedSelectors": []
   },

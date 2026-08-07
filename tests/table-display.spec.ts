@@ -47,11 +47,33 @@ async function probe(page: import("@playwright/test").Page, headingId: string) {
     const ths = Array.from(scope.querySelectorAll("thead th")) as HTMLElement[];
     const firstCell = scope.querySelector("tbody td:first-child") as HTMLElement | null;
     const lastCell = scope.querySelector("tbody td:last-child") as HTMLElement | null;
+    // The horizontal scroller is the TABLE, not `.table-wrapper`: Hextra renders
+    // `table { display: block; overflow-x: auto }`, so a table whose columns
+    // outgrow their box scrolls itself and the wrapper's scrollWidth never
+    // moves. Measuring only the wrapper (as this spec originally did) reports
+    // "no scroll" for a table that is visibly cut off — see tests/HAZARDS.md.
+    // `cellOverflow` is the ground truth: how far the widest cell reaches past
+    // the table's own right edge.
+    const cells = Array.from(scope.querySelectorAll("th, td")) as HTMLElement[];
+    const cellOverflow =
+      table && cells.length
+        ? Math.round(
+            Math.max(...cells.map((c) => c.getBoundingClientRect().right)) -
+              table.getBoundingClientRect().right,
+          )
+        : null;
     return {
       className: scope.className,
       hasTable: !!table,
       tableLayout: table ? getComputedStyle(table).tableLayout : null,
+      tableDisplay: table ? getComputedStyle(table).display : null,
       tableW: table ? table.getBoundingClientRect().width : null,
+      tableClientW: table ? table.clientWidth : null,
+      tableScrollW: table ? table.scrollWidth : null,
+      cellOverflow,
+      inlineNowrapCells: cells.filter((c) =>
+        /nowrap/.test(c.getAttribute("style") || ""),
+      ).length,
       wrapperClientW: wrapper ? wrapper.clientWidth : null,
       wrapperScrollW: wrapper ? wrapper.scrollWidth : null,
       wrapperOverflowX: wrapper ? getComputedStyle(wrapper).overflowX : null,
@@ -87,6 +109,56 @@ test.describe("table shortcode display modes", () => {
       r!.wrapperScrollW! <= r!.wrapperClientW! + 1,
       "wrap table should never scroll horizontally",
     ).toBe(true);
+    expect(r!.cellOverflow, "wrap cells reach past the table's right edge").toBeLessThanOrEqual(1);
+  });
+
+  // The shape that actually broke: four columns (so render-table.html also tags
+  // it `.table-capped`) with short leading cells carrying render-table.html's
+  // inline `white-space: nowrap`. Hextra renders content tables
+  // `display: block`, which is not a table box — `width: 100%` sized the block
+  // while the columns inside it sized to their own content and painted OUTSIDE
+  // it, so the trailing column was cut off mid-word and `.table-wrapper` would
+  // not scroll to reveal it (the overflow belonged to the table element, not
+  // the wrapper). Measured on the real gateway/1.22.x Helm-values page: 115px
+  // outside the box before `display: table`, 0 after, with column widths
+  // unchanged at 262/86/223/375.
+  //
+  // Asserting `cellOverflow` rather than the wrapper's scrollWidth is the whole
+  // point — the original wrap test checked only the wrapper and passed happily
+  // on a visibly clipped table. See tests/HAZARDS.md.
+  test("wrap: short cells do not force the trailing column off the edge", async ({
+    page,
+  }) => {
+    await page.goto(PAGE);
+    const r = await probe(page, "table-shortcode-wrap-mode-with-short-cells");
+    expect(r, ".solo-table for wrap-mode-with-short-cells not found").not.toBeNull();
+    expect(r!.className).toContain("solo-table--wrap");
+    expect(r!.colWidths.length, "fixture table is not 4 columns").toBe(4);
+    // Non-vacuity: the section only exercises the bug while it still holds
+    // cells short enough for render-table.html to stamp (tests/HAZARDS.md #1).
+    // Those cells are the pressure that used to push the last column out.
+    expect(
+      r!.inlineNowrapCells,
+      "fixture no longer contains short (<=30 char) cells, so it cannot reproduce the bug",
+    ).toBeGreaterThan(0);
+    expect(
+      r!.cellOverflow,
+      "the trailing column is cut off past the table's right edge",
+    ).toBeLessThanOrEqual(1);
+  });
+
+  // Guards the `display: table` fix directly. Without it the declaration below
+  // it in the same rule (`width: 100%`, `table-layout: auto`) is inert, because
+  // neither applies to a `display: block` element.
+  test("the table is a real table box, not Hextra's display:block", async ({
+    page,
+  }) => {
+    await page.goto(PAGE);
+    const r = await probe(page, "table-shortcode-wrap-mode-with-short-cells");
+    expect(
+      r!.tableDisplay,
+      "table is display:block, so width/table-layout do not apply and cells paint outside the box",
+    ).toBe("table");
   });
 
   test("nowrap: cells never wrap and the table scrolls when wider than the body", async ({
@@ -99,6 +171,13 @@ test.describe("table shortcode display modes", () => {
     // first cell holds the intentionally long, unbreakable command
     expect(r!.firstCellWhiteSpace, "nowrap cell is allowed to wrap").toBe("nowrap");
     expect(r!.firstCellMaxWidth, "nowrap cell is capped (max-width != none)").toBe("none");
+    // render-table.html's inline declaration must survive into nowrap mode.
+    // The fixture's second row exists to guarantee at least one cell short
+    // enough (<=30 chars) to carry it, so this is not vacuous.
+    expect(
+      r!.inlineNowrapCells,
+      "nowrap mode lost render-table.html's inline white-space:nowrap",
+    ).toBeGreaterThan(0);
     expect(r!.wrapperOverflowX, "wrapper is not horizontally scrollable").toMatch(
       /auto|scroll/,
     );

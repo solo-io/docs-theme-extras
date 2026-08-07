@@ -1059,6 +1059,30 @@ hr.footnotes-sep,
   -webkit-overflow-scrolling: touch;
 }
 .table-wrapper table {
+  /* Hextra's typography layer renders content tables `display: block` so they
+     scroll on phones. That is redundant here — `.table-wrapper` above already
+     owns the scroll — and it actively breaks the two declarations below: a
+     `display: block` element is not a table box, so `width` sizes the BLOCK
+     while the anonymous table inside it sizes to its own content, and
+     `table-layout` does not apply at all.
+
+     The visible symptom is a reference table whose trailing column is cut off
+     mid-word. Measured on gateway/1.22.x open_source_helm_chart_values at
+     1440px: the table box was 832px while the four columns ended at 1250px, so
+     115px of the Description column painted outside the box. `.table-wrapper`
+     reported `scrollWidth == clientWidth` and would not scroll, because the
+     overflow belonged to the table element, not to the wrapper — the reader had
+     to find and drag a scroller on the table itself. A 40-page sample of the
+     docs hub found 169 tables in this state, most of them plain markdown
+     tables rather than `table`-shortcode ones.
+
+     `display: table` restores a real table box: the columns are laid out inside
+     `width: 100%`, nothing paints outside it, and where the content genuinely
+     cannot fit, `.table-wrapper`'s `overflow-x: auto` scrolls as designed.
+     Column widths are unchanged — measured 262/86/223/375 before and after on
+     that page — so this is a containment fix, not a restyle.
+     `tests/table-display.spec.ts` pins it. */
+  display: table;
   width: 100%;
   table-layout: auto;
   border-collapse: collapse;
@@ -1141,7 +1165,16 @@ hr.footnotes-sep,
    specificity) regardless of source order. Note render-table.html also
    emits an INLINE `white-space: nowrap` on short cells (<=30 chars); inline
    styles beat these class rules, so in `wrap`/`equal` mode short cells stay
-   unwrapped — harmless, they're short by definition. */
+   unwrapped — harmless, they're short by definition.
+
+   Those short cells were briefly suspected of causing the cut-off trailing
+   column described on `.table-wrapper table` above, on the theory that a
+   nowrap cell holds a min-content floor its column cannot shrink below.
+   Stripping them did remove the overflow, but only by letting `overflow-wrap:
+   anywhere` collapse the short columns to one character per line — measured on
+   the same page, the `Type` column rendered `b/o/o/l` down four lines. The
+   `display: table` fix above keeps the columns at their natural widths
+   (262/86/223/375, unchanged) and needs no change here. */
 .solo-table--wrap .table-wrapper table {
   width: 100%;
   table-layout: auto;

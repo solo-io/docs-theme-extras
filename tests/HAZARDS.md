@@ -136,3 +136,21 @@ stopped forking two layouts.
 
 A metric that rises when things improve gets ignored. Slots are now counted
 separately from shadows.
+
+## 11. Check which element owns the scroll before calling content unreachable
+
+A reference table looked clipped: the Description column was cut mid-word on
+every row. `.table-wrapper` — the div that exists *specifically* to scroll —
+reported `scrollWidth == clientWidth` and `scrollLeft` stayed 0, so the finding
+was written up as "115px of content unreachable".
+
+Wrong element. Hextra renders content tables `display: block; overflow-x: auto`,
+so the **`<table>`** was the scroller: `clientWidth 832, scrollWidth 947`, and
+setting its `scrollLeft` moved it. The content was reachable the whole time,
+behind a scrollbar nobody would think to look for.
+
+When measuring overflow, walk up from the overflowing content and test every
+ancestor's `scrollWidth`/`scrollLeft`, not just the one you expect to be the
+scroller. And prefer a ground-truth measure that does not depend on guessing:
+`max(cell.getBoundingClientRect().right) - table.getBoundingClientRect().right`
+says whether content paints outside its box regardless of who scrolls.

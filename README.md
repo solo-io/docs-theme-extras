@@ -17,7 +17,7 @@ Two faces, one repo:
 
 > [!WARNING]
 > Writing a scanner, crawler or measurement spec? Read
-> [tests/HAZARDS.md](./tests/HAZARDS.md) first. It catalogues ten ways a test in
+> [tests/HAZARDS.md](./tests/HAZARDS.md) first. It catalogues eleven ways a test in
 > this repo has passed while measuring **nothing** — each one a real incident, not
 > a hypothetical. The worst of them hid six lints walking zero of 11,025 files.
 > **Assert that your scanner found at least N targets**, or it certifies nothing
