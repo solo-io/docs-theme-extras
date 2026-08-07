@@ -102,7 +102,43 @@ are grouped by purpose. See each source file for full parameters.
 | `conditional-text` | Includes or excludes its inner content based on the page's build condition (for example `gme` vs `gmg`), resolved through `utils/page-context`. |
 | `upstream` / `downstream` | Content gating for the oss-vs-enterprise build split. `upstream` shows content only in the source build; `downstream` shows it only in the downstream build. |
 | `link` | An internal link resolved from a section-relative `path=` to the current section and version. Has a translation-export mode that preserves the source shortcode form. |
-| `link-hextra` | Like `link`, but infers the product and version from the current page's permalink when they are not passed in (typical inside a reused snippet). |
+| `link-hextra` | Like `link`, but infers the product and version from the current page's permalink when they are not passed in (typical inside a reused snippet). **See the contract below — it is easy to call wrongly and it fails silently.** |
+
+#### `link-hextra` contract
+
+It resolves an **internal path within the current product and version tree** into
+an absolute URL. That is the whole job. If there is no version to resolve, this
+is the wrong tool.
+
+**Parameters — these three, and no others:**
+
+| Param | Required | Meaning |
+|---|---|---|
+| `path` | yes | Site path **within the version tree**, starting with `/`. Not a full URL. |
+| `version` | no | Overrides inference. This is what `rebase` injects to retarget a link into another version tree. |
+| `product` | no | Enables the enterprise `reference/api` and `reference/cel` routing. Injected by `rebase`. |
+
+```md
+{{</* link-hextra path="/quickstart/" */>}}                 → /docs/envoy/2.1.x/quickstart/
+{{</* link-hextra path="/reference/api/#TypeA" */>}}        → …/reference/api/#TypeA
+{{</* link-hextra path="/quickstart/" version="2.0.x" */>}} → …/2.0.x/quickstart/
+```
+
+**What does NOT work:**
+
+| You write | What happens |
+|---|---|
+| `link=`, `url=`, `href=` | **Not read.** `path` is empty, so it emits the bare version root — usually a real page, so nothing 404s and the wrong link ships. Warns since v0.2.0. |
+| An external URL in `path=` | There is nothing to resolve. Use a plain markdown link. |
+| A cross-product or cross-flavor path | It only moves *within* one version tree. Use a plain absolute link, e.g. `[Kubernetes](/docs/kubernetes/)`. |
+| `path="quickstart/"` (no leading slash) | **Silently broken.** The version and path fuse: `/2.1.x` + `quickstart/` → `/2.1.xquickstart/`. |
+| `path="/page#anchor"` (no slash before `#`) | Emits `/page#anchor`, which takes a 301 before scrolling. Write `/page/#anchor`. |
+
+A missing **trailing** slash is added for you, and doubled slashes are collapsed.
+
+Behavior is pinned by `tests/link-hextra-shapes.spec.ts` against
+`fixture/content/en/test/v2/link-hextra-shapes.md`, which includes the broken
+shapes above so they stay documented rather than rediscovered.
 
 ### UI components
 

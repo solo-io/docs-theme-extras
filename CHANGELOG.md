@@ -33,7 +33,8 @@ the same PR:
 - the ordered-list counter block in `assets/css/custom.css` (kept, it shadows the fix);
 - `layouts/_shortcodes/reuse.html` (its `flatten-rendered` call is now in the module);
 - `assets/css/main.css`, `assets/js/core/toc-scroll.js`, `assets/js/flexsearch.js`
-  (byte-identical duplicates of module files).
+  (byte-identical duplicates of module files — all three are already gone from `main` as of
+  the "Theme updates" commit; listed here so a rebase does not reintroduce them).
 
 **`agentgateway-oss-website` also needs a paired change** — see the breaking entry below.
 Its `layouts/_shortcodes/reuse.html` is a stale 59-line fork that shadows the module, so it
@@ -41,6 +42,100 @@ never applies the gate-form normalization. Measured: with the fork in place the 
 **598 markdown leaks**; deleting it takes the same build to **0** (152/152 content tests).
 
 No other consumer needs a paired change. Details in the individual entries below.
+
+### Fix — `link-hextra` works on sites whose docs are not at the URL root, so two consumers can stop forking it (`layouts/_shortcodes/link-hextra.html`, `tests/link-hextra-{lts-version,lang-prefix}.spec.ts`)
+
+- **Why.** Version inference was two regexes: one anchored to a known product name
+  (`kgateway|agentgateway|gateway|envoy`), one anchored to the start of the URL. Between
+  them they recognized only the docs hub's URL shape. An OSS site serves
+  `/docs/envoy/2.1.x/…` and `/docs/standalone/latest/…`, where no segment is a product name
+  and the version is not first — so `kgateway.dev` inferred the version but **lost the
+  `/docs/envoy` prefix**, emitting `/2.1.x/quickstart/` for a page that lives at
+  `/docs/envoy/2.1.x/quickstart/`, and `agentgateway.dev` could not infer a version at all
+  and fell through to `/latest/…`. That is why both repos carry their own fork of this file,
+  and why `OVERRIDES.md` described those forks as stale 587B/940B stubs. They are not stale.
+  They are the only reason those sites' links work.
+- **What changed.** Inference walks path segments, takes the first that looks like a version,
+  and records everything before it as the **version root**. The root is then part of the
+  emitted URL. The docs hub is unaffected because its baseURL carries the product
+  (`https://docs.solo.io/kgateway/`) and the shortcode already strips that prefix, so its
+  root comes out empty and the URL is the same string as before.
+- **Also added:** a warning when `path` is empty. That fails silently today — the shortcode
+  emits a bare version root, which is often a real page, so nothing 404s and nobody notices.
+  It caught two `agentgateway.dev` pages calling `{{< link-hextra link="https://…" >}}`;
+  `link` is not a parameter on any copy of this shortcode, so `path` was empty and the href
+  pointed at the section root instead of the intended cross-flavor target. Fixed in that repo
+  as plain relative links, since a cross-flavor link is not a same-version-tree link and
+  `link-hextra` cannot express one.
+- **Verified on three real builds.**
+  [kgateway docs](https://kgateway.dev/docs/envoy/latest/quickstart/): 266,013 versioned
+  internal links, **0 broken**, and the only diff against the fork's output across 104 pages
+  is a trailing slash (`/overview` → `/overview/`, one fewer redirect).
+  [agentgateway docs](https://agentgateway.dev/docs/kubernetes/latest/): 352,212 links,
+  **30 broken before and after** — all pre-existing dead targets, none introduced — and the
+  two `/latest/` cases gone. [Docs hub kgateway](https://docs.solo.io/kgateway/latest/):
+  **0 of 769 HTML pages differ** (166 files differ, every one an `llms.txt` timestamp).
+- **Sequencing:** the two consumer forks can only be deleted AFTER a release carrying this
+  fix and a pin bump to it. Deleting them against an older pin breaks 913 pages on
+  agentgateway.dev and 637 on kgateway.dev.
+- **The input contract is now tested and documented, which it was not.** This shortcode had
+  16 tests across three files and **none of them covered what `path` may contain** — they
+  pinned path REWRITING (`reference/api` → enterprise subpages, cel collapsing) and version
+  inference, both of which assume you already know what a valid path looks like. `USAGE.md`
+  had one sentence and no parameter list. That is why the `link=` misuse above went
+  unnoticed: there was nothing to read and nothing that failed. Added
+  `tests/link-hextra-shapes.spec.ts` (11 tests) over a new fixture page, covering the
+  working shapes AND pinning the broken ones — notably that a `path` with **no leading
+  slash silently fuses with the version** (`/2.1.x` + `quickstart/` → `/2.1.xquickstart/`),
+  which I found by writing the test rather than by reasoning, having first written the
+  fixture prose claiming it worked. `USAGE.md` now carries the parameter table, worked
+  examples, and a "what does NOT work" table covering external URLs, cross-flavor links,
+  wrong parameter names, and both slash traps.
+
+### Fix — search "Other versions" dropped `main` and `latest` on three production sites, and filtered nothing at all on a fourth (`assets/js/flexsearch.js`, `tests/search-visible-versions.spec.ts`)
+
+- **Why.** `visibleVersions` decides which versions may appear under "Other versions" in
+  search results. It was built from `params.versions` alone and keyed on each entry's
+  `version`. Both halves are wrong, and both fail in a way nothing surfaces:
+  - The filter compares against a **URL path segment** (`getVersionFromURL`), so the set has
+    to hold segments. Where a config declares `version = "2.5.x"` with
+    `linkVersion = "main"`, the entry can never match — and three production sites do exactly
+    that for their two newest versions, so a search run from an older version returned **no
+    results at all for main or latest**, the two versions a reader is most likely to want.
+    Confirmed live before the fix by reading each shipped bundle:
+    [kgateway.dev](https://kgateway.dev/docs/envoy/latest/) served
+    `["2.5.x","2.4.x","2.3.x","2.2.x","2.1.x"]` for pages that live at `/docs/envoy/main/`
+    and `/docs/envoy/latest/`;
+    [gloo-mesh-enterprise](https://docs.solo.io/gloo-mesh-enterprise/main/) and
+    [gloo-mesh-gateway](https://docs.solo.io/gloo-mesh-gateway/main/) served
+    `["2.14.x","2.13.x",…]` for pages at `/main/` and `/latest/`.
+  - Versions declared under `params.sections.<x>.versions` were not collected at all.
+    [agentgateway.dev](https://agentgateway.dev/docs/kubernetes/latest/) configures versions
+    **only** that way, so its set came out empty — and an empty set *disables* the filter
+    (`visibleVersions.size === 0 || …`), so hidden versions were offered rather than
+    suppressed. That one line is the entire reason that repo forks this 20KB file.
+- **What changed.** Collection now walks `params.versions` **and** every
+  `params.sections.<x>.versions`, and keys on `linkVersion | default .version`. This is not a
+  new convention: `_partials/utils/warn-missing-description.html` already did exactly this.
+  `flexsearch.js` was simply the one place that never got updated.
+- **Verified by build, on all three real shapes.** Against a local `replace`:
+  `PRODUCT=gloo-mesh-enterprise` moves from `["2.14.x","2.13.x",…]` to `["main","latest",…]`
+  with the other eight entries unchanged; `kgateway-oss` moves from
+  `["2.5.x","2.4.x",…]` to `["main","latest","2.3.x","2.2.x","2.1.x"]`; and
+  `agentgateway.dev` with its fork **removed** produces a search bundle **byte-identical** to
+  the one the fork produces, which is what makes the fork deletable. The remaining consumers
+  (`ambientmesh.io`, `agentregistry`, `kagent`) declare no `linkVersion` at all, so the
+  fallback leaves their output unchanged.
+- **Consumer action.** After a pin bump, `agentgateway-oss-website` can delete
+  `assets/js/flexsearch.js`. No other consumer has a fork of this file. Doing it *before* the
+  bump reverts that site to an inert filter.
+- **The bug class, for next time.** This failed open, minified away its own identifier, and
+  had no test — so a build looked healthy in every way while silently returning the wrong
+  result set. `tests/search-visible-versions.spec.ts` (7 tests) now reads the set out of the
+  built bundle, and the fixture gained a `params.sections.searchonly` block that exists purely
+  to make the assertions non-vacuous: the pre-existing `demo` section duplicated the top-level
+  v2/v1 and set `linkVersion == version`, so it could detect neither bug. Break-tested by
+  restoring the old expression: 3 of the 5 build-output tests go red.
 
 ### Breaking — the gating shortcodes emit `.Inner` untouched, and `reuse` / `rebase` now decide the shortcode form (`layouts/_shortcodes/{version,conditional-text,reuse,rebase}.html`, `layouts/_partials/utils/{gate-decide,gate-emit,gate-normalize-form}.html`)
 

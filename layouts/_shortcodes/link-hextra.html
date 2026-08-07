@@ -1,7 +1,22 @@
 {{- $path := .Get "path" -}}
+{{- /* An empty `path` is almost always a misspelled parameter name, and it fails
+       QUIETLY: the shortcode happily emits a bare version root, which is often a
+       real page, so nothing 404s and nobody notices the link goes to the wrong
+       place. Found on agentgateway.dev, where two pages had been calling
+       `{{< link-hextra link="https://…" >}}` — `link` is not a parameter here,
+       so `path` was empty and the emitted href was the section root rather than
+       the intended cross-flavor target. Warn rather than error: `path=""` is a
+       legitimate, if unusual, way to link to the version root itself. */ -}}
+{{- if not $path -}}
+  {{- warnf "link-hextra on %s got an empty `path`. Check the parameter name — this shortcode takes `path`, not `link` or `url`. It will emit the bare version root." .Page.RelPermalink -}}
+{{- end -}}
 {{- $ver := .Get "version" -}}
 {{- $product := .Get "product" -}}
 {{- $finalURL := "" -}}
+{{- /* The site-relative prefix that sits BEFORE the version segment on the
+       current page, e.g. "/docs/envoy". Empty on the docs hub, where the
+       product lives in baseURL instead. See the derivation below. */ -}}
+{{- $versionRoot := "" -}}
 
 {{- /* If no version was passed (typical when called from inside a reuse-included */ -}}
 {{- /* snippet that the rebase shortcode didn't rewrite), infer from the current page's */ -}}
@@ -24,13 +39,49 @@
   {{- with .Site.LanguagePrefix -}}
     {{- $relURL = replace $relURL (printf "%s/" .) "/" -}}
   {{- end -}}
-  {{- /* Versions are either `X.Y.x` (2.3.x) or fully qualified `X.Y.Z` (2026.7.1, LTS). */ -}}
-  {{- with findRE `(?:kgateway|agentgateway|gateway|envoy)/(\d+\.\d+\.(?:x|\d+)|latest|main)` $relURL 1 -}}
-    {{- $ver = replaceRE `^.*/` "" (index . 0) -}}
+  {{- /* Find the VERSION SEGMENT by walking path segments, and remember
+         everything before it as the version root.
+
+         This replaced two regexes — one anchored to a known product name
+         (`kgateway|agentgateway|gateway|envoy`), one anchored to the start of
+         the URL — that between them only recognized the docs hub's URL shape.
+         Neither matches an OSS site: agentgateway.dev serves
+         `/docs/standalone/latest/…` and `/docs/kubernetes/1.1.x/…`, where no
+         segment is a known product name and the version is not first. So the
+         version could not be inferred at all there, the shortcode fell through
+         to the "latest" fallback, and every link was wrong. That is why both
+         agentgateway-oss-website and kgateway-oss carried their own fork of
+         this file rather than using the module's.
+
+         Walking segments handles every shape uniformly:
+
+           /2.1.x/foo/                  ver 2.1.x   root ""            (hub)
+           /kgateway/2.1.x/foo/         ver 2.1.x   root /kgateway     (hub, full build)
+           /docs/envoy/2.1.x/foo/       ver 2.1.x   root /docs/envoy   (kgateway.dev)
+           /docs/standalone/latest/foo/ ver latest  root /docs/standalone (agentgateway.dev)
+
+         The hub is unaffected because its baseURL carries the product
+         (`https://docs.solo.io/kgateway/`) and the block above already strips
+         that prefix, so by the time we get here its URLs start at the version
+         and the root comes out empty — byte-identical to the old two regexes.
+
+         Versions are either `X.Y.x` (2.3.x) or fully qualified `X.Y.Z`
+         (2026.7.1, LTS), plus the moving names `latest` and `main`. Only the
+         FIRST matching segment counts, so a later path component that happens
+         to be called `main` cannot hijack the match. */ -}}
+  {{- $segs := split (strings.TrimPrefix "/" $relURL) "/" -}}
+  {{- $verIdx := -1 -}}
+  {{- range $i, $s := $segs -}}
+    {{- if lt $verIdx 0 -}}
+      {{- if findRE `^(?:\d+\.\d+\.(?:x|\d+)|latest|main)$` $s 1 -}}
+        {{- $verIdx = $i -}}
+      {{- end -}}
+    {{- end -}}
   {{- end -}}
-  {{- if not $ver -}}
-    {{- with findRE `^/(\d+\.\d+\.(?:x|\d+)|latest|main)` $relURL 1 -}}
-      {{- $ver = index . 0 | strings.TrimPrefix "/" -}}
+  {{- if ge $verIdx 0 -}}
+    {{- $ver = index $segs $verIdx -}}
+    {{- if gt $verIdx 0 -}}
+      {{- $versionRoot = printf "/%s" (delimit (first $verIdx $segs) "/") -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
@@ -85,10 +136,17 @@
   {{- $path = replaceRE `reference/cel/(variables|yaml-and-examples)/?` "reference/cel/" $path -}}
 {{- end -}}
 
+{{- /* Assemble as <origin><versionRoot>/<version><path>.
+
+       `$versionRoot` is empty on the docs hub, so this is the same string the
+       previous two-branch version produced. On an OSS site it carries the
+       `/docs/<flavor>` prefix the page actually lives under, which is the whole
+       point: without it a link from /docs/envoy/2.1.x/foo/ to /quickstart/ came
+       out as /2.1.x/quickstart/, a 404. Measured on kgateway.dev, 637 pages. */ -}}
 {{- if or (eq .Site.BaseURL "/") (in .Site.BaseURL "localhost") -}}
-{{- $finalURL = printf "/%s%s" $ver $path -}}
+{{- $finalURL = printf "%s/%s%s" $versionRoot $ver $path -}}
 {{- else -}}
-{{- $finalURL = printf "%s/%s%s" .Site.BaseURL $ver $path -}}
+{{- $finalURL = printf "%s%s/%s%s" .Site.BaseURL $versionRoot $ver $path -}}
 {{- end -}}
 
 {{- /* Append a slash if the link is not a fragment */ -}}

@@ -2,22 +2,39 @@ import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
-// Source-level guard for fully qualified (LTS) versions in link-hextra.
+// Source-level guard for link-hextra's version inference.
 //
-// link-hextra infers the target version by regex-matching the page's permalink.
-// The regexes originally accepted only `X.Y.x` (2.3.x), `latest`, and `main`.
-// When a product ships a fully qualified LTS tree (e.g.
-// `/agentgateway/2026.7.1/...`), inference fell through to the "latest"
-// fallback: every reuse-nested link on those pages pointed at `/latest/...`
-// instead of the LTS tree, and the build emitted a `link-hextra called with no
-// version` WARN for each one (which hugo-warnings.spec.ts fails on).
+// link-hextra works out which version tree a link belongs to by reading the
+// current page's permalink. Two things have to hold, and both have broken
+// before:
+//
+//  1. FULLY QUALIFIED (LTS) VERSIONS MUST INFER. The pattern originally accepted
+//     only `X.Y.x` (2.3.x), `latest` and `main`. When a product shipped an LTS
+//     tree (`/agentgateway/2026.7.1/…`) inference fell through to the "latest"
+//     fallback: every reuse-nested link on those pages pointed at `/latest/…`
+//     and the build emitted a `link-hextra called with no version` WARN for each
+//     (which hugo-warnings.spec.ts fails on).
+//
+//  2. THE VERSION ROOT MUST SURVIVE. Inference used to be two regexes, one
+//     anchored to a known product name (`kgateway|agentgateway|gateway|envoy`)
+//     and one anchored to the start of the URL. Between them they recognized
+//     only the docs hub's URL shape. An OSS site serves
+//     `/docs/standalone/latest/…` and `/docs/envoy/2.1.x/…`, where no segment is
+//     a product name and the version is not first — so agentgateway.dev could
+//     not infer a version at all, and kgateway.dev inferred the version but lost
+//     the `/docs/envoy` prefix, emitting `/2.1.x/quickstart/` for a page that
+//     lives at `/docs/envoy/2.1.x/quickstart/`. Measured: 637 pages of 404s on
+//     kgateway.dev, 913 on agentgateway.dev. That is why both repos forked this
+//     file. Inference is now a segment walk that also records everything before
+//     the version segment as the version root.
 //
 // Why a SOURCE check, not a rendered-output check: the bundled fixture has no
-// fully qualified version tree, and adding one shifts the page URLs the rest of
-// the suite asserts on. So this extracts the version alternation from the
-// shipped shortcode and exercises it directly. Self-skips when the file isn't
-// at the module-relative path (a consumer build, where the module lives under
-// hugo_cache rather than ../layouts).
+// LTS tree and no `/docs/<flavor>/` prefix, and adding either shifts the page
+// URLs the rest of the suite asserts on. So this extracts the version pattern
+// from the shipped shortcode and exercises it, plus mirrors the segment walk to
+// pin the derived (version, root) for each real-world URL shape. Self-skips when
+// the file isn't at the module-relative path (a consumer build, where the module
+// lives under hugo_cache rather than ../layouts).
 
 const SHORTCODE = path.resolve(
   __dirname,
@@ -26,79 +43,107 @@ const SHORTCODE = path.resolve(
 
 // Strip Go/Hugo template comments (`{{- /* … */ -}}`) so the assertions match
 // ACTIVE code, not the explanatory comments (which also spell out version
-// patterns).
+// patterns and example URLs).
 function activeSrc(): string {
   return fs
     .readFileSync(SHORTCODE, "utf8")
     .replace(/\{\{-?\s*\/\*[\s\S]*?\*\/\s*-?\}\}/g, "");
 }
 
-// The two version-inference regexes, as written in the template:
-//   1. product-prefixed, e.g. `/agentgateway/2026.7.1/security/waf/overview/`
-//   2. root-relative, e.g. `/2026.7.1/security/waf/overview/` (preview builds
-//      whose baseURL path is the product)
-const PATTERNS: Array<{ label: string; extract: RegExp }> = [
-  {
-    label: "product-prefixed",
-    extract: /findRE\s+`((?:\(\?:)?kgateway[^`]*)`/,
-  },
-  {
-    label: "root-relative",
-    extract: /findRE\s+`(\^\/\([^`]*)`/,
-  },
-];
+/** The per-segment version pattern, as written in the template. */
+function versionPattern(src: string): RegExp {
+  const m = src.match(/findRE\s+`(\^\(\?:[^`]*)`/);
+  expect(
+    m,
+    "per-segment version `findRE` not found — the shortcode changed shape; " +
+      "re-check that version inference still exists.",
+  ).not.toBeNull();
+  // Go's regexp is RE2, but this pattern uses only constructs JS shares.
+  return new RegExp(m![1]);
+}
 
-// Versions that must infer, and the permalinks they appear in.
-const MUST_MATCH: Array<[string, string, string]> = [
-  ["2026.7.1", "/agentgateway/2026.7.1/security/waf/overview/", "/2026.7.1/security/waf/overview/"],
-  ["2.3.x", "/agentgateway/2.3.x/security/waf/overview/", "/2.3.x/security/waf/overview/"],
-  ["latest", "/agentgateway/latest/security/waf/overview/", "/latest/security/waf/overview/"],
-  ["main", "/kgateway/main/security/waf/overview/", "/main/security/waf/overview/"],
-];
+/**
+ * Mirror of the template's segment walk: find the first path segment that looks
+ * like a version, and return it plus everything before it.
+ *
+ * Kept in step with `layouts/_shortcodes/link-hextra.html` by construction — the
+ * regex is read out of that file rather than duplicated here, so the two cannot
+ * drift on the part that actually decides what counts as a version.
+ */
+function derive(relURL: string, re: RegExp): { ver: string; root: string } {
+  const segs = relURL.replace(/^\//, "").split("/");
+  const i = segs.findIndex((s) => re.test(s));
+  if (i < 0) return { ver: "", root: "" };
+  return { ver: segs[i], root: i > 0 ? "/" + segs.slice(0, i).join("/") : "" };
+}
 
-test.describe("link-hextra infers fully qualified (LTS) versions", () => {
+test.describe("link-hextra version inference", () => {
   test.skip(
     !fs.existsSync(SHORTCODE),
     "link-hextra.html not at the module-relative path (consumer build)",
   );
 
-  for (const { label, extract } of PATTERNS) {
-    test(`the ${label} version regex accepts X.Y.Z as well as X.Y.x`, () => {
-      const src = activeSrc();
-      const m = src.match(extract);
+  test("the version pattern accepts X.Y.Z as well as X.Y.x", () => {
+    const re = versionPattern(activeSrc());
+    for (const v of ["2026.7.1", "2.3.x", "1.1.x", "latest", "main"]) {
       expect(
-        m,
-        `${label} version-inference \`findRE\` not found — the shortcode ` +
-          "changed shape; re-check that fully qualified versions still infer.",
-      ).not.toBeNull();
+        re.test(v),
+        `\`${v}\` is not recognized as a version — links on that tree fall ` +
+          "back to `latest` and the build WARNs.",
+      ).toBe(true);
+    }
+  });
 
-      // Go's regexp syntax is RE2, but these patterns use only constructs JS
-      // shares, so they can be exercised directly.
-      const re = new RegExp(m![1]);
-      const idx = label === "product-prefixed" ? 1 : 2;
+  // Without anchoring, `docs` or `kubernetes` could be mistaken for a version
+  // and the walk would stop at the wrong segment, taking the version root with
+  // it. `mainline` is the specific trap: it starts with `main`.
+  test("the version pattern rejects ordinary path segments", () => {
+    const re = versionPattern(activeSrc());
+    for (const s of ["docs", "envoy", "standalone", "kubernetes", "reference", "mainline", "latest-news"]) {
+      expect(re.test(s), `\`${s}\` was mistaken for a version segment`).toBe(false);
+    }
+  });
 
-      for (const row of MUST_MATCH) {
-        const [version, ...permalinks] = row;
-        const permalink = permalinks[idx - 1];
-        const hit = permalink.match(re);
-        expect(
-          hit?.[1],
-          `\`${version}\` did not infer from ${permalink} — links on that ` +
-            "version tree fall back to `latest` and the build WARNs.",
-        ).toBe(version);
-      }
-    });
-  }
+  test("derives the version and root for every real URL shape", () => {
+    const re = versionPattern(activeSrc());
+    const CASES: Array<[string, string, string, string]> = [
+      // permalink (after baseURL + language strip), version, root, who
+      ["/2.1.x/quickstart/", "2.1.x", "", "docs hub, product in baseURL"],
+      ["/kgateway/2.1.x/quickstart/", "2.1.x", "/kgateway", "docs hub, full build"],
+      ["/2026.7.1/security/waf/overview/", "2026.7.1", "", "docs hub, LTS tree"],
+      ["/docs/envoy/2.1.x/quickstart/", "2.1.x", "/docs/envoy", "kgateway.dev"],
+      ["/docs/standalone/latest/operations/debug/", "latest", "/docs/standalone", "agentgateway.dev"],
+      ["/docs/kubernetes/1.1.x/llm/streaming/", "1.1.x", "/docs/kubernetes", "agentgateway.dev"],
+      ["/kgateway/main/security/waf/overview/", "main", "/kgateway", "docs hub, main"],
+    ];
+    for (const [url, ver, root, who] of CASES) {
+      expect(derive(url, re), `${who}: ${url}`).toEqual({ ver, root });
+    }
+  });
+
+  // The hub is the case that must NOT change: its baseURL carries the product
+  // and the shortcode strips that prefix before inference, so the root comes out
+  // empty and the emitted URL is what it always was. If this ever produces a
+  // non-empty root, every hub link gains a duplicated product segment.
+  test("the docs hub derives an EMPTY root, so its URLs are unchanged", () => {
+    const re = versionPattern(activeSrc());
+    for (const url of ["/2.1.x/foo/", "/latest/foo/", "/main/foo/", "/2026.7.1/foo/"]) {
+      expect(derive(url, re).root, `${url} must yield no version root`).toBe("");
+    }
+  });
+
+  test("a permalink with no version segment infers nothing, so the fallback WARNs", () => {
+    const re = versionPattern(activeSrc());
+    expect(derive("/docs/envoy/", re)).toEqual({ ver: "", root: "" });
+  });
 
   test("the version alternation is not narrowed back to X.Y.x only", () => {
     const src = activeSrc();
-    // Both regexes must allow a numeric third segment. Guards against a
-    // revert of one branch while the other keeps working.
     const narrowed = src.match(/findRE\s+`[^`]*\\d\+\\\.\\d\+\\\.x[|)]/g) ?? [];
     expect(
       narrowed,
-      "a version-inference regex still accepts only `\\d+\\.\\d+\\.x` — " +
-        "fully qualified LTS versions (e.g. 2026.7.1) will not infer.",
+      "the version pattern still accepts only `\\d+\\.\\d+\\.x` — fully " +
+        "qualified LTS versions (e.g. 2026.7.1) will not infer.",
     ).toEqual([]);
   });
 });
