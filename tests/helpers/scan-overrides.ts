@@ -90,6 +90,103 @@ function splitSelectorGroup(sel) {
   return parts;
 }
 
+/* Declaration list -> { property: value }, last write wins.
+ *
+ * Splitting on `;` and `:` naively is wrong: `background: url(a;b)` and
+ * `grid-template-columns: repeat(auto-fill, minmax(200px, 1fr))` both carry
+ * separators inside parentheses, and `background: url(data:image/svg+xml,...)`
+ * carries a colon inside a value. So both splits are depth-aware, and only the
+ * FIRST top-level colon separates property from value. */
+export function declMap(decls: string[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const block of decls) {
+    let depth = 0, buf = "";
+    const flush = () => {
+      const s = buf.trim();
+      buf = "";
+      if (!s) return;
+      let d = 0, at = -1;
+      for (let i = 0; i < s.length; i++) {
+        const c = s[i];
+        if (c === "(" || c === "[") d++;
+        else if (c === ")" || c === "]") d--;
+        else if (c === ":" && d === 0) { at = i; break; }
+      }
+      if (at < 0) return;
+      out[s.slice(0, at).trim()] = s.slice(at + 1).trim();
+    };
+    for (const c of block) {
+      if (c === "(" || c === "[") depth++;
+      else if (c === ")" || c === "]") depth--;
+      if (c === ";" && depth === 0) { flush(); continue; }
+      buf += c;
+    }
+    flush();
+  }
+  return out;
+}
+
+/* Are two CSS values the same paint, written differently?
+ *
+ * `#1e40af` and `rgb(30, 64, 175)` are the same colour, and a consumer that
+ * writes one where extras writes the other is duplicating, not diverging —
+ * deleting it is a no-op. Without this the report calls them DIVERGENT and the
+ * reader has to convert by hand, which is how the hex/token equivalence check
+ * became a manual step in the Phase 7a notes.
+ *
+ * Deliberately narrow: hex (3/4/6/8 digit) and rgb()/rgba() only. `hsl()` is NOT
+ * converted, because comparing it to rgb needs real colour maths and a rounding
+ * policy, and a wrong "these are equal" is far worse here than a spurious
+ * DIVERGENT — one deletes a rule that was doing something, the other just asks
+ * a human to look. Whitespace and `!important` are normalized on every value. */
+function canonValue(v: string): string {
+  let s = v.trim().replace(/\s+/g, " ").replace(/\s*!\s*important$/i, "");
+  const hex = s.match(/^#([0-9a-f]{3,8})$/i);
+  if (hex) {
+    let h = hex[1].toLowerCase();
+    if (h.length === 3 || h.length === 4) h = [...h].map((c) => c + c).join("");
+    const n = (i: number) => parseInt(h.slice(i * 2, i * 2 + 2), 16);
+    return h.length === 8
+      ? `rgba(${n(0)},${n(1)},${n(2)},${+(n(3) / 255).toFixed(3)})`
+      : `rgb(${n(0)},${n(1)},${n(2)})`;
+  }
+  const rgb = s.match(/^rgba?\(([^)]+)\)$/i);
+  if (rgb) {
+    const p = rgb[1].split(/[,\s/]+/).filter(Boolean).map((x) => x.trim());
+    if (p.length === 3) return `rgb(${p.join(",")})`;
+    if (p.length === 4) return `rgba(${p.slice(0, 3).join(",")},${+Number(p[3]).toFixed(3)})`;
+  }
+  return s.replace(/,\s+/g, ",");
+}
+
+/** Compare one consumer rule against extras'. Returns only the properties they
+    BOTH set, split by whether the value actually differs. A selector they share
+    but whose property sets are disjoint is not a conflict at all — extras'
+    `.hextra-toc { display: none }` and a Tailwind `font-family` on the same
+    class never fight, and reporting them as divergent is what made the "four of
+    six consumers override .hextra-toc" backlog item look real when nobody
+    overrides it. */
+export function compareRule(extrasDecls: string[], consumerDecls: string[]) {
+  const a = declMap(extrasDecls);
+  const b = declMap(consumerDecls);
+  const shared = Object.keys(b).filter((p) => p in a);
+  const equivalent: string[] = [];
+  const differing: { prop: string; extras: string; consumer: string }[] = [];
+  const bang = (v: string) => /!\s*important\s*$/i.test(v.trim());
+  for (const p of shared) {
+    // `!important` is compared BEFORE the value is canonicalized, because
+    // canonValue strips it. Two rules with the same paint but different
+    // importance are not interchangeable: the consumer's `!important` may be
+    // what beats a Hextra core rule, so deleting it is a behavior change even
+    // though the declared value matches. Report it as divergent and let a human
+    // check what it was written to win against.
+    if (bang(a[p]) !== bang(b[p])) differing.push({ prop: p, extras: a[p], consumer: b[p] });
+    else if (canonValue(a[p]) === canonValue(b[p])) equivalent.push(p);
+    else differing.push({ prop: p, extras: a[p], consumer: b[p] });
+  }
+  return { shared, equivalent, differing };
+}
+
 /** Top-level selector -> normalized declaration bodies. Skips at-rules. */
 export function cssBlocks(file) {
   const src = fs.readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
@@ -152,14 +249,21 @@ export function scan() {
       }
     }
 
-    const dupSame = [], dupDiff = [];
+    // Three buckets, because they call for three different actions:
+    //   noConflict — same selector, disjoint properties. Nothing to do.
+    //   dupSame    — every shared property has the same value. Safe to delete.
+    //   dupDiff    — at least one shared property differs. Needs a human.
+    const noConflict = [], dupSame = [], dupDiff = [];
     const cssDir = path.join(base, "assets/css");
     if (fs.existsSync(cssDir)) {
       for (const f of fs.readdirSync(cssDir).filter((x) => x.endsWith(".css")).sort()) {
         for (const [sel, decls] of cssBlocks(path.join(cssDir, f))) {
           const ex = exSelectors.get(sel);
           if (!ex) continue;
-          (decls.some((d) => ex.includes(d)) ? dupSame : dupDiff).push({ file: f, sel });
+          const cmp = compareRule(ex, decls);
+          if (cmp.shared.length === 0) noConflict.push({ file: f, sel });
+          else if (cmp.differing.length === 0) dupSame.push({ file: f, sel, equivalent: cmp.equivalent });
+          else dupDiff.push({ file: f, sel, ...cmp });
         }
       }
     }
@@ -172,7 +276,7 @@ export function scan() {
       const onlyConsumer = [...co].filter((c) => !ex.has(c)).sort();
       if (onlyExtras.length || onlyConsumer.length) contract.push({ file, onlyExtras, onlyConsumer });
     }
-    report.push({ name, samePath, dupSame, dupDiff, contract });
+    report.push({ name, samePath, noConflict, dupSame, dupDiff, contract });
   }
   return report;
 }
@@ -185,10 +289,23 @@ export function formatReport(r: ReturnType<typeof scan>): string {
     if (c.missing) { out.push(`\n## ${c.name}\n  (clone not found)`); continue; }
     out.push(`\n## ${c.name}`);
     out.push(`  same-path shadows       : ${c.samePath.length} (${c.samePath.filter((s) => s.identical).length} byte-identical)`);
-    out.push(`  duplicated selectors    : ${c.dupSame.length + c.dupDiff.length} (${c.dupDiff.length} DIVERGENT)`);
+    out.push(`  redundant selectors     : ${c.dupSame.length} (same value as extras — safe to delete)`);
+    out.push(`  DIVERGENT selectors     : ${c.dupDiff.length} (a shared property actually differs)`);
+    out.push(`  shared-name only        : ${c.noConflict.length} (no property in common — ignore)`);
     out.push(`  contract divergences    : ${c.contract.length}`);
     for (const s of c.samePath) out.push(`     ${s.identical ? "=" : "~"} ${s.file}  ${s.extrasBytes}B/${s.consumerBytes}B`);
-    for (const d of c.dupDiff) out.push(`     DIVERGENT selector  ${d.file}  ${d.sel}`);
+    for (const d of c.dupSame) {
+      out.push(`     redundant  ${d.file}  ${d.sel}  [${d.equivalent.join(", ")}]`);
+    }
+    for (const d of c.dupDiff) {
+      out.push(`     DIVERGENT  ${d.file}  ${d.sel}`);
+      for (const p of d.differing) {
+        out.push(`         ${p.prop}:  extras ${p.extras}   |   consumer ${p.consumer}`);
+      }
+      if (d.equivalent.length) {
+        out.push(`         (same value: ${d.equivalent.join(", ")})`);
+      }
+    }
   }
   return out.join("\n");
 }

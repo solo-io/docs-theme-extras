@@ -1,92 +1,66 @@
 {
-  "_readme": [
-    "Frozen inventory of consumer files and CSS selectors that SHADOW this module.",
-    "Enforced by tests/override-parity.spec.ts as a one-way ratchet: anything new",
-    "fails, and anything removed from a consumer must also be removed here.",
-    "Regenerate the raw numbers with `node tests/helpers/scan-overrides.mjs`, but",
-    "do NOT bulk-overwrite this file \u2014 each line is an accepted exception, and the",
-    "point of the ratchet is that adding one is a deliberate, reviewed act.",
-    "Prose for every entry lives in OVERRIDES.md; the spec checks the two agree."
-  ],
-  "consumers": {
-    "docs": {
-      "samePath": [
-        "layouts/_shortcodes/card.html",
-        "layouts/_shortcodes/cards.html",
-        "layouts/_shortcodes/gloss.html",
-        "layouts/_shortcodes/table.html"
-      ],
-      "duplicatedSelectors": []
-    },
-    "kgateway-oss": {
-      "samePath": [
-        "layouts/_partials/navbar.html",
-        "layouts/_shortcodes/link-hextra.html",
-        "layouts/docs/list.html",
-        "layouts/docs/single.html"
-      ],
-      "duplicatedSelectors": [
-        "styles.css :: .hextra-toc"
-      ]
-    },
-    "agentgateway-oss-website": {
-      "samePath": [
-        "assets/js/flexsearch.js",
-        "layouts/_partials/navbar.html",
-        "layouts/_shortcodes/link-hextra.html",
-        "layouts/_shortcodes/openapi.html",
-        "layouts/_shortcodes/redirect.html",
-        "layouts/_shortcodes/reuse-image-dark.html",
-        "layouts/_shortcodes/reuse-image.html",
-        "layouts/docs/list.html",
-        "layouts/docs/single.html"
-      ],
-      "duplicatedSelectors": [
-        "custom.css :: .dark .hextra-tabs-toggle",
-        "custom.css :: .dark .hextra-tabs-toggle:hover",
-        "custom.css :: .dark .hextra-tabs-toggle[data-state=\"selected\"]",
-        "custom.css :: .dark .sidebar-link.sidebar-active-item",
-        "custom.css :: .hextra-tabs-toggle",
-        "custom.css :: .hextra-tabs-toggle:hover",
-        "custom.css :: .hextra-tabs-toggle[data-state=\"selected\"]",
-        "custom.css :: .nav-container",
-        "custom.css :: .section-cards",
-        "custom.css :: .sidebar-link.sidebar-active-item",
-        "custom.css :: .sidebar-nav",
-        "styles.css :: .hextra-toc"
-      ]
-    },
-    "agentregistry-oss-website": {
-      "samePath": [
-        "assets/css/main.css"
-      ],
-      "duplicatedSelectors": []
-    },
-    "kagent-oss-website": {
-      "samePath": [],
-      "duplicatedSelectors": [
-        "custom.css :: .dark .hextra-tabs-toggle",
-        "custom.css :: .dark .hextra-tabs-toggle:hover",
-        "custom.css :: .dark .hextra-tabs-toggle[data-state=\"selected\"]",
-        "custom.css :: .dark .sidebar-link.sidebar-active-item",
-        "custom.css :: .hextra-tabs-toggle",
-        "custom.css :: .hextra-tabs-toggle:hover",
-        "custom.css :: .hextra-tabs-toggle[data-state=\"selected\"]",
-        "custom.css :: .nav-container",
-        "custom.css :: .section-cards",
-        "custom.css :: .sidebar-link.sidebar-active-item",
-        "custom.css :: .sidebar-nav",
-        "custom.css :: :root",
-        "styles.css :: .hextra-toc"
-      ]
-    },
-    "ambientmesh.io": {
-      "samePath": [],
-      "duplicatedSelectors": [
-        "custom.css :: .hextra-toc",
-        "custom.css :: .nav-container",
-        "custom.css :: .sidebar-product-logo"
-      ]
-    }
+ "_readme": [
+  "Frozen inventory of consumer files and CSS selectors that SHADOW this module.",
+  "Enforced by tests/override-parity.spec.ts as a one-way ratchet: anything new",
+  "fails, and anything removed from a consumer must also be removed here.",
+  "Regenerate the raw numbers with `npm run scan:overrides`, but do NOT",
+  "bulk-overwrite this file \u2014 each line is an accepted exception, and the point",
+  "of the ratchet is that adding one is a deliberate, reviewed act.",
+  "Prose for every entry lives in OVERRIDES.md; the spec checks the two agree.",
+  "",
+  "duplicatedSelectors counts REAL conflicts only: the consumer and extras set",
+  "at least one property in common. A selector they merely share the NAME of \u2014",
+  "extras' `.hextra-toc { display: none }` versus a Tailwind `font-family` on the",
+  "same class \u2014 is not duplication and is no longer listed. Confusing the two is",
+  "what made 'four of six consumers override .hextra-toc' look like a real",
+  "backlog item when nobody overrides it."
+ ],
+ "consumers": {
+  "docs": {
+   "samePath": [
+    "layouts/_shortcodes/card.html",
+    "layouts/_shortcodes/cards.html",
+    "layouts/_shortcodes/gloss.html",
+    "layouts/_shortcodes/table.html"
+   ],
+   "duplicatedSelectors": []
+  },
+  "kgateway-oss": {
+   "samePath": [
+    "layouts/_partials/navbar.html",
+    "layouts/_shortcodes/link-hextra.html",
+    "layouts/docs/list.html",
+    "layouts/docs/single.html"
+   ],
+   "duplicatedSelectors": []
+  },
+  "agentgateway-oss-website": {
+   "samePath": [
+    "assets/js/flexsearch.js",
+    "layouts/_partials/navbar.html",
+    "layouts/_shortcodes/link-hextra.html",
+    "layouts/_shortcodes/openapi.html",
+    "layouts/_shortcodes/redirect.html",
+    "layouts/docs/list.html",
+    "layouts/docs/single.html"
+   ],
+   "duplicatedSelectors": []
+  },
+  "agentregistry-oss-website": {
+   "samePath": [
+    "assets/css/main.css"
+   ],
+   "duplicatedSelectors": []
+  },
+  "kagent-oss-website": {
+   "samePath": [],
+   "duplicatedSelectors": []
+  },
+  "ambientmesh.io": {
+   "samePath": [],
+   "duplicatedSelectors": [
+    "custom.css :: .nav-container"
+   ]
   }
+ }
 }

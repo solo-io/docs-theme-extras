@@ -2,7 +2,13 @@ import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { cssBlocks, CONSUMERS, scan } from "./helpers/scan-overrides";
+import {
+  compareRule,
+  cssBlocks,
+  CONSUMERS,
+  declMap,
+  scan,
+} from "./helpers/scan-overrides";
 import baseline from "./helpers/override-baseline.json";
 import { target } from "./helpers/target";
 
@@ -89,6 +95,82 @@ test.describe("scan-overrides selector parsing", () => {
       ...blocksOf("@media (min-width: 40rem) { .a { color: red } }").keys(),
     ];
     expect(keys).toEqual([]);
+  });
+});
+
+// ── Unit: property-level comparison ──────────────────────────────────────────
+// The scanner used to ask "does this selector appear in both files?", which
+// over-reports badly: extras' `.hextra-toc { display: none }` and a Tailwind
+// `font-family` on the same class were counted as a conflict on FOUR consumers,
+// and produced a backlog item to "fix extras' wrong .hextra-toc default" that
+// nobody was overriding. These tests pin the corrected question: do the two set
+// the same PROPERTY, and if so, to the same VALUE?
+test.describe("scan-overrides rule comparison", () => {
+  test("parses declarations into property/value pairs", () => {
+    expect(declMap(["color:red;background:blue"])).toEqual({
+      color: "red",
+      background: "blue",
+    });
+  });
+
+  // Both separators occur inside values in the real corpus: a semicolon in a
+  // url(), and a colon in a data: URI. A naive split on `;` or on the first `:`
+  // mangles both.
+  test("does NOT split on separators inside parentheses", () => {
+    expect(
+      declMap(["grid-template-columns:repeat(auto-fill, minmax(200px, 1fr))"]),
+    ).toEqual({ "grid-template-columns": "repeat(auto-fill, minmax(200px, 1fr))" });
+    expect(declMap(['background:url("data:image/svg+xml;base64,AAA")'])).toEqual({
+      background: 'url("data:image/svg+xml;base64,AAA")',
+    });
+  });
+
+  test("a shared selector with no shared property is not a conflict", () => {
+    const r = compareRule(["display:none"], ["font-family:Open Sans"]);
+    expect(r.shared).toEqual([]);
+    expect(r.differing).toEqual([]);
+  });
+
+  // The hex/rgb equivalence that used to be a manual conversion step in the
+  // Phase 7a notes. agentgateway wrote `#1e40af` where extras wrote
+  // `rgb(30, 64, 175)` — the same colour, so the consumer rule was redundant,
+  // not divergent.
+  test("treats hex and rgb() forms of one colour as equivalent", () => {
+    const r = compareRule(["color:rgb(30, 64, 175)"], ["color:#1e40af"]);
+    expect(r.equivalent).toEqual(["color"]);
+    expect(r.differing).toEqual([]);
+  });
+
+  test("expands 3-digit hex and handles rgba alpha", () => {
+    expect(compareRule(["color:rgb(255,0,0)"], ["color:#f00"]).equivalent).toEqual(["color"]);
+    expect(
+      compareRule(["background:rgba(99, 102, 241, 0.1)"], ["background:rgba(99,102,241,0.1)"])
+        .equivalent,
+    ).toEqual(["background"]);
+  });
+
+  // hsl() is deliberately NOT converted. A wrong "these are equal" deletes a
+  // rule that was doing something; a spurious DIVERGENT only asks a human to
+  // look. So the cheap direction is the safe one.
+  test("does NOT claim hsl and rgb are equivalent", () => {
+    const r = compareRule(["color:rgb(0, 107, 230)"], ["color:hsl(212, 100%, 45%)"]);
+    expect(r.differing.map((d) => d.prop)).toEqual(["color"]);
+  });
+
+  // `!important` is compared before the value is canonicalized. Same colour but
+  // different importance is NOT interchangeable — the consumer's !important may
+  // be what beats a Hextra core rule.
+  test("same value with !important on one side is divergent", () => {
+    const r = compareRule(["color:#c7d2fe"], ["color:#c7d2fe !important"]);
+    expect(r.equivalent).toEqual([]);
+    expect(r.differing.map((d) => d.prop)).toEqual(["color"]);
+  });
+
+  test("reports a genuinely different value", () => {
+    const r = compareRule(["margin-top:1.5rem"], ["margin-top:1rem"]);
+    expect(r.differing).toEqual([
+      { prop: "margin-top", extras: "1.5rem", consumer: "1rem" },
+    ]);
   });
 });
 

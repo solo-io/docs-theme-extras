@@ -34,14 +34,25 @@ which is mechanism 2.
 
 ## Snapshot
 
+Current, 2026-08-07. "Duplicated selectors" counts REAL conflicts only — the consumer and
+extras set at least one property in common. A selector they merely share the NAME of is not
+duplication and is not counted; see the note under kagent/ambientmesh for why that
+distinction mattered.
+
 | consumer | same-path shadows | duplicated selectors | of which divergent | contract divergences |
 |---|---|---|---|---|
-| docs | 8 (3 byte-identical) | **169** | 22 | 1 |
-| kgateway-oss | 4 | 1 | 1 | 3 |
-| agentgateway-oss-website | 8 | 12 | 8 | 5 |
+| docs | 4 | 0 | 0 | 1 |
+| kgateway-oss | 4 | 0 | 0 | 3 |
+| agentgateway-oss-website | 7 | 0 | 0 | 4 |
 | agentregistry-oss-website | 1 | 0 | 0 | 0 |
-| kagent-oss-website | 0 | 13 | 9 | 0 |
-| ambientmesh.io | 0 | 3 | 3 | 0 |
+| kagent-oss-website | 0 | 0 | 0 | 0 |
+| ambientmesh.io | 0 | 1 | 1 | 0 |
+
+For history, the counts before this round of cleanup were: docs 8 shadows / 169 duplicated
+selectors, kgateway-oss 4 / 1, agentgateway-oss 9 / 12, agentregistry 1 / 0, kagent 0 / 13,
+ambientmesh 0 / 3. **CSS duplication is now zero everywhere except one deliberate brand
+font.** What remains is same-path template shadows, which are a separate and harder problem
+— several are load-bearing, not stale.
 
 ### docs — the big one
 
@@ -97,12 +108,11 @@ features do not render here at all. `link-hextra.html` is a 587B stub against ex
 
 ### agentgateway-oss-website
 
-Nine same-path shadows, the most of any consumer. Three arrived on 2026-08-06 in the
+Seven same-path shadows, the most of any consumer (nine before the image pair below was
+resolved). Three arrived on 2026-08-06 in the
 commit "Moved shortcodes to `_shortcodes`": those files already existed under the old
 `layouts/shortcodes/` path, where they did NOT collide with the module, and moving them made
-them shadow it. All three are stale forks substantially smaller than the module's versions,
-so agw silently lost whatever those files have gained since the fork. They need a real diff,
-not a rubber stamp.
+them shadow it.
 
 **This consumer's shadow set depends on which branch the clone has checked out**, so the
 ratchet is only meaningful against a known branch. Over one working session the scanner saw
@@ -112,17 +122,34 @@ below is `kkb-theme-upgrade` at `3769c7c2`. **Re-run `npm run scan:overrides` ag
 release branch before trusting these counts**, and expect this consumer, not the module, to
 be the reason the ratchet goes red.
 
-| file | note |
+**SIZE IS NOT EVIDENCE OF STALENESS.** The rows below used to be described purely by byte
+gap, on the assumption that a fork much smaller than the module's file is an old copy to
+delete. Measured — delete each fork, rebuild, diff the built HTML — **that assumption is
+wrong for at least two of them.** They are small because they do a *different, simpler job
+that is correct for this site's URL shape*, and deleting them breaks pages. Every row now
+carries a measured verdict instead of a byte count.
+
+| file | measured verdict |
 |---|---|
-| `layouts/_shortcodes/link-hextra.html` | stub against extras' 6KB, same gap as kgateway-oss |
-| `layouts/_shortcodes/openapi.html` | product-specific; check whether it still needs to diverge |
-| `layouts/_partials/navbar.html` | 832B against extras' 20.9KB — a different navbar, not a tweak |
-| `layouts/docs/single.html` | drops the `page-badges` / `page-description` / `badge-*` contract |
-| `layouts/docs/list.html` | same contract gap on section landings |
-| `layouts/_shortcodes/redirect.html` | **appeared 2026-08-06**, 1470B vs extras' 2121B |
-| `layouts/_shortcodes/reuse-image-dark.html` | **appeared 2026-08-06**, 937B vs extras' 1635B |
-| `layouts/_shortcodes/reuse-image.html` | **appeared 2026-08-06**, 903B vs extras' 4412B — the largest gap of any shadow here |
-| `assets/js/flexsearch.js` | near-copy that has **drifted** (20929B vs 20564B). The hub's copy of this file was byte-identical and could simply be deleted; this one cannot, so it needs a real diff first |
+| `layouts/_shortcodes/link-hextra.html` | **KEEP.** Deleting rewrites links on **913 pages** from `/docs/kubernetes/1.0.x/setup/gateway/` to `/latest/setup/gateway/` — a 404. extras assumes the hub's `/product/version/…`; agw is `/docs/<flavor>/<version>/…`. Not a stub, an adaptation |
+| `assets/js/flexsearch.js` | **KEEP, or upstream.** Only 13 lines differ, all about where versions come from: extras reads `site.Params.versions`, agw reads `site.Params.sections.*.versions` with `linkVersion`. agw's config uses `sections`, so extras' copy finds no versions and the search version filter silently stops working. Right fix is to teach extras both shapes, then delete this |
+| `layouts/_partials/navbar.html` | 832B against extras' 20.9KB. Deleting changes **1515 pages** and renders extras' full navbar with dropdowns — a visual redesign of the site header, not a cleanup |
+| `layouts/docs/single.html` | drops the `page-badges` / `badge-*` / `section-card-badge` contract, so those extras features cannot render here at all. Deleting changes **1092 pages** structurally. Real capability gap, but needs design work and visual review |
+| `layouts/docs/list.html` | same contract gap on section landings; **391 pages** |
+| `layouts/_shortcodes/openapi.html` | **2 pages.** agw's fork emits a full standalone `<!doctype html>` document; extras emits an embedded fragment. Small enough to decide cheaply, not yet decided |
+| `layouts/_shortcodes/redirect.html` | **2 pages.** agw's emits a versionless target (`/docs/mcp/mcp-access/`); extras version-prefixes it (`/docs/kubernetes/1.1.x/mcp/mcp-access/`). Needs a check of which target actually resolves |
+
+**Resolved 2026-08-07 — the image shortcodes, which had to move as a set:**
+`reuse-image.html` and `reuse-image-dark.html` were deleted, along with the
+`.light-only` / `.dark-only` CSS block in `custom.css` and the two hand-written `<div>`s in
+`content/docs/_index.md` that used those class names. They could not be split: extras emits
+`class="reuse-image-nodark"` on the light image and `class="toggle-light"` on the dark one,
+and the rule that stops both showing at once is
+`.dark .reuse-image-nodark:has(+ .toggle-light) { display: none }`. agw's forks emitted
+`dark-only` instead, styled by its own CSS. Deleting either shortcode alone would have left
+one image unpaired and rendered both in dark mode. Verified in a headless browser on
+`/docs/standalone/latest/operations/debug/`: exactly one figure visible in light and one in
+dark, in both directions.
 
 ### agentregistry-oss-website
 
@@ -132,12 +159,45 @@ intentional or is silently dropping theme CSS.
 
 ### kagent-oss-website and ambientmesh.io
 
-No same-path shadows and no contract divergences, but both redefine extras selectors in
-`custom.css` — kagent 13 (9 divergent, incl. `:root`, `.hextra-tabs-toggle*`,
-`.section-cards`), ambientmesh 3 (all divergent: `.hextra-toc`,
-`.sidebar-product-logo`, `.nav-container`). `.hextra-toc` is redefined divergently by
-**four** of the six consumers, which suggests extras' own rule may be the wrong default
-rather than four consumers each being wrong.
+No same-path shadows and no contract divergences. One accepted duplicated selector, on
+ambientmesh only:
+
+| Selector | Why it stays |
+| --- | --- |
+| `custom.css :: .nav-container` | `font-family: Figtree` where extras sets `Open Sans`. ambientmesh's brand font, deliberately different |
+
+### The CSS duplication that used to be listed here, and why the count fell to one
+
+An earlier revision reported 12 duplicated selectors on `agentgateway-oss-website`, 13 on
+`kagent-oss-website` and 3 on `ambientmesh.io`, and concluded that `.hextra-toc` "is
+redefined divergently by four of the six consumers, which suggests extras' own rule may be
+the wrong default." **That conclusion was wrong, and so were most of the counts.**
+
+The scanner compared SELECTOR NAMES, not properties. extras sets
+`.hextra-toc { display: none }`; the four consumers set `font-family` on the same class
+from a Tailwind `styles.css`. Different properties never collide, so nobody was overriding
+anything. `scan-overrides.ts` now compares property-by-property and reports three separate
+buckets — *redundant* (same value, safe to delete), *DIVERGENT* (a shared property really
+differs), and *shared-name only* (ignore).
+
+Against the corrected scanner the real figures were 10 conflicts each on agentgateway-oss
+and kagent-oss — the identical block, copy-pasted between the two sites — of which only
+three carried a genuinely different value. Those were resolved in favour of the module:
+
+| Selector | Resolution |
+| --- | --- |
+| `.nav-container`, `.hextra-tabs-toggle`, `.hextra-tabs-toggle:hover`, `.dark .hextra-tabs-toggle`, `.dark .hextra-tabs-toggle:hover` | byte-identical to extras — deleted |
+| `.sidebar-link.sidebar-active-item` | `#1e40af` vs extras' `rgb(30, 64, 175)`, the same colour — deleted |
+| `.dark .sidebar-link.sidebar-active-item` | same colour but `!important`. Measured inert (computed style unchanged after deletion) — deleted |
+| `.hextra-tabs-toggle[data-state="selected"]` (+ `.dark`) | underline hardcoded `hsl(212,100%,50%)`; extras uses `var(--theme-primary)` — deleted, underline now follows the brand token and adapts in dark mode |
+| `.section-cards` (+ both media queries) | `margin-top: 1rem` vs extras' `1.5rem` — deleted, extras wins |
+
+Verified by computed-style diff on a real minified `agentgateway-oss-website` build across
+two pages in both colour schemes: **6 differences across 12 snapshots, all three intended
+changes × light and dark, nothing incidental.** Note `!important` is treated as part of the
+value by the scanner, so a rule matching extras' colour but adding `!important` still
+reports DIVERGENT — deleting it changes what wins against other sheets even when the
+declared value matches.
 
 ## Enforcement
 

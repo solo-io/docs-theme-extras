@@ -333,6 +333,62 @@ No other consumer needs a paired change. Details in the individual entries below
   is inside `<head>`, and no page changes outside it. 1,261 static + content tests pass.
   Takes effect when a consumer bumps its extras pin.
 
+### Test harness — the override scanner compares CSS properties, not selector names, and the phantom backlog it created is gone (`tests/helpers/scan-overrides.ts`, `tests/override-parity.spec.ts`, `tests/helpers/override-baseline.json`, `OVERRIDES.md`)
+
+- **Why.** The scanner reported a conflict whenever a consumer stylesheet mentioned a
+  selector extras also defines. That is not what a conflict is. extras sets
+  `.hextra-toc { display: none }`; four consumers set `font-family` on the same class from
+  a Tailwind `styles.css`. Different properties never fight — yet the report called all four
+  DIVERGENT, and that produced a backlog item to "fix extras' wrong `.hextra-toc` default,
+  since four of six consumers override it." **Nobody overrides it.** The item was an
+  artifact of the measurement.
+- **What changed.** `compareRule` now diffs property by property and sorts each selector
+  into one of three buckets: *redundant* (every shared property has the same value, safe to
+  delete), *DIVERGENT* (a shared property really differs), *shared-name only* (ignore). Hex
+  and `rgb()` spellings of one colour compare equal, so `#1e40af` versus
+  `rgb(30, 64, 175)` no longer needs converting by hand. `hsl()` is deliberately left
+  unconverted — a wrong "these are equal" deletes a live rule, while a spurious DIVERGENT
+  only asks a human to look. `!important` is compared before the value is canonicalized,
+  because a rule matching extras' colour but adding `!important` is not interchangeable
+  with it.
+- **The real cleanup this exposed.** `agentgateway-oss-website` and `kagent-oss-website`
+  carried the identical 10-selector block, copy-pasted between the two sites. Five were
+  byte-identical to extras, two were the same colour in different notation, and only three
+  carried a genuinely different value — the selected-tab underline (hardcoded
+  `hsl(212,100%,50%)` versus extras' `var(--theme-primary)`, so it never adapted in dark
+  mode) and `.section-cards` top margin (`1rem` versus `1.5rem`). All resolved in favour of
+  the module and deleted from both consumers. Observable on
+  [agentgateway docs](https://agentgateway.dev/docs/): the selected tab's underline now
+  follows the brand token instead of a fixed blue.
+- **Verified** by computed-style diff on a real minified `agentgateway-oss-website` build,
+  two pages, light and dark: **6 differences across 12 snapshots, all three intended changes
+  × both colour schemes, nothing incidental.** That also proved the `!important` on
+  `.dark .sidebar-link.sidebar-active-item` was inert — the computed colour and background
+  are unchanged after deleting it. Scanner totals across all six consumers went from 30
+  flagged selectors to **one real divergence**: ambientmesh's `.nav-container` font, which
+  is its brand font and stays. Eleven new unit tests pin the comparison logic, including the
+  `.hextra-toc` false positive that motivated the change.
+- Consumer edits are local to `agentgateway-oss-website` and `kagent-oss-website`; they need
+  no pin bump, since deleting a duplicate just lets the module's existing rule apply.
+- **`agentgateway-oss-website` also dropped its `reuse-image` / `reuse-image-dark` forks**,
+  which had to move as a set. extras emits `class="reuse-image-nodark"` on the light image
+  and `class="toggle-light"` on the dark one, and the rule that stops both showing at once is
+  `.dark .reuse-image-nodark:has(+ .toggle-light)`. agw's forks emitted `dark-only`, styled by
+  its own CSS, so deleting either alone would have rendered both images in dark mode. The
+  `.light-only` / `.dark-only` block and the two hand-written `<div>`s in
+  `content/docs/_index.md` that used it moved over too. Verified headlessly on
+  [agentgateway debug guide](https://agentgateway.dev/docs/standalone/latest/operations/debug/):
+  exactly one figure visible in light and one in dark, in both directions.
+- **Recorded a correction in `OVERRIDES.md` rather than acting on it.** That file described
+  consumer forks by byte gap, on the assumption that a fork much smaller than the module's
+  file is a stale copy to delete. Measured by deleting each fork, rebuilding and diffing the
+  built HTML, that is wrong for at least two: `link-hextra.html` is small because
+  agentgateway's URLs are `/docs/<flavor>/<version>/…` rather than the hub's
+  `/product/version/…`, and deleting it rewrites links on **913 pages** into 404s;
+  `flexsearch.js` differs by 13 lines that read versions from `params.sections.*.versions`
+  instead of `params.versions`, without which the search version filter silently stops
+  working. Every row now carries a measured verdict. No extras behavior changed.
+
 ### Test harness — delete the `cond-list-order` lint, whose antipattern the gate refactor made impossible (`tests/helpers/cond-list-order.ts`, `tests/cond-list-order.spec.ts`, `tests/helpers/config.ts`, `playwright.config.ts`, fixture)
 
 - **Why it existed.** Before the refactor, `conditional-text` rendered its body in INLINE
