@@ -87,6 +87,26 @@
     background: #ffffff !important;
     color: #333333 !important;
   }
+  /* Anchors were the gap in this light-island block. swagger-ui's own sheet
+     declares `.swagger-ui a.nostyle { color: inherit }`, and `inherit` resolves
+     against the theme, not against the `color` pinned above — so in dark mode
+     an opblock-tag heading (an `a.nostyle`) inherited the theme's near-white
+     body text and rendered white on this deliberately-white panel: invisible,
+     1.00:1. Pin tag headings to the island's body color, since they read as
+     headings rather than links.
+
+     Real links get #1074ca rather than swagger's stock #4990e2, which reaches
+     only 3.10:1 against the panel (#ffffff) and summary strip (#f8f8f8) and so
+     misses the 4.5:1 floor for normal-size text. #1074ca is the smallest
+     perceptual step from the stock color that clears it, at 4.52:1. */
+  .swagger-ui a.nostyle,
+  .swagger-ui a.nostyle:visited,
+  .swagger-ui .opblock-tag {
+    color: #333333 !important;
+  }
+  .swagger-ui a:not(.nostyle) {
+    color: #1074ca !important;
+  }
   .swagger-ui .opblock {
     background: #ffffff !important;
     border: 1px solid #e0e0e0 !important;

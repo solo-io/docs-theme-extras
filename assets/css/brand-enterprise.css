@@ -15,10 +15,31 @@
   --theme-primary:       #158bc2;
   --theme-primary-hover: #106a94;
   --theme-primary-tint:  rgba(21, 139, 194, 0.1);
+  /* Link/accent TEXT color — deliberately separate from --theme-primary.
+     WCAG sets different floors for the two jobs this palette does: 4.5:1 for
+     normal-size text (1.4.3) but only 3:1 for icons, borders, and other
+     non-text UI (1.4.11). --theme-primary satisfies the 3:1 job at #158bc2 and
+     stays as-is; it cannot satisfy the text job at ANY background, because its
+     relative luminance (0.2252) caps it at 3.82:1 even against pure white.
+     #0274a0 is the smallest perceptual step from #158bc2 (CIEDE2000 dE 9.08)
+     that clears 4.5:1 on every light surface link text can land on — the
+     darkest being the .alert-default callout fill #eaeefb, where it scores
+     4.52:1. See tests/contrast.spec.ts, which re-derives this from the build
+     rather than trusting these comments. */
+  --theme-link:          #0274a0;
+  --theme-link-hover:    #106a94;
 }
 .dark {
   --theme-primary:       #60b5e0;
   --theme-primary-tint:  rgba(96, 181, 224, 0.1);
+  /* Dark-mode link text. #158bc2 was previously used unchanged in dark mode
+     (the old `.content a` rule had no `.dark` variant), which passed on the
+     page fill but failed inside the translucent alert tints — 4.08:1 on
+     .alert-warning. #2f93c7 is a dE 2.94 step from it, near-imperceptible
+     side by side, and clears 4.54:1 on the worst dark surface. Hover reuses
+     the existing dark accent, which has ample headroom at 6.81:1. */
+  --theme-link:          #2f93c7;
+  --theme-link-hover:    #60b5e0;
 }
 
 /* ── Typography ──────────────────────────────────────────────────────── */
@@ -38,14 +59,12 @@ body {
 }
 
 /* ── Links ───────────────────────────────────────────────────────────── */
-/* Enterprise link color (solo blue). Component layer keeps generic color
-   inheritance; this layer paints links in the solo palette. */
-.content a {
-  color: #158bc2;
-}
-.content a:hover {
-  color: #106a94;
-}
+/* Content link color now comes from the shared `.content a` rule in
+   docs-theme-extras.css, which reads --theme-link / --theme-link-hover defined
+   above. Keeping the paint in the component layer is what gives dark mode a
+   link color at all: the rule this replaced hardcoded #158bc2 with no `.dark`
+   variant, so enterprise links were the one component that never flipped with
+   the theme. Brand-specific link VALUES still live here, in the token. */
 
 /* Docs-page column top spacing (sidebar / TOC / content alignment) is now
    centralized in docs-theme-extras.css for both brands — see the #content,
