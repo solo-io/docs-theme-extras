@@ -14,9 +14,8 @@
     "scan:gates": "node scripts/scan-gates.mjs"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.0",
-    "parse5": "^8.0.1",
+    "@playwright/test": "^1.62.1",
     "serve": "^14.2.4",
-    "smol-toml": "^1.7.1"
+    "smol-toml": "^1.8.0"
   }
 }
