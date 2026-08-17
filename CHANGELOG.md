@@ -26,22 +26,23 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 Work on the gating and reuse shortcodes producing markdown/HTML leaks in visible output — plus the consumer-override convergence that fixing it exposed.
 
-**`solo-io/docs` needs a paired change in the same PR as its pin bump.** A pin bump on its
-own is not enough here, and would leave the hub worse than before. The hub must delete, in
-the same PR:
 
-- the ordered-list counter block in `assets/css/custom.css` (kept, it shadows the fix);
-- `layouts/_shortcodes/reuse.html` (its `flatten-rendered` call is now in the module);
-- `assets/css/main.css`, `assets/js/core/toc-scroll.js`, `assets/js/flexsearch.js`
-  (byte-identical duplicates of module files — all three are already gone from `main` as of
-  the "Theme updates" commit; listed here so a rebase does not reintroduce them).
+### Fix — CI failed on every build because `package.json` never declared the `parse5` dev dependency it uses (`package.json`, `package-lock.json`)
 
-**`agentgateway-oss-website` also needs a paired change** — see the breaking entry below.
-Its `layouts/_shortcodes/reuse.html` is a stale 59-line fork that shadows the module, so it
-never applies the gate-form normalization. Measured: with the fork in place the site builds
-**598 markdown leaks**; deleting it takes the same build to **0** (152/152 content tests).
-
-No other consumer needs a paired change. Details in the individual entries below.
+- **Why.** `tests/helpers/ancestor-path.ts` (added for the gate-containment work below) imports
+  `parse5`, and at some point it ended up resolvable in `node_modules`/`package-lock.json`
+  without ever being added to `package.json`'s `devDependencies`. Hugo's `hugo mod npm pack`
+  compares the two and fails the build with `WARN npm dependencies are out of sync`, which
+  `tests/hugo-warnings.spec.ts` treats as a hard failure — so both `brand (oss)` and
+  `brand (enterprise)` CI jobs went red on this PR. A later `package-lock.json` regeneration
+  (adding the `packages/hugoautogen` npm workspace) then dropped the undeclared `parse5`
+  entry from the lockfile entirely, which would have made `gate-containment.spec.ts` fail to
+  even resolve its import on a clean `npm ci`.
+- **What changed.** Added `"parse5": "^8.0.1"` to `devDependencies`, reran `npm install` and
+  `hugo mod npm pack` to resync `packages/hugoautogen/hugo_packagemeta.json`.
+- **Verified.** `hugo160 --config hugo-oss.toml --gc` / `--config hugo-enterprise.toml --gc`
+  no longer warn about npm sync; full `test-oss` and `test-content` suites pass on both
+  brands (1636/1636, 3 skipped) with a clean `npm install`.
 
 ### Fix — `link-hextra` works on sites whose docs are not at the URL root, so two consumers can stop forking it (`layouts/_shortcodes/link-hextra.html`, `tests/link-hextra-{lts-version,lang-prefix}.spec.ts`)
 
@@ -103,8 +104,8 @@ No other consumer needs a paired change. Details in the individual entries below
   contained `<pre`, so a percent-form reuse of a snippet with a fenced code block returned REAL
   newlines — which terminate the enclosing list item. Measured: `</ol>` count between step 1 and
   step 3 went to **1** (list broken, step 3 restarting a new `<ol>`); with the pass enabled it is
-  **0**. The shape occurs **58 times in `solo-io/docs`** and once each in kgateway-oss and
-  agentgateway-oss-website.
+  **0**. The shape occurs **58 times in `docs`** and once each in kgateway oss and
+  agentgateway oss.
 - **The plan said not to fix it this way. The plan was out of date.** Item 7i read *"do NOT fix
   with `bypassPre: false` by analogy with `callout.html` … needs its own design"*, because the
   bypass was documented as protecting Chroma output — flattening was said to turn `\`
@@ -214,7 +215,7 @@ No other consumer needs a paired change. Details in the individual entries below
   rendered document. Added to `tests/HAZARDS.md` as #7: **"present in the served bytes" is not
   "rendered to the reader."**
 
-### Fix — content defects in `solo-io/docs` unblocked by the v0.1.26 `<ol start>` fix (no module change)
+### Fix — content defects unblocked by the v0.1.26 `<ol start>` fix (no module change)
 
 - **The istio "Global Services" step was duplicated into every tab** as a workaround for the
   pre-v0.1.26 bug where CSS counters ignored `<ol start>`. That fix shipped, so the workaround
@@ -243,8 +244,7 @@ No other consumer needs a paired change. Details in the individual entries below
   caught it.
 - **Two findings logged rather than fixed**, both pre-existing and neither caused by this work:
   the gateway keycloak settings table renders ~22KB downstream of its source, after the Cleanup
-  section (plan item 7o — same container-ejection family as
-  [solo-io/docs#3280](https://github.com/solo-io/docs/issues/3280), and adding a trailing
+  section and adding a trailing
   newline does NOT fix it); and the API-reference generators emit literal `<br />` inside code
   spans in **27 files**, so readers see the characters `<br />` printed in the docs (plan item
   7p — belongs in the generator, not a bulk content edit).
@@ -255,7 +255,7 @@ No other consumer needs a paired change. Details in the individual entries below
   "First draft" commit, **loaded by no template in any of the seven repos, nor by Hextra
   0.12.3.** Verified by grepping every `resources.Get` / `resources.Match` CSS lookup across
   all of them: each one is an explicit path, and none is `css/main.css` except
-  agentregistry-oss-website's — which resolves to that repo's OWN file, not this one.
+  agentregistry oss's — which resolves to that repo's OWN file, not this one.
 - **Marked breaking out of caution, not measurement.** Nothing observed loads it, but a
   consumer outside these seven that did `resources.Get "css/main.css"` and relied on the
   module's copy would lose it. Verified where it can be verified:
@@ -270,13 +270,13 @@ No other consumer needs a paired change. Details in the individual entries below
   keyframes, HSL tokens) read by that repo's own `layouts/_partials/css.html` — and **no other
   consumer ships a `css.html`, nor does Hextra 0.12.3**, whose entry is `styles.css`. It was
   supplying the only file that reads that path, not shadowing a theme file. With the module's
-  copy gone, agentregistry-oss-website is at **zero same-path shadows, zero duplicated
+  copy gone, agentregistry oss is at **zero same-path shadows, zero duplicated
   selectors, zero contract divergences** — the first consumer completely clean.
 - **A byte-count gap between two same-named files is not evidence of drift.** These two shared
   a filename and nothing else. Same mistake shape as reading `link-hextra` as a "587B stub vs
   6KB module file", which was also wrong.
 
-### Fix — the docs hub's `gloss` shortcode injected blank lines mid-sentence (`solo-io/docs`, no module change)
+### Fix — the docs hub's `gloss` shortcode injected blank lines mid-sentence
 
 - **Why.** The hub carried its own `layouts/_shortcodes/gloss.html`, functionally identical to
   the module's but **not flattened to a single line**. Every glossary term therefore emitted
@@ -315,7 +315,7 @@ No other consumer needs a paired change. Details in the individual entries below
 
 ### Add — a `scanRoots` that reads nothing is now an error, not a silent pass (`tests/helpers/config.ts`, `tests/scan-roots.spec.ts`)
 
-- **Why.** `solo-io/docs` shipped `scanRoots = ["./content/en/test", "./assets/conrefs/test"]`
+- **Why.** One consumer shipped `scanRoots = ["./content/en/test", "./assets/conrefs/test"]`
   — the extras FIXTURE's paths, copy-pasted. Neither has ever existed in that repo. The
   source-scanning specs skip only when `scanRoots` is **empty**, so two non-empty-but-wrong
   entries sailed through and walked zero files. Six author-side lints (`curl-quotes`,
@@ -332,8 +332,7 @@ No other consumer needs a paired change. Details in the individual entries below
   `getComputedStyle(el, "::before").content` returning the specified value rather than the
   resolved glyph. **Any new scanner needs a "found at least N targets" self-check**, or it
   certifies nothing while looking like it certifies everything.
-- **What it immediately found.** The hub's own roots were already fixed
-  (`solo-io/docs@71504016e`) and all six lints pass on its 11,025 files. But the two OSS
+- **What it immediately found.** The hub's own roots were already fixed and all six lints pass on its 11,025 files. But the two OSS
   consumers scan only `./content/docs` and **never scanned `./assets`** — 297 conref files on
   kgateway.dev and 392 on agentgateway.dev, which is exactly where reuse and gating problems
   live. Widening both configs surfaced 24 deprecated tab usages and 3 unanchored shortcode
@@ -377,7 +376,7 @@ No other consumer needs a paired change. Details in the individual entries below
   (67 fixture pages differed on whitespace alone); the trim markers were rebalanced
   until it was.
 - **Consumer action — already done in both OSS repos.** `kgateway-oss` and
-  `agentgateway-oss-website` deleted all four layout forks and now ship small slot
+  `agentgateway oss` deleted all four layout forks and now ship small slot
   overrides instead. Two things moved out of the layouts on the way: kgateway.dev's
   inline breadcrumb-hiding `<style>` and agentgateway.dev's inline
   `padding-top: 2.5rem` both went to `assets/css/custom.css`, where styling belongs.
@@ -433,7 +432,7 @@ No other consumer needs a paired change. Details in the individual entries below
   the one the fork produces, which is what makes the fork deletable. The remaining consumers
   (`ambientmesh.io`, `agentregistry`, `kagent`) declare no `linkVersion` at all, so the
   fallback leaves their output unchanged.
-- **Consumer action — done.** `agentgateway-oss-website/assets/js/flexsearch.js` is deleted
+- **Consumer action — done.** agentgateway oss `/assets/js/flexsearch.js` is deleted
   against the `v0.2.0-beta.2` pin. No other consumer had a fork of this file. Confirmed
   harmless by rebuilding: the search bundle keeps the **same fingerprint hash**, so the
   output is byte-identical. (Doing this *before* the bump would have reverted that site to an
@@ -452,7 +451,7 @@ No other consumer needs a paired change. Details in the individual entries below
   `version.html` and `conditional-text.html` therefore **guessed** the form from the shape of
   `.Inner` — six regex heuristics in `utils/inner-shape.html` selecting one of four emit
   strategies — while `reuse.html` and `rebase.html` regex-rewrote forms to nudge those
-  guesses. Every leak in [solo-io/docs#3280](https://github.com/solo-io/docs/issues/3280) is
+  guesses. Every leak is
   either a misfired guess or a **double render**: content that was already rendered getting
   parsed a second time.
 - **What changed.** One emit path. Both gates resolve their condition, then emit `.Inner`
@@ -474,14 +473,24 @@ No other consumer needs a paired change. Details in the individual entries below
   override, or port the block carrying the `GATE-FORM-NORMALIZATION-v1` sentinel into it.
   `tests/override-parity.spec.ts` fails until one of those happens. This is why the change
   is breaking rather than a patch.
-- **Verified.** 1779 fixture tests on both brands; all seven `solo-io/docs` products, plus
-  `kgateway-oss` (152/152) and `agentgateway-oss-website` (152/152 once its fork is
+- **Verified.** 1779 fixture tests on both brands; all seven enterprise products, plus
+  `kgateway oss` (152/152) and `agentgateway oss` (152/152 once its fork is
   deleted). No product has a `markdown-leaks` failure. Every remaining consumer failure is a
   pre-existing backlog item (the hub's `scanRoots` pointing at directories that do not
   exist; the `build-test.log` Makefile mismatch; `missing-images`; the `keycloak.md` tables).
 - Production page showing the class of bug this removes:
   [gloo-mesh-enterprise external-auth OPA BYO](https://docs.solo.io/gloo-mesh-enterprise/latest/security/external-auth/opa/opa-byo/)
   — see the Fix entry below for what is wrong on it.
+- **Added the one shape that no fixture covered:**
+  a `{{% version %}}` wrapping a heading, then `{{< tabs >}}`, then another heading, all in
+  one gate — the exact structure that ejected trailing headings out of `.content` on the
+  agentgateway OSS `jwt/setup` page before this refactor (the old `RenderString` re-parse of
+  already-expanded tabs HTML mis-nested a `<div>` and prematurely closed `.content`). Added
+  as Shape 15 in `fixture/content/en/test/v2/gate-transparency.md`, carrying a
+  `MARKER_SHAPE15_HEADING_AFTER_TABS` sentinel. Two independent checks now pin it:
+  `gate-transparency.spec.ts` (gated renders byte-identical to the tags-removed baseline) and
+  `gate-containment.spec.ts` (the sentinel's ancestor path resolves to
+  `main > div.content > p`, not bare `main`). Verified passing on both brands.
 
 ### Add — `OVERRIDES.md` and a re-runnable scanner for consumer files that shadow this module (`OVERRIDES.md`, `tests/helpers/scan-overrides.ts`)
 
@@ -505,13 +514,13 @@ No other consumer needs a paired change. Details in the individual entries below
      silently scopes any extras spec matching those classes to the fixture only.
 - `node tests/helpers/scan-overrides.mjs [--json]` regenerates the inventory from sibling
   consumer clones, so the snapshot can be re-derived rather than hand-maintained.
-- **What the first run found**, beyond the docs hub (resolved below): `agentgateway-oss-website`
+- **What the first run found**, beyond the docs hub (resolved below): `agentgateway oss`
   and `kgateway-oss` both override `layouts/docs/single.html` at a revision that never emits
   `page-badges`, `page-description`, `badge-*` or `section-card-badge`, so **those extras
   features do not render on those sites at all** — a capability gap, not cosmetic drift.
   `.hextra-toc` is redefined divergently by four of six consumers, which suggests the
   module's own default is wrong rather than four consumers each being wrong.
-  `agentregistry-oss-website` overrides `assets/css/main.css` with 1,863B against extras'
+  `agentregistry oss` overrides `assets/css/main.css` with 1,863B against extras'
   13,368B. None of these are addressed here; they are tracked as a cleanup backlog so each
   release stays bisectable.
 - No production page — this entry adds documentation and a scanner and changes no rendered
@@ -599,8 +608,8 @@ No other consumer needs a paired change. Details in the individual entries below
   CSS change above).
   The flatten does fire there — an unminified build of the same page carries 21 `&#10;`
   entities — it just leaves no trace after minification. 217 static + content tests pass.
-- `agentregistry-oss-website` and `kagent-oss-website` have **zero** percent-form `reuse`
-  calls, so they are unaffected. `agentgateway-oss-website` keeps its own stale
+- `agentregistry oss` and `kagent oss` have **zero** percent-form `reuse`
+  calls, so they are unaffected. `agentgateway oss` keeps its own stale
   `reuse.html` fork, so the fix does not reach it; it has 57 percent-form calls but none
   inside a list item with a multi-line target, so there is no live defect there to fix.
 - **Known limitation, deliberately not fixed here.** A snippet containing a **fenced code
@@ -755,7 +764,7 @@ No other consumer needs a paired change. Details in the individual entries below
   only asks a human to look. `!important` is compared before the value is canonicalized,
   because a rule matching extras' colour but adding `!important` is not interchangeable
   with it.
-- **The real cleanup this exposed.** `agentgateway-oss-website` and `kagent-oss-website`
+- **The real cleanup this exposed.** `agentgateway oss` and `kagent oss`
   carried the identical 10-selector block, copy-pasted between the two sites. Five were
   byte-identical to extras, two were the same colour in different notation, and only three
   carried a genuinely different value — the selected-tab underline (hardcoded
@@ -764,7 +773,7 @@ No other consumer needs a paired change. Details in the individual entries below
   the module and deleted from both consumers. Observable on
   [agentgateway docs](https://agentgateway.dev/docs/): the selected tab's underline now
   follows the brand token instead of a fixed blue.
-- **Verified** by computed-style diff on a real minified `agentgateway-oss-website` build,
+- **Verified** by computed-style diff on a real minified `agentgateway oss` build,
   two pages, light and dark: **6 differences across 12 snapshots, all three intended changes
   × both colour schemes, nothing incidental.** That also proved the `!important` on
   `.dark .sidebar-link.sidebar-active-item` was inert — the computed colour and background
@@ -772,9 +781,9 @@ No other consumer needs a paired change. Details in the individual entries below
   flagged selectors to **one real divergence**: ambientmesh's `.nav-container` font, which
   is its brand font and stays. Eleven new unit tests pin the comparison logic, including the
   `.hextra-toc` false positive that motivated the change.
-- Consumer edits are local to `agentgateway-oss-website` and `kagent-oss-website`; they need
+- Consumer edits are local to `agentgateway oss` and `kagent oss`; they need
   no pin bump, since deleting a duplicate just lets the module's existing rule apply.
-- **`agentgateway-oss-website` also dropped its `reuse-image` / `reuse-image-dark` forks**,
+- **`agentgateway oss` also dropped its `reuse-image` / `reuse-image-dark` forks**,
   which had to move as a set. extras emits `class="reuse-image-nodark"` on the light image
   and `class="toggle-light"` on the dark one, and the rule that stops both showing at once is
   `.dark .reuse-image-nodark:has(+ .toggle-light)`. agw's forks emitted `dark-only`, styled by
@@ -839,8 +848,8 @@ No other consumer needs a paired change. Details in the individual entries below
   section in `OVERRIDES.md`, and every same-path shadow must be named **inside that
   consumer's own section**.
 - **The section-scoping matters more than it sounds.** A document-wide name match passed on
-  the first run, then found three undescribed `agentgateway-oss-website` overrides once
-  scoped — `kgateway-oss` and `agentgateway-oss-website` both fork `navbar.html`, so one
+  the first run, then found three undescribed `agentgateway oss` overrides once
+  scoped — `kgateway-oss` and `agentgateway oss` both fork `navbar.html`, so one
   mention was vacuously satisfying both. `OVERRIDES.md` now tabulates all eight of that
   consumer's shadows individually.
 - **A sentinel check that arms itself.** A consumer forking `reuse.html` / `rebase.html`
@@ -853,7 +862,7 @@ No other consumer needs a paired change. Details in the individual entries below
   selector groups with a naive `sel.split(",")`, which tore `:where(.dark, .dark *)` into
   `:where(.dark` and `.dark *)` — the first can never match, the second is a phantom
   collision. Hextra v0.12 emits that shape heavily; it was inflating
-  `kagent-oss-website`'s duplicated-selector count by one. Splitting now tracks paren and
+  `kagent oss`'s duplicated-selector count by one. Splitting now tracks paren and
   bracket depth, with unit tests for pseudo-classes, attribute selectors and at-rules.
 - **Scope, stated plainly: the cross-repo half does NOT run in CI**, because it needs the
   consumer clones as siblings. It is a pre-release check for a developer machine, wired into
@@ -1453,7 +1462,7 @@ No other consumer needs a paired change. Details in the individual entries below
 
 ### Redirect
 
-- **New `redirect` shortcode — a client-side redirect for stub pages that have moved.** This centralizes the shortcode that previously lived only in `agentgateway-oss-website` (`layouts/_shortcodes/redirect.html`), where the MIGRATION_AUDIT had deferred it from phase 1. It emits an inline `<script>` that sets `window.location`, a `<noscript>` `<meta http-equiv="refresh">` fallback, and a visible "Redirecting to …" link, so a page that has moved bounces readers (and, via the meta-refresh/link, no-JS clients and crawlers) to the canonical location. It accepts a URL three ways: positional (`{{< redirect "/some/url" >}}`), named (`{{< redirect url="/some/url" >}}`), or section-relative (`{{< redirect path="/tutorials/basic/" >}}`). The one change from the agw copy is the `path=` resolution: the original hardcoded an agw-only regex (`^/docs/(?:kubernetes|standalone)/[^/]+`) to find the version-scoped section prefix, which wouldn't resolve on any other product's section layout (e.g. kgateway's `/docs/envoy/`). The centralized version resolves through `utils/page-context.html` instead — the same prefix `card.html` and the `link` shortcodes already use — so it works for every section the partial knows about (kubernetes, standalone, envoy, agentgateway, …) and falls back to `FirstSection.RelPermalink` for pages outside the `/docs/<section>/<version>/` shape. Because agw is already configured for `page-context` (its `card.html` depends on it), this is behavior-preserving for the existing agw redirect pages while generalizing to the other consumers. A `redirect` fixture page (`fixture/content/en/test/v2/redirect.md`, kept out of the harness `[[pages]]` list and resolved by direct path) plus `tests/redirect.spec.ts` guard both forms: that the `url=` form emits the script/noscript/link verbatim, and that the `path=` form resolves to the section-prefixed URL (`/everything/` → `/test/v2/everything/`) rather than leaking the bare path. The fixture's redirect targets point at a real page so the browser-smoke crawl that opens every built page lands somewhere valid instead of aborting `page.goto`. Example of the shortcode in production (an old LLM-provider stub that redirects to its new home): [agentgateway — OpenAI integration](https://agentgateway.dev/docs/standalone/latest/integrations/llm-providers/openai/).
+- **New `redirect` shortcode — a client-side redirect for stub pages that have moved.** This centralizes the shortcode that previously lived only in `agentgateway oss` (`layouts/_shortcodes/redirect.html`), where the MIGRATION_AUDIT had deferred it from phase 1. It emits an inline `<script>` that sets `window.location`, a `<noscript>` `<meta http-equiv="refresh">` fallback, and a visible "Redirecting to …" link, so a page that has moved bounces readers (and, via the meta-refresh/link, no-JS clients and crawlers) to the canonical location. It accepts a URL three ways: positional (`{{< redirect "/some/url" >}}`), named (`{{< redirect url="/some/url" >}}`), or section-relative (`{{< redirect path="/tutorials/basic/" >}}`). The one change from the agw copy is the `path=` resolution: the original hardcoded an agw-only regex (`^/docs/(?:kubernetes|standalone)/[^/]+`) to find the version-scoped section prefix, which wouldn't resolve on any other product's section layout (e.g. kgateway's `/docs/envoy/`). The centralized version resolves through `utils/page-context.html` instead — the same prefix `card.html` and the `link` shortcodes already use — so it works for every section the partial knows about (kubernetes, standalone, envoy, agentgateway, …) and falls back to `FirstSection.RelPermalink` for pages outside the `/docs/<section>/<version>/` shape. Because agw is already configured for `page-context` (its `card.html` depends on it), this is behavior-preserving for the existing agw redirect pages while generalizing to the other consumers. A `redirect` fixture page (`fixture/content/en/test/v2/redirect.md`, kept out of the harness `[[pages]]` list and resolved by direct path) plus `tests/redirect.spec.ts` guard both forms: that the `url=` form emits the script/noscript/link verbatim, and that the `path=` form resolves to the section-prefixed URL (`/everything/` → `/test/v2/everything/`) rather than leaking the bare path. The fixture's redirect targets point at a real page so the browser-smoke crawl that opens every built page lands somewhere valid instead of aborting `page.goto`. Example of the shortcode in production (an old LLM-provider stub that redirects to its new home): [agentgateway — OpenAI integration](https://agentgateway.dev/docs/standalone/latest/integrations/llm-providers/openai/).
 
 ### Language switcher
 
@@ -1619,7 +1628,7 @@ This release merges the kgateway.dev theme into the shared module, centralizes t
 
 ### Sidebar
 
-- Replaced the sidebar with a unified mobile-aware implementation shared across kgateway.dev and agentgateway-oss-website.
+- Replaced the sidebar with a unified mobile-aware implementation shared across kgateway.dev and agentgateway oss.
 - At < 1280px, the sidebar becomes a slide-in panel (300ms ease-in-out from the left) triggered by a hamburger button in the breadcrumb row. A semi-transparent overlay closes the panel on tap.
 - The panel includes mobile-only section and version chip rows, driven by `site.Params.sections`.
 - Sidebar section expand/collapse state is persisted to `localStorage` per branch.
@@ -1687,7 +1696,7 @@ This release merges the kgateway.dev theme into the shared module, centralizes t
 
 The module reaches feature parity with the per-repo overrides previously
 maintained inline in the docs hub and
-[agentgateway-oss-website](https://github.com/agentgateway/website).
+[agentgateway oss](https://github.com/agentgateway/website).
 
 ### Module surface
 
