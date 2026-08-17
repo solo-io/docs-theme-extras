@@ -32,7 +32,6 @@
   "agentgateway-oss-website": {
    "samePath": [
     "layouts/_partials/navbar.html",
-    "layouts/_shortcodes/openapi.html",
     "layouts/partials/announcement.html"
    ],
    "duplicatedSelectors": []

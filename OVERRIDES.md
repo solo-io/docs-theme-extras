@@ -48,7 +48,7 @@ layouts, which is the opposite of the signal this table is for.
 |---|---|---|---|---|---|
 | docs | 2 | 0 | 0 | 0 | 1 |
 | kgateway-oss | 1 | 2 | 0 | 0 | 1 |
-| agentgateway-oss-website | 3 | 5 | 0 | 0 | 2 |
+| agentgateway-oss-website | 2 | 5 | 0 | 0 | 2 |
 | agentregistry-oss-website | 0 | 0 | 0 | 0 | 0 |
 | kagent-oss-website | 0 | 0 | 0 | 0 | 0 |
 | ambientmesh.io | 0 | 0 | 1 | 1 | 0 |
@@ -63,8 +63,8 @@ kgateway.dev a visible page subtitle on 856 pages. Full contract in `USAGE.md`.
 
 For history, the counts before this round of cleanup were: docs 8 shadows / 169 duplicated
 selectors, kgateway-oss 4 / 1, agentgateway-oss 9 / 12, agentregistry 1 / 0, kagent 0 / 13,
-ambientmesh 0 / 3. Unsanctioned template shadows are now **6 across all six consumers**,
-down from 22: 2 on docs, 1 on kgateway-oss, 3 on agentgateway-oss, 0 elsewhere. Every one
+ambientmesh 0 / 3. Unsanctioned template shadows are now **5 across all six consumers**,
+down from 22: 2 on docs, 1 on kgateway-oss, 2 on agentgateway-oss, 0 elsewhere. Every one
 that remains has a measured verdict saying why it stays. **CSS duplication is now zero everywhere except one deliberate brand
 font.** What remains is same-path template shadows, which are a separate and harder problem
 — several are load-bearing, not stale.
@@ -241,7 +241,7 @@ carries a measured verdict instead of a byte count.
 | `layouts/partials/docs/width-class.html` | **SLOT OVERRIDE — sanctioned.** `utils/page-width` plus the `agw-docs-topgap` hook class |
 | `layouts/partials/docs/content-class.html` | **SLOT OVERRIDE — sanctioned.** `hx:pt-2` rather than the default `hx:pt-6` |
 | `layouts/partials/docs/after-title.html` | **SLOT OVERRIDE — sanctioned.** `test-status-badge.html`. Inert today: that partial currently emits nothing on any page |
-| `layouts/_shortcodes/openapi.html` | **2 pages.** agw's fork emits a full standalone `<!doctype html>` document; extras emits an embedded fragment. Small enough to decide cheaply, not yet decided |
+| ~~`layouts/_shortcodes/openapi.html`~~ | **DELETED 2026-08-17 — it was emitting invalid HTML.** Affects **7** pages, not the 2 recorded here before. Measured by deleting the fork and diffing the whole build: exactly those 7 pages change out of 2,237, nothing else. The fork emits a complete standalone document *inside* the docs page template, so every one of those pages shipped with **2 `<!doctype>`, 2 `<html>` and 2 `<body>` tags**; extras' version emits a fragment and the page has 1 of each. Browser-checked side by side on `/docs/kubernetes/latest/llm/guardrails/webhook/openapi-spec/`: both render Swagger UI with 2 operations and the same live title ("GuardRail Webhook API 0.1.0 OAS 3.1"), and both carry the same 2 pre-existing `invalid_request` page errors, so nothing regressed. Extras' version is also a strict superset on network resilience (`try` 6 vs 2, `timeout` 5 vs 4, `warnf` 5 vs 3, `GetRemote` 4 vs 1, plus a client-side unpkg fallback) and adds `src=` for a local spec. `make framework-test` after deletion: 2455 passed, 0 failed (4 flaky, all `console-errors` on unrelated pages) |
 
 **Resolved (v0.2.0-beta.3):** `layouts/docs/single.html` and `layouts/docs/list.html`
 deleted, replaced by the five slot overrides above. Verified feature-by-feature on a
