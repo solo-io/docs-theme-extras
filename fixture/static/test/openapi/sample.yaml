@@ -9,3 +9,8 @@ paths:
       responses:
         '200':
           description: OK
+    post:
+      summary: MARKER_OPENAPI_POST sample endpoint
+      responses:
+        '200':
+          description: OK
