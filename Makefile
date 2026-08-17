@@ -44,11 +44,20 @@ server-enterprise: clear-cache
 # Production-shaped baseURL ("/test") so paths match what consumer repos
 # emit. Each brand has its own publishDir so they don't clobber each other.
 
+# Hugo's publishDir ("public-<brand>/test") only ever emits under the "/test"
+# baseURL path, so a literal root-absolute reference in content (e.g.
+# "/images/logo.svg", meant to resolve at true domain root regardless of the
+# docs subpath) has nowhere to land. The harness's builtRoot ("public-<brand>",
+# see fixture/.docs-test-*.toml) is the parent of that "test" dir precisely to
+# give such assets a place to live — mirror fixture/static there too so
+# card-image.spec.ts's ROOTED case has a real file to resolve against.
 build-oss:
 	$(HUGO) --config hugo-oss.toml --gc 2> .build-oss.log
+	cp -r fixture/static/images public-oss/images
 
 build-enterprise:
 	$(HUGO) --config hugo-enterprise.toml --gc 2> .build-enterprise.log
+	cp -r fixture/static/images public-enterprise/images
 
 # ── Tests against the bundled fixture ────────────────────────────────────
 
