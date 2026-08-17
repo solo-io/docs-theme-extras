@@ -93,17 +93,14 @@ test.describe("link-hextra path shapes", () => {
     expect(hrefFor(html(), "SHAPE_EXPLICIT_V1")).toBe("/test/v1/everything/");
   });
 
-  // PINNED AS BROKEN, not as desired behavior. `path` must start with a slash:
-  // without one the version segment and the path fuse into `/test/v2everything/`.
-  // Nothing warns. If someone makes this emit a valid URL, delete this test —
-  // but do it deliberately, because the fix changes every call site that
-  // currently compensates.
-  test("a path with no leading slash fuses with the version and breaks", () => {
-    expect(
-      hrefFor(html(), "SHAPE_NO_LEADING"),
-      "if this now resolves, `path` no longer requires a leading slash — " +
-        "update USAGE.md and remove this test",
-    ).toBe("/test/v2everything/");
+  // Was PINNED AS BROKEN: `path` with no leading slash used to fuse with the
+  // version segment into `/test/v2everything/`, silently. Fixed by
+  // normalizing a missing leading slash in link-hextra.html — a docs-hub-wide
+  // scan found dozens of real, currently-working `link path="foo/"` call
+  // sites (link forwards here now) that only worked because `link`'s old
+  // implementation always inserted the separator itself.
+  test("a path with no leading slash is normalized, not fused", () => {
+    expect(hrefFor(html(), "SHAPE_NO_LEADING")).toBe("/test/v2/everything/");
   });
 
   test("a doubled slash is collapsed", () => {
@@ -115,13 +112,18 @@ test.describe("link-hextra path shapes", () => {
 // catch the "wrong argument name" class of bug that motivated the whole spec.
 test.describe("link-hextra parameter contract", () => {
   test("takes exactly path, version and product — no link/url/href", () => {
-    const file = path.resolve(__dirname, "../layouts/_shortcodes/link-hextra.html");
+    const file = path.resolve(__dirname, "../layouts/_partials/utils/resolve-link.html");
     test.skip(!fs.existsSync(file), "module-relative path only");
     const src = fs
       .readFileSync(file, "utf8")
       .replace(/\{\{-?\s*\/\*[\s\S]*?\*\/\s*-?\}\}/g, "");
 
-    const params = [...src.matchAll(/\.Get\s+"([a-zA-Z]+)"/g)].map((m) => m[1]);
+    // Excludes `.Store.Get`/`.Params.Get`-style calls, which are a different
+    // Hugo API (page store / params map) than the shortcode's own `.Get`
+    // call-argument reader this test is scoping to.
+    const params = [...src.matchAll(/(?<!Store)(?<!Params)\.Get\s+"([a-zA-Z]+)"/g)].map(
+      (m) => m[1],
+    );
     expect([...new Set(params)].sort()).toEqual(["path", "product", "version"]);
 
     // An external URL is not a supported input: there is no parameter to pass
@@ -137,7 +139,7 @@ test.describe("link-hextra parameter contract", () => {
   });
 
   test("an empty path warns instead of silently emitting the version root", () => {
-    const file = path.resolve(__dirname, "../layouts/_shortcodes/link-hextra.html");
+    const file = path.resolve(__dirname, "../layouts/_partials/utils/resolve-link.html");
     test.skip(!fs.existsSync(file), "module-relative path only");
     const src = fs.readFileSync(file, "utf8");
     expect(

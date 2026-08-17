@@ -35,10 +35,8 @@
 {{- /* Chroma linenos=table: keep code cell, drop line-number cell. */ -}}
 {{- $html = $html | replaceRE `(?s)<table class="lntable"><tr><td class="lntd">\s*<pre[^>]*><code><span class="lnt">.*?</td>\s*<td class="lntd">\s*(<pre[^>]*><code[^>]*>.*?</code></pre>)\s*</td>\s*</tr>\s*</table>` "$1" -}}
 
-{{- /* Tabs: strip button bar, unhide all panels, inject panel labels. */ -}}
-{{- $html = $html | replaceRE `(?s)<div[^>]*role="tablist"[^>]*>.*?</div>` "" -}}
-{{- $html = $html | replaceRE `aria-hidden="true"` "" -}}
-{{- $html = $html | replaceRE `<div class="hextra-tabs-panel[^"]*"[^>]*aria-labelledby="([^"]*)"[^>]*>` `<div style="display:block"><p><strong>Option: $1</strong></p>` -}}
+{{- /* Tabs: unhide via the shared partial (also used by book/PDF stitching). */ -}}
+{{- $html = partial "utils/unhide-tabs.html" $html -}}
 
 {{- /* Pre-convert data tables to GFM. transform.HTMLToMarkdown flattens some
        tables (e.g. github-table schema tables) to pipe-less text, so we build

@@ -25,7 +25,7 @@ import path from "node:path";
 
 const SHORTCODE = path.resolve(
   __dirname,
-  "../layouts/_shortcodes/link-hextra.html",
+  "../layouts/_partials/utils/resolve-link.html",
 );
 
 // Strip Go/Hugo template comments (`{{- /* … */ -}}`) so the assertions match

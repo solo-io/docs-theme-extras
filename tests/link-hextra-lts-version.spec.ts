@@ -38,7 +38,7 @@ import path from "node:path";
 
 const SHORTCODE = path.resolve(
   __dirname,
-  "../layouts/_shortcodes/link-hextra.html",
+  "../layouts/_partials/utils/resolve-link.html",
 );
 
 // Strip Go/Hugo template comments (`{{- /* … */ -}}`) so the assertions match
@@ -66,7 +66,7 @@ function versionPattern(src: string): RegExp {
  * Mirror of the template's segment walk: find the first path segment that looks
  * like a version, and return it plus everything before it.
  *
- * Kept in step with `layouts/_shortcodes/link-hextra.html` by construction — the
+ * Kept in step with `layouts/_partials/utils/resolve-link.html` by construction — the
  * regex is read out of that file rather than duplicated here, so the two cannot
  * drift on the part that actually decides what counts as a version.
  */

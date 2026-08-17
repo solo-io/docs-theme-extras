@@ -161,8 +161,13 @@ first segment that matches a known version wins.
 {{/* Adjust any relative doc links if needed */}}
 {{ $clean = replaceRE `\((\/?)docs\/` "(/" $clean }}
 
-{{/* Replace link and reuse shortcodes to pass version */}}
+{{/* Replace link and reuse shortcodes to pass version. `link` gets the same
+     injection as link-hextra (which it now forwards to) so rebased content
+     using either name resolves consistently — see link.html. The `link\s+`
+     pattern requires whitespace right after "link" so it can't also match
+     `link-hextra`. */}}
 {{ $clean = replaceRE `{{<\s*link-hextra\s*(.*?)>}}` (printf "{{< link-hextra $1 version=\"%s\" product=\"%s\" >}}" $version $product ) $clean }}
+{{ $clean = replaceRE `{{<\s*link\s+(.*?)>}}` (printf "{{< link $1 version=\"%s\" product=\"%s\" >}}" $version $product ) $clean }}
 {{ $clean = replaceRE `{{<\s*reuse\s*"([^"]+)"\s*>}}` (printf "{{< reuse \"%s\" \"%s\" \"%s\" >}}" "$1" $version $product ) $clean }}
 
 {{/* ─── Stage 5: VERSION REMAP ──────────────────────────────────────── */}}

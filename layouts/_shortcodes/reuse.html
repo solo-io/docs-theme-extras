@@ -61,8 +61,14 @@
 
 {{- /* Inject parent version into nested link/reuse shortcodes */ -}}
 {{- if $parentVersion -}}
-  {{- /* Add version to link shortcodes */ -}}
+  {{- /* Add version to link shortcodes. `link` gets the same treatment as
+         link-hextra (which it now forwards to) — otherwise a `link` call in
+         reused content would render with no version/product context and fall
+         back to inferring from `.Page`, which is unreliable inside this
+         RenderString context. The `link\s+` pattern requires whitespace right
+         after "link" so it can't also match `link-hextra`. */ -}}
   {{- $content = replaceRE `{{<\s*link-hextra\s*(.*?)>}}` (printf "{{< link-hextra $1 version=\"%s\" product=\"%s\" >}}" $parentVersion $parentProduct ) $content -}}
+  {{- $content = replaceRE `{{<\s*link\s+(.*?)>}}` (printf "{{< link $1 version=\"%s\" product=\"%s\" >}}" $parentVersion $parentProduct ) $content -}}
   {{- $content = replaceRE `{{<\s*reuse\s*"([^"]+)"\s*>}}` (printf "{{< reuse \"%s\" \"%s\" \"%s\" >}}" "$1" $parentVersion $parentProduct ) $content -}}
   {{- /* keepVersion: preserve version string, inject parent version, convert to {{% %}} */ -}}
   {{- $content = replaceRE `\{\{<\s*(version\s+(?:include|exclude)-if="[^"]+?")\s+keepVersion="true"\s*>}}` (printf `{{%% $1 version="%s" %%}}` $parentVersion) $content -}}

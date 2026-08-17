@@ -1,0 +1,13 @@
+{{- /* Unhides Hextra tab panels for linear-reading contexts that have no JS to
+       switch between them (markdown export, "Copy as Markdown", PDF/book
+       stitching): strips the tab button bar, removes aria-hidden, and forces
+       every panel visible with an injected "Option: X" label.
+
+       Usage: {{ $html = partial "utils/unhide-tabs.html" $html }}
+       Input/output is HTML as a string (or template.HTML); the caller marks
+       the result safeHTML again if re-emitting as markup. */ -}}
+{{- $html := . -}}
+{{- $html = $html | replaceRE `(?s)<div[^>]*role="tablist"[^>]*>.*?</div>` "" -}}
+{{- $html = $html | replaceRE `aria-hidden="true"` "" -}}
+{{- $html = $html | replaceRE `<div class="hextra-tabs-panel[^"]*"[^>]*aria-labelledby="([^"]*)"[^>]*>` `<div style="display:block"><p><strong>Option: $1</strong></p>` -}}
+{{- return $html -}}

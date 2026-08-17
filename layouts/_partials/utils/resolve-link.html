@@ -1,0 +1,259 @@
+{{- /* resolve-link.html — shared implementation for the `link` and
+       `link-hextra` shortcodes (both are now a single-line `partial` call
+       into this file, passing their own shortcode context `.` straight
+       through unchanged).
+
+       WHY A PARTIAL AND NOT "link calls link-hextra" (the alert→callout
+       pattern): alert/callout render HTML with a markdown body that
+       legitimately needs to re-enter the outer page's markdown engine, so
+       building a `{{< callout ... >}}` string and re-expanding it via
+       `.Page.RenderString` is the right tool there. link-hextra's output is
+       a bare URL string — there is no markdown to reprocess. Routing it
+       through RenderString anyway added a layer of shortcode-in-string
+       re-expansion, and that broke version inference specifically when a
+       `link` call sits inside content already evaluated via RenderString
+       (e.g. a `card` shortcode's own RenderString pass over a backtick-quoted
+       `link=` attribute value): `.Page.RelPermalink` inside the doubly-nested
+       context stopped reflecting the actual calling page, so inference fell
+       back to "latest" (measured: tests/shortcode-contexts.spec.ts). A
+       partial call doesn't cross that boundary — same `.Page`, same context,
+       all the way through — so it doesn't have this failure mode. */ -}}
+{{- $path := .Get "path" -}}
+{{- $ver := .Get "version" -}}
+{{- $product := .Get "product" -}}
+{{- /* Translation export mode: emit a placeholder that restores to the source
+       shortcode form AFTER HTMLToMarkdown. Both `link` and `link-hextra`
+       normalize to a `link-hextra` shortcode in the translation snapshot —
+       the same "alias reduces to the canonical name" convention alert uses
+       for callout. Only the params actually passed are captured; version/
+       product left unset re-infer correctly on the translated page's own
+       permalink. */ -}}
+{{- if eq hugo.Environment "translation" -}}
+  {{- $attrs := printf "path=%q" $path -}}
+  {{- if ne $ver "" }}{{ $attrs = printf "%s version=%q" $attrs $ver }}{{ end -}}
+  {{- if ne $product "" }}{{ $attrs = printf "%s product=%q" $attrs $product }}{{ end -}}
+  {{- $reg := .Page.Store.Get "transReg" | default slice -}}
+  {{- $ph := printf "XTRANSPH%dX" (len $reg) -}}
+  {{- $reg = $reg | append (dict "ph" $ph "text" (printf "{{< link-hextra %s >}}" $attrs)) -}}
+  {{- .Page.Store.Set "transReg" $reg -}}
+  {{- $ph -}}
+{{- else -}}
+{{- /* An empty `path` is almost always a misspelled parameter name, and it fails
+       QUIETLY: the shortcode happily emits a bare version root, which is often a
+       real page, so nothing 404s and nobody notices the link goes to the wrong
+       place. Found on agentgateway.dev, where two pages had been calling
+       `{{< link-hextra link="https://…" >}}` — `link` is not a parameter here,
+       so `path` was empty and the emitted href was the section root rather than
+       the intended cross-flavor target. Warn rather than error: `path=""` is a
+       legitimate, if unusual, way to link to the version root itself. */ -}}
+{{- if not $path -}}
+  {{- warnf "%s on %s got an empty `path`. Check the parameter name — this shortcode takes `path`, not `link` or `url`. It will emit the bare version root." .Name .Page.RelPermalink -}}
+{{- end -}}
+{{- /* A path with no leading slash used to fuse silently with the version
+       segment (`/2.1.x` + `quickstart/` → `/2.1.xquickstart/`) — documented in
+       USAGE.md as a known trap rather than a footgun worth guarding against.
+       `link` forwards here now, and a docs-hub-wide scan turned up dozens of
+       real, currently-working `link path="foo/bar/"` call sites (kgateway,
+       agentregistry, gateway, gloo-mesh-*, istio, JA translations) that only
+       worked because `link`'s old implementation always inserted the
+       separator itself. Normalizing here, once, fixes those call sites AND
+       closes the same trap for any existing `link-hextra` caller that had
+       quietly hit it too. */ -}}
+{{- if and $path (not (hasPrefix $path "/")) -}}
+  {{- $path = printf "/%s" $path -}}
+{{- end -}}
+{{- $finalURL := "" -}}
+{{- /* The site-relative prefix that sits BEFORE the version segment on the
+       current page, e.g. "/docs/envoy". Empty on the docs hub, where the
+       product lives in baseURL instead. See the derivation below. */ -}}
+{{- $versionRoot := "" -}}
+{{- /* Sites with no `site.Params.versions` at all (ambientmesh.io, and any
+       other single-tree site with no per-version URL structure) have no
+       version to resolve, full stop — not a missed inference, an absent
+       concept. `link` forwarding here made every one of their plain
+       `link path="/foo/"` calls hit the "could not infer a version" warning
+       and fall back to a nonexistent `/latest/` prefix. Checked once, up
+       front, so both the inference attempt below and the fallback can skip
+       cleanly instead of guessing "latest" for a site that has no such
+       directory. */ -}}
+{{- /* `range` over an unset Params key is a safe no-op in Hugo templates;
+       `len` on the same unset value is NOT — it panics with "reflect: call
+       of reflect.Value.Type on zero Value" specifically inside the
+       EXECUTE-AS-TEMPLATE re-execution Hugo does for flexsearch's
+       search-data.json (ambientmesh.io, which has no `versions` param at
+       all). Counting via range avoids the crash entirely. */ -}}
+{{- $siteHasVersioning := false -}}
+{{- range $.Site.Params.versions -}}
+  {{- $siteHasVersioning = true -}}
+{{- end -}}
+
+{{- /* If no version was passed (typical when called from inside a reuse-included */ -}}
+{{- /* snippet that the rebase shortcode didn't rewrite), infer from the current page's */ -}}
+{{- /* permalink so links resolve to the same product/version as the page they appear on. */ -}}
+{{- /* Strip the baseURL path prefix first so the regex sees a site-relative URL regardless */ -}}
+{{- /* of whether this is a full-docs build (baseURL "/") or a single-product preview */ -}}
+{{- /* build (baseURL "/kgateway", "/agentgateway", etc.). */ -}}
+{{- if not $ver -}}
+  {{- $relURL := .Page.RelPermalink -}}
+  {{- $baseURLPath := replaceRE `^https?://[^/]*` "" .Site.BaseURL | strings.TrimSuffix "/" -}}
+  {{- if $baseURLPath -}}
+    {{- $relURL = strings.TrimPrefix $baseURLPath $relURL -}}
+  {{- end -}}
+  {{- /* Strip the language prefix (e.g. `/ja`) so version inference works on */ -}}
+  {{- /* localized pages. A JA page permalink is /<product>/ja/<version>/… (full */ -}}
+  {{- /* build) or /ja/<version>/… (single-product build); neither regex below */ -}}
+  {{- /* expects the language segment, so without this the version can't be inferred */ -}}
+  {{- /* and the link falls back to "latest". `.Site.LanguagePrefix` is empty for the */ -}}
+  {{- /* default language, so this is a no-op there. */ -}}
+  {{- with .Site.LanguagePrefix -}}
+    {{- $relURL = replace $relURL (printf "%s/" .) "/" -}}
+  {{- end -}}
+  {{- /* Find the VERSION SEGMENT by walking path segments, and remember
+         everything before it as the version root.
+
+         This replaced two regexes — one anchored to a known product name
+         (`kgateway|agentgateway|gateway|envoy`), one anchored to the start of
+         the URL — that between them only recognized the docs hub's URL shape.
+         Neither matches an OSS site: agentgateway.dev serves
+         `/docs/standalone/latest/…` and `/docs/kubernetes/1.1.x/…`, where no
+         segment is a known product name and the version is not first. So the
+         version could not be inferred at all there, the shortcode fell through
+         to the "latest" fallback, and every link was wrong. That is why both
+         agentgateway-oss-website and kgateway-oss carried their own fork of
+         this file rather than using the module's.
+
+         Walking segments handles every shape uniformly:
+
+           /2.1.x/foo/                  ver 2.1.x   root ""            (hub)
+           /kgateway/2.1.x/foo/         ver 2.1.x   root /kgateway     (hub, full build)
+           /docs/envoy/2.1.x/foo/       ver 2.1.x   root /docs/envoy   (kgateway.dev)
+           /docs/standalone/latest/foo/ ver latest  root /docs/standalone (agentgateway.dev)
+
+         The hub is unaffected because its baseURL carries the product
+         (`https://docs.solo.io/kgateway/`) and the block above already strips
+         that prefix, so by the time we get here its URLs start at the version
+         and the root comes out empty — byte-identical to the old two regexes.
+
+         Versions are either `X.Y.x` (2.3.x) or fully qualified `X.Y.Z`
+         (2026.7.1, LTS), plus the moving names `latest` and `main`. Only the
+         FIRST matching segment counts, so a later path component that happens
+         to be called `main` cannot hijack the match.
+
+         A segment also counts if it matches `site.Params.versions[].version`
+         (or `.linkVersion`) outright — the SAME check reuse.html and
+         rebase.html already use to detect a version segment for their own
+         injection. Sites are free to name versions however they like there
+         (this fixture uses `v1`/`v2`, which fits neither the regex nor any
+         real production version string), so the regex alone under-recognizes
+         anything a site explicitly configured as a version. Checked first,
+         since an explicit configured match is more trustworthy than a shape
+         guess. */ -}}
+  {{- $configuredVersions := slice -}}
+  {{- range $.Site.Params.versions -}}
+    {{- $configuredVersions = $configuredVersions | append .version -}}
+    {{- with .linkVersion -}}{{- $configuredVersions = $configuredVersions | append . -}}{{- end -}}
+  {{- end -}}
+  {{- $segs := split (strings.TrimPrefix "/" $relURL) "/" -}}
+  {{- $verIdx := -1 -}}
+  {{- range $i, $s := $segs -}}
+    {{- if lt $verIdx 0 -}}
+      {{- if or (in $configuredVersions $s) (findRE `^(?:\d+\.\d+\.(?:x|\d+)|latest|main)$` $s 1) -}}
+        {{- $verIdx = $i -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if ge $verIdx 0 -}}
+    {{- $ver = index $segs $verIdx -}}
+    {{- if gt $verIdx 0 -}}
+      {{- $versionRoot = printf "/%s" (delimit (first $verIdx $segs) "/") -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if and (not $ver) $siteHasVersioning -}}
+  {{- /* Last-resort fallback so something is always emitted, but log a warning.
+         Only reached when the site DOES version its docs and this page's URL
+         still didn't match — a genuine inference miss worth flagging. A site
+         with no versioning at all never reaches here; see $siteHasVersioning
+         above, and the assembly step below, which leaves $ver empty rather
+         than inserting a nonexistent "latest" segment. */ -}}
+  {{- warnf "%s called with no version and could not infer one from %q (path=%q)" .Name .Page.RelPermalink $path -}}
+  {{- $ver = "latest" -}}
+{{- end -}}
+
+{{- if and (in $path "agentgateway") (eq $ver "2.1.x") -}}
+  {{- $path = replace $path "agentgateway/" "" -}}
+{{- end -}}
+{{- /* Route OSS single-page reference/api anchors to the enterprise reference
+       subpages. The OSS site serves one reference/api page, so its anchors are
+       correct as-is; the enterprise site splits the reference into subpages
+       (kgateway, solo, portal, waf), so a bare /reference/api/#x must be routed
+       to a subpage. Applies to every enterprise version, not just 2.1.x.
+
+       Two signals mark an enterprise build:
+         - $product == "envoy": injected by the rebase shortcode (rebased pages).
+         - currentProduct == "kgateway": set on the enterprise kgateway site
+           config (covers reuse-based pages, which get no rebase-injected product).
+       The OSS kgateway.dev config sets neither, so OSS anchors stay untouched.
+       The agentgateway branch stays product-only, to avoid assuming anything
+       about the agentgateway OSS site config. Links that already target a
+       subpage are left alone so re-routing can't double up the path. */ -}}
+{{- if in $path "reference/api" -}}
+  {{- $curProduct := .Site.Params.currentProduct | default "" -}}
+  {{- /* `reference/api-kubespec` is a sibling section, not the single-page
+         reference/api, so the substring match above catches it by accident.
+         Treating it as already-routed leaves paths like
+         /reference/api-kubespec/policies/ intact instead of mangling them into
+         /reference/api/api-kubespec/policies/. */ -}}
+  {{- $alreadyRouted := or (in $path "reference/api/kgateway") (in $path "reference/api/solo") (in $path "reference/api/portal") (in $path "reference/api/waf") (in $path "reference/api/api") (in $path "reference/api/kubernetes") (in $path "reference/api-") -}}
+  {{- if not $alreadyRouted -}}
+    {{- if or (eq $product "envoy") (eq $curProduct "kgateway") -}}
+      {{- $path = replace $path "reference/api" "/reference/api/kgateway" -}}
+    {{- else if eq $product "agentgateway" -}}
+      {{- $path = replace $path "reference/api" "/reference/api/api" -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* Route the OSS agentgateway CEL reference to the enterprise one. OSS splits
+       the CEL reference into /reference/cel/variables/ and
+       /reference/cel/yaml-and-examples/; the enterprise docs serve a single
+       /reference/cel/ page that carries the same anchors (for example
+       #functions-policy-all). Gated on the rebase-injected product so the OSS
+       site, which has no product param, keeps its own paths. */ -}}
+{{- if and (eq $product "agentgateway") (in $path "reference/cel/") -}}
+  {{- $path = replaceRE `reference/cel/(variables|yaml-and-examples)/?` "reference/cel/" $path -}}
+{{- end -}}
+
+{{- /* Assemble as <origin><versionRoot>/<version><path>.
+
+       `$versionRoot` is empty on the docs hub, so this is the same string the
+       previous two-branch version produced. On an OSS site it carries the
+       `/docs/<flavor>` prefix the page actually lives under, which is the whole
+       point: without it a link from /docs/envoy/2.1.x/foo/ to /quickstart/ came
+       out as /2.1.x/quickstart/, a 404. Measured on kgateway.dev, 637 pages. */ -}}
+{{- if or (eq .Site.BaseURL "/") (in .Site.BaseURL "localhost") -}}
+{{- $finalURL = printf "%s/%s%s" $versionRoot $ver $path -}}
+{{- else -}}
+{{- $finalURL = printf "%s%s/%s%s" .Site.BaseURL $versionRoot $ver $path -}}
+{{- end -}}
+
+{{- /* Append a slash if the link is not a fragment */ -}}
+{{- if not (strings.Contains $finalURL "#") -}}
+  {{- $finalURL = printf "%s/" $finalURL -}}
+{{- end -}}
+
+
+{{- /* Replace all double slashes with single slashes as a safety measure */ -}}
+{{- /* Preserve the protocol separator (://) by temporarily replacing it */ -}}
+{{- $finalURL = replace $finalURL "://" "__PROTOCOL_SEPARATOR__" -}}
+{{- /* Loop until no more double slashes exist (max 10 iterations for safety) */ -}}
+{{- range $i := (seq 10) -}}
+  {{- if (strings.Contains $finalURL "//") -}}
+    {{- $finalURL = replace $finalURL "//" "/" -}}
+  {{- end -}}
+{{- end -}}
+{{- /* Restore the protocol separator */ -}}
+{{- $finalURL = replace $finalURL "__PROTOCOL_SEPARATOR__" "://" -}}
+{{- $finalURL -}}
+{{- end -}}

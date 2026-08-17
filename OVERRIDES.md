@@ -51,7 +51,7 @@ layouts, which is the opposite of the signal this table is for.
 | agentgateway-oss-website | 2 | 5 | 0 | 0 | 2 |
 | agentregistry-oss-website | 0 | 0 | 0 | 0 | 0 |
 | kagent-oss-website | 0 | 0 | 0 | 0 | 0 |
-| ambientmesh.io | 0 | 0 | 1 | 1 | 0 |
+| ambientmesh.io | 0 | 0 | 2 | 2 | 0 |
 
 ## Extension slots
 
@@ -325,12 +325,13 @@ docs, `go.mod`, and the extras pin all live under `kagent-oss-website/docs-site/
 doesn't use the module at all. `tests/helpers/scan-overrides.ts` already knows this; this note exists so
 a human doing the same check by hand doesn't draw the same wrong conclusion.
 
-No same-path shadows and no contract divergences. One accepted duplicated selector, on
+No same-path shadows and no contract divergences. Two accepted duplicated selectors, on
 ambientmesh only:
 
 | Selector | Why it stays |
 | --- | --- |
 | `custom.css :: .nav-container` | `font-family: Figtree` where extras sets `Open Sans`. ambientmesh's brand font, deliberately different |
+| `print-book.css :: body` | `font-family`/`line-height`/`color` for the Paged.js PDF-export pilot (`list.book.html`), deliberately different from the on-screen brand font extras sets. Not the same stylesheet as extras' own `@media print` block, which only hides UI chrome for single-page browser printing — see the comment at the top of `print-book.css` |
 
 ### The CSS duplication that used to be listed here, and why the count fell to one
 

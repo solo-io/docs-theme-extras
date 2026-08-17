@@ -274,6 +274,69 @@ Work on the gating and reuse shortcodes producing markdown/HTML leaks in visible
   output. Verified by running the scanner against all six consumer clones and hand-checking
   its docs-hub output against the `custom.css` cleanup below, which it drove.
 
+### Fix — `link` is now an alias for `link-hextra`, so it stops silently mis-resolving reused/rebased content (`layouts/_shortcodes/{link,link-hextra,reuse,rebase}.html`, `layouts/_partials/utils/resolve-link.html`, `USAGE.md`)
+
+- **Why.** `link` resolved `path` against `.Page.FirstSection.RelPermalink` — no notion of
+  version or product. That happens to work on the docs hub, where a product's own build treats
+  the version as the true top-level section, but not on a standalone OSS site (kgateway.dev,
+  agentgateway.dev), where one build serves multiple doc flavors under path segments several
+  levels deep. `link` also had no equivalent of `link-hextra`'s product-aware `reference/api` /
+  `reference/cel` cross-flavor routing, and `reuse.html` / `rebase.html` only ever injected the
+  `version`/`product` args they compute into `link-hextra` calls, never into `link` calls — so a
+  `link` call inside content pulled across products via `rebase` had no way to land on the right
+  page. Measured on a live page: [Request retries](https://docs.solo.io/kgateway/2.3.x/resiliency/retry/retry/)
+  rebases `conrefs/kgateway/envoy/main/resiliency/retry/retry.md`, which reuses a `link
+  path="/quickstart/"` snippet; before this fix the rendered "Get started guide" link was
+  `https://kgateway.dev/kgateway/2.3.x/quickstart/` — the OSS site's domain glued to the
+  enterprise site's path shape, a broken URL that had shipped silently because nothing 404s on a
+  mixed domain/path until a reader actually clicks it.
+- **What changed.** `link` and `link-hextra` now share one implementation,
+  `utils/resolve-link.html`, called via a plain `partial` from both shortcode files (not the
+  `alert`-calls-`callout` pattern of building a shortcode string and re-expanding it through
+  `RenderString` — link-hextra's output is a bare URL with no markdown to reprocess, and routing
+  it through RenderString anyway broke version inference inside doubly-nested contexts, such as a
+  `card` shortcode's own RenderString evaluation of a backtick-quoted `link=` attribute; a plain
+  partial call passes `.Page` straight through instead). `reuse.html` and `rebase.html` now inject
+  `version`/`product` into `link` calls exactly as they already did for `link-hextra`. Two
+  supporting fixes surfaced by the merge: a `path` with no leading slash used to fuse silently
+  with the version segment (documented as a known trap); it's now normalized for both names,
+  since a docs-hub-wide scan found dozens of real `link path="foo/"` call sites (kgateway,
+  agentregistry, gateway, gloo-mesh-*, istio, JA translations) that only worked because `link`'s
+  old implementation always inserted the separator itself. Version inference also now checks a
+  segment against the site's own configured `site.Params.versions` (the same check `reuse.html` /
+  `rebase.html` already use), not just the hardcoded `X.Y.x`/`latest`/`main` shape regex, so a site
+  free to name its versions however it likes is recognized correctly either way.
+- **`link` keeps `link-hextra`'s existing production behavior, including absolute URLs.**
+  `link-hextra` has always emitted a full `https://docs.solo.io/...` URL (rather than a
+  root-relative `/kgateway/...` one) whenever a build's `baseURL` is a real domain, which is true
+  of every docs-hub production build (preview and local builds use path-only baseURLs, so they're
+  unaffected). `link` now inherits that identically — this was a deliberate call, not an
+  oversight, made after surfacing that it changes ~1,000 hrefs per docs-hub product build from
+  root-relative to absolute on the next rebuild. Nothing 404s either way.
+- **A site with no versioning at all is not a missed inference — there is no version to find.**
+  Forwarding `link` here meant every plain `link path="/foo/"` call on a single-tree site with no
+  `site.Params.versions` (ambientmesh.io) hit "could not infer a version" and fell back to a
+  `/latest/` prefix that does not exist on that site. Worse, the naive fix — checking
+  `gt (len $.Site.Params.versions) 0` — crashed the ambientmesh.io build outright:
+  `len` on a completely unset Params key panics with "reflect: call of reflect.Value.Type on zero
+  Value" specifically inside the `EXECUTE-AS-TEMPLATE` re-execution Hugo does for flexsearch's
+  `search-data.json`, even though `range` over the same unset value is a safe no-op elsewhere in
+  this same file. Counting via `range` instead avoids the crash. A site with no configured
+  versions now resolves `link`/`link-hextra` with no version segment at all and no warning —
+  confirmed on a real page, [Migrate a sidecar to ambient](https://ambientmesh.io/docs/setup/sidecar-migration/)
+  (`{{< link path="/setup/add-workloads/" >}}`), which resolves to `/setup/add-workloads/` with a
+  clean `hugo160 --gc` build log (previously two WARNs and, before the `range` fix, a hard build
+  error).
+- **Verified.** Full `test-all` suite (both OSS and enterprise fixtures, `static` + `content`
+  projects): 1,464 + 170 passed on each brand, 0 failed, 0 unexpected warnings. Real builds:
+  kgateway-oss (2,860 pages) diffs byte-identical against its pre-change baseline outside
+  `llms.txt` timestamps. The docs hub's kgateway product (1,842 pages) diffs on 1,036 pages,
+  entirely explained by the accepted absolute-URL change above and by broken `kgateway.dev`/
+  `docs.solo.io` domain-mixing links like the retry-page example being corrected — spot-checked
+  across the diff for any newly-introduced `/latest/` fallback or unexpected domain; found none.
+  ambientmesh.io (no `site.Params.versions`) builds clean with `hugo160 --gc`, no warnings, no
+  errors.
+
 ### Fix — link and accent TEXT gets its own contrast-safe token, so it stops failing WCAG AA (`assets/css/brand-{oss,enterprise}.css`, `assets/css/docs-theme-extras.css`, `layouts/_shortcodes/openapi.html`, `tests/contrast.spec.ts`)
 
 - **Enterprise body links could not pass WCAG AA against any background at all. `#158bc2` has a relative luminance of 0.2252, which caps it at 3.82:1 even on pure white — below the 4.5:1 floor for normal-size text (WCAG 1.4.3) — so every link in the enterprise docs body, every active tab label, and every section-card title failed, down to 3.29:1 inside a `.alert-default` callout.** No background adjustment could rescue it; the color itself had to change. The root cause is that one `--theme-primary` was serving two jobs with different floors: text needs 4.5:1, while icons, borders, and other non-text UI need only 3:1 (1.4.11). A single value cannot satisfy both without over-darkening every accent in the theme. Both brand layers now define `--theme-link` / `--theme-link-hover` alongside `--theme-primary`, with `.dark` overrides, and only the text-bearing rules were repointed at them: `.content a`, `.version-banner a`, `.docs-tab-active`, `.hextra-tabs-toggle[data-state="selected"]`, `.sidebar-mobile-tab-active`, and the `copy-md-btn` / `version-dropdown` hover states. Alert icons, `.section-card-icon`, and every accent border stay on `--theme-primary`, which already clears the 3:1 they are held to.
