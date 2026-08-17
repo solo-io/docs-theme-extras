@@ -190,3 +190,35 @@ Body text under the gated heading.
 ### Heading inside a gate
 
 Body text under the gated heading.
+
+## Shape 15 gated
+
+{{% version include-if="v2" %}}
+### Heading before tabs
+
+Body text before the tabs.
+
+{{< tabs >}}
+{{% tab name="Alpha" %}}Alpha panel body.{{% /tab %}}
+{{% tab name="Beta" %}}Beta panel body.{{% /tab %}}
+{{< /tabs >}}
+
+### Heading after tabs
+
+MARKER_SHAPE15_HEADING_AFTER_TABS. Body text after the tabs, inside the same gate.
+{{% /version %}}
+
+## Shape 15 baseline
+
+### Heading before tabs
+
+Body text before the tabs.
+
+{{< tabs >}}
+{{% tab name="Alpha" %}}Alpha panel body.{{% /tab %}}
+{{% tab name="Beta" %}}Beta panel body.{{% /tab %}}
+{{< /tabs >}}
+
+### Heading after tabs
+
+MARKER_SHAPE15_HEADING_AFTER_TABS. Body text after the tabs, inside the same gate.

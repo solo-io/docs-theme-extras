@@ -862,6 +862,9 @@
     "MARKER_VERSION_WRAPAROUND_COMMENT": "div.hextra-max-page-width > article > main > div.content > div.hextra-code-block > div > div.highlight > pre > code > span.line > span.cl > span.c",
     "MARKER_VERSION_WRAPAROUND_FN": "div.hextra-max-page-width > article > main > div.content > div.hextra-code-block > div > div.highlight > pre > code > span.line > span.cl > span.l"
   },
+  "v2/gate-transparency": {
+    "MARKER_SHAPE15_HEADING_AFTER_TABS": "div.hextra-max-page-width > article > main > div.content > p"
+  },
   "v2/nav-group/child": {
     "MARKER_NAVGROUP_CHILD": "div.hextra-max-page-width > article > main > div.content > p"
   },
