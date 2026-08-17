@@ -316,7 +316,14 @@ byte-identical copy of the same dead file, with no effect, which corroborates th
 of drift. These two shared a filename and nothing else. Same mistake shape as the `link-hextra`
 "587B stub vs 6KB module file" reading, which also turned out to be wrong.
 
-### kagent-oss-website and ambientmesh.io
+### kagent oss and ambientmesh.io
+
+**kagent oss' Hugo root is `docs-site/`, not the repo root.** The repo root is a
+Next.js marketing site (`next.config.mjs`, `open-next.config.ts`, no `go.mod`) — the Hugo
+docs, `go.mod`, and the extras pin all live under `kagent-oss-website/docs-site/`. Point
+`scan:overrides` (and any manual `hugo`/`git` check) there, or it looks like this consumer
+doesn't use the module at all. `tests/helpers/scan-overrides.ts` already knows this; this note exists so
+a human doing the same check by hand doesn't draw the same wrong conclusion.
 
 No same-path shadows and no contract divergences. One accepted duplicated selector, on
 ambientmesh only:

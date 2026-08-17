@@ -115,7 +115,7 @@ test.describe("card shortcode image attribute", () => {
         c.title.includes("MARKER_CARD_IMAGE_ROOTED"),
       );
       expect(card, `no ROOTED card in ${label}`).toBeDefined();
-      expect(card!.imageSrc).toBe("/test/images/logos/logo-oss-test.svg");
+      expect(card!.imageSrc).toBe("/images/logos/logo-oss-test.svg");
       const resolved = fileForResolvedSrc(card!.imageSrc!);
       expect(
         fs.existsSync(resolved),
