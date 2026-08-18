@@ -1,0 +1,34 @@
+{{- /*
+  Used by layouts/docs/list.book.html (the PDF-export book pipeline).
+  Markdown authors write body headings assuming their own page title sits at
+  h1 — a page's first in-body heading is `##`/h2, its subsections `###`/h3,
+  and so on. The book template instead gives each chapter's page title a
+  heading tag chosen by its depth in the doc tree (book-chapter-tree's
+  $level), so a page nested a few levels deep gets, say, an h4 chapter
+  title. Left alone, that page's own h2 body heading would render bigger
+  than the h4 title containing it — backwards from how a reader expects a
+  heading hierarchy to look.
+
+  This shifts every h1-h6 in a chapter's rendered content down by $shift
+  (book-chapter-tree passes $depth + 1, so a body's h2 lands one level below
+  that chapter's own title tag), capping at h6 since HTML has nothing deeper.
+
+  Two-pass rewrite: first move every original hN to a placeholder hxN' (N'
+  already shift-adjusted and capped), using a tag prefix ("hx") no original
+  tag can match, so a level touched early in the loop is never re-matched by
+  a later iteration targeting a different original level. Second pass strips
+  the placeholder prefix. A single-pass rewrite (h2->h3, h3->h4, ...) would
+  double-shift anything that lands on a level processed earlier in the loop.
+*/ -}}
+{{- $html := .html -}}
+{{- $shift := .shift -}}
+{{- range seq 1 6 -}}
+  {{- $level := . -}}
+  {{- $new := add $level $shift -}}
+  {{- if gt $new 6 }}{{ $new = 6 }}{{ end -}}
+  {{- $html = $html | replaceRE (printf `<h%d(\s|>)` $level) (printf "<hx%d$1" $new) -}}
+  {{- $html = $html | replaceRE (printf `</h%d>` $level) (printf "</hx%d>" $new) -}}
+{{- end -}}
+{{- $html = $html | replaceRE `<hx([1-6])` `<h$1` -}}
+{{- $html = $html | replaceRE `</hx([1-6])>` `</h$1>` -}}
+{{- return $html -}}

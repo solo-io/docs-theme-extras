@@ -325,13 +325,17 @@ docs, `go.mod`, and the extras pin all live under `kagent-oss-website/docs-site/
 doesn't use the module at all. `tests/helpers/scan-overrides.ts` already knows this; this note exists so
 a human doing the same check by hand doesn't draw the same wrong conclusion.
 
-No same-path shadows and no contract divergences. Two accepted duplicated selectors, on
+No same-path shadows and no contract divergences. One accepted duplicated selector, on
 ambientmesh only:
 
 | Selector | Why it stays |
 | --- | --- |
 | `custom.css :: .nav-container` | `font-family: Figtree` where extras sets `Open Sans`. ambientmesh's brand font, deliberately different |
-| `print-book.css :: body` | `font-family`/`line-height`/`color` for the Paged.js PDF-export pilot (`list.book.html`), deliberately different from the on-screen brand font extras sets. Not the same stylesheet as extras' own `@media print` block, which only hides UI chrome for single-page browser printing — see the comment at the top of `print-book.css` |
+
+`print-book.css` (the Paged.js PDF-export book pipeline, `layouts/docs/list.book.html`) used
+to be listed here as an ambientmesh-only override; both files now live in this module
+(`assets/css/print-book.css`, `layouts/docs/list.book.html`) since the pattern proved out, so
+there's no longer a same-path shadow to note — ambientmesh.io carries no local copy of either.
 
 ### The CSS duplication that used to be listed here, and why the count fell to one
 
