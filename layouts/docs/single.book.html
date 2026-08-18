@@ -1,0 +1,10 @@
+{{- /* Leaf-page (no _index.md, no children) entry point for the `book`
+       output format — see _partials/docs/book-document.html for everything
+       this actually does. layouts/docs/list.book.html is this file's twin
+       for a section/list page; both exist because Hugo resolves an output
+       format's template per page KIND. A leaf page opting into `outputs:
+       ["html", "book"]` should also set `bookChunkRoot: true`, or it gets
+       no chapter at all (book-chapter-tree's default branch walks
+       $page.Pages, which is always empty for a leaf page) — an empty book
+       with a cover and TOC but no content. */ -}}
+{{- partial "docs/book-document.html" . -}}

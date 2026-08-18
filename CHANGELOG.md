@@ -327,6 +327,79 @@ Work on the gating and reuse shortcodes producing markdown/HTML leaks in visible
   kgateway-oss — the first versioned consumer, and the first consumer other than ambientmesh.io
   to try it at all. Fixed in `v0.2.0-beta.9`.
 
+### Add — the PDF pipeline can chunk a docset too big for Paged.js into several PDFs and merge them, so a versioned site's docs aren't limited to ambientmesh.io's book size (`scripts/render-pdf.mjs`, `layouts/_partials/docs/book-document.html`, `layouts/docs/{list,single}.book.html`)
+
+- **Why.** Trying the single-document pipeline above against kgateway-oss's `latest` version
+  docset (253 pages, 7.3MB stitched HTML) never completed pagination — not in 60 seconds, not
+  in 5 minutes, with no JS error. Bisecting individual subsections (12 pages: 1.5s; 84 pages:
+  25s — already worse than linear) confirmed this isn't a bad page poisoning the whole
+  document, and a web search turned up others hitting the identical wall independently around
+  150-200 pages, with WeasyPrint (a completely different, non-browser rendering engine)
+  reporting the same category of problem and the same community-recommended fix: split into
+  pieces, generate separate PDFs, merge them back together. This is apparently inherent to
+  monolithic CSS Paged Media rendering, not a Paged.js-specific defect.
+- **How it works.** A consumer opts in per top-level SECTION instead of once at the version
+  root — each section page sets `outputs: ["html", "book"]` plus new `bookChunkRoot: true`
+  front matter (see below), producing its own independent `book.html`. `render-pdf.mjs` now
+  accepts `PDF_BOOK_PATHS` (plural, comma-separated) instead of a single path, renders each one
+  through the same pipeline as before (own link rewriting, own pagination), then merges the
+  resulting PDFs with `pdf-lib` and combines their outline trees (offsetting each chunk's
+  page indices by the running total of pages before it) into one continuous bookmark tree.
+  `PDF_BOOK_PATH` (singular) keeps working unchanged for a single-document book like
+  ambientmesh.io's, and takes a fast path that skips pdf-lib's `copyPages` round-trip entirely
+  — verified byte-for-byte equivalent in page count and outline structure to the pre-chunking
+  output (238 pages, 50 TOC entries, identical both before and after this change).
+- **`bookChunkRoot: true`** makes the opted-in page's own title render as the first
+  chapter/TOC entry before recursing into its children, instead of starting silently at its
+  children the way a true book root does. Without it, a merged multi-chunk PDF loses its
+  section groupings entirely — a flat run of subsections with no heading marking which
+  top-level section they came from, since a section landing page was never itself a chapter
+  in the single-document design (only its children were, walked from the true root).
+- **New `layouts/docs/single.book.html`, and the refactor into `_partials/docs/book-document.html`.**
+  A LEAF page (no `_index.md`, no children — kgateway's `quickstart.md`/`faqs.md`) opting into
+  the `book` output format silently fell back to the site's normal HTML template instead of
+  erroring, since Hugo resolves an output format's template per page KIND and this module only
+  ever shipped a `list.book.html` (for section/branch pages). Caught because the resulting
+  chunk had no `<script src=".../paged.polyfill.js">` at all — Paged.js was never loaded, so
+  `window.PagedPolyfill` was undefined at pagination time. Fixed by extracting the actual body
+  into a shared partial both `list.book.html` and the new `single.book.html` call, rather than
+  duplicating ~200 lines of template between them.
+- **Also fixed while testing this: a same-origin, out-of-book link resolved to the throwaway
+  local Playwright server instead of the production host** (`scripts/render-pdf.mjs`'s link
+  rewriter set `a.href` to a root-relative path instead of an absolute URL in its
+  not-in-this-document fallback branch). This is the exact dead-link bug the whole rewrite
+  exists to prevent, but it never triggered against ambientmesh.io's single-document book
+  (nothing in it links to a same-origin page outside the book at all) — a multi-chunk build
+  exposed it immediately, since every cross-chunk reference to a same-origin page hits this
+  exact branch. Fixed by using the already-constructed `URL` object's own `.href` (which
+  already carries the correct origin) instead of re-assembling one without it.
+- **Cross-chunk internal references intentionally do NOT become in-PDF jumps** — a link whose
+  target ended up in a different chunk than its source has no matching element in that chunk's
+  own DOM, so the existing link-rewriter (unchanged) simply doesn't find it and falls through
+  to the external-URL branch above, exactly like a link genuinely outside the book. Building
+  real cross-chunk jumps would mean mapping link screen positions to PDF coordinates across
+  separately-rendered documents and adding manual GoTo annotations after merging — decided
+  against for now as materially bigger and more fragile than the rest of this feature combined.
+- **Continuous page numbers across chunks are NOT attempted.** Paged.js's own `counter-reset:
+  page N` support for this has open, unresolved bug reports independent of this project. Each
+  chunk's printed footer shows its own local page count instead — a known, cosmetic-only
+  mismatch against the actual PDF page a reader's viewer reports, since the real navigation
+  (bookmarks, the offset-adjusted outline tree above) uses actual PDF page objects and stays
+  correct regardless of what text is printed in any page's footer.
+- **Chunking by section, not by a page-count budget, is a real trade-off, not a universal fix.**
+  kgateway's `latest` docset (biggest section: 84 pages) and agentgateway's `kubernetes/main`
+  (biggest: 53 pages) both stay comfortably under the ~150-200 page ceiling with this scheme.
+  But `gloo-mesh-enterprise/main/reference` in the Solo.io docs hub already has 209 markdown
+  files today — a single section already past the same ceiling that broke kgateway's whole
+  tree. A consumer whose sections can grow this large will eventually need to split that
+  section's own `outputs` opt-in further; this module doesn't do that automatically.
+- **No production page yet, same as the pipeline above** — not shipped to any live site.
+  **Verified locally**: `make pdf`-equivalent run against a real kgateway-oss checkout (14
+  section chunks: quickstart, about, install, setup, traffic-management, resiliency, security,
+  observability, operations, reference, integrations, migrate, faqs, ai) produced a single
+  merged 1709-page PDF with 14 top-level bookmarks (one per section, each pointing at the right
+  absolute page) in 28 seconds total — the same docset that never finished as one document.
+
 ### Fix — an unhidden tab panel is labeled with its real tab name, not the internal DOM id its `aria-labelledby` pointed at (`layouts/_partials/utils/unhide-tabs.html`)
 
 - **Why.** Linear-reading contexts (markdown export, PDF/book stitching) unhide every Hextra
