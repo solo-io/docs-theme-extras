@@ -274,27 +274,34 @@ Work on the gating and reuse shortcodes producing markdown/HTML leaks in visible
   output. Verified by running the scanner against all six consumer clones and hand-checking
   its docs-hub output against the `custom.css` cleanup below, which it drove.
 
-### Add — a Paged.js PDF-export book pipeline, so a docs section can ship a downloadable PDF alongside the site (`layouts/docs/list.book.html`, `assets/css/print-book.css`, `layouts/_partials/utils/shift-headings.html`)
+### Add — a Paged.js PDF-export book pipeline, so a docs section can ship a downloadable PDF alongside the site (`layouts/docs/list.book.html`, `assets/css/print-book.css`, `layouts/_partials/utils/shift-headings.html`, `scripts/render-pdf.mjs`)
 
 - **Why.** ambientmesh.io wanted a single downloadable PDF of its entire docs section, and
   nothing in this module (or any consumer) stitched a Hugo docs tree into one paginated
   document. Piloted entirely site-local first (see ambientmesh.io's own history) — a new Hugo
   `book` output format, a template that walks the docs tree depth-first into one long HTML
-  document, and a print stylesheet for Paged.js (driven by a consumer's own Playwright script)
-  to paginate into a PDF. Moved here once the pattern proved out on a real site, so the next
-  consumer that wants this doesn't re-solve the same problems: real tab names surviving into
-  the linearized output (shared with `unhide-tabs.html`, see below), heading levels that don't
-  invert when a section nests a few levels deep, empty section-landing pages reading as a
-  stray page break instead of a deliberate divider, running-header breadcrumbs that don't leak
-  a stale value onto the next top-level section, and internal cross-references becoming real
-  in-PDF jumps instead of round-tripping through the internet for a page the reader is already
-  holding.
-- **What does NOT move here, and why.** The `book` output format's `outputFormats` block
+  document, and a print stylesheet for Paged.js (driven by a Playwright script) to paginate
+  into a PDF. Moved here once the pattern proved out on a real site, so the next consumer that
+  wants this doesn't re-solve the same problems: real tab names surviving into the linearized
+  output (shared with `unhide-tabs.html`, see below), heading levels that don't invert when a
+  section nests a few levels deep, empty section-landing pages reading as a stray page break
+  instead of a deliberate divider, running-header breadcrumbs that don't leak a stale value
+  onto the next top-level section, and internal cross-references becoming real in-PDF jumps
+  instead of round-tripping through the internet for a page the reader is already holding.
+- **`scripts/render-pdf.mjs` is included, but not as a Hugo module mount** — `module.mounts` in
+  `hugo.toml` only covers `layouts`/`assets`/`data`, so this file is never pulled into a
+  consumer's build; it just rides along in the git repo as fetchable content. A consumer's own
+  Makefile curls it from GitHub, pinned to whatever version its `go.mod` already requires for
+  this module (`https://raw.githubusercontent.com/solo-io/docs-theme-extras/<version>/scripts/render-pdf.mjs`),
+  so the `go.mod` bump stays the single version pin — no second Makefile variable to drift out
+  of sync with it. Two site-specific constants that were hardcoded during the pilot
+  (`PROD_HOST`, `BOOK_PATH`) are now `PDF_PROD_HOST`/`PDF_BOOK_PATH` env vars the consumer's
+  Makefile passes in, so the fetched file itself needs no editing per consumer.
+- **What still does NOT move here, and why.** The `book` output format's `outputFormats` block
   (hugo.yaml top-level config isn't merged from an imported module), a page's own
-  `outputs: ["html", "book"]` front-matter opt-in, and the whole Node/Playwright render
-  pipeline (`scripts/render-pdf.mjs`, the Makefile target, `playwright`/`pagedjs`/`pdf-lib` in
-  `package.json`) all stay in the consumer — Hugo modules distribute `layouts`/`assets`/`data`,
-  not arbitrary Node tooling or top-level site config.
+  `outputs: ["html", "book"]` front-matter opt-in, and `playwright`/`pdf-lib` as npm
+  devDependencies (Node resolves `node_modules` relative to the invoking project, not to
+  wherever the curled script landed) all stay in the consumer.
 - **Known limitation.** Proven so far only on a flat, unversioned site (ambientmesh.io, one
   fixed docs root, no `site.Params.versions`). A version line is already wired into the cover
   and footer conditionally (resolves to nothing when a site has no versions), but proper
@@ -302,9 +309,10 @@ Work on the gating and reuse shortcodes producing markdown/HTML leaks in visible
   done — see the comments in `list.book.html` for the exact gap.
 - **No production page yet** — the PDF pilot hasn't shipped to ambientmesh.io's live site
   (checked <https://ambientmesh.io/docs/> directly: no PDF download link or mention there today).
-  **Verified locally**: `make pdf` in an ambientmesh.io checkout (this module referenced via a
-  local `replace`) produces a byte-identical PDF to the pre-move site-local version — same page
-  count, same chapter/bookmark structure, same internal/external link split.
+  **Verified locally**: `make pdf` in an ambientmesh.io checkout, fetching this module's
+  `render-pdf.mjs` by its pinned `go.mod` version instead of the old site-local copy, produces a
+  byte-identical PDF to the pre-move version — same page count, same chapter/bookmark structure,
+  same internal/external link split.
 
 ### Fix — an unhidden tab panel is labeled with its real tab name, not the internal DOM id its `aria-labelledby` pointed at (`layouts/_partials/utils/unhide-tabs.html`)
 

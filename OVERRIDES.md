@@ -336,6 +336,10 @@ ambientmesh only:
 to be listed here as an ambientmesh-only override; both files now live in this module
 (`assets/css/print-book.css`, `layouts/docs/list.book.html`) since the pattern proved out, so
 there's no longer a same-path shadow to note — ambientmesh.io carries no local copy of either.
+The pipeline's `scripts/render-pdf.mjs` followed the same way, but isn't a module mount at all
+(`module.mounts` in `hugo.toml` only covers `layouts`/`assets`/`data`) — a consumer's Makefile
+curls it from GitHub instead, pinned to its own `go.mod` version for this module, so there's
+never a local copy to fall out of sync in the first place. See the CHANGELOG entry for details.
 
 ### The CSS duplication that used to be listed here, and why the count fell to one
 
