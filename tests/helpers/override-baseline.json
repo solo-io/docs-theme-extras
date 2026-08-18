@@ -47,8 +47,7 @@
   "ambientmesh.io": {
    "samePath": [],
    "duplicatedSelectors": [
-    "custom.css :: .nav-container",
-    "print-book.css :: body"
+    "custom.css :: .nav-container"
    ]
   }
  }
