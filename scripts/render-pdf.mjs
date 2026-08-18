@@ -146,7 +146,7 @@ async function addOutline(pdfBytes, outlineTree) {
 }
 
 async function main() {
-  if (!fs.existsSync(path.join(PUBLIC_DIR, "docs", "book.html"))) {
+  if (!fs.existsSync(path.join(PUBLIC_DIR, BOOK_PATH))) {
     throw new Error(`${BOOK_PATH} not found under public/ — build the site with the "book" output format first.`);
   }
   fs.mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
