@@ -313,6 +313,12 @@ Work on the gating and reuse shortcodes producing markdown/HTML leaks in visible
   `render-pdf.mjs` by its pinned `go.mod` version instead of the old site-local copy, produces a
   byte-identical PDF to the pre-move version — same page count, same chapter/bookmark structure,
   same internal/external link split.
+- **`v0.2.0-beta.7` shipped a wrong Makefile-snippet example** in this file's own header comment:
+  `awk '{print $2}'` on a `require github.com/x/y v1.2.3` line grabs the module path, not the
+  version — the leading `require` keyword shifts every field over by one, so it needed `$3`.
+  Caught immediately by actually running the snippet against ambientmesh.io's real `go.mod`
+  (curl 404'd on the module path instead of a version string) before it reached any real
+  consumer's committed Makefile; fixed in `v0.2.0-beta.8`.
 
 ### Fix — an unhidden tab panel is labeled with its real tab name, not the internal DOM id its `aria-labelledby` pointed at (`layouts/_partials/utils/unhide-tabs.html`)
 
