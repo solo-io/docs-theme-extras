@@ -5,7 +5,7 @@
 // GitHub, pinned to whatever version its go.mod already requires for
 // docs-theme-extras, e.g.:
 //
-//   RENDER_PDF_VERSION := $(shell awk '/solo-io\/docs-theme-extras/ {print $$2}' go.mod)
+//   RENDER_PDF_VERSION := $(shell awk '/solo-io\/docs-theme-extras/ {print $$3}' go.mod)
 //   RENDER_PDF_SCRIPT  := .pdf-tools/render-pdf-$(RENDER_PDF_VERSION).mjs
 //   ...
 //   test -f $(RENDER_PDF_SCRIPT) || curl -fsSL https://raw.githubusercontent.com/solo-io/docs-theme-extras/$(RENDER_PDF_VERSION)/scripts/render-pdf.mjs -o $(RENDER_PDF_SCRIPT)
