@@ -108,6 +108,21 @@
   {{- with .Site.LanguagePrefix -}}
     {{- $relURL = replace $relURL (printf "%s/" .) "/" -}}
   {{- end -}}
+  {{- if not $siteHasVersioning -}}
+  {{- /* Flat, unversioned site (ambientmesh.io; agentregistry oss has
+         the same shape but no live `link`/`link-hextra` calls yet). There is
+         no version segment to walk for below — $siteHasVersioning already
+         established that — so the segment walk would always find nothing and
+         $versionRoot would stay "", silently dropping the site's own /docs
+         mount from every `path` that (like every current ambientmesh.io call
+         site) doesn't spell it out itself. FirstSection.RelPermalink is exactly
+         that mount on a flat site, since there's no version/product segment to
+         misidentify it as — this is the same lookup `link`'s OLD
+         implementation used before being unified with link-hextra here (see
+         link.html's own history comment): wrong for a versioned OSS site,
+         never for this one. */ -}}
+    {{- $versionRoot = strings.TrimSuffix "/" .Page.FirstSection.RelPermalink -}}
+  {{- else -}}
   {{- /* Find the VERSION SEGMENT by walking path segments, and remember
          everything before it as the version root.
 
@@ -167,6 +182,7 @@
     {{- if gt $verIdx 0 -}}
       {{- $versionRoot = printf "/%s" (delimit (first $verIdx $segs) "/") -}}
     {{- end -}}
+  {{- end -}}
   {{- end -}}
 {{- end -}}
 

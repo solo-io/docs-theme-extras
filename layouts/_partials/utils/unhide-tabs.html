@@ -1,13 +1,66 @@
 {{- /* Unhides Hextra tab panels for linear-reading contexts that have no JS to
        switch between them (markdown export, "Copy as Markdown", PDF/book
        stitching): strips the tab button bar, removes aria-hidden, and forces
-       every panel visible with an injected "Option: X" label.
+       every panel visible with an injected "Option: <name>" label using each
+       tab's REAL visible name — not the internal DOM id its aria-labelledby
+       points at (e.g. "tabs-tab-tabs-03-1"), which is all that's left once
+       the button bar carrying the name is discarded. Hextra's own tabs
+       partial (_partials/shortcodes/tabs.html) nests a tab's visible name two
+       <span>s deep inside its button (id="tabs-tab-...
+       "><span class="..."><span>{{ $item.name }}</span></span></button>), so
+       the id->name map has to be built from the buttons BEFORE they're
+       stripped below.
 
        Usage: {{ $html = partial "utils/unhide-tabs.html" $html }}
        Input/output is HTML as a string (or template.HTML); the caller marks
        the result safeHTML again if re-emitting as markup. */ -}}
 {{- $html := . -}}
+
+{{- /* Hugo templates have no "regex match with capture groups" function —
+       findRE only returns whole-match strings — so each group is pulled out
+       by replaceRE-ing the WHOLE matched string down to just its
+       backreference (a standard Hugo idiom). Scoped to `role="tab"` so this
+       can't pick up an unrelated button elsewhere on the page (e.g. a
+       code-block copy button). */ -}}
+{{- $names := newScratch -}}
+{{- range findRE `(?s)<button[^>]*role="tab"[^>]*>.*?</button>` $html 50 -}}
+  {{- $id := . | replaceRE `(?s).*\bid="([^"]*)".*` "$1" -}}
+  {{- $name := . | replaceRE `(?s).*<span>([^<]*)</span>.*` "$1" -}}
+  {{- $names.Set $id $name -}}
+{{- end -}}
+
+{{- /* One panel at a time (not a single global replaceRE, which can only
+       emit a literal per-match template, not a dictionary lookup): resolve
+       each panel's own aria-labelledby id to the name map above, falling
+       back to the id itself if a button somehow has no matching name. */ -}}
+{{- range findRE `(?s)<div[^>]*class="hextra-tabs-panel[^"]*"[^>]*aria-labelledby="[^"]*"[^>]*>` $html 50 -}}
+  {{- $openTag := . -}}
+  {{- $id := $openTag | replaceRE `(?s).*aria-labelledby="([^"]*)".*` "$1" -}}
+  {{- $name := $names.Get $id | default $id -}}
+  {{- /* Plain `replace`, unlike `replaceRE`, takes its subject FIRST
+         (replace SUBJECT OLD NEW) rather than last — piping $html in here
+         the way replaceRE is piped below would silently put $html in the
+         NEW slot instead, collapsing the whole page down to whatever
+         $openTag alone doesn't match (i.e. $openTag itself, unmodified). */ -}}
+  {{- $html = replace $html $openTag (printf `<div style="display:block"><p><strong>Option: %s</strong></p>` $name) -}}
+{{- end -}}
+
+{{- /* Some content hand-numbers a tab's list to continue from the step it's
+       nested under via the list's native `start` attribute (e.g. two tabs
+       offering alternate ways to do the same step: one is steps 1-5, the
+       other picks up at 6-7 via `<ol start="6">`). That reads fine on the
+       live site, where JS shows only one tab at a time, but once every
+       option is unhidden and stacked here, back-to-back 1-5/6-7 numbering
+       looks like one long 7-step sequence instead of two alternatives.
+       Tried overriding it with a `counter-reset: list-item 0` CSS rule
+       first — Chromium still honored `start` regardless, so the attribute
+       has to go instead, right on the one `<ol>` immediately following an
+       injected "Option: " label (i.e. only a tab whose content leads with a
+       list — the actual case this addresses — never a list elsewhere on the
+       page). replaceRE's `$1` keeps everything up to (and including)
+       "<ol", dropping just the ` start="N"` that followed it. */ -}}
+{{- $html = $html | replaceRE `(<p><strong>Option: [^<]*</strong></p><ol) start="\d+"` "$1" -}}
+
 {{- $html = $html | replaceRE `(?s)<div[^>]*role="tablist"[^>]*>.*?</div>` "" -}}
 {{- $html = $html | replaceRE `aria-hidden="true"` "" -}}
-{{- $html = $html | replaceRE `<div class="hextra-tabs-panel[^"]*"[^>]*aria-labelledby="([^"]*)"[^>]*>` `<div style="display:block"><p><strong>Option: $1</strong></p>` -}}
 {{- return $html -}}
