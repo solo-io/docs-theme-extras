@@ -838,6 +838,35 @@ Work on the gating and reuse shortcodes producing markdown/HTML leaks in visible
   distinct, method-correct colors. Confirmed it fails against the old CSS and passes with the
   fix, on both the OSS and enterprise fixture builds.
 
+### Fix — Swagger UI's request/response example blocks rendered white-on-white in light mode (`layouts/_shortcodes/openapi.html`, `tests/openapi-example-contrast.spec.ts`, fixture)
+
+- **Why.** Flagged via solo-io/docs#3472: Swagger UI renders its "Example Value" panel as
+  `.opblock-body pre.microlight`, styled by Swagger's own stylesheet as
+  `background:#333; color:#fff`. Because the widget renders inside `.content`
+  (`layouts/docs/{single,list}.html`), it inherits the site-wide
+  `.content pre { background-color: #fff !important; ... }` rule, which repaints the
+  background white but leaves Swagger's white text untouched — invisible except for the
+  syntax-colored string values. This is the same bug class as the `a.nostyle` /
+  `.opblock-tag` fix above: a global `!important` rule reaching into the light-island panel
+  and only partially overriding Swagger's own styles.
+- **What changed.** Added `.swagger-ui .opblock-body pre.microlight { background: #333333
+  !important; color: #ffffff !important; }` to the shortcode's light-island `<style>` block.
+  At three classes plus an element, it out-specifies `.content pre`'s one class plus element,
+  so it wins regardless of source order. No `.dark` variant is needed since this panel is
+  deliberately pinned to light-mode colors independent of site theme, unlike solo-io/docs's
+  own `custom.css`, which patches the same bug with light/dark variants because it repaints
+  `.content pre`'s background per scheme.
+- **Live today** on the agentregistry API reference
+  (https://docs.solo.io/agentregistry/latest/reference/api/) and the kgateway portal OpenAPI
+  pages (2.2.x, 2.3.x) — both consume this shortcode and inherit the same `.content pre`
+  override.
+- **Verified.** Extended the fixture spec (`fixture/assets|static/test/openapi/sample.yaml`)
+  with a response schema/example on the GET operation, so Swagger's Example Value panel
+  actually renders, and added `tests/openapi-example-contrast.spec.ts` (`browser` project)
+  asserting the panel's background isn't white and its text stays white. Confirmed it fails
+  against the old CSS (`background !== #ffffff` assertion trips) and passes with the fix, on
+  both the OSS and enterprise fixture builds.
+
 ### Fix — `hugo server` got stuck answering every request with a 500 after an unrelated content edit, until restarted (`layouts/_partials/head.html`)
 
 - **Why.** Editing `fixture/assets/conrefs/test/everything.md` (a test fixture, no template

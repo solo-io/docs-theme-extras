@@ -185,6 +185,16 @@
     background: transparent !important;
     color: #333333 !important;
   }
+  /* Swagger's own request/response example blocks (.opblock-body pre.microlight)
+     ship with background:#333 and color:#fff. Left uncovered, they'd inherit
+     the site's global `.content pre { background-color: #fff !important }`
+     rule and render white text on a white background. This light island
+     otherwise pins everything to a light palette, so this block keeps
+     Swagger's own dark example background instead. */
+  .swagger-ui .opblock-body pre.microlight {
+    background: #333333 !important;
+    color: #ffffff !important;
+  }
 </style>
 
 {{- /* deepLinking hijacks window.location.hash for Swagger's own routing
