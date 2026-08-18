@@ -319,6 +319,13 @@ Work on the gating and reuse shortcodes producing markdown/HTML leaks in visible
   Caught immediately by actually running the snippet against ambientmesh.io's real `go.mod`
   (curl 404'd on the module path instead of a version string) before it reached any real
   consumer's committed Makefile; fixed in `v0.2.0-beta.8`.
+- **`v0.2.0-beta.7`/`.8` also shipped a stale pre-flight check**: `main()` still hardcoded
+  `public/docs/book.html` for its existence check even though `BOOK_PATH` became configurable in
+  the same change, so any consumer whose book output lands somewhere other than the site root
+  (a versioned site's `/docs/envoy/latest/book.html`, say) failed immediately with a misleading
+  "not found" error even though the file existed. Caught trying this pipeline against
+  kgateway-oss — the first versioned consumer, and the first consumer other than ambientmesh.io
+  to try it at all. Fixed in `v0.2.0-beta.9`.
 
 ### Fix — an unhidden tab panel is labeled with its real tab name, not the internal DOM id its `aria-labelledby` pointed at (`layouts/_partials/utils/unhide-tabs.html`)
 
