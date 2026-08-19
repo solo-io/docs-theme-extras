@@ -406,6 +406,24 @@ Work on the gating and reuse shortcodes producing markdown/HTML leaks in visible
   exposed it immediately, since every cross-chunk reference to a same-origin page hits this
   exact branch. Fixed by using the already-constructed `URL` object's own `.href` (which
   already carries the correct origin) instead of re-assembling one without it.
+- **Only the first chunk keeps its cover page, and every chunk's own TOC is dropped** — every
+  chunk's `book.html` renders a full cover + "Contents" page, since Hugo has no idea at build
+  time that its output will be merged with others. Merged as-is against kgateway-oss's 14
+  chunks, that stacked 14 title pages and 14 separate "Contents" pages into one PDF — and none
+  of those TOCs was even complete on its own, since a chunk's TOC only ever lists its own
+  descendants (`bookChunkRoot`). `renderChunk()` takes new `keepCover`/`keepToc` options
+  (both default `true`, so a single-document book like ambientmesh.io's is unaffected); the
+  multi-chunk loop in `main()` keeps the cover on chunk 0 only and drops every chunk's TOC
+  outright, relying on the PDF's own bookmark sidebar (already complete and correct across
+  every chunk, see the outline-offsetting above) for navigation instead of a second, harder-
+  to-keep-in-sync table of contents. A full consolidated TOC page (real page numbers, built
+  fresh once every chunk's final page count is known) was considered and set aside — real new
+  engineering (a fresh render pass, a dotted-leader print style this module doesn't have,
+  reworked offset math) for something the bookmark sidebar already covers. **Verified**:
+  kgateway-oss's merged PDF now opens directly on one cover page, then straight into chapter
+  content with no "Contents" page anywhere in its 1681 pages (down from 1709, the removed
+  cover/TOC pages); ambientmesh.io's single-document PDF is unchanged (238 pages, 50 TOC
+  entries, cover and Contents page both still present, same as ever).
 - **Cross-chunk internal references intentionally do NOT become in-PDF jumps** — a link whose
   target ended up in a different chunk than its source has no matching element in that chunk's
   own DOM, so the existing link-rewriter (unchanged) simply doesn't find it and falls through

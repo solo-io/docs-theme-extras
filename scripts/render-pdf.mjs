@@ -164,7 +164,7 @@ async function addOutline(pdfBytes, outlineTree) {
 // the outline tree with LOCAL page indices (0-based within this chunk's own
 // PDF) — a multi-chunk merge is responsible for offsetting them into global
 // indices once every chunk's own page count is known.
-async function renderChunk(page, bookURL) {
+async function renderChunk(page, bookURL, { keepCover = true, keepToc = true } = {}) {
   await page.goto(bookURL, { waitUntil: "load" });
 
   console.log("Rewriting links: same-book cross-references become in-PDF jumps, everything else points at the production host...");
@@ -291,6 +291,33 @@ async function renderChunk(page, bookURL) {
     return rootUl ? walk(rootUl) : [];
   });
 
+  if (!keepCover || !keepToc) {
+    console.log("Removing this chunk's own cover/TOC page(s)...");
+    // Multi-chunk only (both default true, so a single-document book like
+    // ambientmesh.io's is untouched): every chunk's book.html renders a full
+    // cover + TOC, since Hugo has no idea at build time that its output will
+    // be merged with 13 others. Merged as-is, that's 14 title pages and 14
+    // "Contents" pages stacked into one PDF — and each chunk's own TOC only
+    // ever lists ITS OWN descendants (see bookChunkRoot), so none of them is
+    // even a correct, complete table of contents to begin with. Only the
+    // FIRST chunk keeps its cover (becoming the one title page for the whole
+    // merged PDF); every chunk's TOC is dropped outright rather than trying
+    // to keep or merge one — the PDF's own bookmark sidebar (built from
+    // every chunk's outline, see the merge loop in main()) already covers
+    // navigation completely and correctly, without a second, harder-to-keep-
+    // in-sync table of contents. Removed from the DOM AFTER outline
+    // extraction above (which reads THIS chunk's own .pdf-toc) but BEFORE
+    // Paged.js paginates, so the removed element doesn't consume any
+    // page space in the printed output.
+    await page.evaluate(
+      ({ keepCover, keepToc }) => {
+        if (!keepCover) document.querySelector(".pdf-cover")?.remove();
+        if (!keepToc) document.querySelector(".pdf-toc")?.remove();
+      },
+      { keepCover, keepToc }
+    );
+  }
+
   console.log("Waiting for mermaid diagrams to finish rendering...");
   try {
     await page.waitForFunction(
@@ -382,6 +409,12 @@ async function main() {
     } else {
       // Multi-chunk: render each book path independently (own link
       // rewriting, own pagination), then merge the resulting PDFs in order.
+      // Only the FIRST chunk keeps its cover (the one title page for the
+      // whole merged PDF); every chunk's own TOC is dropped — each only
+      // ever lists its own descendants (bookChunkRoot), so none of them is a
+      // correct, complete table of contents on its own, and the PDF's own
+      // bookmark sidebar (built from every chunk's outline below) already
+      // covers navigation. See renderChunk's keepCover/keepToc comment.
       // Continuous page numbers across chunks are NOT attempted — Paged.js's
       // own counter-reset support for this has open, unresolved bug reports
       // (see CHANGELOG.md), so each chunk's printed footer shows its own
@@ -391,9 +424,12 @@ async function main() {
       const merged = await PDFDocument.create();
       let offset = 0;
       let combinedOutline = [];
-      for (const bookPath of BOOK_PATHS) {
+      for (const [i, bookPath] of BOOK_PATHS.entries()) {
         console.log(`--- Chunk: ${bookPath} ---`);
-        const { pdfBytes, outlineTree, pageCount } = await renderChunk(page, `http://127.0.0.1:${port}${bookPath}`);
+        const { pdfBytes, outlineTree, pageCount } = await renderChunk(page, `http://127.0.0.1:${port}${bookPath}`, {
+          keepCover: i === 0,
+          keepToc: false,
+        });
         const chunkDoc = await PDFDocument.load(pdfBytes);
         const copiedPages = await merged.copyPages(chunkDoc, chunkDoc.getPageIndices());
         copiedPages.forEach((p) => merged.addPage(p));
