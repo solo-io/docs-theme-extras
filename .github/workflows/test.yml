@@ -113,17 +113,20 @@ jobs:
 
       # timeout-minutes guards the `sudo apt-get` that --with-deps/install-deps
       # runs: on a bad runner it can hang on a dpkg lock or a stalled mirror.
-      # The browser download + apt normally finishes in <1min, so 5 is generous
-      # — a genuine hang fails the step fast (and is re-runnable) instead of
-      # burning the whole 15-min job budget.
+      # Only the browser binaries are cached (~/.cache/ms-playwright above) —
+      # the OS-level apt packages are reinstalled from scratch on every fresh
+      # runner regardless of that cache's hit/miss, and a slow mirror can push
+      # the ~114MB webkit codec stack past 5 minutes on its own (observed on
+      # PR #30). 10 is generous — a genuine hang still fails well short of the
+      # 15-min job budget, and the step is re-runnable.
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: npx playwright install --with-deps ${{ env.PW_BROWSERS }}
 
       - name: Install Playwright OS deps (cache-hit path)
         if: steps.playwright-cache.outputs.cache-hit == 'true'
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: npx playwright install-deps ${{ env.PW_BROWSERS }}
 
       # Override HUGO=hugo160 (the local convention) with HUGO=hugo (what
