@@ -111,6 +111,19 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
 
+      # ubuntu-latest resolves apt's default mirror to a region-specific
+      # azure.archive.ubuntu.com endpoint that has repeatedly gone unreachable
+      # outright (every request logs "Ign:", apt-get update never completes) —
+      # hit twice more on this PR even after doubling the timeout below to 10
+      # minutes. A dead mirror doesn't recover by waiting longer, so point apt
+      # at the direct global mirror instead of extending the timeout further.
+      - name: Work around flaky azure.archive.ubuntu.com apt mirror
+        run: |
+          sudo sed -i 's|azure\.archive\.ubuntu\.com|archive.ubuntu.com|g' \
+            /etc/apt/sources.list \
+            /etc/apt/sources.list.d/*.sources \
+            /etc/apt/apt-mirrors.txt 2>/dev/null || true
+
       # timeout-minutes guards the `sudo apt-get` that --with-deps/install-deps
       # runs: on a bad runner it can hang on a dpkg lock or a stalled mirror.
       # Only the browser binaries are cached (~/.cache/ms-playwright above) —
