@@ -355,6 +355,39 @@ Work on the gating and reuse shortcodes producing markdown/HTML leaks in visible
   section groupings entirely — a flat run of subsections with no heading marking which
   top-level section they came from, since a section landing page was never itself a chapter
   in the single-document design (only its children were, walked from the true root).
+- **Set `outputs`/`bookChunkRoot` via `cascade`, not by hand-editing every section's own
+  `_index.md`.** kgateway-oss's first attempt set both directly on each of its 14 chunk roots;
+  a `cascade` block on the VERSION root instead (`target.path: "/docs/envoy/latest/*"` — a
+  single path-segment glob, matches direct children only, confirmed NOT to reach
+  `setup/listeners/` two levels down) pushes both fields onto every direct child automatically,
+  and a new section added later picks them up with no content edit at all. Not a module change
+  (`cascade` is plain Hugo, works today against every released version of this module) — noted
+  here since it's the pattern worth reaching for instead of the per-page front matter this
+  CHANGELOG entry originally described. `render-pdf.mjs`'s `PDF_BOOK_PATHS` still has to be an
+  explicit, ordered list maintained by hand — Hugo has no query for "every page that opted into
+  an output format" to generate it from, so a new section still needs one manual addition
+  there even with the cascade in place.
+- **The chunk root's title is always centered, and centering is now reserved exclusively for a
+  chunk root** (`.pdf-chunk-title` CSS, a `$chunked` flag threaded through the chapter walk).
+  Caught immediately when tried against kgateway-oss: the pre-existing "empty landing page gets
+  a centered `.pdf-divider` treatment" rule (designed for a single-document book, where it's the
+  only kind of section boundary there is) fired on an ordinary NESTED empty page
+  (`setup/listeners/_index.md`, "Listeners") instead of the chunk's own root
+  (`setup/_index.md`, "Gateway setup") — the two had swapped roles from what a reader would
+  expect once each chunk gets its own title page automatically. Fixed by having the chunk root
+  ALWAYS get a centered title (`.pdf-chunk-title` if it has real content, so the content still
+  renders in normal flow below rather than being buried or dropped; the original full-page
+  `.pdf-divider` only when genuinely empty, e.g. `traffic-management/_index.md`), and by
+  suppressing `.pdf-divider` for any DESCENDANT of a chunk root even when empty — it still shows
+  its Description as a plain paragraph (`.pdf-chapter-description`), just not centered, since
+  the chunk already has a title page and a second one mid-chunk would read as a stray boundary.
+  A true single-document book (ambientmesh.io, which never sets `bookChunkRoot`) is completely
+  unaffected — `$chunked` is `false` throughout its whole walk, so every nested empty landing
+  page (`about`, `operations`, `resiliency`, `traffic-management`, `traffic-management/ingress`)
+  keeps its original centered-divider treatment exactly as before. **Verified**: ambientmesh.io's
+  `book.html` is byte-for-byte identical before and after this fix; kgateway-oss's `setup` chunk
+  now centers "Gateway setup" (with its real intro paragraph still rendered below) and renders
+  "Listeners" as a plain heading with a left-aligned description.
 - **New `layouts/docs/single.book.html`, and the refactor into `_partials/docs/book-document.html`.**
   A LEAF page (no `_index.md`, no children — kgateway's `quickstart.md`/`faqs.md`) opting into
   the `book` output format silently fell back to the site's normal HTML template instead of
@@ -399,6 +432,31 @@ Work on the gating and reuse shortcodes producing markdown/HTML leaks in visible
   observability, operations, reference, integrations, migrate, faqs, ai) produced a single
   merged 1709-page PDF with 14 top-level bookmarks (one per section, each pointing at the right
   absolute page) in 28 seconds total — the same docset that never finished as one document.
+
+### Fix — the navbar's Solo corporate mark links to `docs.solo.io`, not the current product's own home page (`layouts/partials/navbar-title.html`)
+
+- **Why.** In the older enterprise logo arrangement (`params.sidebar.logo` set to the product
+  mark, `params.navbar.logo` carrying the Solo corporate mark), the navbar logo's link had no
+  brand-aware default and fell back to `.Site.Home.RelPermalink` — the current product's own
+  docs home. Clicking the Solo mark took a reader to, say, `/gloo-mesh-enterprise/latest/`
+  again instead of to Solo's corporate docs hub. The newer arrangement (product lockup in the
+  navbar, Solo mark moved to `params.footer.logo`, shipped in v0.1.21) isn't affected — there
+  the navbar logo is the product's own mark, and linking home is correct.
+- **The fix reuses an existing signal instead of adding a new config key.** `sidebar.logo` being
+  set already meant "the navbar carries the Solo mark, not the product's own mark" (it's the
+  same condition `$hasMobileLogo` already computed, a few lines down, to decide whether the
+  navbar logo is desktop-only). `$defaultLogoLink` now reads that same signal: `docs.solo.io`
+  when `sidebar.logo` is set, the site's own home otherwise. An explicit
+  `params.navbar.logo.link` still overrides either default. This avoids repeating the same
+  literal URL across every enterprise product's `hugo-<product>.toml`.
+- Observable in production today (the bug, pre-fix): the Solo mark at the top left of
+  [docs.solo.io/gloo-mesh-enterprise/latest/](https://docs.solo.io/gloo-mesh-enterprise/latest/)
+  links back into the same product tree instead of to `docs.solo.io`.
+- **Test gap.** The module's own fixture (`hugo-enterprise-local.toml`) has already fully moved
+  to the newer footer-logo arrangement and no longer exercises the `sidebar.logo`-set shape this
+  fix targets, so there's no automated coverage for it in this repo. Verifying requires either a
+  temporary fixture config with `sidebar.logo` set, or checking a real consumer (`docs`) build
+  after it bumps its pin. Takes effect when a consumer bumps its extras pin.
 
 ### Fix — an unhidden tab panel is labeled with its real tab name, not the internal DOM id its `aria-labelledby` pointed at (`layouts/_partials/utils/unhide-tabs.html`)
 

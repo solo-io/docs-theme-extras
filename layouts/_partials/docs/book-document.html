@@ -160,25 +160,41 @@
   {{- $depth := .depth -}}
   {{- $trail := .trail -}}
   {{- if .self -}}
-    {{- /* Renders $page itself as a level-2 chapter (same $isEmpty divider
-           treatment as any other section landing below), then recurses into
-           its children one level deeper with $trail extended by $page's own
-           title — see bookChunkRoot in this file's header comment. */ -}}
+    {{- /* Renders $page itself as a level-2 chapter, ALWAYS with a centered
+           title (this is the chunk's own title page — see bookChunkRoot in
+           this file's header comment), then recurses into its children one
+           level deeper, passing "chunked" true so the loop branch below
+           knows to stop treating an empty nested landing page as its own
+           part divider — only a chunk's own root should read as a title
+           page now that each chunk gets one automatically.
+
+           A genuinely empty root (no body content at all, e.g. kgateway's
+           traffic-management/_index.md) gets the full-page `pdf-divider`
+           treatment, identical to any other empty landing page. A root with
+           real content (e.g. kgateway's migrate/_index.md, a multi-paragraph
+           intro) gets a lighter `pdf-chunk-title` treatment instead: just the
+           title/description centered, with the real content still rendered
+           below in normal flow — centering the whole page the way
+           `pdf-divider` does would either bury that content 10cm down the
+           page or, worse, center-align body paragraphs/lists/tables that
+           were never written to be read that way. */ -}}
     {{- $anchor := $page.RelPermalink | anchorize -}}
     {{- $navLabel := $page.LinkTitle | default $page.Title -}}
     {{- $isEmpty := eq (len ($page.Content | plainify | strings.TrimSpace)) 0 -}}
-    <section class="pdf-chapter{{ if $isEmpty }} pdf-divider{{ end }}" id="{{ $anchor }}" data-source-path="{{ $page.RelPermalink }}">
+    <section class="pdf-chapter" id="{{ $anchor }}" data-source-path="{{ $page.RelPermalink }}">
       <span class="pdf-breadcrumb-source">{{ delimit $trail " / " }}</span>
-      <h2>{{ $page.Title }}</h2>
-      {{- if $isEmpty -}}
+      <div class="{{ if $isEmpty }}pdf-divider{{ else }}pdf-chunk-title{{ end }}">
+        <h2>{{ $page.Title }}</h2>
         {{- with $page.Description }}<p class="pdf-divider-description">{{ . }}</p>{{ end -}}
-      {{- else -}}
+      </div>
+      {{- if not $isEmpty -}}
         {{- $content := partial "utils/unhide-tabs.html" $page.Content -}}
         {{- partial "utils/shift-headings.html" (dict "html" $content "shift" (add $depth 1)) | safeHTML }}
       {{- end -}}
     </section>
-    {{- template "book-chapter-tree" (dict "page" $page "depth" (add $depth 1) "trail" ($trail | append $navLabel)) -}}
+    {{- template "book-chapter-tree" (dict "page" $page "depth" (add $depth 1) "trail" ($trail | append $navLabel) "chunked" true) -}}
   {{- else -}}
+  {{- $chunked := .chunked | default false -}}
   {{- range $page.Pages -}}
     {{- $anchor := .RelPermalink | anchorize -}}
     {{- $level := add (add $depth 1) 1 -}}
@@ -199,9 +215,21 @@
            has and the book otherwise never shows — makes the boundary
            intentional and gives the page a reason to exist. Pages with real
            body content (even a one-line intro) keep the normal top-aligned
-           heading + content layout. */ -}}
+           heading + content layout.
+
+           $chunked (true for every descendant of a bookChunkRoot page, see
+           the self branch above; always false for a true single-document
+           book like ambientmesh.io's, which never sets bookChunkRoot) turns
+           this OFF even when $isEmpty — a chunk already gets its own title
+           page from its root, so an empty nested landing further down (e.g.
+           kgateway's setup/listeners/_index.md) reads as a stray full-page
+           divider in the middle of a chunk rather than a real boundary.
+           Still shows the page's Description as an ordinary paragraph in
+           that case, just not centered — the text isn't lost, only the
+           divider styling is skipped. */ -}}
     {{- $isEmpty := eq (len (.Content | plainify | strings.TrimSpace)) 0 -}}
-    <section class="pdf-chapter{{ if $isEmpty }} pdf-divider{{ end }}" id="{{ $anchor }}" data-source-path="{{ .RelPermalink }}">
+    {{- $showDivider := and $isEmpty (not $chunked) -}}
+    <section class="pdf-chapter{{ if $showDivider }} pdf-divider{{ end }}" id="{{ $anchor }}" data-source-path="{{ .RelPermalink }}">
       {{- /* Always emitted, even with an empty $trail (top-level chapters) —
              string-set only updates when a new source element is crossed
              during pagination, so a top-level chapter that skipped this
@@ -218,13 +246,13 @@
       {{- else }}<h6>{{ .Title }}</h6>
       {{- end }}
       {{- if $isEmpty -}}
-        {{- with .Description }}<p class="pdf-divider-description">{{ . }}</p>{{ end -}}
+        {{- with .Description }}<p class="{{ if $showDivider }}pdf-divider-description{{ else }}pdf-chapter-description{{ end }}">{{ . }}</p>{{ end -}}
       {{- else -}}
         {{- $content := partial "utils/unhide-tabs.html" .Content -}}
         {{- partial "utils/shift-headings.html" (dict "html" $content "shift" (add $depth 1)) | safeHTML }}
       {{- end -}}
     </section>
-    {{- template "book-chapter-tree" (dict "page" . "depth" (add $depth 1) "trail" ($trail | append $navLabel)) -}}
+    {{- template "book-chapter-tree" (dict "page" . "depth" (add $depth 1) "trail" ($trail | append $navLabel) "chunked" $chunked) -}}
   {{- end -}}
   {{- end -}}
 {{- end -}}

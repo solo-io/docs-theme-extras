@@ -147,6 +147,27 @@ h6 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.03em; }
   color: #666;
 }
 
+/* Lighter sibling of .pdf-divider for a chunk root that HAS real content
+   (book-document.html's bookChunkRoot self branch) — centers just the
+   title/description block, not the whole page. Skips the 10cm top padding
+   .pdf-divider uses, since that assumes the div IS the whole page; here the
+   page's real content follows immediately after in normal (left-aligned)
+   flow, and a large top offset would just bury it partway down the page. */
+.pdf-chunk-title {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+/* A nested empty landing page inside an already-titled chunk (book-document
+   .html's $chunked flag) still shows its Description, just as a plain
+   paragraph instead of .pdf-divider-description's centered treatment — the
+   chunk already got its own title page from its root, so this one reads as
+   an ordinary heading with a one-line intro, not a second part boundary. */
+.pdf-chapter-description {
+  margin: 0.5rem 0 0;
+  color: #666;
+}
+
 /* Running-header source for @top-left above: string-set captures this
    element's text into the "pdf-breadcrumb" named string, updated to the
    latest value each time pagination crosses one of these markers. Hidden via
