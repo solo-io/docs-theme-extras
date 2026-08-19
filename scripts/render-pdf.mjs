@@ -164,7 +164,7 @@ async function addOutline(pdfBytes, outlineTree) {
 // the outline tree with LOCAL page indices (0-based within this chunk's own
 // PDF) — a multi-chunk merge is responsible for offsetting them into global
 // indices once every chunk's own page count is known.
-async function renderChunk(page, bookURL, { keepCover = true, keepToc = true } = {}) {
+async function renderChunk(page, bookURL, { keepCover = true, keepToc = true, sectionLabel = null } = {}) {
   await page.goto(bookURL, { waitUntil: "load" });
 
   console.log("Rewriting links: same-book cross-references become in-PDF jumps, everything else points at the production host...");
@@ -328,6 +328,30 @@ async function renderChunk(page, bookURL, { keepCover = true, keepToc = true } =
     console.warn(`Mermaid didn't report done within ${MERMAID_TIMEOUT_MS}ms — continuing anyway.`);
   }
 
+  if (sectionLabel) {
+    console.log(`Labeling page footers "${sectionLabel}"...`);
+    // Multi-chunk only (null by default, so a single-document book like
+    // ambientmesh.io's is unaffected) — each chunk paginates independently,
+    // so print-book.css's `@bottom-center { content: counter(page) }` restarts
+    // at 1 for every chunk with nothing distinguishing which section a given
+    // "page 1" belongs to. Continuous numbering across the whole merged PDF
+    // isn't attempted (see the comment on continuous page numbers elsewhere
+    // in this file — an open, unresolved Paged.js bug), so instead each
+    // chunk's own local counter gets a static, build-time-known section
+    // label prefix. Injected as a plain <style> tag rather than edited into
+    // print-book.css itself, since Hugo builds each chunk's book.html with no
+    // idea what position it'll occupy in the final merged PDF — only this
+    // script's own chunk loop (main()) knows that. Must run before
+    // PagedPolyfill.preview() below: Paged.js reads the page's full stylesheet
+    // cascade once, when it builds its page templates, so a style added
+    // afterward wouldn't take effect. Source-order cascade (this tag is
+    // added after print-book.css's <link>, so it wins the tie on this
+    // anonymous @page's @bottom-center box) needs no extra specificity.
+    await page.addStyleTag({
+      content: `@page { @bottom-center { content: "${sectionLabel}, Page " counter(page); } }`,
+    });
+  }
+
   console.log("Running Paged.js pagination...");
   await page.evaluate(
     (timeoutMs) =>
@@ -418,9 +442,11 @@ async function main() {
       // Continuous page numbers across chunks are NOT attempted — Paged.js's
       // own counter-reset support for this has open, unresolved bug reports
       // (see CHANGELOG.md), so each chunk's printed footer shows its own
-      // local page count. The PDF's real navigation (bookmarks, this
-      // function's own outline offsetting) uses actual PDF page objects and
-      // is correct regardless of what text is printed in any page's footer.
+      // local page count, prefixed with a static "Section N" label (see
+      // renderChunk's sectionLabel) so a reader can at least tell which
+      // section restarted the count. The PDF's real navigation (bookmarks,
+      // this function's own outline offsetting) uses actual PDF page objects
+      // and is correct regardless of what text is printed in any page's footer.
       const merged = await PDFDocument.create();
       let offset = 0;
       let combinedOutline = [];
@@ -429,6 +455,7 @@ async function main() {
         const { pdfBytes, outlineTree, pageCount } = await renderChunk(page, `http://127.0.0.1:${port}${bookPath}`, {
           keepCover: i === 0,
           keepToc: false,
+          sectionLabel: `Section ${i + 1}`,
         });
         const chunkDoc = await PDFDocument.load(pdfBytes);
         const copiedPages = await merged.copyPages(chunkDoc, chunkDoc.getPageIndices());

@@ -450,6 +450,56 @@ Work on the gating and reuse shortcodes producing markdown/HTML leaks in visible
   observability, operations, reference, integrations, migrate, faqs, ai) produced a single
   merged 1709-page PDF with 14 top-level bookmarks (one per section, each pointing at the right
   absolute page) in 28 seconds total — the same docset that never finished as one document.
+- **Each chunk's local page counter is now prefixed with a static "Section N" label** (e.g.
+  "Section 2, Page 1"), so a reader can at least tell which chunk restarted the count, addressing
+  the cosmetic mismatch the "continuous page numbers are NOT attempted" bullet above documents.
+  `renderChunk()` takes a new `sectionLabel` option (default `null`, so a single-document book
+  like ambientmesh.io's is unaffected — its render never logs a "Labeling page footers" line at
+  all); the multi-chunk loop in `main()` passes `Section ${i + 1}` from its own existing loop
+  index. Injected as a `page.addStyleTag()` call overriding `@bottom-center`'s `content` right
+  before `PagedPolyfill.preview()` runs, rather than edited into `print-book.css` itself — Hugo
+  builds each chunk's `book.html` with no idea what position it'll occupy in the final merged
+  PDF, so only this script's own chunk loop knows the number to use. **Verified**: extracting
+  every page's footer text from a real 2-chunk kgateway-oss merge (`setup` + `observability`)
+  shows "Section 1, Page 1" through "Section 1, Page 194", then "Section 2, Page 1" through
+  "Section 2, Page 55" — the restart is now labeled instead of silently ambiguous.
+- **A section landing page's auto-generated child cards (e.g. a `## Guides` heading with no
+  manual `{{< cards >}}`) never appeared in the book at all** (`layouts/_partials/docs/
+  book-document.html`). The live site's `docs/list.html` renders `partials/auto-section-cards.
+  html` AFTER `.Content` for exactly this case — the book's chapter walk rendered `.Content`
+  but never called that partial, so a heading like kgateway-oss's `observability/_index.md`
+  ("## Guides") printed with nothing under it, and the same gap silently affected ambientmesh.io
+  too (`observability`, `security` both rely on auto-cards). Fixed by calling
+  `auto-section-cards.html` after content in both the chunk-root and per-descendant branches of
+  the chapter walk; it already no-ops on its own for a page with no children, `disableCards:
+  true`, or manual cards. Rendered in `print-book.css` as a plain bordered-box list rather than
+  the live site's card grid — Paged.js's page-break decisions around a CSS grid/flex row are
+  unpredictable, and a PDF has no hover/click affordance to preserve anyway. A card's `icon`
+  front matter can resolve to a bare Material Icons ligature name (`<i class="material-icons">`)
+  instead of an `<svg>`; that font isn't loaded by this standalone document, so it's hidden
+  outright rather than printing literal text like "monitoring" next to a card title — not
+  triggered by either proven consumer today (no child page under either site sets `icon`), but
+  a real gap the same activation would otherwise have shipped silently. **Verified**: the card
+  links for both kgateway-oss's Observability chapter and ambientmesh.io's Observability/Security
+  chapters now render with real title/description text extractable from the PDF; ambientmesh.io's
+  page count goes from 238 to 241 (the newly-rendered card content), its 50 TOC entries unchanged.
+- **A wide reference table visibly changed column widths from one page to the next, and on at
+  least one page ran past the right margin entirely** (`assets/css/print-book.css`) — reported
+  against kgateway-oss's "Control plane metrics" table. `table-layout` was never set, so it
+  defaulted to `auto`: when Paged.js splits a table across a page break, each resulting page
+  fragment is effectively a separate table for column-width purposes, and the browser reruns its
+  content-based width algorithm against only the rows that fragment holds — visibly shifting
+  column widths page to page. Worse, an unbroken long token (a full metric name like
+  `kgateway_resources_updates_dropped_total`) can grow its column past the page's own content
+  box under `auto`, which is the overflow the report's screenshot showed. Fixed with
+  `table-layout: fixed` (pins every fragment to the same column widths, set once from the first
+  row) plus `overflow-wrap: break-word` on `th`/`td` (required alongside `fixed` — a fixed-width
+  column no longer grows to fit a long token, so without wrapping that token would overflow its
+  own cell instead of the whole table overflowing the page). **Verified**: re-rendered
+  kgateway-oss's `observability` chunk and measured every page's table bounding box directly
+  (`pymupdf`'s `find_tables()`) across the 8-page "Control plane metrics" table — width now
+  562.1-562.2pt on every page (previously varying and, once, over the 612pt page width), 0
+  overflow.
 
 ### Fix — the navbar's Solo corporate mark links to `docs.solo.io`, not the current product's own home page (`layouts/partials/navbar-title.html`)
 

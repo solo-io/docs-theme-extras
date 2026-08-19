@@ -191,6 +191,15 @@
         {{- $content := partial "utils/unhide-tabs.html" $page.Content -}}
         {{- partial "utils/shift-headings.html" (dict "html" $content "shift" (add $depth 1)) | safeHTML }}
       {{- end -}}
+      {{- /* The live site's docs/list.html renders this AFTER .Content, for any
+             section whose own body ends in a heading like "## Guides" with no
+             manual {{< cards >}} — the actual links only ever come from this
+             partial, not from .Content. Missing here left those headings with
+             nothing under them in every book/chunk render. Runs unconditionally
+             (matching the live site): it no-ops on its own for a page with no
+             children, `disableCards: true`, or manual cards already rendered
+             during .Content above. */ -}}
+      {{- partial "auto-section-cards.html" $page -}}
     </section>
     {{- template "book-chapter-tree" (dict "page" $page "depth" (add $depth 1) "trail" ($trail | append $navLabel) "chunked" true) -}}
   {{- else -}}
@@ -251,6 +260,7 @@
         {{- $content := partial "utils/unhide-tabs.html" .Content -}}
         {{- partial "utils/shift-headings.html" (dict "html" $content "shift" (add $depth 1)) | safeHTML }}
       {{- end -}}
+      {{- partial "auto-section-cards.html" . -}}
     </section>
     {{- template "book-chapter-tree" (dict "page" . "depth" (add $depth 1) "trail" ($trail | append $navLabel) "chunked" $chunked) -}}
   {{- end -}}
