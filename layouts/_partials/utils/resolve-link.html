@@ -46,9 +46,6 @@
        so `path` was empty and the emitted href was the section root rather than
        the intended cross-flavor target. Warn rather than error: `path=""` is a
        legitimate, if unusual, way to link to the version root itself. */ -}}
-{{- if eq .Page.RelPermalink "/gateway/1.19.x/reference/changelog/release-notes/" -}}
-  {{- warnf "CALL path=%q params=%v inner=%q" $path .Params (substr .Inner 0 60) -}}
-{{- end -}}
 {{- if not $path -}}
   {{- warnf "%s on %s got an empty `path`. Check the parameter name — this shortcode takes `path`, not `link` or `url`. It will emit the bare version root. PARAMS=%v" .Name .Page.RelPermalink .Params -}}
 {{- end -}}
