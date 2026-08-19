@@ -1,9 +1,3 @@
-{{- $logoPath := .Site.Params.navbar.logo.path | default "images/logo.svg" -}}
-{{- $logoLink := .Site.Params.navbar.logo.link | default .Site.Home.RelPermalink -}}
-{{- $logoWidth := .Site.Params.navbar.logo.width | default "20" -}}
-{{- $logoHeight := .Site.Params.navbar.logo.height | default "20" -}}
-{{- $logoDarkPath := .Site.Params.navbar.logo.dark | default $logoPath -}}
-
 {{- /* When a separate mobile logo is configured via sidebar.logo (below), the
        navbar logo is desktop-only and the sidebar logo covers mobile. When it
        is NOT configured, show the navbar logo at every breakpoint so it is the
@@ -11,6 +5,17 @@
        Only utilities Hextra already emits are used here. */ -}}
 {{- $hasMobileLogo := false -}}
 {{- with .Site.Params.sidebar.logo -}}{{- if .path -}}{{- $hasMobileLogo = true -}}{{- end -}}{{- end -}}
+
+{{- $logoPath := .Site.Params.navbar.logo.path | default "images/logo.svg" -}}
+{{- /* sidebar.logo being set means the navbar carries the Solo corporate mark
+       (the product mark lives in the sidebar instead), so its link should go
+       to docs.solo.io rather than this site's own home page. */ -}}
+{{- $defaultLogoLink := cond $hasMobileLogo "https://docs.solo.io" .Site.Home.RelPermalink -}}
+{{- $logoLink := .Site.Params.navbar.logo.link | default $defaultLogoLink -}}
+{{- $logoWidth := .Site.Params.navbar.logo.width | default "20" -}}
+{{- $logoHeight := .Site.Params.navbar.logo.height | default "20" -}}
+{{- $logoDarkPath := .Site.Params.navbar.logo.dark | default $logoPath -}}
+
 {{- $lightClass := cond $hasMobileLogo "hx:mr-2 hx:md:block hx:dark:hidden hx:max-md:hidden" "hx:mr-2 hx:dark:hidden" -}}
 {{- $darkClass := cond $hasMobileLogo "hx:mr-2 hx:hidden hx:md:dark:block" "hx:mr-2 hx:hidden hx:dark:block" -}}
 <a class="hx:flex hx:items-center hx:hover:opacity-75 hx:ltr:mr-auto hx:rtl:ml-auto" href="{{ $logoLink }}">
