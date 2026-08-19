@@ -68,23 +68,6 @@
 {{- $innerHTML := .inner -}}
 {{- $inner := printf "%s" $innerHTML -}}
 
-{{- /* NESTED PRE-RENDERED BODIES ARE FLATTENED, top-level ones are not.
-
-       Transparency is a claim about RAW MARKDOWN: emit what the author wrote
-       and let the one outer pass render it. At depth >= 1 in percent form the
-       body is not raw markdown — Hugo already rendered it to HTML — so there is
-       nothing to be transparent about, and emitting multi-line HTML back into
-       the markdown stream lets Goldmark paragraph-wrap it. Measured: a gated
-       `{{< card >}}` inside `{{< cards >}}` came back as
-       `div.section-cards > p > a`, putting a stray <p> in the card grid.
-
-       Flattening to one logical line (newlines -> `&#10;`, which Goldmark does
-       not decode) removes the block-level signal that triggers the wrap. This
-       is the same treatment reuse.html gives its expansion, for the same
-       reason.
-
-       Scoped by `.Parent` AND a leading `<`, so a top-level gate — the 85% case
-       and the one transparency is about — is never touched. */ -}}
 {{- /* A nested pre-rendered body that is ONE paragraph is unwrapped.
 
        At depth >= 1 in percent form Hugo renders the body before the shortcode

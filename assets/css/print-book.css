@@ -4,18 +4,11 @@
    page numbers. Not the same stylesheet as docs-theme-extras.css's `@media
    print` block, which hides UI chrome for single-page browser printing. */
 
-{{- /* Kept byte-for-byte in sync by hand with the identical block in
-       list.book.html (see its comment for the full rationale) — this file
-       runs as its own separate ExecuteAsTemplate execution, so there's no
-       way to share the variable computed there. Resolves to "" on a site
-       with no site.Params.versions at all, so @bottom-right below just
-       shows the product name alone, unchanged. */ -}}
-{{- $versionScratch := newScratch -}}
-{{- range site.Params.versions -}}
-  {{- if not ($versionScratch.Get "first") -}}{{- $versionScratch.Set "first" (.version | default .linkVersion) -}}{{- end -}}
-  {{- if eq .linkVersion "latest" -}}{{- $versionScratch.Set "latest" (.version | default .linkVersion) -}}{{- end -}}
-{{- end -}}
-{{- $productVersion := $versionScratch.Get "latest" | default ($versionScratch.Get "first") -}}
+{{- /* See utils/resolve-latest-version.html, shared with the identical need
+       in docs/book-document.html. Resolves to "" on a site with no
+       site.Params.versions at all, so @bottom-right below just shows the
+       product name alone, unchanged. */ -}}
+{{- $productVersion := partial "utils/resolve-latest-version.html" . -}}
 
 @page {
   size: letter;

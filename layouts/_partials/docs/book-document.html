@@ -73,21 +73,9 @@
          the only site this has run on so far) always resolve $productVersion
          to "" here, so the version line/footer suffix below simply don't
          render — but a versioned site (agw, kgw, the docs hub) should show
-         one. Prefers whichever entry is flagged the `latest` linkVersion,
-         else just the first configured entry — a reasonable stand-in only,
-         since this single fixed-root book has no per-page "current version"
-         concept the way a normal docs page does; proper version-root
-         resolution (utils/version-root.html, same as sidebar.html) is real
-         work deferred until this pattern is actually proven on a versioned
-         site. Kept in sync by hand with the identical block in
-         print-book.css, since ExecuteAsTemplate runs that file as a
-         separate template execution with no way to share this variable. */ -}}
-  {{- $versionScratch := newScratch -}}
-  {{- range site.Params.versions -}}
-    {{- if not ($versionScratch.Get "first") -}}{{- $versionScratch.Set "first" (.version | default .linkVersion) -}}{{- end -}}
-    {{- if eq .linkVersion "latest" -}}{{- $versionScratch.Set "latest" (.version | default .linkVersion) -}}{{- end -}}
-  {{- end -}}
-  {{- $productVersion := $versionScratch.Get "latest" | default ($versionScratch.Get "first") -}}
+         one. See utils/resolve-latest-version.html, shared with the
+         identical need in print-book.css, for how the version is picked. */ -}}
+  {{- $productVersion := partial "utils/resolve-latest-version.html" . -}}
   {{- $isChunkRoot := .Params.bookChunkRoot | default false -}}
   <section class="pdf-cover">
     {{- with site.Params.navbar.logo.path }}

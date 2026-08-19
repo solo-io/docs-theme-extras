@@ -197,7 +197,19 @@
   {{- $ver = "latest" -}}
 {{- end -}}
 
-{{- if and (in $path "agentgateway") (eq $ver "2.1.x") -}}
+{{- /* Strip a leading "agentgateway/" segment carried over from a shared
+       source path on an agentgateway rebase. Was gated on `eq $ver "2.1.x"`,
+       the same bug class fixed just below for `reference/api`: rebase.html
+       sets `$product = "agentgateway"` as the DEFAULT for every rebased
+       agentgateway page at every version (not just 2.1.x — 2.1.x has no
+       special status here), overridden only to "envoy" for kgateway/envoy
+       source dirs, so the version gate silently stopped stripping the
+       segment on every other enterprise version. Gating on `$product`
+       instead follows the version-independent signal rebase.html already
+       provides, matching the routing below. NOT verified against a real
+       agentgateway build (no fixture exercises this path) — confirm on
+       agentgateway.dev before relying on it. */ -}}
+{{- if and (in $path "agentgateway") (eq $product "agentgateway") -}}
   {{- $path = replace $path "agentgateway/" "" -}}
 {{- end -}}
 {{- /* Route OSS single-page reference/api anchors to the enterprise reference
