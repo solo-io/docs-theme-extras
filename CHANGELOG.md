@@ -22,6 +22,43 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
+## [0.2.1] — 2026-08-20
+
+### Fix — `link`/`link-hextra` no longer drops the version segment on a site that only declares versions per-section (`layouts/_partials/utils/resolve-link.html`)
+
+- **Why.** `$siteHasVersioning` — the switch between the version-segment walk and the flat-site
+  fallback added in v0.2.0 — only checked a top-level `site.Params.versions`. agentgateway-oss-website
+  has never had one: its versions are declared under `params.sections.standalone.versions` and
+  `params.sections.kubernetes.versions` only, because its pre-unification forked `link-hextra` did
+  its own path-segment walk regardless of any versions list. The v0.2.0 unification made the
+  top-level check load-bearing for the first time, misclassified agw oss as a flat, unversioned
+  site (the branch meant for ambientmesh.io), and every `link-hextra` call on it lost its
+  `/standalone/<version>` or `/kubernetes/<version>` prefix. Confirmed live:
+  <https://agentgateway.dev/docs/kubernetes/latest/llm/prompt-templates/> currently renders its
+  "JWT authentication guide" link as `href=/docs/security/jwt/`, which 404s (`curl -I` → `404`),
+  instead of `/docs/kubernetes/latest/security/jwt/`. Some call sites happened to survive in
+  production only because of an unrelated Cloudflare redirect rule that maps bare
+  `/docs/configuration/*` paths to `/docs/standalone/latest/configuration/*` — that rule doesn't
+  cover `/docs/security/*` or any kubernetes-flavor path, which is why this one hard-404s while
+  others merely took an extra redirect hop.
+- **What changed.** `$siteHasVersioning` now also treats a site as versioned if any
+  `params.sections.*.versions` list is non-empty, not just a top-level one. The version-segment
+  regex walk it enables already matched agw oss's actual URL segments (`main`, `latest`, `1.x.x`)
+  without needing `$configuredVersions` from a top-level list, so this one check was the whole fix.
+- **Verified.** Local `hugo160` build of agentgateway-oss-website (via its local `replace` on this
+  module): before the fix, a site-wide sweep of every `href="/docs/..."` found 311 hrefs missing
+  their `/standalone/<version>` or `/kubernetes/<version>` segment, including the exact
+  `/docs/security/jwt/` case confirmed live above; after the fix, 0 remain (the 2 leftover
+  non-prefixed hrefs are unrelated — the bare `/docs/` section root, and a hardcoded href in
+  `layouts/_default/enterprise.html` that this shortcode never touches). All 27 existing
+  `tests/link-hextra-*.spec.ts` cases still pass on both fixture brands.
+- Takes effect for agentgateway-oss-website (and any future consumer with the same
+  per-section-only versions shape) once it bumps its extras pin; kgateway-oss and the docs hub
+  already declare a top-level `params.versions` in addition to their section overrides, so they
+  were never exposed to this and need no action beyond their normal pin bump.
+
+---
+
 ## [0.2.0] — 2026-08-20
 
 Work on the gating and reuse shortcodes producing markdown/HTML leaks in visible output — plus the consumer-override convergence that fixing it exposed.
