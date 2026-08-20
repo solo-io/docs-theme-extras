@@ -1,0 +1,6 @@
+{{- /* Section/list-page (has its own _index.md) entry point for the `book`
+       output format — see _partials/docs/book-document.html for everything
+       this actually does. layouts/docs/single.book.html is this file's
+       twin for a leaf page (no _index.md, no children); both exist because
+       Hugo resolves an output format's template per page KIND. */ -}}
+{{- partial "docs/book-document.html" . -}}

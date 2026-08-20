@@ -87,26 +87,21 @@
    (`a { color: inherit; text-decoration: inherit }`) leaves the anchor
    painted in the banner's own body color with no underline. That is a link
    which is clickable but indistinguishable from the surrounding sentence.
-   Paint from the brand's runtime primary var, which both brand layers
-   redefine under `.dark`, and underline unconditionally so the affordance
-   still reads on the tinted banner background. */
+   Paint from the same --theme-link token `.content a` uses (both brand layers
+   define it per scheme) and underline unconditionally, so the affordance still
+   reads on the tinted banner background. The banner fill is the second-darkest
+   light surface in the theme, so it is one of the two backgrounds the
+   --theme-link values were solved against. */
 .version-banner a {
-  color: var(--theme-primary);
+  color: var(--theme-link);
   font-weight: 500;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
 .version-banner a:hover {
-  color: var(--theme-primary-hover, var(--theme-primary));
+  color: var(--theme-link-hover);
   text-decoration: none;
-}
-
-/* --theme-primary-hover is defined only in the brand layers' `:root`, not
-   their `.dark` block. Reusing the light-mode hover on the dark banner would
-   darken the link toward the background, so hold the resting color instead. */
-:where(.dark, .dark *) .version-banner a:hover {
-  color: var(--theme-primary);
 }
 
 /* ── Alerts and callouts ─────────────────────────────────────────────── */
@@ -170,6 +165,10 @@
 .alert-danger  { background: hsl(0, 70%, 97%); }
 .alert-default { background: hsl(226, 68%, 95.1%); }
 
+/* Alert icons stay on --theme-primary, NOT --theme-link: they are graphical,
+   so the WCAG floor is 3:1 (1.4.11) rather than the 4.5:1 that applies to link
+   text, and --theme-primary clears 3:1 on every alert fill. Same reasoning
+   keeps .section-card-icon and every accent border on --theme-primary. */
 .alert-info .solo-alert-icon    { color: var(--theme-primary); }
 .alert-warning .solo-alert-icon { color: #d97706; }
 .alert-success .solo-alert-icon { color: #059669; }
@@ -211,7 +210,7 @@
 }
 
 .copy-md-btn:hover {
-  color: var(--theme-primary);
+  color: var(--theme-link);
   border-color: var(--theme-primary);
 }
 
@@ -235,7 +234,7 @@
   border-color: #4b5563;
 }
 .dark .copy-md-btn:hover {
-  color: var(--theme-primary);
+  color: var(--theme-link);
   border-color: var(--theme-primary);
 }
 .dark .copy-md-btn.copied {
@@ -305,10 +304,24 @@
 }
 
 /* ── Links ───────────────────────────────────────────────────────────── */
-/* Link weight is component-shaped (consistent across brands). Link colors
-   live in brand-{oss,enterprise}.css. */
+/* Link weight is component-shaped (consistent across brands). Link COLOR is
+   wired here but VALUED per brand: --theme-link / --theme-link-hover are
+   defined in brand-{oss,enterprise}.css, including their `.dark` overrides.
+   Painting here rather than in each brand layer is what makes dark mode work —
+   both brands previously emitted a single light-mode link color for both
+   schemes (enterprise hardcoded #158bc2 with no `.dark` rule; OSS inherited
+   Hextra's prose color, which has no dark variant), so link text was the one
+   element that never flipped with the theme and fell below 4.5:1 in dark mode.
+   --theme-link is deliberately NOT --theme-primary: text needs 4.5:1
+   (WCAG 1.4.3) while icons and borders need only 3:1 (1.4.11), and one value
+   cannot serve both without over-darkening every accent in the theme. */
 .content a {
   font-weight: 500;
+  color: var(--theme-link);
+}
+
+.content a:hover {
+  color: var(--theme-link-hover);
 }
 
 /* ── Code block highlighted lines ────────────────────────────────────── */
@@ -410,36 +423,32 @@
   color: #d1d5db;
 }
 
-/* Nested ordered lists: lowercase letters.
-   `:not([start])` so that an explicit `<ol start="N">` continues the
-   counter from the prior sibling nested ol — needed when a list-item's
-   content includes a block (HTML pre, etc.) that Goldmark renders
-   outside the parent <li>, splitting one logical list into two
-   sibling <ol>s. Without this, item 9 after the split would render
-   as "a" instead of "i". */
-#content > .content ol ol:not([start]) {
-  counter-reset: sublistitem;
-}
+/* Nested ordered lists: lowercase letters; doubly-nested: lowercase roman.
+   These use the BUILT-IN `list-item` counter rather than a custom one, so the
+   HTML `start` attribute is honored for free: per the HTML Standard's list
+   rendering rules `ol` implies `counter-reset: list-item`, `<ol start="N">`
+   maps onto `counter-reset: list-item N-1`, and every `display: list-item`
+   element implies `counter-increment: list-item` (unaffected by the
+   `list-style: none` set above — the top-level rule already relies on this).
 
-#content > .content ol ol > li {
-  counter-increment: sublistitem list-item 0;
-}
+   That is what fixes numbering across a SPLIT list: when a numbered list is
+   interrupted by a block Goldmark renders outside the parent <li> — a
+   {{< tabs >}} block, a fenced code block, raw HTML — it emits two <ol>s and
+   puts `start="N"` on the second. Custom counters cannot see `start`, and
+   their scope only reaches FOLLOWING SIBLINGS, so when the two fragments end
+   up under different parent <li>s (the tabs case) the second restarted at "a".
+   solo-io/docs#3280 §2. Pure CSS, no JS shim, no number flip on load.
 
+   An explicit <ol start="1"> now correctly restarts at "a" (it continued the
+   previous letter before). Known engine gap: Chromium ignores <li value="N">
+   for counter(list-item); Goldmark never emits `value=`, so that is inert
+   here. */
 #content > .content ol ol > li::before {
-  content: counter(sublistitem, lower-alpha);
-}
-
-/* Doubly-nested ordered lists: lowercase roman numerals */
-#content > .content ol ol ol:not([start]) {
-  counter-reset: subsublistitem;
-}
-
-#content > .content ol ol ol > li {
-  counter-increment: subsublistitem list-item 0;
+  content: counter(list-item, lower-alpha);
 }
 
 #content > .content ol ol ol > li::before {
-  content: counter(subsublistitem, lower-roman);
+  content: counter(list-item, lower-roman);
 }
 
 /* ── Sidebar ─────────────────────────────────────────────────────────── */
@@ -783,14 +792,16 @@ pre.mermaid:not([data-processed]) {
 .dark .docs-tab:hover {
   color: #f3f4f6;
 }
+/* Active tab LABEL takes --theme-link (text, 4.5:1); the underline beneath it
+   stays on --theme-primary (graphical, 3:1). */
 .docs-tab-active,
 .docs-tab-active:hover {
-  color: var(--theme-primary, rgb(30, 64, 175));
+  color: var(--theme-link, rgb(30, 64, 175));
   border-bottom-color: var(--theme-primary, rgb(30, 64, 175));
 }
 .dark .docs-tab-active,
 .dark .docs-tab-active:hover {
-  color: var(--theme-primary, rgb(199, 210, 254));
+  color: var(--theme-link, rgb(199, 210, 254));
   border-bottom-color: var(--theme-primary, rgb(199, 210, 254));
 }
 
@@ -1063,6 +1074,30 @@ hr.footnotes-sep,
   -webkit-overflow-scrolling: touch;
 }
 .table-wrapper table {
+  /* Hextra's typography layer renders content tables `display: block` so they
+     scroll on phones. That is redundant here — `.table-wrapper` above already
+     owns the scroll — and it actively breaks the two declarations below: a
+     `display: block` element is not a table box, so `width` sizes the BLOCK
+     while the anonymous table inside it sizes to its own content, and
+     `table-layout` does not apply at all.
+
+     The visible symptom is a reference table whose trailing column is cut off
+     mid-word. Measured on gateway/1.22.x open_source_helm_chart_values at
+     1440px: the table box was 832px while the four columns ended at 1250px, so
+     115px of the Description column painted outside the box. `.table-wrapper`
+     reported `scrollWidth == clientWidth` and would not scroll, because the
+     overflow belonged to the table element, not to the wrapper — the reader had
+     to find and drag a scroller on the table itself. A 40-page sample of the
+     docs hub found 169 tables in this state, most of them plain markdown
+     tables rather than `table`-shortcode ones.
+
+     `display: table` restores a real table box: the columns are laid out inside
+     `width: 100%`, nothing paints outside it, and where the content genuinely
+     cannot fit, `.table-wrapper`'s `overflow-x: auto` scrolls as designed.
+     Column widths are unchanged — measured 262/86/223/375 before and after on
+     that page — so this is a containment fix, not a restyle.
+     `tests/table-display.spec.ts` pins it. */
+  display: table;
   width: 100%;
   table-layout: auto;
   border-collapse: collapse;
@@ -1145,7 +1180,16 @@ hr.footnotes-sep,
    specificity) regardless of source order. Note render-table.html also
    emits an INLINE `white-space: nowrap` on short cells (<=30 chars); inline
    styles beat these class rules, so in `wrap`/`equal` mode short cells stay
-   unwrapped — harmless, they're short by definition. */
+   unwrapped — harmless, they're short by definition.
+
+   Those short cells were briefly suspected of causing the cut-off trailing
+   column described on `.table-wrapper table` above, on the theory that a
+   nowrap cell holds a min-content floor its column cannot shrink below.
+   Stripping them did remove the overflow, but only by letting `overflow-wrap:
+   anywhere` collapse the short columns to one character per line — measured on
+   the same page, the `Type` column rendered `b/o/o/l` down four lines. The
+   `display: table` fix above keeps the columns at their natural widths
+   (262/86/223/375, unchanged) and needs no change here. */
 .solo-table--wrap .table-wrapper table {
   width: 100%;
   table-layout: auto;
@@ -1482,7 +1526,7 @@ svg.section-card-icon {
 }
 
 .version-dropdown-btn:hover {
-  color: var(--theme-primary);
+  color: var(--theme-link);
 }
 
 .version-dropdown-btn svg {
@@ -1527,7 +1571,7 @@ svg.section-card-icon {
 }
 
 .version-dropdown-item:hover {
-  color: var(--theme-primary);
+  color: var(--theme-link);
   background: #f9fafb;
 }
 
@@ -1537,7 +1581,7 @@ svg.section-card-icon {
 }
 
 .dark .version-dropdown-btn:hover {
-  color: var(--theme-primary);
+  color: var(--theme-link);
 }
 
 .dark .version-dropdown-menu {
@@ -1550,7 +1594,7 @@ svg.section-card-icon {
 }
 
 .dark .version-dropdown-item:hover {
-  color: var(--theme-primary);
+  color: var(--theme-link);
   background: #262626;
 }
 
@@ -1754,7 +1798,7 @@ details[open].hextra-search-other-versions > summary::before {
   border-bottom-color: #d1d5db;
 }
 .hextra-tabs-toggle[data-state="selected"] {
-  color: var(--theme-primary);
+  color: var(--theme-link);
   border-bottom-color: var(--theme-primary);
 }
 .dark .hextra-tabs-toggle {
@@ -1765,7 +1809,7 @@ details[open].hextra-search-other-versions > summary::before {
   border-bottom-color: #4b5563;
 }
 .dark .hextra-tabs-toggle[data-state="selected"] {
-  color: var(--theme-primary);
+  color: var(--theme-link);
   border-bottom-color: var(--theme-primary);
 }
 
@@ -2098,12 +2142,12 @@ details[open].hextra-search-other-versions > summary::before {
 }
 .sidebar-mobile-tab-active,
 .sidebar-mobile-tab-active:hover {
-  color: var(--theme-primary);
+  color: var(--theme-link);
   border-bottom-color: var(--theme-primary);
 }
 .dark .sidebar-mobile-tab-active,
 .dark .sidebar-mobile-tab-active:hover {
-  color: var(--theme-primary);
+  color: var(--theme-link);
   border-bottom-color: var(--theme-primary);
 }
 

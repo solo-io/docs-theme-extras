@@ -61,8 +61,14 @@
 
 {{- /* Inject parent version into nested link/reuse shortcodes */ -}}
 {{- if $parentVersion -}}
-  {{- /* Add version to link shortcodes */ -}}
+  {{- /* Add version to link shortcodes. `link` gets the same treatment as
+         link-hextra (which it now forwards to) — otherwise a `link` call in
+         reused content would render with no version/product context and fall
+         back to inferring from `.Page`, which is unreliable inside this
+         RenderString context. The `link\s+` pattern requires whitespace right
+         after "link" so it can't also match `link-hextra`. */ -}}
   {{- $content = replaceRE `{{<\s*link-hextra\s*(.*?)>}}` (printf "{{< link-hextra $1 version=\"%s\" product=\"%s\" >}}" $parentVersion $parentProduct ) $content -}}
+  {{- $content = replaceRE `{{<\s*link\s+(.*?)>}}` (printf "{{< link $1 version=\"%s\" product=\"%s\" >}}" $parentVersion $parentProduct ) $content -}}
   {{- $content = replaceRE `{{<\s*reuse\s*"([^"]+)"\s*>}}` (printf "{{< reuse \"%s\" \"%s\" \"%s\" >}}" "$1" $parentVersion $parentProduct ) $content -}}
   {{- /* keepVersion: preserve version string, inject parent version, convert to {{% %}} */ -}}
   {{- $content = replaceRE `\{\{<\s*(version\s+(?:include|exclude)-if="[^"]+?")\s+keepVersion="true"\s*>}}` (printf `{{%% $1 version="%s" %%}}` $parentVersion) $content -}}
@@ -121,34 +127,32 @@
 
 {{- end -}}
 
-{{- /* Table-row exception: a {{< version >}} that wraps one or more
-       pipe-delimited rows needs the percent form so the shortcode output
-       re-enters the markdown stream and the pipes get parsed as cell
-       delimiters. Angle form would emit opaque HTML inline and Goldmark
-       would treat the whole pipe-string as one <td> (or drop a multi-row
-       block entirely, since the rows land in the placeholder after the
-       table is parsed). The content group `(?:\s*\|[^\n]*\|)+` matches a
-       single same-line row OR several rows across lines (inter-row `\n`
-       absorbed by the leading `\s*`); every matched line must be a full
-       `|...|` row, so it won't affect the indented-list or fence-adjacent
-       cases that rely on staying in angle form. Mirrors rebase.html. */ -}}
-{{- $content = replaceRE `\{\{<\s*(version\s+(?:include|exclude)-if="[^"]+"[^>]*?)\s*>}}((?:\s*\|[^\n]*\|)+\s*)\{\{<\s*/version\s*>}}` "{{% $1 %}}$2{{% /version %}}" $content -}}
+{{- /* GATE-FORM-NORMALIZATION-v1
 
-{{- /* List-item exception: a version block whose inner content starts
-       with a bullet or numbered list marker at column 0 needs the percent
-       form so the marker re-enters the markdown stream as a real list
-       item. Angle form would emit the marker as literal text in the
-       surrounding placeholder context — when the version wraps a single
-       bullet adjacent to other bullets, Goldmark lazy-continues the prior
-       `<li>` and the `* [link](url)` survives as raw markdown (the leak
-       shape in `policy-merging.md`'s "Merging examples" list). Matches
-       same-line wraps (`{{< version >}}* item{{< /version >}}`) and
-       newline-prefixed multi-item blocks. Content must start at column 0
-       (no leading spaces before the marker) so we don't trip deeply-
-       indented version blocks where percent form's 4-space-code-block
-       rule would wrap inner content in `<pre><code>`. Mirrors the same
-       conversion in rebase.html. */ -}}
-{{- $content = replaceRE `\{\{<\s*(version\s+(?:include|exclude)-if="[^"]+"[^>]*?)\s*>}}((?:\r?\n)?(?:[*+\-]|[0-9]+\.)[ \t][\s\S]*?)\{\{<\s*/version\s*>}}` "{{% $1 %}}$2{{% /version %}}" $content -}}
+       Convert every TOP-LEVEL angle-form `version` / `conditional-text` gate in
+       the reused content to percent form, so its output re-enters the markdown
+       stream. utils/gate-emit.html emits `.Inner` untouched, and at top level
+       that is only transparent in percent form — angle form substitutes after
+       Goldmark has run, so raw markdown would survive as literal text.
+
+       Nested gates are deliberately LEFT AS ANGLE: at depth >= 1 percent form
+       hands the shortcode pre-rendered HTML, so converting them is the
+       regression rather than the fix. See utils/gate-normalize-form.html for
+       the measured evidence and for how depth is computed without a regex that
+       can count.
+
+       This replaces two shape-conditional exceptions (a table-row rule and a
+       list-item rule) that each converted only the cases someone had already
+       been bitten by. Nesting-aware conversion makes the body shape irrelevant,
+       which is the point: the old rules were a list of remembered bugs.
+
+       PLACEMENT IS LOAD-BEARING. This must run AFTER the two-pass
+       OSS->enterprise remap above, because the keepVersion guard
+       (kvincif=/kvexcif=) that protects those blocks from the remap is
+       percent-only — converting first would expose keepVersion blocks to the
+       remap and shift their version tokens. It must run BEFORE the <img src>
+       prefix and the final RenderString. */ -}}
+{{- $content = partial "utils/gate-normalize-form.html" $content -}}
 
 {{- /* Prefix root-absolute <img src="/..."> with the site's baseURL path so
        OSS-authored static image refs (e.g. /integrations/providers/*.svg, which
@@ -166,5 +170,68 @@
        into the middle of a code-block continuation line. RenderString wraps
        single-line content in a paragraph and emits a trailing newline. */ -}}
 {{- $rendered := $content | .Page.RenderString -}}
-{{- strings.TrimRight " \n\t" $rendered | safeHTML -}}
+{{- $rendered = strings.TrimRight " \n\t" $rendered -}}
+
+{{- /* Flatten to one logical line (newlines → &#10;) so a multi-line expansion
+       can't terminate a parent ordered list.
+
+       Only PERCENT form is at risk, and that is the whole reason this is here.
+       Hugo substitutes a shortcode's output at the call's source position; for
+       `2. {{%% reuse "…" %%}}` the first line lands at the list-item content
+       column but every later line lands at column 0, and Goldmark's list-item
+       continuation rule terminates the list there — closing </li>/</ol> early
+       and hoisting the snippet's tail into an <ol start="N"> fragment. Angle
+       form is immune (its output is placeholder-substituted AFTER Goldmark, so
+       the list is already parsed), which is why this went unnoticed upstream
+       for so long: the fixture only exercised angle form.
+
+       Goldmark does not decode HTML entities, so &#10; carries no block
+       meaning; browsers decode it to LF, and inside <pre> it still renders as a
+       line break. utils/flatten-rendered also collapses Hextra's copy-button
+       block and protects <script>/<style>.
+
+       This lived only in the docs hub's LOCAL reuse.html override until it was
+       upstreamed, which is exactly the shadowing problem OVERRIDES.md describes —
+       the module and the override had silently diverged. Guarded by
+       fixture/content/en/test/v2/reuse-list-continuation.md, which covers both
+       forms. The override's other divergence, a lone-<p> unwrap, was verified
+       DEAD before deletion: .Page.RenderString with no options renders at
+       display:"inline", which does not wrap single-line content in <p> at all,
+       so its condition was unreachable. */ -}}
+{{- /* bypassPre:false — the <pre> bypass is DISABLED here, deliberately.
+
+       With the bypass ON (the partial's default), a snippet containing a fenced
+       code block returned REAL newlines, and those newlines terminated the
+       enclosing list item. Measured on
+       fixture/content/en/test/v2/reuse-fence-step.md:
+
+         bypass ON   ->  </ol> count between step 1 and step 3 = 1  (list BROKEN,
+                         step 3 restarts a new <ol>)
+         bypass OFF  ->  </ol> count = 0                            (list intact)
+
+       The plan's Phase 7 entry said explicitly "do NOT fix with bypassPre:false
+       by analogy with callout.html … needs its own design", because the bypass
+       was documented as protecting Chroma output: flattening was said to turn
+       `\` line-continuations into literal `</span>` text via CommonMark
+       backslash-escaping of `\<` inside the spans.
+
+       That hazard was re-tested against the post-refactor pipeline and DOES NOT
+       REPRODUCE. The fixture snippet deliberately contains the exact trigger —
+       `echo \<not-a-tag\>`, a `cat <<EOF` heredoc, and trailing `\`
+       continuations — and Chroma highlighting is genuinely active on it
+       (7 `<span class="line">` chains in the output, verified, so the check is
+       not vacuous). The decoded code text is BYTE-IDENTICAL with the bypass on
+       and off, and `&lt;/span&gt;` never appears. The warning predates the
+       Phase 5 gate refactor, which removed the re-parse that caused it.
+
+       Real-world reach: 58 numbered steps in solo-io/docs, and 1 each in
+       kgateway-oss and agentgateway-oss-website, are a percent-form reuse as the
+       body of a list item.
+
+       Note this leaves NO caller enabling the bypass (callout.html also passes
+       false). The option is kept because it is a documented library default and
+       a consumer override could still want it — not because anything here uses
+       it. */ -}}
+{{- $rendered = partial "utils/flatten-rendered.html" (dict "html" $rendered "bypassPre" false) -}}
+{{- $rendered | safeHTML -}}
 

@@ -19,12 +19,39 @@ document.addEventListener("DOMContentLoaded", function () {
 // {{ end }}
 // {{ $noResultsFound := (T "noResultsFound") | default "No results found." }}
 
+// Versions visible in the version dropdown, keyed by URL SEGMENT.
+//
+// Two things this has to get right, both of which it got wrong before:
+//
+//   1. Collect from BOTH `params.versions` (flat) and `params.sections.<x>.versions`
+//      (per-section). A site that configures only sections — agentgateway.dev — used
+//      to produce an empty set here, which the filter below treats as "no filtering",
+//      so hidden versions leaked into "Other versions". That is why that repo carries
+//      a forked copy of this file.
+//   2. Key on `linkVersion`, not `version`. `getVersionFromURL` reads the URL path
+//      segment, so the set has to hold segments. Where the two differ the entry can
+//      never match and its results are dropped. Live example: gloo-mesh-enterprise
+//      and gloo-mesh-gateway declare version "2.14.x"/"2.13.x" with linkVersion
+//      "main"/"latest", so searching from an older version silently returned NO
+//      results for the two newest versions.
+//
+// This mirrors `_partials/utils/warn-missing-description.html`, which already walks
+// flat + sections and already keys on `linkVersion | default .version`. Keep the two
+// in step; this file was simply the one that never got updated.
+// {{ $verEntries := slice }}
+// {{ range (site.Params.versions | default slice) }}{{ $verEntries = $verEntries | append . }}{{ end }}
+// {{ range $k, $s := (site.Params.sections | default dict) }}{{ range ($s.versions | default slice) }}{{ $verEntries = $verEntries | append . }}{{ end }}{{ end }}
+// {{ $visibleVersions := slice }}
+// {{ range $verEntries }}{{ $label := .dropdown | default .version }}{{ if ne (trim $label " ") "" }}{{ $visibleVersions = $visibleVersions | append (.linkVersion | default .version) }}{{ end }}{{ end }}
+
 (function () {
   const searchDataURL = '{{ $searchData.RelPermalink }}';
   const resultsFoundTemplate = '{{ (T "resultsFound") | default "%d results found" }}';
-  // Versions visible in the dropdown (dropdown field non-empty/non-whitespace).
-  // Used to filter "Other versions" results so hidden versions don't appear.
-  const visibleVersions = new Set(JSON.parse('{{- $vs := slice -}}{{- range site.Params.versions -}}{{- $label := .dropdown | default .version -}}{{- if ne (trim $label " ") "" -}}{{- $vs = $vs | append .version -}}{{- end -}}{{- end -}}{{ $vs | jsonify }}'));
+  // Version URL segments whose dropdown label is non-empty/non-whitespace. Used to
+  // filter "Other versions" results so hidden versions don't appear. An EMPTY set
+  // disables the filter entirely (see the `.size === 0` guard below), so a
+  // collection bug here fails open and is invisible without a test.
+  const visibleVersions = new Set(JSON.parse('{{ $visibleVersions | uniq | jsonify }}'));
 
   const inputElements = document.querySelectorAll('.hextra-search-input');
   for (const el of inputElements) {

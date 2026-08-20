@@ -49,11 +49,6 @@ export function crawlBuiltRoot(): CrawledPage[] {
   return cache;
 }
 
-// Reset between test runs in unit tests; not used in normal Playwright flow.
-export function _resetCrawlCache(): void {
-  cache = null;
-}
-
 // Return only the explicitly listed pages from CONFIG, falling back to the
 // crawl when no [[pages]] entries are declared. Specs that test specific
 // behaviors against representative pages (contrast, viewport, browser specs)

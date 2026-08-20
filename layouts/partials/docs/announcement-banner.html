@@ -1,0 +1,21 @@
+{{- /*
+  The announcement banner plus its positioning wrapper, as the docs layouts
+  render it.
+
+  Deliberately NOT merged into `docs/chrome-top.html`. That partial is an
+  OVERRIDE SLOT: a consumer replaces it wholesale, and a replacement that wanted
+  to keep the banner would have to call `partial "docs/chrome-top.html"` — which,
+  since the consumer's file wins the lookup, calls ITSELF and blows the stack.
+  Keeping the default body under its own name is what makes
+  "override the slot, then call the default" possible.
+
+  Emits the wrapper ONLY when `announcement.html` actually produces output.
+  `announcement.html` is a no-op unless `site.Params.banner.message` or
+  `site.Data.announcement` is set, and emitting an empty `<div class="w-full z-10">`
+  for every consumer that configures neither would break the byte-identical
+  guarantee the slots are built on.
+*/ -}}
+{{- $announcement := partial "announcement.html" . -}}
+{{- if trim (printf "%s" $announcement) " \n\r\t" -}}
+<div class="w-full z-10">{{ $announcement }}</div>
+{{- end -}}

@@ -1,0 +1,28 @@
+{{- /*
+  EXTENSION SLOT — the max-width class applied to the docs page wrapper (the
+  flex container holding sidebar + TOC + article).
+
+  DEFAULT: `hextra-max-page-width`, which resolves to
+  `--hextra-max-page-width: 100%` in docs-theme-extras.css. That is a deliberate
+  full-width docs layout, present since the module's first commit, and it is
+  what the docs hub ships today.
+
+  A KNOWN WART, recorded here rather than silently "fixed": the docs hub sets
+  `[params.page] width = "wide"` in every product config, and this layout has
+  always IGNORED it. Honouring it would narrow every hub page from 100% to
+  90rem — a visible change that is not this module's call to make unilaterally,
+  and one that would also desynchronise the body from the navbar and footer
+  (both of which key off `--hextra-max-page-width: 100%`). So the default stays
+  as-is. If the hub wants its own config honoured, it overrides this partial.
+
+  TO OVERRIDE with the configured width (what kgateway.dev and
+  agentgateway.dev want — both set `page.width: wide`), create
+  `layouts/partials/docs/width-class.html` in the consumer containing:
+
+      {{ return partial "utils/page-width" . }}
+
+  Note the path is `partials/`, not `_partials/`.
+
+  Must `return` a string; it is interpolated straight into a class attribute.
+*/ -}}
+{{- return "hextra-max-page-width" -}}

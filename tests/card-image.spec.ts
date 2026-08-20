@@ -19,12 +19,19 @@ import { target } from "./helpers/target";
 // one card per form, each tagged with a MARKER_CARD_IMAGE_* title:
 //   ASSET    image="assets/img/test/light.svg"  → pipeline, must publish
 //   NOPREFIX image="img/test/light.svg"         → pipeline, must publish
-//   ROOTED   image="/test/images/logos/..."     → verbatim, real static file
+//   ROOTED   image="/images/logos/..."          → verbatim, real static file
 //   HTTP     image="https://avatars.githubusercontent.com/..." → verbatim external URL
 //
 // This is a static spec: it reads the built HTML from disk and, for the
 // pipeline forms, asserts the resolved src maps to a file that actually
 // exists under builtRoot (the on-disk equivalent of "doesn't 404").
+//
+// ROOTED is deliberately baseURL-agnostic ("/images/..." not
+// "/test/images/..."): a real root-absolute path resolves at the domain
+// root regardless of the docs subpath. Hugo's own publishDir only emits
+// under that subpath, so `make build-oss`/`build-enterprise` separately
+// mirrors fixture/static/images to true builtRoot for this case to have a
+// file to resolve against (see Makefile).
 
 type Card = { href: string; title: string; imageSrc: string | null };
 
@@ -115,7 +122,7 @@ test.describe("card shortcode image attribute", () => {
         c.title.includes("MARKER_CARD_IMAGE_ROOTED"),
       );
       expect(card, `no ROOTED card in ${label}`).toBeDefined();
-      expect(card!.imageSrc).toBe("/test/images/logos/logo-oss-test.svg");
+      expect(card!.imageSrc).toBe("/images/logos/logo-oss-test.svg");
       const resolved = fileForResolvedSrc(card!.imageSrc!);
       expect(
         fs.existsSync(resolved),

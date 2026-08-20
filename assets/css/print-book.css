@@ -1,0 +1,391 @@
+/* Paged.js pagination for the PDF-export book pipeline (layouts/docs/list.book.html).
+   Scoped to what CSS needs to own once tabs are pre-flattened server-side by
+   utils/unhide-tabs.html — page geometry, running headers, chapter breaks,
+   page numbers. Not the same stylesheet as docs-theme-extras.css's `@media
+   print` block, which hides UI chrome for single-page browser printing. */
+
+{{- /* See utils/resolve-latest-version.html, shared with the identical need
+       in docs/book-document.html. Resolves to "" on a site with no
+       site.Params.versions at all, so @bottom-right below just shows the
+       product name alone, unchanged. */ -}}
+{{- $productVersion := partial "utils/resolve-latest-version.html" . -}}
+
+@page {
+  size: letter;
+  margin: 2cm 1.75cm;
+
+  @bottom-left {
+    content: "{{ now.Format `January 2, 2006` }}";
+    font-size: 9pt;
+    color: #666;
+  }
+
+  @bottom-center {
+    content: counter(page);
+  }
+
+  @bottom-right {
+    content: "{{ site.Title }}{{ with $productVersion }} {{ . }}{{ end }}";
+    font-size: 9pt;
+    color: #666;
+  }
+
+  @top-left {
+    content: string(pdf-breadcrumb);
+    font-size: 9pt;
+    color: #666;
+  }
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 11pt;
+  line-height: 1.5;
+  color: #1a1a1a;
+}
+
+/* Explicit print scale for h2-h6 (h1 is never used — chapter titles start
+   at h2, see book-chapter-tree). Without this, h4-h6 fall back to the
+   browser's UA default sizing, which is NOT a logical descending scale
+   relative to body text: default h4 is 1em (same size as a paragraph) and
+   h5/h6 are smaller than body copy (0.83em/0.67em). That flattens or
+   inverts the visual hierarchy for any chapter nested 3+ levels deep,
+   exactly where utils/shift-headings.html can now push a page's own body
+   headings. break-after:avoid keeps a heading from stranding alone at the
+   bottom of a page, separated from the content it introduces. */
+h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  line-height: 1.25;
+  break-after: avoid;
+}
+
+h2 { font-size: 20pt; margin-top: 0; }
+h3 { font-size: 16pt; }
+h4 { font-size: 13pt; }
+h5 { font-size: 11.5pt; }
+h6 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.03em; }
+
+/* Cover page. Deliberately not height:100%+flexbox to vertically center —
+   Paged.js sizes page boxes during its own pagination pass, and a percentage
+   height set before that can resolve against the wrong containing block.
+   Padding-down from the top is simpler and reliable. */
+.pdf-cover {
+  break-after: page;
+  text-align: center;
+  padding-top: 6cm;
+}
+
+.pdf-cover-logo {
+  max-width: 280px;
+  margin: 0 auto 2rem;
+  display: block;
+}
+
+.pdf-cover-subtitle {
+  font-size: 14pt;
+  color: #666;
+  margin: 0;
+}
+
+.pdf-cover-version {
+  font-size: 11pt;
+  color: #666;
+  margin: 0.5rem 0 0;
+}
+
+.pdf-cover-date {
+  margin-top: 3rem;
+  color: #666;
+}
+
+.pdf-toc {
+  break-after: page;
+}
+
+.pdf-toc ul {
+  list-style: none;
+  padding-left: 1.25rem;
+}
+
+.pdf-toc > ul {
+  padding-left: 0;
+}
+
+.pdf-toc a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.pdf-chapter {
+  break-before: page;
+}
+
+/* "Part divider" treatment for section landings with no body content
+   (list.book.html's $isEmpty check) — a centered title (+ description, if
+   the page has one) instead of the normal top-aligned heading, so an
+   otherwise-empty chapter reads as a deliberate section boundary rather
+   than a stray page break. Padding-down from the top rather than
+   height:100%+flexbox centering, same reasoning as .pdf-cover above:
+   Paged.js sizes page boxes during its own pagination pass, so a
+   percentage height set before that can resolve against the wrong
+   containing block. */
+.pdf-divider {
+  text-align: center;
+  padding-top: 10cm;
+}
+
+.pdf-divider-description {
+  margin: 1rem auto 0;
+  max-width: 30rem;
+  color: #666;
+}
+
+/* Lighter sibling of .pdf-divider for a chunk root that HAS real content
+   (book-document.html's bookChunkRoot self branch) — centers just the
+   title/description block, not the whole page. Skips the 10cm top padding
+   .pdf-divider uses, since that assumes the div IS the whole page; here the
+   page's real content follows immediately after in normal (left-aligned)
+   flow, and a large top offset would just bury it partway down the page. */
+.pdf-chunk-title {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+/* A nested empty landing page inside an already-titled chunk (book-document
+   .html's $chunked flag) still shows its Description, just as a plain
+   paragraph instead of .pdf-divider-description's centered treatment — the
+   chunk already got its own title page from its root, so this one reads as
+   an ordinary heading with a one-line intro, not a second part boundary. */
+.pdf-chapter-description {
+  margin: 0.5rem 0 0;
+  color: #666;
+}
+
+/* Running-header source for @top-left above: string-set captures this
+   element's text into the "pdf-breadcrumb" named string, updated to the
+   latest value each time pagination crosses one of these markers. Hidden via
+   zero height/font-size rather than display:none — Paged.js (like most
+   string-set implementations) doesn't track a string-set value on a
+   display:none element at all, since it has no page position to track. */
+.pdf-breadcrumb-source {
+  string-set: pdf-breadcrumb content();
+  display: block;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-size: 0;
+  line-height: 0;
+}
+
+/* This document deliberately skips the live site's docs-theme-extras.css
+   (see the file header) since it's a standalone print artifact, not a
+   browsable page — but that also means none of the site's normal content
+   styling comes along for free, including image scaling. A reuse-image
+   call with no explicit `width` renders <img> with an empty width
+   attribute, so without this it displays at native pixel size (e.g. a
+   full-resolution browser screenshot) and overflows the page instead of
+   scaling down. Tables get the same treatment for the same reason. */
+.pdf-chapter img,
+.pdf-chapter video {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Inline utility icons (card.html's .section-card-icon, the alert-box icon
+   in github-style-alert.html, etc.) ship as bare <svg> with no width/height
+   at all — normal sizing comes from Tailwind hx: utility classes this
+   isolated print stylesheet never loads. Left unstyled, a browser falls back
+   to its ~300px default replaced-element size for an svg with no intrinsic
+   dimensions, which is what made a card's icon balloon to nearly full-page
+   width. Giving every inline svg a fixed, icon-sized default fixes that;
+   real diagram content (mermaid's own <svg>) opts back out via the
+   higher-specificity, later-declared rule below, so diagrams still scale to
+   the page instead of shrinking to icon size. */
+.pdf-chapter svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  vertical-align: -0.2em;
+}
+
+.pdf-chapter .mermaid svg {
+  width: auto;
+  max-width: 100%;
+  height: auto;
+}
+
+/* reuse-image's light/dark pair (docs-theme-extras.css: .toggle-dark shown in
+   light mode, .toggle-light shown when a .dark class is present) both render
+   unconditionally here, since this document never gets a .dark class and
+   never loads that toggle CSS — so a paired image shows twice without this.
+   A static PDF has no theme toggle, so always keep the light-mode variant. */
+.pdf-chapter .toggle-light {
+  display: none;
+}
+
+/* GitHub-style callouts (render-blockquote-alert.html / github-style-alert.html)
+   normally get their box and color from hx: Tailwind classes this document
+   never loads, so without this a `> [!NOTE]`/`[!WARNING]`/etc block would
+   print as plain, unset-off body text. github-style-alert.html always stamps
+   a `data-alert-type` attribute regardless of theme CSS, so that's used as
+   the hook instead of the hx: classes. Colors approximate the same per-type
+   Tailwind palette the live site uses (see github-style-alert.html's
+   $styles map) rather than one flat neutral box, so a scanned page still
+   distinguishes a warning from a note. Base rule doubles as the fallback for
+   any consumer-defined custom alert type (site.Params.themeExtras.alertTypes)
+   not covered below — the live site falls back to the green "default" style
+   in that case too. */
+.pdf-chapter [data-alert-type] {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  background: #dcfce7;
+  color: #14532d;
+}
+
+.pdf-chapter [data-alert-type="NOTE"] {
+  border-color: #bfdbfe;
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+
+.pdf-chapter [data-alert-type="IMPORTANT"] {
+  border-color: #e9d5ff;
+  background: #f3e8ff;
+  color: #581c87;
+}
+
+.pdf-chapter [data-alert-type="WARNING"] {
+  border-color: #fde68a;
+  background: #fef3c7;
+  color: #78350f;
+}
+
+.pdf-chapter [data-alert-type="CAUTION"] {
+  border-color: #fecaca;
+  background: #fee2e2;
+  color: #7f1d1d;
+}
+
+/* Auto-generated child cards (partials/auto-section-cards.html), e.g. the
+   "## Guides" links under a docs section landing page. Rendered as a plain
+   bordered-box list rather than mirroring the live site's card grid — a
+   CSS grid/flex layout interacts unpredictably with how Paged.js decides
+   where to break a row of boxes across a page boundary, and a PDF has no
+   hover/click affordance to preserve from the live design anyway.
+   break-inside keeps one card from splitting across two pages. */
+.pdf-chapter .section-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.pdf-chapter .section-card {
+  display: block;
+  break-inside: avoid;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.pdf-chapter .section-card-title {
+  font-weight: 600;
+  margin: 0;
+}
+
+.pdf-chapter .section-card-desc {
+  margin: 0.25rem 0 0;
+  color: #666;
+}
+
+.pdf-chapter .section-card-badge {
+  font-size: 9pt;
+  font-weight: 400;
+  color: #666;
+}
+
+/* A child page's `icon` front matter can resolve to a bare Material Icons
+   ligature (`<i class="material-icons">`, see auto-section-cards.html) —
+   that font is part of the live site's own asset pipeline, which this
+   standalone print document never loads, so left alone the ligature name
+   itself (e.g. "monitoring") would print as literal text next to the card
+   title instead of an icon. True inline <svg> icons (the other two
+   branches of that same partial) render fine without this, sized by the
+   general svg rule above. */
+.pdf-chapter i.section-card-icon {
+  display: none;
+}
+
+/* Table borders. Hextra's own table styling comes from Tailwind hx: classes
+   this document never loads, so without this a table's cells run together
+   with nothing but border-collapse (which only affects how adjoining
+   borders are drawn, not whether any exist).
+
+   table-layout: fixed pins column widths to the FIRST row Paged.js lays
+   out, for the table's whole run of page fragments. Without it (the
+   default `auto`), a long reference table that Paged.js splits across a
+   page break behaves as several independent tables for width purposes —
+   each fragment re-runs the browser's content-based column-width
+   algorithm against only the rows it happens to hold, so column widths
+   visibly shift from one page to the next. overflow-wrap on th/td is
+   required alongside `fixed`, not optional: a fixed column no longer
+   grows to fit an unbroken long token (e.g. a full metric name like
+   `kgateway_resources_updates_dropped_total`), so without a break
+   opportunity that cell's content pushes past its own column and off the
+   page's right margin instead of wrapping to a second line. */
+.pdf-chapter table {
+  max-width: 100%;
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.pdf-chapter th,
+.pdf-chapter td {
+  border: 1px solid #d1d5db;
+  padding: 0.4rem 0.75rem;
+  text-align: left;
+  overflow-wrap: break-word;
+}
+
+.pdf-chapter th {
+  background: #f3f4f6;
+  font-weight: 600;
+}
+
+/* Code blocks and diagrams shouldn't split across a page boundary if they
+   can help it — Paged.js honors break-inside on block-level elements. Long
+   lines wrap instead of overflowing the page, since a PDF can't scroll.
+   `<pre>`'s background normally comes from a Tailwind hx: class this
+   document doesn't load, hence the plain white block without this. Chroma's
+   syntax-highlighting classes (hugo.yaml: highlight.noClasses: false) are a
+   separate gap — the compiled `.chroma` CSS they need lives in
+   docs-theme-extras.css too, so code in the PDF is uncolored monospace text
+   regardless of this fix. */
+.pdf-chapter pre,
+.pdf-chapter .mermaid {
+  break-inside: avoid;
+  max-width: 100%;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.pdf-chapter pre {
+  background: #f6f8fa;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+}
+
+/* Hextra's per-code-block "Copy code" button (codeblock-copy-button.html):
+   an icon-only <button> whose icon is a CSS background-image from Hextra's
+   compiled stylesheet, which this document never loads. Without that CSS
+   it's an empty button, so the browser's default UA styling renders it as a
+   bare rounded pill — and it does nothing useful in a static PDF anyway. */
+.pdf-chapter .hextra-code-copy-btn-container {
+  display: none;
+}

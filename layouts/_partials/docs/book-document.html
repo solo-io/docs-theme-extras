@@ -1,0 +1,256 @@
+{{- /*
+  PDF-export book pipeline (originally piloted in ambientmesh.io — see
+  ~/.claude/plans/velvet-enchanting-parnas.md for the design history):
+  stitches every page under a docs section into one long HTML document, in
+  the same order as the left sidebar, for Paged.js (a consumer's own
+  scripts/render-pdf.mjs — Hugo modules can't distribute that Node tooling,
+  so every consumer keeps its own copy, along with the Makefile target and
+  package.json devDependencies) to paginate into a downloadable PDF.
+
+  Deliberately skips baseof.html and the normal docs chrome (navbar, sidebar,
+  in-page TOC) entirely — this document is a print artifact, not a browsable
+  page, so it's a self-contained HTML file from <!DOCTYPE html> down.
+
+  Only reachable at all when a consumer's own hugo.yaml defines the `book`
+  output format (Hugo doesn't merge top-level outputFormats config from an
+  imported module) and a page opts in via `outputs: ["html", "book"]` front
+  matter — both stay in the consumer, this partial (and its two thin
+  callers, layouts/docs/list.book.html and layouts/docs/single.book.html)
+  is the only shared part. Both callers exist because Hugo resolves output
+  format templates per page KIND — a section/list page (has its own
+  _index.md) and a leaf/single page (a bare .md with no children) need
+  separate template files even though they run identical logic; a leaf page
+  opting in with no matching single.book.html silently falls back to the
+  site's normal HTML template instead of erroring, which is how a missing
+  leaf-page template was first caught here (a chunk with no <script
+  src=".../paged.polyfill.js">, since it never rendered from this partial
+  at all).
+
+  Proven on ambientmesh.io, a flat/unversioned site with a single fixed docs
+  root. Adapting this to a VERSIONED site (per-version book generation,
+  version-root scoping) is real work not yet done — see the version-related
+  comments below for the one place that already anticipates it.
+
+  `bookChunkRoot: true` front matter (opt-in, defaults unset/false — no
+  behavior change for a consumer that never sets it, e.g. ambientmesh.io)
+  renders the opted-in page's OWN title as the first chapter/TOC entry,
+  before recursing into its children, instead of starting silently at its
+  children the way a true book root does. Needed when a large, versioned
+  site can't stitch its whole docs tree into one document at all (Paged.js
+  has a real ceiling somewhere around 150-200 pages — see docs-theme-extras
+  CHANGELOG.md) and instead generates one `book.html` per top-level section,
+  later merged into a single PDF by a consumer's render-pdf.mjs. Without
+  this, the merged PDF would lose its section groupings entirely — a flat
+  run of subsections with no heading marking which top-level section they
+  came from. A true single-document book root (ambientmesh.io's docs
+  section) doesn't want this: it already gets a proper title from its own
+  cover page, and repeating it as a first chapter would be redundant. A leaf
+  page (no children either way) should also set this — otherwise it has no
+  chapter at all, an empty book.
+
+  This define block calls itself via `{{ template "book-toc-tree" }}` and
+  `{{ template "book-chapter-tree" }}`, both defined at the bottom of this
+  same file — `define`/`template` register into whatever template Hugo is
+  currently parsing together, so this works the same inside a partial as it
+  did inside a plain layout file.
+*/ -}}
+<!DOCTYPE html>
+<html lang="{{ site.Language.Lang }}">
+<head>
+  <meta charset="utf-8">
+  <title>{{ site.Title }} Documentation</title>
+  {{- /* ExecuteAsTemplate lets print-book.css use the current build date in
+         its footer (@bottom-left) — plain resources.Get would emit that
+         Hugo template syntax as literal, invalid CSS text instead of
+         evaluating it. */ -}}
+  {{- with resources.Get "css/print-book.css" }}
+  {{- $css := . | resources.ExecuteAsTemplate "css/print-book.css" $ }}
+  <link rel="stylesheet" href="{{ $css.RelPermalink }}">
+  {{- end }}
+</head>
+<body>
+  {{- /* Conditional: sites with no site.Params.versions at all (ambientmesh.io,
+         the only site this has run on so far) always resolve $productVersion
+         to "" here, so the version line/footer suffix below simply don't
+         render — but a versioned site (agw, kgw, the docs hub) should show
+         one. See utils/resolve-latest-version.html, shared with the
+         identical need in print-book.css, for how the version is picked. */ -}}
+  {{- $productVersion := partial "utils/resolve-latest-version.html" . -}}
+  {{- $isChunkRoot := .Params.bookChunkRoot | default false -}}
+  <section class="pdf-cover">
+    {{- with site.Params.navbar.logo.path }}
+    <img src="{{ . | relURL }}" alt="{{ site.Title }}" class="pdf-cover-logo">
+    {{- end }}
+    <p class="pdf-cover-subtitle">Documentation</p>
+    {{- with $productVersion }}<p class="pdf-cover-version">Version {{ . }}</p>{{ end }}
+    <p class="pdf-cover-date">{{ now.Format "January 2, 2006" }}</p>
+  </section>
+
+  <nav class="pdf-toc">
+    <h2>Contents</h2>
+    {{- template "book-toc-tree" (dict "page" . "depth" 0 "self" $isChunkRoot) -}}
+  </nav>
+
+  {{- template "book-chapter-tree" (dict "page" . "depth" 0 "trail" slice "self" $isChunkRoot) -}}
+
+  {{- partial "scripts/mermaid.html" . }}
+  {{- /* auto:false stops the polyfill from pagination the instant it loads —
+         mermaid diagrams render asynchronously (fonts + requestAnimationFrame,
+         see scripts/mermaid.html), so pagination could start before diagrams
+         are in the DOM and never re-run. A consumer's render-pdf.mjs waits
+         for mermaid to finish, then calls window.PagedPolyfill.preview()
+         itself and awaits it, so pagination always sees the final DOM. */ -}}
+  <script>window.PagedConfig = { auto: false };</script>
+  <script src="https://cdn.jsdelivr.net/npm/pagedjs@0.4.3/dist/paged.polyfill.js"></script>
+</body>
+</html>
+
+{{- /* TOC walk: same page tree as the chapters below, rendered as nested
+       anchor links instead of content. `self` (only ever set on the initial
+       call from <body>, never on a recursive one) wraps the whole tree in
+       one extra <li> for the root page's own title — see bookChunkRoot in
+       this file's header comment. */ -}}
+{{- define "book-toc-tree" -}}
+  {{- $page := .page -}}
+  {{- if .self -}}
+    <ul>
+      <li>
+        <a href="#{{ $page.RelPermalink | anchorize }}">{{ $page.LinkTitle | default $page.Title }}</a>
+        {{- template "book-toc-tree" (dict "page" $page) -}}
+      </li>
+    </ul>
+  {{- else -}}
+    {{- with $page.Pages -}}
+      <ul>
+        {{- range . -}}
+          <li>
+            <a href="#{{ .RelPermalink | anchorize }}">{{ .LinkTitle | default .Title }}</a>
+            {{- template "book-toc-tree" (dict "page" .) -}}
+          </li>
+        {{- end -}}
+      </ul>
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* Chapter walk: depth-first, one <section> per page. Heading level is
+       capped at h6 (Hugo/HTML has nothing deeper) since a docs tree can
+       nest past that in principle, even though none does today.
+
+       $trail carries the ancestor titles seen so far (root to current
+       parent, current page's own title excluded — same convention as
+       docs-theme-extras' breadcrumb.html, which also omits the current
+       page since it's already shown as a heading). Threading it down
+       through the recursive call, rather than deriving it from .Ancestors,
+       reuses the walk's own parent chain directly. */ -}}
+{{- define "book-chapter-tree" -}}
+  {{- $page := .page -}}
+  {{- $depth := .depth -}}
+  {{- $trail := .trail -}}
+  {{- if .self -}}
+    {{- /* Renders $page itself as a level-2 chapter, ALWAYS with a centered
+           title (this is the chunk's own title page — see bookChunkRoot in
+           this file's header comment), then recurses into its children one
+           level deeper, passing "chunked" true so the loop branch below
+           knows to stop treating an empty nested landing page as its own
+           part divider — only a chunk's own root should read as a title
+           page now that each chunk gets one automatically.
+
+           A genuinely empty root (no body content at all, e.g. kgateway's
+           traffic-management/_index.md) gets the full-page `pdf-divider`
+           treatment, identical to any other empty landing page. A root with
+           real content (e.g. kgateway's migrate/_index.md, a multi-paragraph
+           intro) gets a lighter `pdf-chunk-title` treatment instead: just the
+           title/description centered, with the real content still rendered
+           below in normal flow — centering the whole page the way
+           `pdf-divider` does would either bury that content 10cm down the
+           page or, worse, center-align body paragraphs/lists/tables that
+           were never written to be read that way. */ -}}
+    {{- $anchor := $page.RelPermalink | anchorize -}}
+    {{- $navLabel := $page.LinkTitle | default $page.Title -}}
+    {{- $isEmpty := eq (len ($page.Content | plainify | strings.TrimSpace)) 0 -}}
+    <section class="pdf-chapter" id="{{ $anchor }}" data-source-path="{{ $page.RelPermalink }}">
+      <span class="pdf-breadcrumb-source">{{ delimit $trail " / " }}</span>
+      <div class="{{ if $isEmpty }}pdf-divider{{ else }}pdf-chunk-title{{ end }}">
+        <h2>{{ $page.Title }}</h2>
+        {{- with $page.Description }}<p class="pdf-divider-description">{{ . }}</p>{{ end -}}
+      </div>
+      {{- if not $isEmpty -}}
+        {{- $content := partial "utils/unhide-tabs.html" $page.Content -}}
+        {{- partial "utils/shift-headings.html" (dict "html" $content "shift" (add $depth 1)) | safeHTML }}
+      {{- end -}}
+      {{- /* The live site's docs/list.html renders this AFTER .Content, for any
+             section whose own body ends in a heading like "## Guides" with no
+             manual {{< cards >}} — the actual links only ever come from this
+             partial, not from .Content. Missing here left those headings with
+             nothing under them in every book/chunk render. Runs unconditionally
+             (matching the live site): it no-ops on its own for a page with no
+             children, `disableCards: true`, or manual cards already rendered
+             during .Content above. */ -}}
+      {{- partial "auto-section-cards.html" $page -}}
+    </section>
+    {{- template "book-chapter-tree" (dict "page" $page "depth" (add $depth 1) "trail" ($trail | append $navLabel) "chunked" true) -}}
+  {{- else -}}
+  {{- $chunked := .chunked | default false -}}
+  {{- range $page.Pages -}}
+    {{- $anchor := .RelPermalink | anchorize -}}
+    {{- $level := add (add $depth 1) 1 -}}
+    {{- $navLabel := .LinkTitle | default .Title -}}
+    {{- /* data-source-path records where this chapter's content actually lived
+           before being flattened into one document — a consumer's
+           render-pdf.mjs needs it to correctly resolve any dot-relative
+           links inside (e.g. auto-section-cards.html's "../observability/"),
+           which are authored to work relative to THIS page's own directory,
+           not book.html's. */ -}}
+    {{- /* Some section landings are pure front matter — a title/description
+           with no body content, meant on the live site to just introduce
+           their child pages via the sidebar. Stitched into the book
+           verbatim, that's a break-before:page chapter holding nothing but
+           a heading, which reads as a stray page break rather than a
+           deliberate section boundary. Rendering those as a centered "part
+           divider" instead — reusing the description the live site already
+           has and the book otherwise never shows — makes the boundary
+           intentional and gives the page a reason to exist. Pages with real
+           body content (even a one-line intro) keep the normal top-aligned
+           heading + content layout.
+
+           $chunked (true for every descendant of a bookChunkRoot page, see
+           the self branch above; always false for a true single-document
+           book like ambientmesh.io's, which never sets bookChunkRoot) turns
+           this OFF even when $isEmpty — a chunk already gets its own title
+           page from its root, so an empty nested landing further down (e.g.
+           kgateway's setup/listeners/_index.md) reads as a stray full-page
+           divider in the middle of a chunk rather than a real boundary.
+           Still shows the page's Description as an ordinary paragraph in
+           that case, just not centered — the text isn't lost, only the
+           divider styling is skipped. */ -}}
+    {{- $isEmpty := eq (len (.Content | plainify | strings.TrimSpace)) 0 -}}
+    {{- $showDivider := and $isEmpty (not $chunked) -}}
+    <section class="pdf-chapter{{ if $showDivider }} pdf-divider{{ end }}" id="{{ $anchor }}" data-source-path="{{ .RelPermalink }}">
+      {{- /* Always emitted, even with an empty $trail (top-level chapters) —
+             string-set only updates when a new source element is crossed
+             during pagination, so a top-level chapter that skipped this
+             (previously gated behind `with $trail`) left the running header
+             showing whatever nested breadcrumb the LAST deeper chapter had
+             set, e.g. a top-level section wrongly showing a stale breadcrumb
+             left over from a nested section's children. delimit on an empty
+             slice is "", clearing it. */ -}}
+      <span class="pdf-breadcrumb-source">{{ delimit $trail " / " }}</span>
+      {{- if eq $level 2 }}<h2>{{ .Title }}</h2>
+      {{- else if eq $level 3 }}<h3>{{ .Title }}</h3>
+      {{- else if eq $level 4 }}<h4>{{ .Title }}</h4>
+      {{- else if eq $level 5 }}<h5>{{ .Title }}</h5>
+      {{- else }}<h6>{{ .Title }}</h6>
+      {{- end }}
+      {{- if $isEmpty -}}
+        {{- with .Description }}<p class="{{ if $showDivider }}pdf-divider-description{{ else }}pdf-chapter-description{{ end }}">{{ . }}</p>{{ end -}}
+      {{- else -}}
+        {{- $content := partial "utils/unhide-tabs.html" .Content -}}
+        {{- partial "utils/shift-headings.html" (dict "html" $content "shift" (add $depth 1)) | safeHTML }}
+      {{- end -}}
+      {{- partial "auto-section-cards.html" . -}}
+    </section>
+    {{- template "book-chapter-tree" (dict "page" . "depth" (add $depth 1) "trail" ($trail | append $navLabel) "chunked" $chunked) -}}
+  {{- end -}}
+  {{- end -}}
+{{- end -}}

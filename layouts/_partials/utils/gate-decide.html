@@ -1,0 +1,64 @@
+{{- /* gate-decide — the single include-if / exclude-if evaluator for the gating
+       shortcodes.
+
+       Replaces four near-duplicate condition ladders (two in version.html, two
+       in conditional-text.html) that had drifted apart in three ways. All three
+       divergences are fixed here, deliberately:
+
+         1. BOTH ATTRS SET is now an error. The old ladders used
+            `if isset "include-if" … else if isset "exclude-if"`, so setting both
+            silently ignored exclude-if and hid the typo.
+         2. COMMA LIST ENTRIES ARE TRIMMED. `include-if="a, b"` split to
+            ["a", " b"], and " b" matched nothing — a gate that looked correct
+            and silently never fired.
+         3. MEMBERSHIP, NOT SUBSTRING. version.html's keepVersion landing zone
+            used `in $include $versionToml` where $include is a STRING, so Go's
+            `in` did a substring test: include-if="12.4.x" matched version
+            "2.4.x". Tokens are compared as slice members now.
+
+       Input dict:
+         sc     — the shortcode context (for .Params, .Get, .Position)
+         tokens — slice of strings that may satisfy the condition. version.html
+                  passes both the canonical version ("1.4.x") and the stable
+                  linkVersion ("main"), so `include-if="main"` survives a
+                  release bump; conditional-text passes its single build
+                  condition.
+
+       Returns bool: emit the body or not. A gate with NEITHER attribute returns
+       false, matching the old behavior (no attribute, no emit). */ -}}
+
+{{- $sc := .sc -}}
+{{- $tokens := .tokens -}}
+
+{{- $hasInclude := isset $sc.Params "include-if" -}}
+{{- $hasExclude := isset $sc.Params "exclude-if" -}}
+
+{{- if and $hasInclude $hasExclude -}}
+  {{- errorf "The %q shortcode has both include-if and exclude-if; use one. See %s" $sc.Name $sc.Position -}}
+{{- end -}}
+
+{{- $raw := "" -}}
+{{- if $hasInclude -}}
+  {{- $raw = $sc.Get "include-if" | default "" -}}
+{{- else if $hasExclude -}}
+  {{- $raw = $sc.Get "exclude-if" | default "" -}}
+{{- end -}}
+
+{{- $list := slice -}}
+{{- range (split $raw ",") -}}
+  {{- with (trim . " \t") -}}{{- $list = $list | append . -}}{{- end -}}
+{{- end -}}
+
+{{- $hit := false -}}
+{{- range $tokens -}}
+  {{- if and . (in $list .) -}}{{- $hit = true -}}{{- end -}}
+{{- end -}}
+
+{{- $emit := false -}}
+{{- if $hasInclude -}}
+  {{- $emit = $hit -}}
+{{- else if $hasExclude -}}
+  {{- $emit = not $hit -}}
+{{- end -}}
+
+{{- return $emit -}}

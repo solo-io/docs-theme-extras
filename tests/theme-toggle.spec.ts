@@ -6,7 +6,9 @@ import { target } from "./helpers/target";
  *
  * R1 — CSS @layer cascade conflict (padding + border)
  *   Hextra v0.12+ compiles every hx:* utility class into @layer utilities in
- *   main.css.  When a consumer also loads Tailwind v3 (whose preflight is
+ *   the consumer's COMPILED bundle (css/compiled/main.min.css — not this
+ *   module's former assets/css/main.css, which was dead code and is gone).
+ *   When a consumer also loads Tailwind v3 (whose preflight is
  *   unlayered), the unlayered rules always win the cascade regardless of
  *   specificity:
  *

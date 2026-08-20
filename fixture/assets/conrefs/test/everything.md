@@ -741,6 +741,19 @@ The `table` shortcode with `mode="wrap"`: fills the body width and wraps content
 | `timeout` | A fairly long description that should wrap within the body width rather than forcing the table wider than the page or scrolling horizontally. |
 {{% /table %}}
 
+### Table shortcode wrap mode with short cells
+
+The real regression shape: four columns, so render-table.html also tags it `.table-capped`, and the first three columns hold cells of 30 characters or fewer, which render-table.html would otherwise stamp with an inline `white-space: nowrap`. Those cells used to hold a min-content floor that pushed the Description column off the right edge. `table-display.spec.ts` asserts zero horizontal overflow here.
+
+{{% table mode="wrap" %}}
+| Option | Type | Default Value | Description |
+| ------ | ---- | ------------- | ----------- |
+| `gateway.image.registryPrefix` | map[string]interface{} | quay.io/solo-io/gloo-envoy | The image registry prefix for the container that runs in the gateway proxy deployment. |
+| `gateway.image.pullPolicyName` | map[string]interface{} | quay.io/solo-io/gloo-envoy | Enable the Kubernetes Gateway integration controller for this installation. |
+| `gatewayParameters.image.tag` | string | | The image tag for the container that runs in the gateway proxy deployment. |
+| `gatewayParameters.image.digest` | string | | The container image's hash digest, for example `sha256:12345...`, consumed when the variant is standard. If the image does not have a distroless variant, this field contains the digest for the standard image variant instead. |
+{{% /table %}}
+
 ### Table shortcode nowrap mode
 
 The `table` shortcode with `mode="nowrap"`: columns sized to content, no wrapping, wrapper scrolls when wider than the body.
@@ -749,6 +762,7 @@ The `table` shortcode with `mode="nowrap"`: columns sized to content, no wrappin
 | Command | Description |
 | ------- | ----------- |
 | `kubectl get pods -n agentgateway -o wide --show-labels --field-selector=status.phase=Running` | Sized to content, no wrapping. |
+| `kubectl get pods` | Short cell. |
 {{% /table %}}
 
 ### Table shortcode equal mode
@@ -1087,9 +1101,17 @@ Run the {{% conditional-text include-if="test" %}}`COND_IN_CODEPHRASE`{{% /condi
 
 ### Around bold text
 
-The setting **{{% version include-if="v2" %}}MARKER_VERSION_IN_BOLD{{% /version %}}** is v2-only.
+<!-- A gate must wrap the WHOLE inline construct, never sit inside one. With the
+     bold markers on the OUTSIDE and the gate within them, an excluded gate leaves
+     the two asterisk pairs adjacent and CommonMark renders four literal asterisks
+     — visible on the page. Guarded by tests/gate-inline-form.spec.ts and the
+     empty_emphasis pattern in tests/helpers/markdown-leaks.ts.
+     NOTE: do not write live shortcode syntax in a comment here. Hugo expands
+     shortcodes BEFORE markdown, so they run inside HTML comments too; an
+     argument-less one fails the build outright. -->
+The setting {{% version include-if="v2" %}}**MARKER_VERSION_IN_BOLD**{{% /version %}} is v2-only.
 
-The setting **{{% conditional-text include-if="test" %}}COND_IN_BOLD{{% /conditional-text %}}** is build-gated.
+The setting {{% conditional-text include-if="test" %}}**COND_IN_BOLD**{{% /conditional-text %}} is build-gated.
 
 ### Around heading text
 
@@ -1198,7 +1220,7 @@ inner: value
 
 ### Cards whose link attribute is itself a shortcode call
 
-The card shortcode takes a `link` named argument. Hugo treats backtick-quoted shortcode-argument values as literal strings — the inner `{{< link >}}` call is not expanded by Hugo's shortcode parser. The card shortcode detects nested shortcode syntax in its `link` parameter and resolves it via `RenderString` before using the result as the `href` value. The test asserts the rendered anchor's `href` matches the version-correct URL the inner `link` shortcode resolves to (for example `/test/v2/rebased/` on v2 pages).
+The card shortcode takes a `link` named argument. Hugo treats backtick-quoted shortcode-argument values as literal strings — the inner `{{</* link */>}}` call is not expanded by Hugo's shortcode parser. The card shortcode detects nested shortcode syntax in its `link` parameter and resolves it via `RenderString` before using the result as the `href` value. The test asserts the rendered anchor's `href` matches the version-correct URL the inner `link` shortcode resolves to (for example `/test/v2/rebased/` on v2 pages).
 
 {{< cards >}}
 {{% version include-if="v2" %}}{{< card link=`{{< link path="rebased" >}}` title="MARKER_NESTED_ARG_TITLE Nested link in card" subtitle="Card with a nested shortcode call as its link attribute." icon="document" >}}{{% /version %}}
@@ -1212,7 +1234,7 @@ The card shortcode takes an optional `image` named argument. An author can write
 {{< cards >}}
 {{< card link="../rebased/" title="MARKER_CARD_IMAGE_ASSET Asset-relative with prefix" subtitle="image written as assets/img/test/light.svg; must resolve through the pipeline." image="assets/img/test/light.svg" >}}
 {{< card link="../rebased/" title="MARKER_CARD_IMAGE_NOPREFIX Asset-relative no prefix" subtitle="image written as img/test/light.svg; resources.Get is already assets-relative." image="img/test/light.svg" >}}
-{{< card link="../rebased/" title="MARKER_CARD_IMAGE_ROOTED Root-absolute static" subtitle="image is a published static path; passed through verbatim." image="/test/images/logos/logo-oss-test.svg" >}}
+{{< card link="../rebased/" title="MARKER_CARD_IMAGE_ROOTED Root-absolute static" subtitle="image is a published static path; passed through verbatim." image="/images/logos/logo-oss-test.svg" >}}
 {{< card link="../rebased/" title="MARKER_CARD_IMAGE_HTTP External URL" subtitle="image is an absolute external URL; passed through verbatim." image="https://avatars.githubusercontent.com/u/26319377?v=4" >}}
 {{< /cards >}}
 

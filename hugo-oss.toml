@@ -259,6 +259,31 @@ pageContextMode = "siteParams"
   dropdown = "demo override: v1 only"
   linkVersion = "v1"
 
+# Search-only version entries. Deliberately NOT referenced by any
+# {{< version-cards >}} call and NOT backed by any content — they exist solely so
+# that flexsearch.js's `visibleVersions` set is non-vacuous for the three things
+# it has to get right, none of which the `demo` section above can detect (its
+# entries duplicate the top-level v2/v1, and its linkVersion equals its version):
+#
+#   1. params.sections is collected at ALL. Before v0.2.0-beta.2 only the
+#      top-level params.versions list was read, so a sections-only site
+#      (agentgateway.dev) produced an empty set, which disables the filter.
+#   2. The set is keyed on linkVersion, not version — the filter compares against
+#      a URL path segment. `v9` vs `v9-link` below is the probe for that.
+#   3. A whitespace-only `dropdown` means "hidden", so `v8-link` must NOT appear.
+#
+# Asserted by tests/search-visible-versions.spec.ts.
+[[params.sections.searchonly.versions]]
+  version = "v9"
+  dropdown = "search fixture: v9"
+  linkVersion = "v9-link"
+
+[[params.sections.searchonly.versions]]
+  version = "v8"
+  dropdown = "   "
+  linkVersion = "v8-link"
+
+
 [[menu.main]]
   name = "Search"
   weight = 1

@@ -1,0 +1,15 @@
+{{- /* FIXTURE-ONLY. Not shipped to consumers — fixture/layouts is mounted by
+       hugo-oss.toml / hugo.toml only.
+
+       Renders the RAW result of `utils/gate-normalize-form.html` for one case
+       file, so `tests/gate-normalize.spec.ts` can compare the real Go template
+       against the TypeScript port in `tests/helpers/gate-normalize.ts`. Without
+       this the port could drift away from the template it models and the
+       corpus-agreement test would keep passing while shipping wrong output.
+
+       Escaped and wrapped in <pre> so the result is inspected as TEXT and never
+       re-rendered as markdown. */ -}}
+{{- $case := .Get "case" -}}
+{{- $r := resources.Get (printf "conrefs/test/gatenorm/%s.md" $case) -}}
+{{- if not $r -}}{{- errorf "gate-normalize-probe: no case file for %q" $case -}}{{- end -}}
+<pre data-gatenorm="{{ $case }}">{{ partial "utils/gate-normalize-form.html" $r.Content }}</pre>

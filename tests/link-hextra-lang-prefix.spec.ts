@@ -25,7 +25,7 @@ import path from "node:path";
 
 const SHORTCODE = path.resolve(
   __dirname,
-  "../layouts/_shortcodes/link-hextra.html",
+  "../layouts/_partials/utils/resolve-link.html",
 );
 
 // Strip Go/Hugo template comments (`{{- /* … */ -}}`) so the assertions match
@@ -46,9 +46,15 @@ test.describe("link-hextra strips the language prefix before version inference",
   test("`.Site.LanguagePrefix` is stripped from the permalink before the version regex", () => {
     const src = activeSrc();
 
-    // The version-inference regex (matches product/version in the URL). Its
-    // position is the boundary the language strip must precede.
-    const verMatchIdx = src.search(/findRE\s+`\(\?:kgateway/);
+    // The version-inference step. Its position is the boundary the language
+    // strip must precede.
+    //
+    // This used to look for `findRE \`(?:kgateway…\``, the product-name-anchored
+    // regex. That regex is gone: it only recognized the docs hub's URL shape, so
+    // OSS sites could not infer a version at all and had to fork this file.
+    // Version inference is now a segment walk; the marker is the per-segment
+    // version pattern.
+    const verMatchIdx = src.search(/findRE\s+`\^\(\?:\\d\+/);
     expect(
       verMatchIdx,
       "version-inference `findRE` not found — the shortcode changed shape; " +

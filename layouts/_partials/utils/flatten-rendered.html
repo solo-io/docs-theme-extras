@@ -31,7 +31,17 @@
   The partial emits its result directly (no `{{ return }}`) so callers
   can pipe it through safeHTML in the conventional way.
 */ -}}
-{{- $rendered := printf "%s" . -}}
+{{- /* Input: either the rendered HTML directly, or a dict
+         { "html": <rendered>, "bypassPre": <bool> }
+       to override the <pre> bypass documented below. Default (and the plain
+       string form) keeps the bypass on. */ -}}
+{{- $bypassPre := true -}}
+{{- $in := . -}}
+{{- if reflect.IsMap . -}}
+  {{- $in = .html -}}
+  {{- if isset . "bypassPre" -}}{{- $bypassPre = .bypassPre -}}{{- end -}}
+{{- end -}}
+{{- $rendered := printf "%s" $in -}}
 {{- /* Pre-collapse Hextra's <div class="hextra-code-copy-btn-container">…
        </button></div> block to a single logical line before the global
        \n → &#10; replace below. Hextra's codeblock-copy-button partial emits
@@ -64,7 +74,7 @@
        (output: `&lt;`). Mirror the main-branch version.html bypass:
        when <pre is present, emit the rendered HTML untouched (after the
        copy-button collapse, which is safe for any context). */ -}}
-{{- if strings.Contains $rendered "<pre" -}}
+{{- if and $bypassPre (strings.Contains $rendered "<pre") -}}
 {{- $rendered | safeHTML -}}
 {{- else -}}
 {{- $protected := findRE `(?s)<(?:script|style)\b[^>]*>.*?</(?:script|style)>` $rendered -}}
@@ -72,7 +82,32 @@
   {{- $placeholder := printf "__FLATTEN_PROTECT_%d__" $i -}}
   {{- $rendered = replace $rendered $block $placeholder -}}
 {{- end -}}
+{{- /* <pre> is protected the same way <script>/<style> are, and for a related
+       reason: the newlines INSIDE it are content (they are the code's line
+       breaks), whereas every other newline in rendered HTML is source
+       formatting. Separating the two is what lets the formatting newlines be
+       dropped rather than encoded.
+
+       Without this, encoding every newline put a literal `&#10;` inside heading
+       TEXT — extras' heading hook emits
+       `<h2>Alerts<span id=…></span>\n    <a class="subheading-anchor"></a></h2>`
+       — which polluted the TOC label, the copy-as-markdown payload and the
+       accessible name on 23 headings of the fixture's `everything` page. */ -}}
+{{- $preBlocks := findRE `(?s)<pre\b[^>]*>.*?</pre>` $rendered -}}
+{{- range $i, $block := $preBlocks -}}
+  {{- $rendered = replace $rendered $block (printf "__FLATTEN_PRE_%d__" $i) -}}
+{{- end -}}
 {{- $rendered = replace $rendered "\n" "&#10;" -}}
+{{- /* Formatting-only newlines: an encoded newline (plus any indent) that runs
+       straight into the next tag carries no visible whitespace, so collapse it
+       to a single space. A space, not nothing, because between two INLINE
+       elements the whitespace is word-separating. */ -}}
+{{- $rendered = replaceRE `(&#10;)+\s*<` " <" $rendered -}}
+{{- /* Restore each <pre> with its own newlines encoded, so the code keeps its
+       line breaks in the browser while staying invisible to Goldmark. */ -}}
+{{- range $i, $block := $preBlocks -}}
+  {{- $rendered = replace $rendered (printf "__FLATTEN_PRE_%d__" $i) (replace $block "\n" "&#10;") -}}
+{{- end -}}
 {{- range $i, $block := $protected -}}
   {{- $placeholder := printf "__FLATTEN_PROTECT_%d__" $i -}}
   {{- $rendered = replace $rendered $placeholder (printf "\n%s\n" $block) -}}

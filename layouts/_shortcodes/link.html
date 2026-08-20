@@ -1,36 +1,26 @@
-{{- $path := .Get "path" -}}
-{{- /* Translation export mode: emit a placeholder (registered verbatim in the
-       page store) that restores to the source {{< link path="..." >}} form
-       AFTER HTMLToMarkdown. The placeholder rides through as the href of the
-       enclosing markdown link ([text](placeholder)); copy-markdown.html
-       restores it before its link-rewriting passes, so the translation
-       snapshot keeps the shortcode (translate only the display text) instead
-       of a root-absolute URL that doubles the prefix / drops ja/. Gated on
-       hugo.Environment so normal builds resolve the real URL below. */ -}}
-{{- if eq hugo.Environment "translation" -}}
-  {{- $reg := .Page.Store.Get "transReg" | default slice -}}
-  {{- $ph := printf "XTRANSPH%dX" (len $reg) -}}
-  {{- $reg = $reg | append (dict "ph" $ph "text" (printf "{{< link path=\"%s\" >}}" $path)) -}}
-  {{- .Page.Store.Set "transReg" $reg -}}
-  {{- $ph -}}
-{{- else -}}
-{{- $finalURL := printf "/%s/%s" .Page.FirstSection.RelPermalink $path -}}
+{{- /* link is an alias for link-hextra — same relationship as alert/callout,
+       but implemented as a shared partial call rather than alert's
+       "build a shortcode string and RenderString it" trick (see
+       utils/resolve-link.html for why: link-hextra's output is a bare URL
+       string, not markdown, so there is nothing RenderString needs to
+       reprocess, and going through it anyway broke version inference in
+       deeply-nested contexts). link-hextra is the canonical, version/
+       product-aware implementation; this exists only so existing `link`
+       call sites keep working without a repo-wide sweep.
 
-{{- /* Append a slash if the link is not a fragment */ -}}
-{{- if not (strings.Contains $finalURL "#") -}}
-  {{- $finalURL = printf "%s/" $finalURL -}}
-{{- end -}}
-
-{{- /* Replace all double slashes with single slashes as a safety measure */ -}}
-{{- /* Preserve the protocol separator (://) by temporarily replacing it */ -}}
-{{- $finalURL = replace $finalURL "://" "__PROTOCOL_SEPARATOR__" -}}
-{{- /* Loop until no more double slashes exist (max 10 iterations for safety) */ -}}
-{{- range $i := (seq 10) -}}
-  {{- if (strings.Contains $finalURL "//") -}}
-    {{- $finalURL = replace $finalURL "//" "/" -}}
-  {{- end -}}
-{{- end -}}
-{{- /* Restore the protocol separator */ -}}
-{{- $finalURL = replace $finalURL "__PROTOCOL_SEPARATOR__" "://" -}}
-{{- $finalURL -}}
-{{- end -}}
+       Forwarding matters beyond naming: link's OLD implementation resolved
+       `path` against `.Page.FirstSection.RelPermalink`, which has no notion
+       of version or product. That happened to produce correct URLs on the
+       docs hub, where a product's own Hugo build treats the version as the
+       true top-level section (baseURL already carries the product). It does
+       NOT hold on a standalone OSS site (kgateway.dev, agentgateway.dev),
+       where one Hugo build serves multiple doc flavors under real path
+       segments like `/docs/envoy/2.1.x/...` — the version is several
+       segments deep, not the first one. It also had no equivalent of
+       link-hextra's product-aware `reference/api` / `reference/cel`
+       cross-flavor routing, so a `link` call inside content pulled across
+       products via `rebase` had no way to land on the right page —
+       `rebase`/`reuse` only ever injected the `version`/`product` args into
+       `link-hextra` calls, never into `link` calls (see reuse.html,
+       rebase.html — both now inject into either name). */ -}}
+{{- partial "utils/resolve-link.html" . -}}

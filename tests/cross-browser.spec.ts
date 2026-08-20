@@ -206,3 +206,70 @@ test.describe("interactive components work cross-browser", () => {
     expect(isDark).toBe(true);
   });
 });
+
+// ── Ordered-list markers ──────────────────────────────────────────────────
+// The nested-list marker fix (solo-io/docs#3280 §2) rests entirely on an
+// engine behavior: that the built-in `list-item` counter is seeded from the
+// HTML `start` attribute and incremented per <li> even under `list-style:
+// none`. The full four-shape matrix lives in ordered-list-numbering.spec.ts
+// (chromium). This is the cheap engine sweep for the one shape that regressed.
+//
+// Reading the marker: getComputedStyle(el, "::before").content returns the
+// SPECIFIED value in all three engines, so we compare pixels instead — see
+// ordered-list-numbering.spec.ts for the full rationale.
+test.describe("ordered-list markers honor <ol start> in every engine", () => {
+  const OL_SPLIT =
+    "/" + target.baseURL.replace(/^\/+|\/+$/g, "") + "/v2/ol-split/";
+  const IS_FIXTURE_TARGET = target.name.startsWith("docs-theme-extras-fixture");
+
+  test.skip(
+    !IS_FIXTURE_TARGET,
+    "ol-split is a fixture-only page; skipped against consumer builds",
+  );
+
+  test("nested list continues across a tabs block", async ({ page }) => {
+    await page.goto(OL_SPLIT);
+    await page.evaluate(() => document.fonts.ready);
+
+    for (const [marker, expected] of [
+      ["MARKER_OLSPLIT_S1_SUB_C", "c"],
+      ["MARKER_OLSPLIT_S1_SUB_D", "d"],
+      ["MARKER_OLSPLIT_S4_DEEP_II", "ii"],
+    ] as const) {
+      const li = page
+        .locator("#content .content li", { hasText: marker })
+        .filter({
+          has: page.locator(`:scope:not(:has(li:has-text("${marker}")))`),
+        })
+        .first();
+      await li.scrollIntoViewIfNeeded();
+      const box = (await li.boundingBox())!;
+      const clip = { x: box.x, y: box.y + 3, width: 20, height: 20 };
+
+      const actual = await page.screenshot({ clip });
+      await li.evaluate((el) => el.setAttribute("data-marker-probe", "x"));
+      const shotWith = async (glyph: string) => {
+        const tag = await page.addStyleTag({
+          content: `li[data-marker-probe="x"]::before { content: "${glyph}" !important; }`,
+        });
+        const buf = await page.screenshot({ clip });
+        await tag.evaluate((n) => n.remove());
+        return buf;
+      };
+      const reference = await shotWith(expected);
+      // Negative control — see ordered-list-numbering.spec.ts. Without it an
+      // occluded or mis-clipped marker box passes vacuously.
+      const control = await shotWith(expected === "z" ? "y" : "z");
+      await li.evaluate((el) => el.removeAttribute("data-marker-probe"));
+
+      expect(
+        control.equals(reference),
+        `${marker}: clip is occluded or mis-clipped — cannot measure`,
+      ).toBe(false);
+      expect(
+        actual.equals(reference),
+        `${marker}: marker did not render as "${expected}"`,
+      ).toBe(true);
+    }
+  });
+});

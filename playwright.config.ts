@@ -67,7 +67,7 @@ export default defineConfig({
     {
       name: "static",
       testMatch:
-        /static\.spec\.ts$|versioning\.spec\.ts$|versioned-image-auto\.spec\.ts$|version-nested-list\.spec\.ts$|version-inside-fence\.spec\.ts$|version-table-row\.spec\.ts$|version-cards\.spec\.ts$|shortcode-contexts\.spec\.ts$|conditional-block\.spec\.ts$|cond-reuse-table\.spec\.ts$|reuse-version-remap\.spec\.ts$|llms-directive\.spec\.ts$|callout-in-table-cell\.spec\.ts$|callout-in-reuse-tab\.spec\.ts$|auto-cards\.spec\.ts$|card-image\.spec\.ts$|presence\.spec\.ts$|github-shortcode\.spec\.ts$|language-switch\.spec\.ts$|redirect\.spec\.ts$|sidebar-linktitle\.spec\.ts$|sidebar-flat\.spec\.ts$|link-hextra-apiref\.spec\.ts$|build-resilience\.spec\.ts$|page-feedback\.spec\.ts$|footnotes-after-cards\.spec\.ts$|callout-icon\.spec\.ts$|custom-alert\.spec\.ts$|docs-tabs\.spec\.ts$|meta-description\.spec\.ts$|link-hextra-lang-prefix\.spec\.ts$|link-hextra-lts-version\.spec\.ts$|warn-missing-description\.spec\.ts$/,
+        /static\.spec\.ts$|versioning\.spec\.ts$|versioned-image-auto\.spec\.ts$|version-nested-list\.spec\.ts$|version-inside-fence\.spec\.ts$|version-table-row\.spec\.ts$|version-cards\.spec\.ts$|shortcode-contexts\.spec\.ts$|conditional-block\.spec\.ts$|cond-reuse-table\.spec\.ts$|reuse-version-remap\.spec\.ts$|llms-directive\.spec\.ts$|callout-in-table-cell\.spec\.ts$|callout-in-reuse-tab\.spec\.ts$|auto-cards\.spec\.ts$|card-image\.spec\.ts$|presence\.spec\.ts$|github-shortcode\.spec\.ts$|language-switch\.spec\.ts$|redirect\.spec\.ts$|sidebar-linktitle\.spec\.ts$|sidebar-flat\.spec\.ts$|link-hextra-apiref\.spec\.ts$|link-hextra-shapes\.spec\.ts$|build-resilience\.spec\.ts$|page-feedback\.spec\.ts$|footnotes-after-cards\.spec\.ts$|callout-icon\.spec\.ts$|custom-alert\.spec\.ts$|docs-tabs\.spec\.ts$|meta-description\.spec\.ts$|link-hextra-lang-prefix\.spec\.ts$|link-hextra-lts-version\.spec\.ts$|warn-missing-description\.spec\.ts$|search-visible-versions\.spec\.ts$|tab-code-fences\.spec\.ts$|callout-fence\.spec\.ts$|reuse-list-continuation\.spec\.ts$|override-parity\.spec\.ts$|gate-containment\.spec\.ts$|gate-transparency\.spec\.ts$|gate-normalize\.spec\.ts$|gate-blockhtml\.spec\.ts$/,
     },
     // Consumer-content specs. Every spec here reads the CONSUMER's own content
     // — either the built HTML tree (target.builtRoot) or the markdown source
@@ -89,13 +89,13 @@ export default defineConfig({
     {
       name: "content",
       testMatch:
-        /markdown-leaks\.spec\.ts$|missing-images\.spec\.ts$|built-html-integrity\.spec\.ts$|copy-md-fidelity\.spec\.ts$|hugo-warnings\.spec\.ts$|dev-build\.spec\.ts$|curl-quotes\.spec\.ts$|tab-syntax\.spec\.ts$|shortcode-args\.spec\.ts$|heading-shortcode-id\.spec\.ts$|include-form\.spec\.ts$|cascade-type\.spec\.ts$|reuse-image-pair-lint\.spec\.ts$/,
+        /markdown-leaks\.spec\.ts$|missing-images\.spec\.ts$|built-html-integrity\.spec\.ts$|copy-md-fidelity\.spec\.ts$|hugo-warnings\.spec\.ts$|dev-build\.spec\.ts$|curl-quotes\.spec\.ts$|tab-syntax\.spec\.ts$|shortcode-args\.spec\.ts$|heading-shortcode-id\.spec\.ts$|include-form\.spec\.ts$|gate-form\.spec\.ts$|cascade-type\.spec\.ts$|scan-roots\.spec\.ts$|gate-normalize-corpus\.spec\.ts$|gate-inline-form\.spec\.ts$|reuse-image-pair-lint\.spec\.ts$/,
     },
     {
       name: "browser",
       use: { ...devices["Desktop Chrome"] },
       testMatch:
-        /browser\.spec\.ts$|contrast\.spec\.ts$|viewport\.spec\.ts$|brand\.spec\.ts$|theme-toggle\.spec\.ts$|mermaid-render\.spec\.ts$|sidebar-rail\.spec\.ts$|toc-layout\.spec\.ts$|alert-body\.spec\.ts$|back-to-top\.spec\.ts$|table-display\.spec\.ts$|reuse-image-dark-pair\.spec\.ts$|version-banner-link\.spec\.ts$|mobile-drawer\.spec\.ts$|docs-tabs-sidebar\.spec\.ts$/,
+        /browser\.spec\.ts$|contrast\.spec\.ts$|viewport\.spec\.ts$|brand\.spec\.ts$|theme-toggle\.spec\.ts$|mermaid-render\.spec\.ts$|sidebar-rail\.spec\.ts$|toc-layout\.spec\.ts$|alert-body\.spec\.ts$|back-to-top\.spec\.ts$|table-display\.spec\.ts$|reuse-image-dark-pair\.spec\.ts$|version-banner-link\.spec\.ts$|mobile-drawer\.spec\.ts$|docs-tabs-sidebar\.spec\.ts$|ordered-list-numbering\.spec\.ts$|loose-list-spacing\.spec\.ts$|openapi-method-colors\.spec\.ts$|openapi-example-contrast\.spec\.ts$/,
     },
     {
       name: "cross-browser-chromium",

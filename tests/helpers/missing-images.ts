@@ -111,19 +111,45 @@ export function extractImageRefs(html: string): ImageRef[] {
   return refs;
 }
 
+// Decode the HTML character references a serializer puts in an attribute value.
+//
+// This is not optional politeness — an attribute value is ENCODED text, and the
+// URL a browser requests is its DECODED form. Hugo emits `+` in a filename as
+// `&#43;`, so `ui-clusters-2.10+.png` reaches the HTML as
+// `ui-clusters-2.10&#43;.png`. Without decoding, the scanner looks for a file
+// whose name literally contains "&#43;", finds nothing, and reports a missing
+// image that in fact loads fine in a browser. That was 242 false positives on
+// the gloo-mesh-enterprise build, every one of them a real file on disk.
+//
+// Numeric (decimal and hex) plus the five predefined named entities, which is
+// everything a serializer will produce inside an attribute value.
+export function decodeHtmlEntities(s: string): string {
+  return s
+    .replace(/&#(\d+);/g, (_m, d) => String.fromCodePoint(Number(d)))
+    .replace(/&#[xX]([0-9a-fA-F]+);/g, (_m, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    // &amp; LAST, so "&amp;#43;" decodes to the literal text "&#43;" rather
+    // than being double-decoded into "+".
+    .replace(/&amp;/g, "&");
+}
+
 // Resolve an image URL to the file path a static server rooted at `builtRoot`
 // would serve for a page at `pageFile`. Absolute URLs (`/img/x.svg`) resolve
 // against builtRoot; relative URLs resolve against the page's own directory,
-// matching how a browser resolves them from the page URL. Query string and
-// fragment are stripped, and percent-encoding is decoded. Returns null when
-// nothing is left to resolve (e.g. a bare `?query`).
+// matching how a browser resolves them from the page URL. HTML character
+// references are decoded first (the attribute is encoded text), then the query
+// string and fragment are stripped, then percent-encoding is decoded. Returns
+// null when nothing is left to resolve (e.g. a bare `?query`).
 export function resolveImagePath(
   src: string,
   pageFile: string,
   builtRoot: string,
   pathMod: typeof import("node:path"),
 ): string | null {
-  let clean = src.split(/[?#]/)[0];
+  let clean = decodeHtmlEntities(src).split(/[?#]/)[0];
   try {
     clean = decodeURIComponent(clean);
   } catch {

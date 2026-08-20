@@ -56,6 +56,12 @@ export type Checks = {
   // `tabTotal=`, nameless tabs) that renders labels as "Tab 0", "Tab 1", ….
   tabSyntax: boolean;
   includeForm: boolean;
+  // Source scan for a `version` / `conditional-text` gate authored in ANGLE
+  // form. The gates emit .Inner untouched, which only re-enters the markdown
+  // stream in percent form; angle-form output lands after Goldmark and survives
+  // as literal text. content/ only — reuse/rebase normalize assets/ before
+  // render. See helpers/gate-form.ts.
+  gateForm: boolean;
   cascadeType: boolean;
   // Browser-level crawl: open every built page in Chromium and fail on
   // uncaught JS exceptions, console.error calls, or HTTP 4xx on JS/CSS assets.
@@ -147,6 +153,7 @@ const DEFAULT_CHECKS: Checks = {
   headingShortcodeId: true,
   tabSyntax: true,
   includeForm: true,
+  gateForm: true,
   cascadeType: true,
   consoleErrors: true,
   missingImages: true,
@@ -223,7 +230,38 @@ function validate(
       if (typeof p !== "string") {
         throw new Error(`scanRoots[${i}] must be a string in ${configPath}`);
       }
-      scanRoots.push(path.resolve(configDir, p));
+      const resolved = path.resolve(configDir, p);
+      // A scanRoot that does not exist is a HARD ERROR, not a silent empty walk.
+      //
+      // This check exists because of a measured failure, not a hypothetical one.
+      // solo-io/docs shipped `scanRoots = ["./content/en/test", "./assets/conrefs/test"]`
+      // — the docs-theme-extras FIXTURE's paths, copy-pasted. Neither path has ever
+      // existed in that repo. The source-scanning specs only `test.skip` when
+      // scanRoots is EMPTY, so two non-empty-but-missing entries sailed straight
+      // through and walked zero files. Six author-side lints (curl-quotes,
+      // tab-syntax, shortcode-args, heading-shortcode-id, include-form,
+      // cascade-type) therefore passed VACUOUSLY over 11,025 markdown files, for
+      // as long as the config had existed. Everything was green and nothing was
+      // being checked.
+      //
+      // Failing loudly here is the only defence: a typo'd or stale path is
+      // indistinguishable from a correct one at every later layer, because
+      // "walked nothing, found nothing" and "walked everything, found nothing"
+      // produce the identical result.
+      if (!fs.existsSync(resolved)) {
+        throw new Error(
+          `scanRoots[${i}] does not exist: ${p} (resolved to ${resolved}) in ${configPath}. ` +
+            `A missing scan root makes every source lint pass without reading a single ` +
+            `file, so this is an error rather than a skip. Fix the path, or remove the ` +
+            `entry if the lints are not meant to run here.`,
+        );
+      }
+      if (!fs.statSync(resolved).isDirectory()) {
+        throw new Error(
+          `scanRoots[${i}] is not a directory: ${p} (resolved to ${resolved}) in ${configPath}.`,
+        );
+      }
+      scanRoots.push(resolved);
     }
   }
 

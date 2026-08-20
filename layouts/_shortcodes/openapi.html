@@ -87,6 +87,26 @@
     background: #ffffff !important;
     color: #333333 !important;
   }
+  /* Anchors were the gap in this light-island block. swagger-ui's own sheet
+     declares `.swagger-ui a.nostyle { color: inherit }`, and `inherit` resolves
+     against the theme, not against the `color` pinned above — so in dark mode
+     an opblock-tag heading (an `a.nostyle`) inherited the theme's near-white
+     body text and rendered white on this deliberately-white panel: invisible,
+     1.00:1. Pin tag headings to the island's body color, since they read as
+     headings rather than links.
+
+     Real links get #1074ca rather than swagger's stock #4990e2, which reaches
+     only 3.10:1 against the panel (#ffffff) and summary strip (#f8f8f8) and so
+     misses the 4.5:1 floor for normal-size text. #1074ca is the smallest
+     perceptual step from the stock color that clears it, at 4.52:1. */
+  .swagger-ui a.nostyle,
+  .swagger-ui a.nostyle:visited,
+  .swagger-ui .opblock-tag {
+    color: #333333 !important;
+  }
+  .swagger-ui a:not(.nostyle) {
+    color: #1074ca !important;
+  }
   .swagger-ui .opblock {
     background: #ffffff !important;
     border: 1px solid #e0e0e0 !important;
@@ -100,8 +120,6 @@
     padding: 8px 20px !important;
   }
   .swagger-ui .opblock .opblock-summary-method {
-    background: #4990e2 !important;
-    color: #ffffff !important;
     font-weight: 700 !important;
     padding: 6px 10px !important;
     border-radius: 3px !important;
@@ -167,6 +185,16 @@
     background: transparent !important;
     color: #333333 !important;
   }
+  /* Swagger's own request/response example blocks (.opblock-body pre.microlight)
+     ship with background:#333 and color:#fff. Left uncovered, they'd inherit
+     the site's global `.content pre { background-color: #fff !important }`
+     rule and render white text on a white background. This light island
+     otherwise pins everything to a light palette, so this block keeps
+     Swagger's own dark example background instead. */
+  .swagger-ui .opblock-body pre.microlight {
+    background: #333333 !important;
+    color: #ffffff !important;
+  }
 </style>
 
 {{- /* deepLinking hijacks window.location.hash for Swagger's own routing
@@ -182,7 +210,17 @@
        body causes Goldmark to break out of the type-1 HTML block when this
        shortcode's HTML is fed back through Page.RenderString (e.g. inside
        conditional-text), wrapping the next indented line in <pre><code> and
-       producing invalid JS for the minifier. */ -}}
+       producing invalid JS for the minifier.
+
+       The trailing `}}` (not `-}}`) is deliberate: it preserves the newline
+       between this comment and `<script>` below, so `<script>` starts its
+       own output line instead of landing glued to `</style>` above as
+       `</style><script>`. Glued onto one line, `<script>` no longer opens
+       its own CommonMark type-1 HTML block when this HTML is re-parsed by
+       Goldmark (e.g. through conditional-text/reuse) — the block already
+       closed on the `</style>` line, so the JS body falls through to normal
+       paragraph parsing and the typographer mangles its quotes, breaking
+       the minifier (solo-io/docs#3403). */}}
 <script>
   document.addEventListener('DOMContentLoaded', function() {
     var el = document.getElementById('swagger-ui');

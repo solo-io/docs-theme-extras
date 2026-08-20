@@ -1,0 +1,34 @@
+{{- /*
+  EXTENSION SLOT — content rendered at the very top of a docs page, above the
+  tab band and above the sidebar/content wrapper.
+
+  WHY THIS EXISTS. Both OSS consumers used to fork the ENTIRE `docs/single.html`
+  and `docs/list.html` for the sake of two or three lines injected here:
+  agentgateway.dev needs its own `nav.html`, and both sites want the
+  announcement banner. A forked layout then silently misses every later feature
+  the module gains — that is how `page-description` came to be absent from 933
+  kgateway.dev pages, along with `version-banner`, `page-badges`,
+  `components/page-context-menu` and the `displayPagination` guard.
+
+  Overriding a five-line partial keeps those features. Overriding a forty-line
+  layout throws them away. That is the whole point of the slot.
+
+  DEFAULT: the announcement banner, and only when one is configured — see
+  `docs/announcement-banner.html`. A consumer that configures no banner gets no
+  output at all, not an empty wrapper, which is what keeps the docs hub's built
+  HTML byte-identical.
+
+  TO OVERRIDE: create `layouts/partials/docs/chrome-top.html` in the consumer.
+  Note the path — this module keeps these under `partials/`, NOT `_partials/`,
+  matching the existing `partials/docs/` directory. An override placed in
+  `_partials/docs/` is silently ignored.
+
+  To keep the banner in your override, call the DEFAULT by its own name:
+
+      {{ partial "docs/announcement-banner.html" . }}
+      {{ partial "my-custom-nav.html" . }}
+
+  Do NOT call `partial "docs/chrome-top.html"` from the override — your file
+  wins the lookup, so that is infinite recursion.
+*/ -}}
+{{- partial "docs/announcement-banner.html" . -}}

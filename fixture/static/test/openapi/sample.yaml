@@ -9,3 +9,17 @@ paths:
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                example:
+                  status: ok
+    post:
+      summary: MARKER_OPENAPI_POST sample endpoint
+      responses:
+        '200':
+          description: OK

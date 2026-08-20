@@ -1,0 +1,26 @@
+{{- /* Shared version-string lookup for the PDF book pipeline: the cover
+       page in docs/book-document.html and the running footer in
+       print-book.css both need "the version to print on this book," and
+       both want the same answer — whichever entry is flagged the `latest`
+       linkVersion, else just the first configured entry.
+
+       print-book.css calls this from its own resources.ExecuteAsTemplate
+       execution — a separate template run from the page that renders it —
+       but `partial` and the global `site` function are available in both,
+       so this one file is the only place the lookup is written, instead of
+       two copies that had to be edited together by hand.
+
+       Resolves to "" on a site with no site.Params.versions at all
+       (ambientmesh.io, the only site this pipeline has run on so far), so
+       callers should treat an empty result as "no version to show," not an
+       error — this single fixed-root book has no per-page "current
+       version" concept the way a normal docs page does; proper
+       version-root resolution (utils/version-root.html, same as
+       sidebar.html) is real work deferred until this pattern is proven on
+       a versioned site. */ -}}
+{{- $versionScratch := newScratch -}}
+{{- range site.Params.versions -}}
+  {{- if not ($versionScratch.Get "first") -}}{{- $versionScratch.Set "first" (.version | default .linkVersion) -}}{{- end -}}
+  {{- if eq .linkVersion "latest" -}}{{- $versionScratch.Set "latest" (.version | default .linkVersion) -}}{{- end -}}
+{{- end -}}
+{{- return ($versionScratch.Get "latest" | default ($versionScratch.Get "first")) -}}

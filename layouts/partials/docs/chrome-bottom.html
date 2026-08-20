@@ -1,0 +1,16 @@
+{{- /*
+  EXTENSION SLOT — content rendered at the very bottom of a docs page, after the
+  sidebar/content wrapper closes and before the layout ends.
+
+  DEFAULT BEHAVIOR: renders nothing, so no consumer's output changes until it
+  opts in.
+
+  This is the counterpart to `docs/chrome-top.html`; see that file for why the
+  slots exist. agentgateway.dev uses this one for `{{ partial "chatbot.html" . }}`,
+  which was previously the sole reason its `docs/single.html` and
+  `docs/list.html` had to be forked at the bottom as well as the top.
+
+  TO OVERRIDE: create `layouts/partials/docs/chrome-bottom.html` in the consumer.
+  Note `partials/`, not `_partials/` — an override in the wrong tree is silently
+  ignored.
+*/ -}}

@@ -21,10 +21,27 @@
   --theme-primary:       hsl(212, 100%, 45%);
   --theme-primary-hover: hsl(212, 100%, 35%);
   --theme-primary-tint:  hsla(212, 100%, 45%, 0.1);
+  /* Link/accent TEXT color, split from --theme-primary because WCAG sets
+     different floors for the two jobs: 4.5:1 for normal-size text (1.4.3) vs
+     3:1 for icons and borders (1.4.11). #0060cf is the color Hextra's prose
+     layer was already painting OSS content links, and it clears 4.5:1 on every
+     light surface (worst 5.07:1 on the .alert-default callout fill), so the
+     light theme is unchanged — this only makes the value explicit and gives
+     dark mode something to override. */
+  --theme-link:          #0060cf;
+  --theme-link-hover:    hsl(212, 100%, 35%);
 }
 .dark {
   --theme-primary:       hsl(212, 100%, 60%);
   --theme-primary-tint:  hsla(212, 100%, 60%, 0.1);
+  /* Hextra's prose layer emits ONE link color for both schemes, so OSS content
+     links stayed #0060cf in dark mode and scored 3.21:1 on the page fill —
+     below the 4.5:1 floor. Dark link text now uses the brand's own dark accent
+     (the same hsl(212,100%,60%) as --theme-primary), which clears 4.96:1 on the
+     worst dark surface, so links match the accent every other dark component
+     already uses. */
+  --theme-link:          hsl(212, 100%, 60%);
+  --theme-link-hover:    hsl(212, 100%, 72%);
 }
 
 /* ── Typography ──────────────────────────────────────────────────────── */

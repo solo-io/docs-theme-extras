@@ -101,8 +101,45 @@ are grouped by purpose. See each source file for full parameters.
 | `version-cards` | Renders a card grid mirroring the navbar version dropdown, for a section landing page. |
 | `conditional-text` | Includes or excludes its inner content based on the page's build condition (for example `gme` vs `gmg`), resolved through `utils/page-context`. |
 | `upstream` / `downstream` | Content gating for the oss-vs-enterprise build split. `upstream` shows content only in the source build; `downstream` shows it only in the downstream build. |
-| `link` | An internal link resolved from a section-relative `path=` to the current section and version. Has a translation-export mode that preserves the source shortcode form. |
-| `link-hextra` | Like `link`, but infers the product and version from the current page's permalink when they are not passed in (typical inside a reused snippet). |
+| `link` | Alias for `link-hextra` — same pattern as `alert`/`callout`. Kept so existing call sites don't need a repo-wide sweep; write new content with either name. |
+| `link-hextra` | The canonical implementation. Infers the product and version from the current page's permalink when they are not passed in (typical inside a reused snippet). **See the contract below — it is easy to call wrongly and it fails silently.** |
+
+#### `link` / `link-hextra` contract
+
+It resolves an **internal path within the current product and version tree** into
+an absolute URL. That is the whole job. If there is no version to resolve, this
+is the wrong tool.
+
+**Parameters — these three, and no others:**
+
+| Param | Required | Meaning |
+|---|---|---|
+| `path` | yes | Site path **within the version tree**. A leading `/` is added if missing. Not a full URL. |
+| `version` | no | Overrides inference. This is what `rebase` injects to retarget a link into another version tree. |
+| `product` | no | Enables the enterprise `reference/api` and `reference/cel` routing. Injected by `rebase`. |
+
+```md
+{{</* link-hextra path="/quickstart/" */>}}                 → /docs/envoy/2.1.x/quickstart/
+{{</* link-hextra path="/reference/api/#TypeA" */>}}        → …/reference/api/#TypeA
+{{</* link-hextra path="/quickstart/" version="2.0.x" */>}} → …/2.0.x/quickstart/
+```
+
+**What does NOT work:**
+
+| You write | What happens |
+|---|---|
+| `link=`, `url=`, `href=` | **Not read.** `path` is empty, so it emits the bare version root — usually a real page, so nothing 404s and the wrong link ships. Warns since v0.2.0. |
+| An external URL in `path=` | There is nothing to resolve. Use a plain markdown link. |
+| A cross-product or cross-flavor path | It only moves *within* one version tree. Use a plain absolute link, e.g. `[Kubernetes](/docs/kubernetes/)`. |
+| `path="/page#anchor"` (no slash before `#`) | Emits `/page#anchor`, which takes a 301 before scrolling. Write `/page/#anchor`. |
+
+A missing **leading** slash is added for you (`path="quickstart/"` resolves the
+same as `path="/quickstart/"`), a missing **trailing** slash is added for you,
+and doubled slashes are collapsed.
+
+Behavior is pinned by `tests/link-hextra-shapes.spec.ts` against
+`fixture/content/en/test/v2/link-hextra-shapes.md`, which includes the broken
+shapes above so they stay documented rather than rediscovered.
 
 ### UI components
 
@@ -346,6 +383,70 @@ blocks), reapply them on top of the new upstream text, then run `make self-test`
 A `# ours` comment at the top of every shadow file documents what was inserted
 vs. upstream. If you find a shadow without that header, treat it as a maintenance
 gap: either add the header or unshadow the file.
+
+## Extension slots — override these instead of forking a docs layout
+
+**If you are about to copy `layouts/docs/single.html` or `layouts/docs/list.html`
+into your repo, read this first.** Almost certainly you want a slot.
+
+Both OSS consumers used to fork those layouts, each for two or three injected
+lines. The cost is invisible and cumulative: a forked layout stops receiving
+everything the module adds afterwards. Measured, when kgateway.dev's forks were
+finally removed, the site gained a visible page subtitle on **856 pages** it had
+silently been missing, plus `components/page-context-menu`, the
+`displayPagination` config guard, `version-banner` and the `page-badges`
+contract. Nothing was broken; the features simply never arrived.
+
+Five partials exist purely so you do not have to fork. Each one defaults to
+today's exact output, so adding them changed **0 of 770** built HTML pages on
+the docs hub.
+
+| Slot | Renders | Default |
+|---|---|---|
+| `partials/docs/chrome-top.html` | very top of the page, above the tab band | the announcement banner, and only when one is configured |
+| `partials/docs/chrome-bottom.html` | very bottom, after the content wrapper closes | nothing |
+| `partials/docs/width-class.html` | max-width class on the page wrapper | `hextra-max-page-width` (100%) |
+| `partials/docs/content-class.html` | width + padding classes on `<main id="content">` | `hextra-max-content-width hx:px-6 hx:pt-6 hx:md:px-12` |
+| `partials/docs/after-title.html` | inside `.content`, after the title and description | nothing — **detail pages only**, not section indexes |
+
+Two things to get right:
+
+- **Path is `layouts/partials/docs/…`, not `layouts/_partials/docs/…`.** This
+  module keeps these under `partials/`, matching the existing `partials/docs/`
+  directory. An override in the wrong tree is silently ignored — no error, it
+  just never runs.
+- **Do not call a slot from its own override.** Your file wins the lookup, so
+  `{{ partial "docs/chrome-top.html" . }}` inside your `chrome-top.html` is
+  infinite recursion. To keep the default banner, call it by its own name:
+
+  ```gotemplate
+  {{ partial "docs/announcement-banner.html" . }}
+  {{ partial "my-custom-nav.html" . }}
+  ```
+
+Worked example — the whole of agentgateway.dev's `chrome-top.html`, which
+replaced two forked layouts:
+
+```gotemplate
+<style>.nav-container { display: none !important; }</style>
+{{ partial "nav.html" . }}
+<div class="w-full z-10 pt-10 lg:pt-20">
+  {{ partial "docs/announcement-banner.html" . }}
+</div>
+```
+
+`npm run scan:overrides` reports slot overrides separately from same-path
+shadows, because a slot override is the mechanism working and a layout fork is a
+defect. Do not "fix" a rising slot count.
+
+### What still needs a real layout
+
+A slot is for injecting chrome, not for restructuring the page. If one page
+needs a genuinely different layout — kgateway.dev's `/docs/envoy/` landing hides
+the sidebar and TOC entirely — give it its own layout file and select it from
+front matter (`layout: landing` → `layouts/docs/landing.html`). Branching inside
+a forked `list.html` on a hardcoded path, which is what that site did, holds
+every other section index hostage to one page.
 
 ## Top-level partials
 
