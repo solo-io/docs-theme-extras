@@ -83,17 +83,34 @@ test.describe("tab panel code fences with blank lines stay intact", () => {
       expect(proseIdx, `${PROSE} missing — tab panel not rendered`).toBeGreaterThan(-1);
 
       // Isolate the tab panel that contains the prose marker.
-      // NOTE: the class is `hextra-tabs-panel` (plural). This spec sat in no
-      // playwright.config.ts testMatch allowlist for months, so it never ran and
-      // never noticed Hextra renaming it from `hextra-tab-panel`. Match the bare
-      // class name, not `class="…`, so it also survives an attribute-quote-
-      // stripping --minify build in a consumer.
-      const PANEL_CLASS = "hextra-tabs-panel";
-      const panelStart = html.lastIndexOf(PANEL_CLASS, proseIdx);
-      expect(panelStart, `no .${PANEL_CLASS} preceding prose marker`).toBeGreaterThan(-1);
+      // NOTE: two shapes are valid here, not one. Hextra's own default tabs use
+      // `hextra-tabs-panel` (plural) — this spec sat in no playwright.config.ts
+      // testMatch allowlist for months, so it never ran and never noticed Hextra
+      // renaming it from `hextra-tab-panel`. But `hextra-tab-panel` (singular) is
+      // ALSO a real, currently-shipping shape: docs's local tabs.html/tab.html
+      // override (predates this spec, not a stale Hextra leftover) intentionally
+      // emits it, and copy-markdown.html already special-cases exactly this class
+      // name as "docs's tab override" alongside Hextra's native plural form. A
+      // check that only recognizes the plural form is blind to that documented,
+      // accepted consumer shape. Match the bare class names, not `class="…`, so
+      // this also survives an attribute-quote-stripping --minify build.
+      const PANEL_CLASSES = ["hextra-tabs-panel", "hextra-tab-panel"];
+      const panelStart = Math.max(
+        ...PANEL_CLASSES.map((c) => html.lastIndexOf(c, proseIdx)),
+      );
+      expect(
+        panelStart,
+        `no .${PANEL_CLASSES.join(" or .")} preceding prose marker`,
+      ).toBeGreaterThan(-1);
 
-      // Panel ends at the next sibling panel opening (if any).
-      const nextPanel = html.indexOf(PANEL_CLASS, proseIdx + PROSE.length);
+      // Panel ends at the next sibling panel opening (if any), whichever shape
+      // it is.
+      const nextPanelCandidates = PANEL_CLASSES
+        .map((c) => html.indexOf(c, proseIdx + PROSE.length))
+        .filter((i) => i !== -1);
+      const nextPanel = nextPanelCandidates.length
+        ? Math.min(...nextPanelCandidates)
+        : -1;
       const panelHtml = nextPanel > -1
         ? html.slice(panelStart, nextPanel)
         : html.slice(panelStart);

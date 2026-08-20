@@ -1405,6 +1405,12 @@ Work on the gating and reuse shortcodes producing markdown/HTML leaks in visible
 - **The behavior it guards was fine** — this was a dead test with a stale selector, not a live rendering bug. 18/18 pass on both brands once corrected.
 - No production page: this is test-harness only and changes no rendered output. Verified by running `--project=static --grep "tab panel code fences"` on both brands.
 
+### Test harness — the re-enabled `tab-code-fences.spec.ts` (previous entry) now also recognizes the docs hub's tab-panel class, not just Hextra's (`tests/tab-code-fences.spec.ts`)
+
+- **Why.** The previous entry guessed the singular `hextra-tab-panel` selector was a stale leftover and switched the spec to match only Hextra's plural `hextra-tabs-panel`. It wasn't stale: the docs hub's `layouts/_shortcodes/tabs.html`/`tab.html` still ship the singular class today, deliberately — it predates this spec and is unrelated to the Hextra-version tracking the previous entry assumed. `copy-markdown.html` in this module already names and handles both shapes side by side (`.hextra-tab-panel[data-tab-name]` for "docs's tab override", `.hextra-tabs-panel` for Hextra's default), so a test that recognizes only one of the two is a gap in the test, not evidence the other shape is wrong. Surfaced when `docs` bumped its pin to pick up this spec: the "no <p> inside any <pre> within the tab panel" case failed on all six of its content pages with "no .hextra-tabs-panel preceding prose marker", even though the panel was rendered correctly.
+- **What changed.** The panel-boundary lookup now checks for either class name and reports both in its failure message. No template or layout file changed — this is a test-only fix.
+- No production page: test-harness only, changes no rendered output. Verified by running `--project=static --grep "tab panel code fences"` against this module's own fixture (18/18, unchanged — it only ever renders the plural Hextra form) and against a local `docs` build carrying the singular form (27/27, previously 6 failing).
+
 ---
 
 ## [v0.1.25] — 2026-08-04
