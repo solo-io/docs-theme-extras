@@ -22,7 +22,7 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
-## [Unreleased]
+## [0.2.0] — 2026-08-20
 
 Work on the gating and reuse shortcodes producing markdown/HTML leaks in visible output — plus the consumer-override convergence that fixing it exposed.
 
@@ -1142,7 +1142,7 @@ Work on the gating and reuse shortcodes producing markdown/HTML leaks in visible
 
 ### Fix — Swagger UI's request/response example blocks rendered white-on-white in light mode (`layouts/_shortcodes/openapi.html`, `tests/openapi-example-contrast.spec.ts`, fixture)
 
-- **Why.** Flagged via solo-io/docs#3472: Swagger UI renders its "Example Value" panel as
+- **Why.** Swagger UI renders its "Example Value" panel as
   `.opblock-body pre.microlight`, styled by Swagger's own stylesheet as
   `background:#333; color:#fff`. Because the widget renders inside `.content`
   (`layouts/docs/{single,list}.html`), it inherits the site-wide
@@ -1155,7 +1155,7 @@ Work on the gating and reuse shortcodes producing markdown/HTML leaks in visible
   !important; color: #ffffff !important; }` to the shortcode's light-island `<style>` block.
   At three classes plus an element, it out-specifies `.content pre`'s one class plus element,
   so it wins regardless of source order. No `.dark` variant is needed since this panel is
-  deliberately pinned to light-mode colors independent of site theme, unlike solo-io/docs's
+  deliberately pinned to light-mode colors independent of site theme, unlike the docs's
   own `custom.css`, which patches the same bug with light/dark variants because it repaints
   `.content pre`'s background per scheme.
 - **Live today** on the agentregistry API reference
