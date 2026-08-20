@@ -1,0 +1,29 @@
+{{- /*
+  resolve-section-versions.html — the version list to show for a given
+  section.
+
+  This is the one piece of "which versions exist here" logic every consumer
+  needs, regardless of URL shape: enterprise's navbar.html and sidebar.html
+  mobile version row, and each OSS-shaped site's own navbar-version.html /
+  nav.html (agentgateway-oss-website, kgateway-oss). Before this partial
+  existed, all four reimplemented the same isset/fallback check
+  independently.
+
+  Input: a section string (e.g. "kubernetes", "standalone", "envoy"), or ""
+         for a page with no section.
+  Output: the slice of version entries to render — from
+          site.Params.sections.<section>.versions when that key's table sets
+          one, otherwise the flat site.Params.versions list. A section
+          registered with no `versions:` override (see utils/
+          section-segment.html — the table entry still has to exist, for
+          detection) gets the flat list too, so only a section whose
+          versions genuinely differ from the top-level list needs one.
+*/ -}}
+{{- $section := . -}}
+{{- $versions := site.Params.versions -}}
+{{- if and $section site.Params.sections (isset site.Params.sections $section) -}}
+  {{- with (index site.Params.sections $section).versions -}}
+    {{- $versions = . -}}
+  {{- end -}}
+{{- end -}}
+{{- return $versions -}}

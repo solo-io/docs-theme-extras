@@ -1,0 +1,46 @@
+{{- /*
+  section-segment.html — detect an optional content-division path segment
+  (e.g. "kubernetes"/"standalone" for agentgateway, "envoy"/"agentgateway"
+  for kgateway) that a product opts into by registering keys under
+  site.Params.sections.
+
+  Products nest their version trees directly under the product root
+  (/<product>/<version>/…). A product with more than one parallel
+  documentation section can instead nest version trees under a section
+  segment (/<product>/<section>/<version>/…), matching how OSS sites lay
+  theirs out. Every file that parses Page.RelPermalink to find the version
+  segment needs to know whether a section segment is in the way; this
+  partial is the one place that answers "is there one, and where."
+
+  A section registers by existing as a key under site.Params.sections, even
+  with no fields set (e.g. `[params.sections.kubernetes]` with nothing
+  under it) — the same table that optionally carries a `.versions` override
+  (see utils/resolve-section-versions.html). One registry serves both
+  purposes: "is this a valid section" and "does it override the version
+  list," so a product declares each section once.
+
+  Input: a Page (passed as `.`)
+  Output: dict:
+    segment  string — the matched section string, or "" if none/not
+                       configured
+    index    int    — the index of that segment within
+                       split(trim(.RelPermalink, "/"), "/"), i.e. 0 for the
+                       first path segment after the domain/baseURL. -1 if
+                       no match.
+
+  Products that don't set site.Params.sections get segment="" always, so
+  every caller's existing math is unchanged for them.
+*/ -}}
+{{- $page := . -}}
+{{- $segment := "" -}}
+{{- $index := -1 -}}
+{{- if site.Params.sections -}}
+  {{- $parts := split (strings.Trim $page.RelPermalink "/") "/" -}}
+  {{- range $i, $p := $parts -}}
+    {{- if and (eq $segment "") (isset site.Params.sections $p) -}}
+      {{- $segment = $p -}}
+      {{- $index = $i -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- return (dict "segment" $segment "index" $index) -}}

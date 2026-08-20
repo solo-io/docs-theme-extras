@@ -122,6 +122,13 @@
   {{- $matchedIdx := $vr.matchedIdx -}}
   {{- $versionPrefix := $vr.versionPrefix -}}
   {{- $segments := split $context.RelPermalink "/" -}}
+  {{- /* $section doubles as the section for a product that registers
+         site.Params.sections entries (see version-root.html), but it can
+         also hold a plain product name (matchedIdx 2, no section) or be
+         empty — neither of which belongs in a GetPage lookup path.
+         utils/section-segment.html is the one place that answers "is
+         $section actually a registered section." */ -}}
+  {{- $sectionSegment := (partial "utils/section-segment.html" $context).segment -}}
 
   <!-- Mobile sidebar overlay (clicking outside the panel closes it) -->
   <div class="sidebar-mobile-overlay" onclick="closeMobileSidebar()"></div>
@@ -231,19 +238,12 @@
             </div>
           {{- end -}}
 
-          {{- $versions := slice -}}
-          {{- if and $section site.Params.sections (isset site.Params.sections $section) -}}
-            {{- $versions = (index site.Params.sections $section).versions -}}
-          {{- end -}}
-          {{- /* Fall back to the site-wide `params.versions` list when the
-                 section doesn't override it. Sites with a flat top-level
-                 list (kgw) get version chips without duplicating the array
-                 under every section. agw defines no top-level versions, so
-                 this is a no-op there. Mirrors the same fallback in kgw's
-                 navbar / navbar-version partials. */ -}}
-          {{- if not $versions -}}
-            {{- $versions = site.Params.versions -}}
-          {{- end -}}
+          {{- /* utils/resolve-section-versions.html: site.Params.sections.<section>.versions
+                 when that key exists, else the flat site.Params.versions list.
+                 Shared with navbar.html and each OSS-shaped site's own
+                 navbar-version.html, which used to reimplement this same
+                 isset/fallback check independently. */ -}}
+          {{- $versions := partial "utils/resolve-section-versions.html" $section -}}
           {{- /* Keep every visible (non-empty dropdown) entry, including
                cross-product ones, so the mobile chips list the SAME versions
                and point to the SAME destinations as the desktop navbar version
@@ -298,7 +298,9 @@
                 {{- /* Build href. Same-product: swap version into the current
                        path (GetPage lookups are relative to contentDir, so the
                        enterprise lookup omits $section even when the href uses
-                       it) with a not-in-version fallback. Cross-product: use the
+                       it — except when $section is actually a registered
+                       section, which IS part of the contentDir-relative path)
+                       with a not-in-version fallback. Cross-product: use the
                        configured url, exactly like navbar.html. */ -}}
                 {{- $href := "" -}}
                 {{- if $isSameProduct -}}
@@ -310,10 +312,14 @@
                     {{- /* $versionBase carries the product and (for multilingual
                            URLs) the language prefix; "" in local dev. */ -}}
                     {{- $href = printf "%s/%s%s" $versionBase .linkVersion $newPath -}}
-                    {{- $targetPath = printf "/%s%s" .linkVersion $newPath -}}
+                    {{- if $sectionSegment -}}
+                      {{- $targetPath = printf "/%s/%s%s" $sectionSegment .linkVersion $newPath -}}
+                    {{- else -}}
+                      {{- $targetPath = printf "/%s%s" .linkVersion $newPath -}}
+                    {{- end -}}
                   {{- end -}}
                   {{- if not (site.GetPage $targetPath) -}}
-                    {{- $fallbackPath := cond $isOSSShape (printf "/docs/%s/%s/not-in-version" $section .linkVersion) (printf "/%s/not-in-version" .linkVersion) -}}
+                    {{- $fallbackPath := cond $isOSSShape (printf "/docs/%s/%s/not-in-version" $section .linkVersion) (cond (ne $sectionSegment "") (printf "/%s/%s/not-in-version" $sectionSegment .linkVersion) (printf "/%s/not-in-version" .linkVersion)) -}}
                     {{- if site.GetPage $fallbackPath -}}
                       {{- if $isOSSShape -}}
                         {{- $href = printf "/docs/%s/%s/not-in-version/" $section .linkVersion -}}

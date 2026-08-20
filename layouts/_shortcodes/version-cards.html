@@ -35,7 +35,7 @@
 {{- $desc := .Get "desc" -}}
 
 {{- $versions := slice -}}
-{{- if and $section (isset site.Params.sections $section) -}}
+{{- if and $section site.Params.sections (isset site.Params.sections $section) -}}
   {{- with (index site.Params.sections $section).versions -}}
     {{- $versions = . -}}
   {{- end -}}

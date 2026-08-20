@@ -38,12 +38,33 @@
 
 {{- if eq $mode "siteParams" -}}
   {{- $folder := .Site.Params.folder | default "" -}}
-  {{- $sectionUrl := .Page.FirstSection.RelPermalink -}}
-  {{- $version = trim (replace $sectionUrl (printf "/%s" $folder) "") "/" -}}
+  {{- /* A product with more than one parallel documentation section
+         (site.Params.sections, see utils/section-segment.html) nests its
+         version trees one level deeper, under a section segment:
+         /<folder>/<section>/<version>/…. .Page.FirstSection only returns
+         the first path level under the product, which would resolve to the
+         section instead of the version in that shape, so derive the
+         version from the full URL instead when a section is present. */ -}}
+  {{- $sectionSegInfo := partial "utils/section-segment.html" .Page -}}
+  {{- $sectionSeg := $sectionSegInfo.segment -}}
+  {{- if $sectionSeg -}}
+    {{- $relParts := split (strings.Trim .Page.RelPermalink "/") "/" -}}
+    {{- $versionIdx := add $sectionSegInfo.index 1 -}}
+    {{- if gt (len $relParts) $versionIdx -}}
+      {{- $version = index $relParts $versionIdx -}}
+    {{- end -}}
+  {{- else -}}
+    {{- $sectionUrl := .Page.FirstSection.RelPermalink -}}
+    {{- $version = trim (replace $sectionUrl (printf "/%s" $folder) "") "/" -}}
+  {{- end -}}
   {{- $section = $folder -}}
   {{- $condition = .Site.Params.buildCondition | default "" -}}
   {{- if and $folder $version -}}
-    {{- $prefix = printf "/%s/%s" $folder $version -}}
+    {{- if $sectionSeg -}}
+      {{- $prefix = printf "/%s/%s/%s" $folder $sectionSeg $version -}}
+    {{- else -}}
+      {{- $prefix = printf "/%s/%s" $folder $version -}}
+    {{- end -}}
   {{- else if $folder -}}
     {{- $prefix = printf "/%s" $folder -}}
   {{- end -}}
@@ -52,8 +73,16 @@
   {{- $rel := trim .Page.RelPermalink "/" -}}
   {{- $parts := split $rel "/" -}}
   {{- if and (ge (len $parts) 2) (eq (index $parts 0) "docs") -}}
-    {{/* known section list — extend in a follow-up if/when more sections exist */}}
-    {{- $known := slice "kubernetes" "standalone" "envoy" "agentgateway" -}}
+    {{- /* Known sections come from the keys of site.Params.sections (see
+           utils/section-segment.html) instead of a hardcoded list, so each
+           OSS-shaped site declares its own set by registering a table
+           there — even an empty one — for each section it has (agentgateway:
+           kubernetes/standalone; kgateway: envoy/agentgateway) rather than
+           sharing one list across every consumer. */ -}}
+    {{- $known := slice -}}
+    {{- range $k, $_ := .Site.Params.sections -}}
+      {{- $known = $known | append $k -}}
+    {{- end -}}
     {{- if and (ge (len $parts) 3) (in $known (index $parts 1)) -}}
       {{- $section = index $parts 1 -}}
       {{- $version = index $parts 2 -}}

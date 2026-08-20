@@ -38,7 +38,9 @@
     {{ partial "navbar-title.html" . }}
 
     {{- /* Version dropdown */ -}}
-    {{- with .Site.Params.versions -}}
+    {{- $navSectionSegment := (partial "utils/section-segment.html" .).segment -}}
+    {{- $navVersions := partial "utils/resolve-section-versions.html" $navSectionSegment -}}
+    {{- with $navVersions -}}
       {{- $folder := $.Site.Params.folder | default "" -}}
       {{- $currentLabel := "" -}}
       {{- $currentProductName := "" -}}
@@ -64,12 +66,25 @@
       {{- $langPath := "" -}}
       {{- if $langSeg -}}{{- $langPath = printf "/%s" $langSeg -}}{{- end -}}
 
+      {{- /* A product with more than one parallel documentation section
+             (site.Params.sections, see utils/section-segment.html) nests
+             version trees under a section segment:
+             /<folder>/<section>/<version>/<rest>. $navSectionSegment
+             (computed above, before this `with`, to pick the right version
+             list) is the same detection — reuse it instead of calling the
+             partial twice. Version extraction below skips past it instead
+             of mistaking the section for the version. */ -}}
+      {{- $sectionSegment := $navSectionSegment -}}
+      {{- $sectionPath := "" -}}
+      {{- if $sectionSegment -}}{{- $sectionPath = printf "/%s" $sectionSegment -}}{{- end -}}
+
       {{- /* Extract the version segment from the URL itself.
              .Page.FirstSection only returns the first section (e.g. "/gloo-mesh/"),
              which doesn't include the version. Splitting the full URL is the only
              reliable way to find the version segment after the folder (and language).
                 Prod URL: /<folder>/<version>/<rest>      → version is segment[1]
                 Prod+lang: /<folder>/ja/<version>/<rest>  → version is segment[2]
+                Prod+section: /<folder>/<section>/<version>/<rest> → version is segment[2]
                 Dev URL:  /<version>/<rest>               → version is segment[0] */ -}}
       {{- $segments := split (trim $.Page.RelPermalink "/") "/" -}}
       {{- $urlVersion := "" -}}
@@ -77,6 +92,7 @@
       {{- $skip := 1 -}}
       {{- if $includeFolder -}}{{- $skip = 2 -}}{{- end -}}
       {{- if $langSeg -}}{{- $skip = add $skip 1 -}}{{- end -}}
+      {{- if $sectionSegment -}}{{- $skip = add $skip 1 -}}{{- end -}}
       {{- if ge (len $segments) $skip -}}
         {{- $urlVersion = index $segments (sub $skip 1) -}}
         {{- $pathAfterVersion = delimit (after $skip $segments) "/" -}}
@@ -187,33 +203,35 @@
               {{- $isSameProduct := or (not $currentProduct) (eq (.product | default "") $currentProduct) -}}
               {{- if $isSameProduct -}}
                 {{- if $includeFolder -}}
-                  {{- $versionUrl = printf "/%s%s/%s/%s" $folder $langPath .linkVersion $pathAfterVersion -}}
+                  {{- $versionUrl = printf "/%s%s%s/%s/%s" $folder $langPath $sectionPath .linkVersion $pathAfterVersion -}}
                 {{- else -}}
-                  {{- $versionUrl = printf "%s/%s/%s" $langPath .linkVersion $pathAfterVersion -}}
+                  {{- $versionUrl = printf "%s%s/%s/%s" $langPath $sectionPath .linkVersion $pathAfterVersion -}}
                 {{- end -}}
                 {{- /* If the same-path page does not exist in the target version, route
                        to that version's not-in-version fallback page (if one exists), so
                        the user lands on a helpful page instead of a 404. We only redirect
                        when the fallback page is present in the target version, so versions
                        without the wrapper keep the existing behavior — wrappers can be
-                       rolled out per-product incrementally. */ -}}
-                {{- $targetLookupPath := printf "/%s/%s" .linkVersion (strings.TrimRight "/" $pathAfterVersion) -}}
+                       rolled out per-product incrementally. Lookup paths are relative to
+                       contentDir, which already absorbs any section segment's sibling
+                       language prefix but not the section itself, so it's included here. */ -}}
+                {{- $targetLookupPath := printf "%s/%s/%s" $sectionPath .linkVersion (strings.TrimRight "/" $pathAfterVersion) -}}
                 {{- if not (site.GetPage $targetLookupPath) -}}
-                  {{- $fallbackLookupPath := printf "/%s/not-in-version" .linkVersion -}}
+                  {{- $fallbackLookupPath := printf "%s/%s/not-in-version" $sectionPath .linkVersion -}}
                   {{- if site.GetPage $fallbackLookupPath -}}
                     {{- if $includeFolder -}}
-                      {{- $versionUrl = printf "/%s%s/%s/not-in-version/" $folder $langPath .linkVersion -}}
+                      {{- $versionUrl = printf "/%s%s%s/%s/not-in-version/" $folder $langPath $sectionPath .linkVersion -}}
                     {{- else -}}
-                      {{- $versionUrl = printf "%s/%s/not-in-version/" $langPath .linkVersion -}}
+                      {{- $versionUrl = printf "%s%s/%s/not-in-version/" $langPath $sectionPath .linkVersion -}}
                     {{- end -}}
                   {{- else -}}
                     {{- /* No not-in-version page either: fall back to the target
                            version's landing page (always exists) so the switch
                            can never 404. */ -}}
                     {{- if $includeFolder -}}
-                      {{- $versionUrl = printf "/%s%s/%s/" $folder $langPath .linkVersion -}}
+                      {{- $versionUrl = printf "/%s%s%s/%s/" $folder $langPath $sectionPath .linkVersion -}}
                     {{- else -}}
-                      {{- $versionUrl = printf "%s/%s/" $langPath .linkVersion -}}
+                      {{- $versionUrl = printf "%s%s/%s/" $langPath $sectionPath .linkVersion -}}
                     {{- end -}}
                   {{- end -}}
                 {{- end -}}

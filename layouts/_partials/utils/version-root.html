@@ -127,12 +127,20 @@
            along — multilingual URLs (/<product>/<lang>/<version>/…) would
            otherwise filter to nothing and leave an empty sidebar. */ -}}
     {{- $versionPrefix = printf "%s/" (delimit (first (add $matchedIdx 1) $segments) "/") -}}
-    {{- /* $section is the product segment, used to look up per-section version
-           lists. Only the production shape (version at [2], product at [1])
-           exposes one; the local-dev and language-prefixed shapes leave it
-           empty. The mobile version row builds hrefs from $versionBase instead,
-           which keeps the language prefix the language-prefixed shape drops. */ -}}
-    {{- if eq $matchedIdx 2 -}}
+    {{- $sectionInfo := partial "utils/section-segment.html" $context -}}
+    {{- /* $section normally holds the product segment, used to look up
+           per-section version lists — only the production shape (version at
+           [2], product at [1]) exposes one; the local-dev and
+           language-prefixed shapes leave it empty (the mobile version row
+           builds hrefs from $versionBase instead, which keeps the language
+           prefix those shapes drop). A product that registers
+           site.Params.sections entries (utils/section-segment.html)
+           repurposes $section to hold that section instead — the same
+           site.Params.sections.<key>.versions lookup OSS sites already use,
+           just detected generically instead of by a fixed URL position. */ -}}
+    {{- if $sectionInfo.segment -}}
+      {{- $section = $sectionInfo.segment -}}
+    {{- else if eq $matchedIdx 2 -}}
       {{- $section = index $segments 1 -}}
     {{- else -}}
       {{- $section = "" -}}
@@ -142,8 +150,17 @@
     {{- $versionBase = delimit (first $matchedIdx $segments) "/" -}}
     {{- /* GetPage paths are relative to contentDir, which is set to the
            product subtree (and is per-language: content/<lang>/<product>),
-           so the lookup never includes the product or language prefix. */ -}}
-    {{- $lookupPath = printf "/%s/" $currentVersion -}}
+           so the lookup never includes the product or language prefix.
+           A product that registers site.Params.sections entries (utils/
+           section-segment.html) nests version trees one level deeper, under
+           the section segment (content/<lang>/<product>/<section>/<version>/…),
+           so the lookup path needs the section segment too or GetPage
+           resolves nothing and the sidebar silently renders empty. */ -}}
+    {{- if $sectionInfo.segment -}}
+      {{- $lookupPath = printf "/%s/%s/" $sectionInfo.segment $currentVersion -}}
+    {{- else -}}
+      {{- $lookupPath = printf "/%s/" $currentVersion -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
 
