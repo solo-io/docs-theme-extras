@@ -150,7 +150,7 @@ test.describe("link-hextra parameter contract", () => {
     ).toBe(true);
   });
 
-  // Migration guard for the tagged-versions model (CHANGELOG [1.0.0]). There is
+  // Migration guard for the tagged-versions model (CHANGELOG [0.2.2]). There is
   // now exactly ONE versions list, site.Params.versions, and a version that
   // belongs to only some sections says so in its own `sections` field. The old
   // shape — a section carrying its own `params.sections.<x>.versions` list —
@@ -191,10 +191,19 @@ test.describe("link-hextra parameter contract", () => {
         .filter((l) => !/^\s*\/\//.test(l) || /\{\{/.test(l))
         .join("\n");
 
+    // The SPLIT form gets its own exact check below, not a regex here: it is
+    // two statements (`$cfg := index site.Params.sections .` then
+    // `$cfg.versions`), and a pattern loose enough to catch the assignment also
+    // flags the LEGITIMATE registry reads — utils/resolve-sections.html reads
+    // `title` and `externalURL` from exactly that lookup. Matching the
+    // assignment alone therefore fails the honest callers, which is how a guard
+    // gets deleted rather than fixed.
+    //
     // `.versions` reached through a sections lookup, in any of the forms used
     // before the migration.
     const BAD = [
       /\(index\s+(?:\$\.)?[Ss]ite\.Params\.sections\s+\$?\w+\)\.versions/,
+
       /\$s\.versions/,
       /\$data\.versions/,
       /sections\.\w+\.versions/,
@@ -205,6 +214,24 @@ test.describe("link-hextra parameter contract", () => {
       const src = strip(fs.readFileSync(f, "utf8"));
       if (BAD.some((re) => re.test(src))) offenders.push(path.relative(root, f));
     }
+    // Exact split-form detection: find every variable assigned from the
+    // sections registry, then see whether THAT variable is used with
+    // `.versions` in the same file. This is what the dead remap in
+    // sidebar.html looked like, and it is why that code outlived the migration.
+    for (const f of files) {
+      const src = strip(fs.readFileSync(f, "utf8"));
+      const vars = [
+        ...src.matchAll(/(\$\w+)\s*:=\s*index\s+(?:\$\.)?[Ss]ite\.Params\.sections\s/g),
+      ].map((m) => m[1]);
+      for (const v of vars) {
+        const used = new RegExp(`\\${v}\\.versions\\b`).test(src);
+        if (used) {
+          const rel = path.relative(root, f);
+          if (!offenders.includes(rel)) offenders.push(rel);
+        }
+      }
+    }
+
     expect(
       offenders,
       "these files read a per-section versions list, which no longer exists. A " +

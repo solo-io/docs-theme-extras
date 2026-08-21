@@ -173,7 +173,7 @@ const FIXTURE_BLOCKS = [
   },
   {
     // The `section=` argument now FILTERS the one versions list by each entry's
-    // `sections` tag (CHANGELOG [1.0.0]) instead of reading a separate
+    // `sections` tag (CHANGELOG [0.2.2]) instead of reading a separate
     // per-section list. So `demo` gets the entries tagged demo (v2, v1) plus the
     // untagged ones (v3, v4), and NOT `main`, which is tagged ["alt"] — that
     // exclusion is the whole assertion. Block 1 above is the unfiltered set, so

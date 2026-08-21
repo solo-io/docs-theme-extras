@@ -297,7 +297,7 @@ pageContextMode = "siteParams"
 # It is backed by real content (fixture/content/en/test/v8-link/), which matters
 # for two reasons. It matches production — agentgateway's 2.2.x and 2.1.x are
 # hidden this way and both have full content — and it is what exposed the navbar
-# bug fixed in CHANGELOG [1.0.0]: the navbar used to EMIT a hidden entry (as an
+# bug fixed in CHANGELOG [0.2.2]: the navbar used to EMIT a hidden entry (as an
 # empty, still-clickable row) instead of skipping it, so a content-less hidden
 # version put a broken link in every version dropdown on the site. Keeping real
 # content here means a regression back to emitting shows up as a bad link rather
@@ -319,7 +319,7 @@ pageContextMode = "siteParams"
 # Section REGISTRY. A section exists because it is a key here; an empty table is
 # the normal way to declare one, and it is what utils/section-segment.html uses
 # to recognize a section segment in a URL. Under the tagged-versions model
-# (CHANGELOG [1.0.0]) these tables no longer carry a `versions` list — a version
+# (CHANGELOG [0.2.2]) these tables no longer carry a `versions` list — a version
 # entry names its sections instead, in the ONE site.Params.versions list above.
 #
 # Two sections, with deliberately overlapping membership, so the filter in

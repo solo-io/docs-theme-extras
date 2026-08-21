@@ -37,7 +37,7 @@ document.addEventListener("DOMContentLoaded", function () {
 //
 // There is now ONE list to read, site.Params.versions: a version that belongs to
 // only some sections says so in its own `sections` field rather than living in a
-// separate per-section list (CHANGELOG [1.0.0]). That second list is exactly what
+// separate per-section list (CHANGELOG [0.2.2]). That second list is exactly what
 // this file forgot to read, which is bug 1 above — so the fix is structural, not a
 // matter of remembering to walk both.
 // {{ $verEntries := site.Params.versions | default slice }}

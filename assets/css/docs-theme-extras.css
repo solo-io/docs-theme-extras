@@ -1482,6 +1482,7 @@ svg.section-card-icon {
 /* ── Version dropdown ────────────────────────────────────────────────── */
 /* Replicates the docs-theme-lotus version switcher styling */
 
+.section-dropdown,
 .version-dropdown {
   position: relative;
 }
@@ -1493,6 +1494,7 @@ svg.section-card-icon {
    dropdown as their only selector. The 1279px bound matches the
    .sidebar-mobile-panel breakpoint. The dropdown stays on desktop (>= 1280px). */
 @media (max-width: 1279px) {
+  body:has(.sidebar-mobile-panel) .section-dropdown,
   body:has(.sidebar-mobile-panel) .version-dropdown {
     display: none !important;
   }
@@ -1508,6 +1510,7 @@ svg.section-card-icon {
   }
 }
 
+.section-dropdown-btn,
 .version-dropdown-btn {
   display: inline-flex;
   align-items: center;
@@ -1525,19 +1528,23 @@ svg.section-card-icon {
   transition: color 0.2s, border-color 0.2s;
 }
 
+.section-dropdown-btn:hover,
 .version-dropdown-btn:hover {
   color: var(--theme-link);
 }
 
+.section-dropdown-btn svg,
 .version-dropdown-btn svg {
   transition: transform 0.2s;
 }
 
+.section-dropdown.open .section-dropdown-btn svg,
 .version-dropdown.open .version-dropdown-btn svg {
   transform: rotate(180deg);
 }
 
 /* Menu — hidden by default, shown when .open is on parent */
+.section-dropdown-menu,
 .version-dropdown-menu {
   display: none !important;
   position: absolute;
@@ -1557,10 +1564,12 @@ svg.section-card-icon {
   list-style: none;
 }
 
+.section-dropdown.open .section-dropdown-menu,
 .version-dropdown.open .version-dropdown-menu {
   display: block !important;
 }
 
+.section-dropdown-item,
 .version-dropdown-item {
   display: block;
   padding: 8px 16px;
@@ -1570,29 +1579,35 @@ svg.section-card-icon {
   transition: color 0.15s;
 }
 
+.section-dropdown-item:hover,
 .version-dropdown-item:hover {
   color: var(--theme-link);
   background: #f9fafb;
 }
 
 /* ── Version dropdown dark mode ──────────────────────────────────────── */
+.dark .section-dropdown-btn,
 .dark .version-dropdown-btn {
   color: #d1d5db;
 }
 
+.dark .section-dropdown-btn:hover,
 .dark .version-dropdown-btn:hover {
   color: var(--theme-link);
 }
 
+.dark .section-dropdown-menu,
 .dark .version-dropdown-menu {
   background: #1a1a1a;
   border-color: #333;
 }
 
+.dark .section-dropdown-item,
 .dark .version-dropdown-item {
   color: #d1d5db;
 }
 
+.dark .section-dropdown-item:hover,
 .dark .version-dropdown-item:hover {
   color: var(--theme-link);
   background: #262626;
@@ -2643,4 +2658,15 @@ a[class*="word-break:break-word"] {
   width: 16rem;
   max-width: 80vw;
   padding: 0.25rem 0.25rem 0.5rem;
+}
+
+/* Section dropdown — the product-name menu listing a product's parallel doc
+   sets (agentgateway: Kubernetes / Standalone). It sits beside the version
+   dropdown in the navbar and must look identical, so every rule above carries a
+   .section-dropdown twin selector rather than a forked copy that would drift.
+   The -divider and -header rules are deliberately NOT shared: those are for the
+   related-product groups inside the version menu, which the section menu has no
+   equivalent of. */
+.section-dropdown-item-active {
+  font-weight: 600;
 }

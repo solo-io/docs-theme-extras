@@ -22,7 +22,7 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
-## [1.0.0] — 2026-08-21
+## [0.2.2] — 2026-08-21
 
 ### BREAKING — one tagged versions list replaces per-section version lists
 
@@ -189,6 +189,66 @@ assertions in `tests/related-docs.spec.ts` cover both sides, two groups sharing 
 within a group, the three skip rules, and desktop/mobile parity. docs-hub kgateway 5442 pages,
 gateway built clean, agentgateway-oss-website and kgateway-oss unchanged at 5442 and 2836 pages.
 
+### Add — a product-name section selector in the navbar, and the product name leaves the version dropdown (`layouts/_partials/utils/resolve-sections.html`)
+
+A product with parallel doc sets had no way to switch between them except the URL.
+agentgateway-oss-website solved it with a "Docs" navbar dropdown holding two hardcoded
+`<a>` tags; this is the same idea, generalised: a dropdown labelled with the PRODUCT name,
+listing every registered section, driven by `utils/resolve-sections.html`.
+
+```
+navbar:   [ Solo Enterprise for agentgateway ▾ ]  [ 2026.8.0 (latest) ▾ ]
+                 Kubernetes                            2026.8.0 (latest)
+                 Standalone                            2026.7.1 (LTS)
+                                                       2.3.x
+```
+
+The product name is REMOVED from the version dropdown — both the button prefix and the
+in-menu group header — whenever the selector is rendering it, since showing it twice reads
+"Solo Enterprise for agentgateway | Solo Enterprise for agentgateway - 2026.8.0 (latest)".
+Related-product group headers are untouched: those name OTHER products, which the selector
+does not cover.
+
+**Nothing changes for a product without sections.** `utils/resolve-sections.html` returns an
+empty slice when `params.sections` is unset, and the selector is suppressed below two
+sections, so the other eight hub products and both OSS sites render exactly as before —
+version dropdown with its product-name prefix intact. Verify on
+<https://docs.solo.io/kgateway/2.3.x/>, whose dropdown button reads "Solo Enterprise for
+kgateway - 2.3.x (latest)" and must keep reading that.
+
+This also fixes two defects in the mobile section row that already existed in
+`sidebar.html`, which is now the drawer counterpart of the same resolver:
+
+- **It never rendered on the docs hub.** Hrefs were built as a literal
+  `/docs/<section>/<version>/`, so the row was gated on `$isOSSShape`. The hub serves
+  sections at `/<product>/<section>/…` and `/<section>/…`, so it was excluded outright.
+  Hrefs now come from the section landing page's own `.RelPermalink` via `site.GetPage`,
+  which is correct in all three shapes without the partial knowing which one it is.
+- **Its version remap was dead code.** Section version sets diverge — agentgateway's
+  kubernetes section ships 2.3.x and 2026.7.1 while standalone ships only latest — so a
+  link to another section cannot reuse the current version verbatim. The remap read
+  `$cfg.versions`, i.e. `site.Params.sections.<key>.versions`, which THIS release removes.
+  It had therefore been nil-guarded into a no-op since the migration, sending every chip to
+  the current version whether or not it existed in the target section.
+
+  That survived the migration sweep because the lookup was split across two statements
+  (`$cfg := index site.Params.sections .`, then `$cfg.versions`), which the repo-wide guard
+  in `tests/link-hextra-shapes.spec.ts` matched as a single expression and could not see.
+  The guard now detects the split form exactly — it collects variables assigned from the
+  registry and checks whether each is used with `.versions` — rather than by a looser
+  pattern, which would have flagged the legitimate `title` and `externalURL` reads and got
+  itself deleted instead of fixed. Confirmed by planting the old shape in a probe file and
+  watching the guard fail, then removing it.
+
+A section with neither a landing page nor an `externalURL` is left out and warns
+(`extras-section-no-target`) rather than emitting a dead menu entry.
+
+Verified: 10 assertions in `tests/section-selector.spec.ts`, covering the product-name
+label, the de-duplication, both remap directions plus a no-remap control, the active
+marker, and navbar/drawer parity. The fixture gained a second section landing page
+(`fixture/content/en/test/alt/`) because with one section there is nothing to select and
+the selector correctly renders nothing.
+
 ### Fix — section landing pages suppress the left nav in every URL shape, not just the OSS one (`layouts/partials/sidebar.html`)
 
 A section landing page is the "pick a version / deployment type" splash that sits ABOVE the
@@ -316,9 +376,6 @@ per-section versions list again, so the two-list shape cannot creep back.
 - **kagent docs-site**: 240 pages, no warnings — registers no sections, so unaffected, which is the
   point of "no `sections` field means every section".
 
----
-
-## [0.2.2] — 2026-08-21
 
 ### Fix — old-version pages are actually noindexed now, on every consumer shape (`layouts/partials/utils/version-noindex.html`)
 

@@ -102,6 +102,14 @@
       {{- end -}}
 
 
+      {{- /* Sections this product ships. Resolved HERE, before the label
+             composition below, because whether the product name belongs on the
+             version dropdown depends on whether the section selector is going to
+             show it. $page, not `.` — this sits inside `with $navVersions`,
+             where the dot is the versions slice. */ -}}
+      {{- $sections := partial "utils/resolve-sections.html" $page -}}
+      {{- $hasSelector := gt (len $sections) 1 -}}
+
       {{- /* Match current version — check all entries (including hidden) so that
              manually navigating to a hidden version shows the correct label.
              Match against the version segment from the URL, not Site.Params.version
@@ -110,16 +118,24 @@
       {{- range . -}}
         {{- $label := .dropdown | default .version -}}
         {{- $visible := ne (trim $label " ") "" -}}
+        {{- /* The product-name prefix is skipped when the section selector is
+               rendering the product name instead. This label feeds
+               $firstVisibleLabel, which is what the button falls back to on a
+               page with no version in its URL — the product root. Without this
+               the root page showed the name twice while every versioned page
+               showed it once. */ -}}
         {{- $fullLabel := $label -}}
-        {{- with .productName -}}
-          {{- $fullLabel = printf "%s - %s" . $label -}}
+        {{- if not $hasSelector -}}
+          {{- with .productName -}}
+            {{- $fullLabel = printf "%s - %s" . $label -}}
+          {{- end -}}
         {{- end -}}
         {{- if and $visible (not $firstVisibleLabel) -}}
           {{- $firstVisibleLabel = $fullLabel -}}
         {{- end -}}
         {{- /* No same-product test any more: site.Params.versions holds ONLY this
                product's versions. Other products' versions live in
-               site.Params.relatedDocs (CHANGELOG [1.0.0]) — see
+               site.Params.relatedDocs (CHANGELOG [0.2.2]) — see
                utils/resolve-related-docs.html for why they were separated. */ -}}
         {{- if and (not $currentLabel) $urlVersion -}}
           {{- if or (eq .linkVersion $urlVersion) (eq .version $urlVersion) -}}
@@ -167,9 +183,43 @@
       {{- $isVersionless := and $urlVersion (not $matchedVersion) (not $versionMarker) -}}
 
       {{- if and $currentLabel (not $isVersionless) -}}
+        {{- /* Section selector — the product-name dropdown, listing this
+               product's parallel doc sets (agentgateway's Kubernetes and
+               Standalone). Modelled on agentgateway-oss-website's "Docs"
+               dropdown, but labelled with the PRODUCT name rather than "Docs",
+               and driven by utils/resolve-sections.html instead of two
+               hardcoded <a> tags, so it works for any product that registers
+               sections and in any URL shape.
+
+               utils/resolve-sections.html returns an EMPTY slice for a product
+               with no sections, so this renders nothing at all for the other
+               eight hub products and both OSS sites — and a product with a
+               single section gets no selector either, since there is nothing to
+               select between. */ -}}
+        {{- if gt (len $sections) 1 -}}
+        <div class="section-dropdown">
+          <button type="button" class="section-dropdown-btn" aria-expanded="false" aria-haspopup="true">
+            <span>{{ site.Params.product | default site.Title }}</span>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2.5 4l2.5 2.5L7.5 4"/></svg>
+          </button>
+          <ul class="section-dropdown-menu" role="menu">
+            {{- range $sections -}}
+            <li role="none">
+              <a href="{{ .href }}" class="section-dropdown-item{{ if .isCurrent }} section-dropdown-item-active{{ end }}" role="menuitem"{{ if .isExternal }} rel="noopener"{{ end }}>{{ .label }}</a>
+            </li>
+            {{- end -}}
+          </ul>
+        </div>
+        {{- end -}}
         <div class="version-dropdown">
           <button type="button" class="version-dropdown-btn" aria-expanded="false" aria-haspopup="true">
-            {{- if $currentProductName -}}<span class="version-product-name">{{ $currentProductName }} - </span><span>{{ $currentVersionLabel }}</span>{{- else -}}<span>{{ $currentLabel }}</span>{{- end -}}
+            {{- /* The product name is dropped from this button when the section
+                   selector above is showing it — repeating it would read
+                   "Solo Enterprise for agentgateway | Solo Enterprise for
+                   agentgateway - 2026.8.0 (latest)". A product with no sections
+                   renders no selector, so it keeps the prefix exactly as
+                   before. */ -}}
+            {{- if and $currentProductName (not $hasSelector) -}}<span class="version-product-name">{{ $currentProductName }} - </span><span>{{ $currentVersionLabel }}</span>{{- else if $currentProductName -}}<span>{{ $currentVersionLabel }}</span>{{- else -}}<span>{{ $currentLabel }}</span>{{- end -}}
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2.5 4l2.5 2.5L7.5 4"/></svg>
           </button>
           <ul class="version-dropdown-menu" role="menu">
@@ -201,8 +251,14 @@
               {{- if $related.before -}}
               <li role="separator" class="version-dropdown-divider"></li>
               {{- end -}}
-              {{- with $ownName -}}
+              {{- /* Suppressed when the section selector already names the
+                     product, for the same reason as the button above. Related
+                     groups keep their headers regardless — those name OTHER
+                     products, which the selector does not cover. */ -}}
+              {{- if not $hasSelector -}}
+                {{- with $ownName -}}
               <li role="none" class="version-dropdown-header">{{ . }}</li>
+                {{- end -}}
               {{- end -}}
             {{- end -}}
             {{- range . -}}

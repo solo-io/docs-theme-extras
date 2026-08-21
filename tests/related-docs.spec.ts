@@ -16,7 +16,7 @@ const IS_FIXTURE_TARGET = target.name.startsWith("docs-theme-extras-fixture");
 // WHY THIS EXISTS. These groups used to be ordinary site.Params.versions entries
 // whose `product` differed from site.Params.currentProduct, carrying an absolute
 // `url` that three readers used in place of a constructed href. Splitting them
-// out (CHANGELOG [1.0.0]) fixed four things at once — duplicate linkVersions
+// out (CHANGELOG [0.2.2]) fixed four things at once — duplicate linkVersions
 // colliding in version-root.html, other products' versions leaking into
 // flexsearch/noindex/banner/remap, ~60 inert `url` values going stale unnoticed,
 // and assemble-assets.py demanding ossDir/ossBranch from entries that can never

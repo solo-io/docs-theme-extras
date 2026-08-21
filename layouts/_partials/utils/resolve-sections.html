@@ -1,0 +1,158 @@
+{{- /*
+  resolve-sections.html — the sections this product ships, with a label and a
+  working href for each, in any URL shape.
+
+  Input:  a Page (passed as `.`)
+  Output: a slice of dicts, sorted by section key:
+            key        string — the registry key ("kubernetes")
+            label      string — what to show
+            href       string — where the chip/menu item points
+            isCurrent  bool   — the page being rendered is in this section
+            isExternal bool   — href came from `externalURL`, so rel=noopener
+
+  A product registers a section by adding a key under site.Params.sections; see
+  utils/section-segment.html. A product with none gets an EMPTY slice, so every
+  caller can render unconditionally and single-section products are untouched.
+
+  LABEL, in order: the section's own `title` in the registry, then the section
+  landing page's title, then the humanized key. The landing page is where the
+  title naturally lives ("Kubernetes", "Standalone"), so most products need no
+  registry `title` at all.
+
+  HREF resolves through site.GetPage rather than string arithmetic, because the
+  section root is at a different depth in each shape:
+
+      /docs/<section>/<version>/…            OSS
+      /<section>/<version>/…                 docs hub under `hugo server`
+      /<product>/<section>/<version>/…        docs hub in production
+
+  GetPage paths are contentDir-relative, which already absorbs the product and
+  language prefixes, so looking up the landing page and reading its
+  .RelPermalink gets the published prefix right in all three without this
+  partial needing to know which one it is. The previous inline implementation
+  in sidebar.html hardcoded `/docs/%s/%s/` and was gated on `$isOSSShape`, so
+  the hub simply never showed a section selector.
+
+  VERSION REMAP. Section version sets do not always align: agentgateway's
+  kubernetes section ships 2.3.x and 2026.7.1 while standalone ships only
+  latest. Pointing another section's link at the CURRENT version can therefore
+  land on a page that does not exist. So for a section that is not the current
+  one, prefer an exact linkVersion match, then a `latest` entry, then that
+  section's first configured version.
+
+  That remap used to read `$cfg.versions` — i.e.
+  site.Params.sections.<key>.versions, which v0.2.2 REMOVED. `$cfg.versions`
+  has been nil ever since, so the whole remap silently no-opped and every
+  section link reused the current version verbatim. It survived the migration
+  sweep because the lookup was split across two statements
+  (`$cfg := index site.Params.sections .` then `$cfg.versions`), which the
+  repo-wide single-expression guard in tests/link-hextra-shapes.spec.ts could
+  not see. That guard now covers the split form too. Versions come from
+  utils/resolve-section-versions.html here, the one place that knows the
+  tagged-list rule.
+
+  `externalURL` on a section overrides the href entirely, for a section that
+  exists only to scope version dropdowns and has no landing page of its own
+  (kgateway's `agentgateway` section).
+*/ -}}
+{{- $page := . -}}
+{{- $root := partial "utils/version-root.html" $page -}}
+{{- $currentSection := (partial "utils/section-segment.html" $page).segment -}}
+{{- $currentVersion := $root.currentVersion -}}
+
+{{- $keys := slice -}}
+{{- range $k, $_ := site.Params.sections -}}
+  {{- $keys = $keys | append $k -}}
+{{- end -}}
+{{- $keys = sort $keys -}}
+
+{{- $out := slice -}}
+{{- range $keys -}}
+  {{- $key := . -}}
+  {{- $cfg := index site.Params.sections $key -}}
+
+  {{- /* The section landing page, in whichever shape this site uses.
+
+         LEADING SLASH IS REQUIRED. A bare `site.GetPage "envoy"` is a fuzzy
+         lookup, and on docs-hub kgateway it aborts the whole build with
+         `page reference "envoy" is ambiguous` — the word matches more than one
+         page across its version trees. A rooted path is resolved against
+         contentDir only, so it cannot be ambiguous and cannot accidentally
+         match a same-named page deep in a version tree. */ -}}
+  {{- $landing := site.GetPage (printf "/%s" $key) -}}
+  {{- if not $landing -}}
+    {{- $landing = site.GetPage (printf "/docs/%s" $key) -}}
+  {{- end -}}
+
+  {{- $isCurrent := eq $key $currentSection -}}
+
+  {{- /* Label */ -}}
+  {{- $label := $key | humanize -}}
+  {{- with $landing -}}{{- $label = partial "utils/title" . -}}{{- end -}}
+  {{- with $cfg.title -}}{{- $label = . -}}{{- end -}}
+
+  {{- /* Target version within THIS section. */ -}}
+  {{- $targetVersion := $currentVersion -}}
+  {{- if not $isCurrent -}}
+    {{- $sectionVersions := partial "utils/resolve-section-versions.html" $key -}}
+    {{- with $sectionVersions -}}
+      {{- $match := false -}}
+      {{- $hasLatest := false -}}
+      {{- range . -}}
+        {{- if eq .linkVersion $currentVersion -}}{{- $match = true -}}{{- end -}}
+        {{- if eq .linkVersion "latest" -}}{{- $hasLatest = true -}}{{- end -}}
+      {{- end -}}
+      {{- if not $match -}}
+        {{- $targetVersion = cond $hasLatest "latest" (index . 0).linkVersion -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- /* Href */ -}}
+  {{- $href := "" -}}
+  {{- $isExternal := false -}}
+  {{- with $landing -}}
+    {{- $href = .RelPermalink -}}
+    {{- /* Append the version ONLY when that page actually exists. A product may
+           register a section WITHOUT nesting its version trees under it — the
+           section then exists purely to scope version dropdowns for shared
+           paths, and the versions live at /<product>/<version>/. Appending
+           blindly emits /<section>/<version>/ for pages that were never built,
+           which is a dead menu entry.
+
+           Relative GetPage off the landing page, so this needs no knowledge of
+           whether the prefix is /docs/<section>/, /<section>/ or
+           /<product>/<section>/. Falling back to the landing page itself is
+           always safe: it is the page the reader picks a version on. */ -}}
+    {{- $land := . -}}
+    {{- with $targetVersion -}}
+      {{- $want := printf "%s%s/" $land.RelPermalink . -}}
+      {{- /* Compare the RESOLVED permalink, don't just test that GetPage
+             returned something. Page.GetPage tries a relative lookup and then
+             falls back to a SITE-WIDE one, so `$land.GetPage "v2"` happily
+             returns /test/v2/ when /test/demo/v2/ does not exist — which is
+             exactly the dead link this check exists to prevent. */ -}}
+      {{- with $land.GetPage . -}}
+        {{- if eq .RelPermalink $want -}}{{- $href = $want -}}{{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- with $cfg.externalURL -}}
+    {{- $href = . -}}
+    {{- $isExternal = true -}}
+  {{- end -}}
+
+  {{- /* A section with neither a landing page nor an externalURL has nowhere to
+         point; emitting it would put a dead link in the menu. */ -}}
+  {{- if $href -}}
+    {{- $out = $out | append (dict
+          "key" $key
+          "label" $label
+          "href" $href
+          "isCurrent" $isCurrent
+          "isExternal" $isExternal) -}}
+  {{- else -}}
+    {{- warnidf "extras-section-no-target" "params.sections.%s has no landing page and no `externalURL`, so it is left out of the section selector. Add a content page at that path, or set externalURL." $key -}}
+  {{- end -}}
+{{- end -}}
+{{- return $out -}}

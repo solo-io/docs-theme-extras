@@ -22,7 +22,7 @@ import { TEST_PRODUCT_ROOT } from "./helpers/fixture";
 //      and the filter was inert. That repo forked this whole 20KB file to fix
 //      one line. This one is now structurally impossible: there is a single
 //      versions list, and a section-scoped version names its sections inside it
-//      (CHANGELOG [1.0.0]), so there is no second place to forget.
+//      (CHANGELOG [0.2.2]), so there is no second place to forget.
 //   2. The set was keyed on `version`, but the filter compares it against a URL
 //      path SEGMENT (`getVersionFromURL`). Where a config sets
 //      `version = "2.14.x"` with `linkVersion = "main"` — gloo-mesh-enterprise
@@ -82,7 +82,7 @@ test.describe("search visibleVersions", () => {
 
   // Was two tests: one that sections were walked at all, one that the set was
   // keyed on linkVersion. The first is now structurally impossible to fail —
-  // there is only ONE list to read (CHANGELOG [1.0.0]) — so a section-scoped
+  // there is only ONE list to read (CHANGELOG [0.2.2]) — so a section-scoped
   // version cannot hide from this collection the way it used to. What remains
   // worth asserting is the keying, and the tagged model does not change it.
   test("entries are keyed on linkVersion, not version", () => {

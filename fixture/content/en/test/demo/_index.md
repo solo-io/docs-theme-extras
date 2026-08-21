@@ -1,5 +1,5 @@
 ---
-title: Demo section landing
+title: Demo
 weight: 900
 description: >-
   A SECTION landing page, used to pin that the left nav is suppressed on the

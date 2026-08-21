@@ -235,51 +235,28 @@
                label so it's clear what the chips switch. */ -}}
         <div class="sidebar-mobile-only sidebar-mobile-header">
 
-          {{- if and $isOSSShape (gt (len $sectionKeys) 1) -}}
+          {{- /* Mobile section row — the drawer counterpart of the navbar's
+                 product-name section dropdown. Both come from
+                 utils/resolve-sections.html so they offer the same sections,
+                 with the same labels and the same destinations.
+
+                 That resolver replaced ~45 lines inlined here which (a) built
+                 hrefs as a literal `/docs/<section>/<version>/`, so this row was
+                 gated on $isOSSShape and the docs hub never showed it at all,
+                 and (b) remapped the target version by reading `$cfg.versions`
+                 — site.Params.sections.<key>.versions, removed in v0.2.2 — so
+                 the remap had silently no-opped since that migration and every
+                 chip reused the current version verbatim, pointing at pages that
+                 need not exist in the target section. */ -}}
+          {{- $sections := partial "utils/resolve-sections.html" $context -}}
+          {{- if gt (len $sections) 1 -}}
             <span class="sidebar-mobile-row-label">{{ (T "section") | default "Section" }}</span>
             <div class="sidebar-mobile-section-row">
-              {{- range $sectionKeys -}}
-                {{- $isCurrent := eq . $section -}}
-                {{- $label := . | humanize -}}
-                {{- $cfg := index site.Params.sections . -}}
-                {{- with $cfg.title -}}{{- $label = . -}}{{- end -}}
-                {{- /* Resolve a version that actually exists in the target
-                       section. Version numbers don't always align across
-                       sections (e.g. agw's kubernetes has 1.1.x but standalone
-                       only ships latest/main), so reusing $currentVersion
-                       verbatim can point the chip at a non-existent landing.
-                       The current section always has the current version, so
-                       only the other sections need remapping: prefer an exact
-                       linkVersion match, then a `latest` entry, then the first
-                       configured version. */ -}}
-                {{- $targetVersion := $currentVersion -}}
-                {{- if not $isCurrent -}}
-                  {{- with $cfg.versions -}}
-                    {{- $match := false -}}
-                    {{- $hasLatest := false -}}
-                    {{- range . -}}
-                      {{- if eq .linkVersion $currentVersion -}}{{- $match = true -}}{{- end -}}
-                      {{- if eq .linkVersion "latest" -}}{{- $hasLatest = true -}}{{- end -}}
-                    {{- end -}}
-                    {{- if not $match -}}
-                      {{- $targetVersion = cond $hasLatest "latest" (index . 0).linkVersion -}}
-                    {{- end -}}
-                  {{- end -}}
-                {{- end -}}
-                {{- /* Consumers can set `externalURL` on a section to redirect
-                       this chip off-site (e.g. kgw's `agentgateway` section,
-                       which exists only to scope version dropdowns for shared
-                       paths and has no internal landing page). */ -}}
-                {{- $href := printf "/docs/%s/%s/" . $targetVersion -}}
-                {{- $isExternal := false -}}
-                {{- with $cfg.externalURL -}}
-                  {{- $href = . -}}
-                  {{- $isExternal = true -}}
-                {{- end -}}
-                <a href="{{ $href }}"
-                   class="sidebar-mobile-section-link{{ if $isCurrent }} sidebar-mobile-section-active{{ end }}"
-                   {{ if $isExternal }}rel="noopener"{{ end }}>
-                  {{ $label }}
+              {{- range $sections -}}
+                <a href="{{ .href }}"
+                   class="sidebar-mobile-section-link{{ if .isCurrent }} sidebar-mobile-section-active{{ end }}"
+                   {{ if .isExternal }}rel="noopener"{{ end }}>
+                  {{ .label }}
                 </a>
               {{- end -}}
             </div>
@@ -299,7 +276,7 @@
 
                Every entry here is THIS product's; other products' versions come
                from site.Params.relatedDocs via utils/resolve-related-docs.html
-               (CHANGELOG [1.0.0]), so there is no same-product branch and no
+               (CHANGELOG [0.2.2]), so there is no same-product branch and no
                per-entry `url` to fall back to. */ -}}
           {{- $related := partial "utils/resolve-related-docs.html" . -}}
           {{- $filteredVersions := slice -}}
