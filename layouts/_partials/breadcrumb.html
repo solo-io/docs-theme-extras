@@ -36,6 +36,31 @@
     </a>
     {{- range $ancestors -}}
       {{- $label := partial "utils/title" . -}}
+      {{- /* Collapse a VERSION ancestor to its URL slug, at whatever depth it
+             sits. A version section's own title is written for the page itself,
+             not for a crumb — kgateway's /2.3.x/ is titled "Solo Enterprise for
+             kgateway 2.3.x" — so the crumb reads Home / 2.3.x / Reference / …
+             instead of repeating the product name on every page.
+
+             Depth matters here. This used to be folded into the `.Parent.IsHome`
+             branch below, on the assumption that a version is always the
+             top-level ancestor. That holds only for a product whose versions sit
+             directly under the product root. A product with parallel doc
+             sections nests them one level deeper
+             (/<product>/<section>/<version>/…), so the version ancestor is no
+             longer top-level and kept its full title, giving
+             Home / Kubernetes / Kubernetes / Install.
+
+             Enterprise brand only: the OSS shape puts /docs/ above the section
+             and is handled in the branch below.
+
+             Assign-then-if, not `with partial` — see
+             utils/match-version-entry.html. */ -}}
+      {{- if eq (site.Params.themeExtras.brand | default "") "enterprise" -}}
+        {{- $slug := path.Base (strings.TrimSuffix "/" .RelPermalink) -}}
+        {{- $asVersion := partial "utils/match-version-entry.html" (dict "versions" site.Params.versions "candidate" $slug) -}}
+        {{- if and $slug $asVersion -}}{{ $label = $slug }}{{- end -}}
+      {{- end -}}
       {{- if .Parent.IsHome -}}
         {{- /* Enterprise (docs hub) builds put each product in its own Hugo
                site with baseURL=/<product>/, so the top-level ancestor is
@@ -57,14 +82,10 @@
 
                Assign-then-if, not `with partial` — see
                utils/match-version-entry.html for why. */ -}}
-        {{- if eq (site.Params.themeExtras.brand | default "") "enterprise" -}}
-          {{- $slug := path.Base (strings.TrimSuffix "/" .RelPermalink) -}}
-          {{- $asVersion := partial "utils/match-version-entry.html" (dict "versions" site.Params.versions "candidate" $slug) -}}
-          {{- if and $slug $asVersion -}}{{ $label = $slug }}{{- end -}}
-        {{- else -}}
-          {{- /* For top-level sections whose title resolution returned a path
-                 (e.g. "kgateway/2.1.x"), strip the consumer's folder prefix so
-                 preview builds don't render "kgateway/2.1.x" in the crumb. */ -}}
+        {{- if ne (site.Params.themeExtras.brand | default "") "enterprise" -}}
+          {{- /* OSS: for top-level sections whose title resolution returned a
+                 path (e.g. "kgateway/2.1.x"), strip the consumer's folder prefix
+                 so preview builds don't render "kgateway/2.1.x" in the crumb. */ -}}
           {{- with site.Params.folder -}}
             {{- $label = strings.TrimPrefix (printf "%s/" .) $label -}}
           {{- end -}}
