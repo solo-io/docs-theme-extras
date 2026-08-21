@@ -39,14 +39,28 @@
       {{- if .Parent.IsHome -}}
         {{- /* Enterprise (docs hub) builds put each product in its own Hugo
                site with baseURL=/<product>/, so the top-level ancestor is
-               always a version directory (e.g. /kgateway/2.2.x/). The version
+               normally a VERSION directory (e.g. /kgateway/2.2.x/). A version
                section's own title is verbose ("Solo Enterprise for kgateway
-               2.2.x"); collapse to the URL slug so the breadcrumb reads
+               2.2.x"), so it collapses to the URL slug and the breadcrumb reads
                Home / 2.2.x / Reference / … instead of repeating the product
-               name on every page. */ -}}
+               name on every page.
+
+               ONLY when the slug really is a version. A product with parallel
+               doc sections nests its versions one level deeper
+               (/<product>/<section>/<version>/…), which makes the top-level
+               ancestor the SECTION — and a section's title is already short and
+               properly cased ("Kubernetes", "Standalone"). Collapsing that to
+               the slug lowercased it, so agentgateway's breadcrumbs read
+               Home / kubernetes / … instead of Home / Kubernetes / … . The
+               override was written when a version was the only thing that could
+               sit at this level.
+
+               Assign-then-if, not `with partial` — see
+               utils/match-version-entry.html for why. */ -}}
         {{- if eq (site.Params.themeExtras.brand | default "") "enterprise" -}}
           {{- $slug := path.Base (strings.TrimSuffix "/" .RelPermalink) -}}
-          {{- if $slug -}}{{ $label = $slug }}{{- end -}}
+          {{- $asVersion := partial "utils/match-version-entry.html" (dict "versions" site.Params.versions "candidate" $slug) -}}
+          {{- if and $slug $asVersion -}}{{ $label = $slug }}{{- end -}}
         {{- else -}}
           {{- /* For top-level sections whose title resolution returned a path
                  (e.g. "kgateway/2.1.x"), strip the consumer's folder prefix so

@@ -670,6 +670,12 @@
     "MARKER_CALLOUTFENCE_STEP_PROSE": "div.hextra-max-page-width > article > main > div.content > ol > li > div.solo-alert > div.solo-alert-body > p",
     "MARKER_CALLOUTFENCE_STEP_TWO": "div.hextra-max-page-width > article > main > div.content > ol > li > p"
   },
+  "v2/card-path": {
+    "MARKER_CARD_PATH_ABS": "div.hextra-max-page-width > article > main > div.content > div.section-cards > a > span.section-card-body > span.section-card-title",
+    "MARKER_CARD_PATH_FRAGMENT": "div.hextra-max-page-width > article > main > div.content > div.section-cards > a > span.section-card-body > span.section-card-title",
+    "MARKER_CARD_PATH_NESTED": "div.hextra-max-page-width > article > main > div.content > div.section-cards > a > span.section-card-body > span.section-card-title",
+    "MARKER_CARD_PATH_REL": "div.hextra-max-page-width > article > main > div.content > div.section-cards > a > span.section-card-body > span.section-card-title"
+  },
   "v2/cond-multiline-step": {
     "COND_MULTISTEP": "div.hextra-max-page-width > article > main > div.content > ol > li > p",
     "COND_MULTISTEP_CMD": "div.hextra-max-page-width > article > main > div.content > ol > li > ol > li > div.hextra-code-block > div > div.highlight > pre > code > span.line > span.cl"
@@ -1125,5 +1131,10 @@
     "MARKER_REMAP_ALWAYS_KEY": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td > code",
     "MARKER_REMAP_COLLIDE_KEEP": "div.hextra-max-page-width > article > main > div.content > p",
     "MARKER_REMAP_INTRO": "div.hextra-max-page-width > article > main > div.content > p"
+  },
+  "v4-link/gating": {
+    "MARKER_GATE_CANONICAL_INCLUDED": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_GATE_EXCLUDE_OTHER_INCLUDED": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_GATE_LINKVERSION_INCLUDED": "div.hextra-max-page-width > article > main > div.content > p"
   }
 }

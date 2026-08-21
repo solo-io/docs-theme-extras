@@ -22,11 +22,11 @@
            warning the same page twice (once in `main`, once in `latest`).
            Everything else is skipped — frozen old versions (`1.0.x`, `2.1.x`, …),
            the current release (`latest`), and unversioned pages (blog, marketing).
-           Version lists are read from both `params.versions` (top level) and
-           `params.sections.<s>.versions` (agw keeps them per section). A site
-           with NO version config is linted in full; a versioned site with no
-           `main` version falls back to linting everything rather than silently
-           going quiet.
+           Versions come from the single `params.versions` list (an entry that
+           belongs to only some sections names them in its own `sections`
+           field). A site with NO version config is linted in full; a versioned
+           site with no `main` version falls back to linting everything rather
+           than silently going quiet.
 
        Enabled by default on every consumer (no opt-in needed). Opt out per
        consumer only if necessary:
@@ -53,12 +53,10 @@
   {{- if eq .warnMissingDescription false -}}{{ $enabled = false }}{{ end -}}
 {{- end -}}
 
-{{- /* Collect version entries from the top level and every section. */ -}}
-{{- $entries := slice -}}
-{{- range (site.Params.versions | default slice) }}{{ $entries = $entries | append . }}{{ end -}}
-{{- range $k, $s := (site.Params.sections | default dict) -}}
-  {{- range ($s.versions | default slice) }}{{ $entries = $entries | append . }}{{ end -}}
-{{- end -}}
+{{- /* Every version entry. One list now — a section-scoped version tags itself
+       rather than living under site.Params.sections.<s>.versions, so there is no
+       second place to forget to walk. */ -}}
+{{- $entries := site.Params.versions | default slice -}}
 
 {{- /* Known = every version's URL segment; active = latest + main only. */ -}}
 {{- $known := slice -}}

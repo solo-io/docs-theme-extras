@@ -41,24 +41,21 @@
       {{- end -}}
     {{- end -}}
   {{- end -}}
-{{- else if .Site.Params.sections -}}
-  {{- $versions = slice -}}
-  {{- range $name, $data := .Site.Params.sections -}}
-    {{- with $data.versions -}}
-      {{- range . -}}
-        {{- $versions = $versions | append . -}}
-      {{- end -}}
-    {{- end -}}
-  {{- end -}}
-  {{- $parts := split (trim .Page.RelPermalink "/") "/" -}}
-  {{- range $i, $p := $parts -}}
-    {{- if and (eq $condition "") (index $.Site.Params.sections $p) -}}
-      {{- $next := add $i 1 -}}
-      {{- if lt $next (len $parts) -}}
-        {{- $condition = index $parts $next -}}
-      {{- end -}}
-    {{- end -}}
-  {{- end -}}
+{{- /* REMOVED: a second branch for sites that declared versions ONLY under
+       site.Params.sections.<x>.versions. That shape is gone (CHANGELOG
+       [1.0.0]) — a section-scoped version now tags itself inside the one
+       site.Params.versions list — so `if $versions` above is reached by every
+       versioned site, including the sections-only ones this branch existed for.
+
+       It is worth recording what that branch got WRONG, because the tagged
+       model makes the mistake unrepresentable rather than merely fixed: it
+       flattened EVERY section's version list into one slice and matched the
+       first hit, without scoping to the page's own section. On a site whose
+       sections ship different version sets, a `standalone` page could gate
+       against the `kubernetes` entry's canonical `.version` and silently render
+       nothing. It stayed invisible only because agentgateway's two sections
+       happened to ship identical version numbers, which sidebar.html's own
+       comments note is not expected to last. */ -}}
 {{- end -}}
 
 {{- $currentProduct := .Site.Params.currentProduct | default "" -}}

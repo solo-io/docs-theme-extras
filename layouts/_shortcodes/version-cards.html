@@ -4,9 +4,12 @@
   Designed for a section landing page; each card links to
   <currentPagePath>/<linkVersion>/.
 
-  Reads versions from, in priority order:
-    1. site.Params.sections.<section>.versions  (per-section list)
-    2. site.Params.versions                     (top-level fallback)
+  Resolves versions through utils/resolve-section-versions.html — the single
+  place that knows which entries in site.Params.versions apply to a section
+  (each entry names its sections; an untagged entry applies to all). This used
+  to read site.Params.sections.<section>.versions itself, with a fallback to
+  the top-level list, which meant the priority rule lived here AND in the
+  sidebar AND in the navbar AND in version-root.html, and they drifted.
 
   Each version item is expected to expose `dropdown` (label) and
   `linkVersion` (URL slug). Items whose `dropdown` is empty/whitespace
@@ -34,42 +37,33 @@
 {{- end -}}
 {{- $desc := .Get "desc" -}}
 
-{{- $versions := slice -}}
-{{- if and $section site.Params.sections (isset site.Params.sections $section) -}}
-  {{- with (index site.Params.sections $section).versions -}}
-    {{- $versions = . -}}
-  {{- end -}}
-{{- end -}}
-{{- if eq (len $versions) 0 -}}
-  {{- with site.Params.versions -}}
-    {{- $versions = . -}}
-  {{- end -}}
-{{- end -}}
+{{- $versions := partial "utils/resolve-section-versions.html" $section -}}
 
 {{- $base := strings.TrimRight "/" .Page.RelPermalink -}}
-{{- $currentProduct := site.Params.currentProduct | default "" -}}
 {{- if gt (len $versions) 0 -}}
   {{- $.Page.Store.Set "hasManualCards" true -}}
   <div class="section-cards">
     {{- range $versions -}}
       {{- $label := .dropdown | default .version -}}
       {{- if and $label (ne (strings.Trim $label " ") "") -}}
-        {{- /* Same-product vs cross-product href, mirroring the navbar
-               version-dropdown logic in navbar.html. Same-product entries
-               (or builds without a `currentProduct` set) get the original
-               `<currentBase>/<linkVersion>/` so dev/preview baseURLs stay
-               relative. Cross-product entries (e.g., a docs-hub kgateway
-               config that lists pre-2.0 versions whose content lives under
-               /gateway/) take the explicit `url` field so the card points
-               at the correct product path instead of 404-ing under the
-               current product. */ -}}
-        {{- $sameProduct := or (not $currentProduct) (eq (.product | default "") $currentProduct) -}}
-        {{- $href := "" -}}
-        {{- if and (not $sameProduct) .url -}}
-          {{- $href = .url -}}
-        {{- else -}}
-          {{- $href = printf "%s/%s/" $base .linkVersion -}}
-        {{- end -}}
+        {{- /* `<currentBase>/<linkVersion>/`, so dev and preview baseURLs stay
+               relative. Every entry in site.Params.versions is THIS product's, so
+               there is nothing to branch on: other products' versions live in
+               site.Params.relatedDocs (CHANGELOG [1.0.0]).
+
+               This used to carry a cross-product branch that took an entry's
+               explicit `url`. It never ran anywhere: this shortcode is used only
+               by agentgateway's kubernetes section, agentgateway-oss-website,
+               kgateway-oss and this fixture, and none of them has (or had) a
+               cross-product entry — the two OSS sites set no `currentProduct` at
+               all, which made every entry same-product by definition.
+
+               Related products are deliberately NOT rendered as cards. This grid
+               sits on a section landing page and answers "which version of THIS
+               product, in this section" — a card pointing at another product's
+               site would be a different question. The version dropdown is where
+               cross-product navigation belongs. */ -}}
+        {{- $href := printf "%s/%s/" $base .linkVersion -}}
         <a class="section-card" href="{{ $href }}">
           <span class="section-card-body">
             <span class="section-card-title">{{ $label }}</span>
@@ -80,5 +74,5 @@
     {{- end -}}
   </div>
 {{- else -}}
-  {{- warnf "version-cards: no versions found (tried sections.%q.versions and top-level versions) on %s" $section .Page.RelPermalink -}}
+  {{- warnf "version-cards: no versions apply to section %q on %s. Check that site.Params.versions has entries whose `sections` list includes it (or that omit `sections`, meaning every section)." $section .Page.RelPermalink -}}
 {{- end -}}

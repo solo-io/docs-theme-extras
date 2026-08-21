@@ -75,8 +75,9 @@
        and fall back to a nonexistent `/latest/` prefix. Checked once, up
        front, so both the inference attempt below and the fallback can skip
        cleanly instead of guessing "latest" for a site that has no such
-       directory. */ -}}
-{{- /* `range` over an unset Params key is a safe no-op in Hugo templates;
+       directory.
+
+       `range` over an unset Params key is a safe no-op in Hugo templates;
        `len` on the same unset value is NOT — it panics with "reflect: call
        of reflect.Value.Type on zero Value" specifically inside the
        EXECUTE-AS-TEMPLATE re-execution Hugo does for flexsearch's
@@ -86,121 +87,68 @@
 {{- range $.Site.Params.versions -}}
   {{- $siteHasVersioning = true -}}
 {{- end -}}
-{{- /* A top-level `params.versions` list is not the only way a site declares
-       versioning. agentgateway-oss-website only ever defined its versions
-       under `params.sections.standalone.versions` / `.kubernetes.versions` —
-       its old forked link-hextra did its own path-segment walk regardless, so
-       it never needed a top-level list. Checking only the top level here
-       misclassified it as a flat, unversioned site (the same branch that's
-       correct for ambientmesh.io) and silently dropped the version segment
-       from every generated link (measured: 311 hrefs missing their
-       /standalone|kubernetes/<version> segment across the built site). If any
-       section declares versions, the site has versioning, even with no
-       top-level list. */ -}}
-{{- if not $siteHasVersioning -}}
-  {{- range $.Site.Params.sections -}}
-    {{- range .versions -}}
-      {{- $siteHasVersioning = true -}}
-    {{- end -}}
-  {{- end -}}
-{{- end -}}
+{{- /* This used to need a SECOND check, for a site that declared versions only
+       under `params.sections.<x>.versions` with no top-level list —
+       agentgateway-oss-website's old shape. Missing it misclassified that site
+       as flat and unversioned (the branch that is correct for ambientmesh.io),
+       dropping the version segment from every generated link: 311 hrefs
+       measured across the built site (v0.2.1).
 
-{{- /* If no version was passed (typical when called from inside a reuse-included */ -}}
-{{- /* snippet that the rebase shortcode didn't rewrite), infer from the current page's */ -}}
-{{- /* permalink so links resolve to the same product/version as the page they appear on. */ -}}
-{{- /* Strip the baseURL path prefix first so the regex sees a site-relative URL regardless */ -}}
-{{- /* of whether this is a full-docs build (baseURL "/") or a single-product preview */ -}}
-{{- /* build (baseURL "/kgateway", "/agentgateway", etc.). */ -}}
+       That second list no longer exists (CHANGELOG [1.0.0]) — a section-scoped
+       version tags itself inside site.Params.versions — so "does this site
+       version its docs" is once again answerable from one place, and the class
+       of bug where a reader forgets the second place is gone by construction.
+       That is the real argument for the tagged model: this file, flexsearch.js,
+       version-noindex.html and warn-missing-description.html each had to
+       remember to walk both, and three of the four did not. */ -}}
+
+{{- /* If no version was passed (typical when called from inside a
+       reuse-included snippet that the rebase shortcode didn't rewrite),
+       infer from the current page's permalink so links resolve to the same
+       product/version as the page they appear on. Delegates to
+       utils/version-root.html — the same "what section/version is this page
+       in" answer the sidebar, navbar, and version banner use — instead of
+       re-deriving a second, independent segment walk. That used to be a
+       real second implementation here, and it had to be fixed on its own
+       (agentgateway-oss-website's shape, see CHANGELOG [0.2.1]) because
+       nothing kept it in sync with the canonical one. */ -}}
 {{- if not $ver -}}
-  {{- $relURL := .Page.RelPermalink -}}
-  {{- $baseURLPath := replaceRE `^https?://[^/]*` "" .Site.BaseURL | strings.TrimSuffix "/" -}}
-  {{- if $baseURLPath -}}
-    {{- $relURL = strings.TrimPrefix $baseURLPath $relURL -}}
-  {{- end -}}
-  {{- /* Strip the language prefix (e.g. `/ja`) so version inference works on */ -}}
-  {{- /* localized pages. A JA page permalink is /<product>/ja/<version>/… (full */ -}}
-  {{- /* build) or /ja/<version>/… (single-product build); neither regex below */ -}}
-  {{- /* expects the language segment, so without this the version can't be inferred */ -}}
-  {{- /* and the link falls back to "latest". `.Site.LanguagePrefix` is empty for the */ -}}
-  {{- /* default language, so this is a no-op there. */ -}}
-  {{- with .Site.LanguagePrefix -}}
-    {{- $relURL = replace $relURL (printf "%s/" .) "/" -}}
-  {{- end -}}
   {{- if not $siteHasVersioning -}}
-  {{- /* Flat, unversioned site (ambientmesh.io; agentregistry oss has
-         the same shape but no live `link`/`link-hextra` calls yet). There is
-         no version segment to walk for below — $siteHasVersioning already
-         established that — so the segment walk would always find nothing and
-         $versionRoot would stay "", silently dropping the site's own /docs
-         mount from every `path` that (like every current ambientmesh.io call
-         site) doesn't spell it out itself. FirstSection.RelPermalink is exactly
-         that mount on a flat site, since there's no version/product segment to
-         misidentify it as — this is the same lookup `link`'s OLD
-         implementation used before being unified with link-hextra here (see
-         link.html's own history comment): wrong for a versioned OSS site,
-         never for this one. */ -}}
+    {{- /* Flat, unversioned site (ambientmesh.io; agentregistry oss has
+           the same shape but no live `link`/`link-hextra` calls yet). There
+           is no version segment to resolve — $siteHasVersioning already
+           established that — so version-root.html would report
+           isVersioned=false and $versionRoot would stay "", silently
+           dropping the site's own /docs mount from every `path` that (like
+           every current ambientmesh.io call site) doesn't spell it out
+           itself. FirstSection.RelPermalink is exactly that mount on a flat
+           site, since there's no version/product segment to misidentify it
+           as. */ -}}
     {{- $versionRoot = strings.TrimSuffix "/" .Page.FirstSection.RelPermalink -}}
   {{- else -}}
-  {{- /* Find the VERSION SEGMENT by walking path segments, and remember
-         everything before it as the version root.
-
-         This replaced two regexes — one anchored to a known product name
-         (`kgateway|agentgateway|gateway|envoy`), one anchored to the start of
-         the URL — that between them only recognized the docs hub's URL shape.
-         Neither matches an OSS site: agentgateway.dev serves
-         `/docs/standalone/latest/…` and `/docs/kubernetes/1.1.x/…`, where no
-         segment is a known product name and the version is not first. So the
-         version could not be inferred at all there, the shortcode fell through
-         to the "latest" fallback, and every link was wrong. That is why both
-         agentgateway-oss-website and kgateway-oss carried their own fork of
-         this file rather than using the module's.
-
-         Walking segments handles every shape uniformly:
-
-           /2.1.x/foo/                  ver 2.1.x   root ""            (hub)
-           /kgateway/2.1.x/foo/         ver 2.1.x   root /kgateway     (hub, full build)
-           /docs/envoy/2.1.x/foo/       ver 2.1.x   root /docs/envoy   (kgateway.dev)
-           /docs/standalone/latest/foo/ ver latest  root /docs/standalone (agentgateway.dev)
-
-         The hub is unaffected because its baseURL carries the product
-         (`https://docs.solo.io/kgateway/`) and the block above already strips
-         that prefix, so by the time we get here its URLs start at the version
-         and the root comes out empty — byte-identical to the old two regexes.
-
-         Versions are either `X.Y.x` (2.3.x) or fully qualified `X.Y.Z`
-         (2026.7.1, LTS), plus the moving names `latest` and `main`. Only the
-         FIRST matching segment counts, so a later path component that happens
-         to be called `main` cannot hijack the match.
-
-         A segment also counts if it matches `site.Params.versions[].version`
-         (or `.linkVersion`) outright — the SAME check reuse.html and
-         rebase.html already use to detect a version segment for their own
-         injection. Sites are free to name versions however they like there
-         (this fixture uses `v1`/`v2`, which fits neither the regex nor any
-         real production version string), so the regex alone under-recognizes
-         anything a site explicitly configured as a version. Checked first,
-         since an explicit configured match is more trustworthy than a shape
-         guess. */ -}}
-  {{- $configuredVersions := slice -}}
-  {{- range $.Site.Params.versions -}}
-    {{- $configuredVersions = $configuredVersions | append .version -}}
-    {{- with .linkVersion -}}{{- $configuredVersions = $configuredVersions | append . -}}{{- end -}}
-  {{- end -}}
-  {{- $segs := split (strings.TrimPrefix "/" $relURL) "/" -}}
-  {{- $verIdx := -1 -}}
-  {{- range $i, $s := $segs -}}
-    {{- if lt $verIdx 0 -}}
-      {{- if or (in $configuredVersions $s) (findRE `^(?:\d+\.\d+\.(?:x|\d+)|latest|main)$` $s 1) -}}
-        {{- $verIdx = $i -}}
+    {{- $root := partial "utils/version-root.html" .Page -}}
+    {{- if $root.isVersioned -}}
+      {{- $ver = $root.currentVersion -}}
+      {{- /* TWO DIFFERENT COORDINATE SYSTEMS — do not pass $root.versionBase
+             through unchanged. version-root.html returns a PUBLISHED-URL
+             prefix, so on the docs hub (baseURL https://host/<product>/) it
+             includes the product segment, and on a non-default language it
+             includes /<lang>/ too. The assembly below re-prepends
+             .Site.BaseURL, which already carries both, so handing it over
+             as-is emits /kgateway/kgateway/2.1.x/… — every hub link broken.
+             $versionRoot is baseURL-RELATIVE: "" on the hub (product lives in
+             baseURL), "/docs/<section>" on an OSS site (whose baseURL is the
+             bare host, so the prefix has to be spelled out). Strip in URL
+             order, baseURL path then language. */ -}}
+      {{- $versionRoot = $root.versionBase -}}
+      {{- $baseURLPath := replaceRE `^https?://[^/]*` "" .Site.BaseURL | strings.TrimSuffix "/" -}}
+      {{- with $baseURLPath -}}
+        {{- $versionRoot = strings.TrimPrefix . $versionRoot -}}
+      {{- end -}}
+      {{- with .Site.LanguagePrefix -}}
+        {{- $versionRoot = strings.TrimPrefix . $versionRoot -}}
       {{- end -}}
     {{- end -}}
-  {{- end -}}
-  {{- if ge $verIdx 0 -}}
-    {{- $ver = index $segs $verIdx -}}
-    {{- if gt $verIdx 0 -}}
-      {{- $versionRoot = printf "/%s" (delimit (first $verIdx $segs) "/") -}}
-    {{- end -}}
-  {{- end -}}
   {{- end -}}
 {{- end -}}
 

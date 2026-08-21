@@ -1,0 +1,86 @@
+{{- /*
+  resolve-related-docs.html — the OTHER products' version groups that share this
+  product's version dropdown, split into the ones that render above the current
+  product's versions and the ones that render below.
+
+  Input:  nothing (reads site.Params.relatedDocs).
+  Output: dict "before" <slice of groups> "after" <slice of groups>
+                "any" <bool — true when either side is non-empty>
+
+  CONFIG SHAPE:
+
+    [[params.relatedDocs]]
+      productName = "Solo Enterprise for kgateway"
+      position    = "before"        # optional; "after" is the default
+      [[params.relatedDocs.versions]]
+        label = "2.3.x (latest)"
+        url   = "https://docs.solo.io/kgateway/2.3.x"
+
+  ORDER IS TOML ORDER. Groups on the same side render in the order they are
+  declared, and versions inside a group render in the order they are declared.
+  There is no `weight` to reason about: to reorder the dropdown, move the blocks.
+
+  `position` exists because TOML order cannot express the ONE thing two separate
+  keys leave undefined — which side of your own versions a related group sits on.
+  All three multi-product configs were checked before choosing this shape:
+
+    hugo-gateway.toml                kgateway ×3 | SELF ×4 | edge ×4
+    hugo-kgateway.toml               SELF ×3 | gateway ×4 | edge ×4
+    hugo-gloo-mesh-enterprise.toml   SELF ×5 | istio ×5
+
+  Only gateway puts a related group above its own versions (Gloo Gateway is the
+  older Kubernetes Gateway API product and the dropdown steers readers to
+  kgateway), so "after" is the default and `position = "before"` is the rare
+  case. Two groups on the same side need no extra field: kgateway-then-edge is
+  just declaration order.
+
+  WHAT THIS REPLACES (breaking, see CHANGELOG [1.0.0]). Other products' versions
+  used to live in site.Params.versions as ordinary entries, distinguished only by
+  a `product` that differed from site.Params.currentProduct, with an absolute
+  `url` that three readers used instead of constructing an href. That conflated
+  two different things in one list and caused four distinct problems:
+
+    1. DUPLICATE linkVersions. hugo-gateway.toml carried Gloo Gateway 1.22.x–1.19.x
+       AND Gloo Edge 1.22.x–1.19.x — the same four slugs twice. Any resolver that
+       matched a URL segment by linkVersion alone was order-dependent, and
+       version-root.html picking Edge's entry took the version banner off every
+       /gateway/1.2x.x/ page (Edge's entries set no `banner`).
+    2. PHANTOM VERSIONS. Everything else that reads site.Params.versions —
+       flexsearch's visibleVersions, version-noindex.html, version-banner.html,
+       reuse.html/rebase.html's version remap — iterated another product's
+       versions as if they were this product's.
+    3. An `url` that was READ ON ONLY 20 OF ~80 ENTRIES. The other ~60 were
+       same-product, where all three readers construct the href instead (which is
+       what preserves the reader's current page across a version switch). Those
+       values were inert, and being inert they went stale invisibly: agentgateway's
+       said /agentgateway/latest after its docs moved to /agentgateway/<mode>/latest.
+    4. assemble-assets.py requires `version`, `ossDir` and `ossBranch` on every
+       params.versions entry and exits otherwise. Cross-product entries have none
+       of them, because another product's docs have no OSS worktree here. Only
+       agentgateway is in ASSEMBLED_PRODUCTS today, so nothing failed — but
+       kgateway joining it would have broken the build for that reason alone.
+
+  Group headers are now EXPLICIT, one `productName` per group, rather than being
+  derived by watching for a change of `productName` between consecutive entries.
+  That derivation emitted a duplicate header for any product whose entries were
+  not contiguous, which nothing prevented.
+*/ -}}
+{{- $before := slice -}}
+{{- $after := slice -}}
+{{- range site.Params.relatedDocs -}}
+  {{- /* Skip a group with no versions rather than emitting a bare header. */ -}}
+  {{- if .versions -}}
+    {{- if eq (.position | default "after") "before" -}}
+      {{- $before = $before | append . -}}
+    {{- else -}}
+      {{- $after = $after | append . -}}
+    {{- end -}}
+  {{- else if . -}}
+    {{- warnidf "extras-relateddocs-empty" "params.relatedDocs group %q has no `versions` — it renders nothing. Add [[params.relatedDocs.versions]] entries with `label` and `url`, or remove the group." (.productName | default "(unnamed)") -}}
+  {{- end -}}
+{{- end -}}
+{{- return (dict
+      "before" $before
+      "after" $after
+      "any" (gt (add (len $before) (len $after)) 0)
+   ) -}}

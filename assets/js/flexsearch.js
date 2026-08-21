@@ -35,12 +35,12 @@ document.addEventListener("DOMContentLoaded", function () {
 //      "main"/"latest", so searching from an older version silently returned NO
 //      results for the two newest versions.
 //
-// This mirrors `_partials/utils/warn-missing-description.html`, which already walks
-// flat + sections and already keys on `linkVersion | default .version`. Keep the two
-// in step; this file was simply the one that never got updated.
-// {{ $verEntries := slice }}
-// {{ range (site.Params.versions | default slice) }}{{ $verEntries = $verEntries | append . }}{{ end }}
-// {{ range $k, $s := (site.Params.sections | default dict) }}{{ range ($s.versions | default slice) }}{{ $verEntries = $verEntries | append . }}{{ end }}{{ end }}
+// There is now ONE list to read, site.Params.versions: a version that belongs to
+// only some sections says so in its own `sections` field rather than living in a
+// separate per-section list (CHANGELOG [1.0.0]). That second list is exactly what
+// this file forgot to read, which is bug 1 above — so the fix is structural, not a
+// matter of remembering to walk both.
+// {{ $verEntries := site.Params.versions | default slice }}
 // {{ $visibleVersions := slice }}
 // {{ range $verEntries }}{{ $label := .dropdown | default .version }}{{ if ne (trim $label " ") "" }}{{ $visibleVersions = $visibleVersions | append (.linkVersion | default .version) }}{{ end }}{{ end }}
 

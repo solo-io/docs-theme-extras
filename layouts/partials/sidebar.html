@@ -80,11 +80,58 @@
 {{- end -}}
 {{- $sectionKeys = sort $sectionKeys -}}
 
-{{- /* Detect docs landing pages: /docs/ or /docs/<section>/. */ -}}
-{{- $isDocsIndex := and (eq $context.Section "docs") (eq $context.RelPermalink "/docs/") -}}
+{{- /* Detect docs landing pages — the "pick a version / deployment type"
+       splash pages that sit ABOVE the version trees and so have no single tree
+       to show a nav for.
+
+       Two kinds:
+         - the OSS docs index, /docs/ exactly
+         - a SECTION landing page, i.e. the page whose own URL ends at a
+           registered section
+
+       The section test used to be a literal `/docs/<section>/` comparison,
+       which only ever matched the OSS URL shape. The docs hub serves the same
+       page at /<product>/<section>/ in production and /<section>/ under
+       `hugo server`, so agentgateway's /kubernetes/ and /standalone/ splash
+       pages rendered a full left nav for a version tree that does not exist at
+       that level. Same bug class as the rest of this module's URL parsing: one
+       shape hardcoded where two exist.
+
+       Now it asks the shape-agnostic question instead — is the LAST path
+       segment a registered section? — via utils/section-segment.html, which is
+       the one place that knows where a section segment sits in any shape:
+
+         /docs/kubernetes/            last = kubernetes  -> landing
+         /kubernetes/                 last = kubernetes  -> landing   (local dev)
+         /agentgateway/kubernetes/    last = kubernetes  -> landing   (production)
+         /docs/kubernetes/latest/     last = latest      -> NOT a landing
+         /agentgateway/kubernetes/latest/install/        -> NOT a landing
+
+       Requiring the section to be the LAST segment is what keeps every page
+       INSIDE a section (versioned or not) out of this branch. */ -}}
+{{- /* The docs index. Two spellings, because "the page above every version
+       tree" is a different URL on each site shape:
+
+         OSS sites      /docs/ exactly — home is the MARKETING page, not this
+         docs hub       the product root IS the Hugo home page, since each
+                        product is its own site with baseURL=/<product>/ (and
+                        just / under `hugo server`)
+
+       $context.IsHome covers the hub case. Without it, agentgateway's root
+       chooser page — which exists to send you to /kubernetes/ or /standalone/ —
+       rendered the whole Kubernetes tree: 870 links in a 324KB <aside>, for a
+       page that is above the version trees and has no tree of its own. It only
+       became reachable when that root stopped being a `type: "default"` redirect
+       stub; every product still redirecting never calls this partial at all, so
+       adding IsHome is a no-op for them.
+
+       A flat, unversioned site that makes its home page the real docs entry
+       opts back in with `[params.sidebar] showOnLanding = true`, below. */ -}}
+{{- $isDocsIndex := or $context.IsHome (and (eq $context.Section "docs") (eq $context.RelPermalink "/docs/")) -}}
 {{- $isSectionLanding := false -}}
-{{- range $sectionKeys -}}
-  {{- if eq $context.RelPermalink (printf "/docs/%s/" .) -}}
+{{- with (partial "utils/section-segment.html" $context).segment -}}
+  {{- $urlParts := split (strings.Trim $context.RelPermalink "/") "/" -}}
+  {{- if eq (index $urlParts (sub (len $urlParts) 1)) . -}}
     {{- $isSectionLanding = true -}}
   {{- end -}}
 {{- end -}}
@@ -238,21 +285,23 @@
             </div>
           {{- end -}}
 
-          {{- /* utils/resolve-section-versions.html: site.Params.sections.<section>.versions
-                 when that key exists, else the flat site.Params.versions list.
-                 Shared with navbar.html and each OSS-shaped site's own
-                 navbar-version.html, which used to reimplement this same
-                 isset/fallback check independently. */ -}}
+          {{- /* utils/resolve-section-versions.html: the entries in
+                 site.Params.versions that apply to $section — each entry names
+                 its sections, and an untagged entry applies to all. Shared with
+                 navbar.html, version-cards.html, version-noindex.html and each
+                 OSS-shaped site's own navbar-version.html, which used to
+                 reimplement the resolution independently. */ -}}
           {{- $versions := partial "utils/resolve-section-versions.html" $section -}}
-          {{- /* Keep every visible (non-empty dropdown) entry, including
-               cross-product ones, so the mobile chips list the SAME versions
-               and point to the SAME destinations as the desktop navbar version
-               dropdown (navbar.html). Same-product entries swap the version
-               into the current path; cross-product entries use the configured
-               `.url`, grouped under productName headers to disambiguate
-               same-labelled versions across products (e.g. gateway 1.20.x vs
-               edge 1.20.x). */ -}}
-          {{- $currentProduct := site.Params.currentProduct | default "" -}}
+          {{- /* Keep every visible (non-empty dropdown) entry, so the mobile
+               chips list the SAME versions and point to the SAME destinations as
+               the desktop navbar version dropdown (navbar.html) —
+               tests/static.spec.ts asserts the two href lists are equal.
+
+               Every entry here is THIS product's; other products' versions come
+               from site.Params.relatedDocs via utils/resolve-related-docs.html
+               (CHANGELOG [1.0.0]), so there is no same-product branch and no
+               per-entry `url` to fall back to. */ -}}
+          {{- $related := partial "utils/resolve-related-docs.html" . -}}
           {{- $filteredVersions := slice -}}
           {{- range $versions -}}
             {{- $visible := ne (trim (.dropdown | default .version) " ") "" -}}
@@ -262,49 +311,54 @@
           {{- end -}}
           {{- $versions = $filteredVersions -}}
           {{- if $versions -}}
-            {{- /* Decide whether to show productName group headers — only when
-                   more than one product is represented, mirroring navbar.html. */ -}}
-            {{- $productNames := slice -}}
+            {{- /* Group headers appear only when a related group exists, mirroring
+                   navbar.html. This product's header label is read off the first
+                   entry's `productName` rather than site.Params.product, because
+                   the two legitimately differ (gloo-mesh-enterprise labels the
+                   group "Gloo Mesh (Gloo Platform APIs)" while its product is
+                   "Gloo Mesh Enterprise"). */ -}}
+            {{- $ownName := "" -}}
             {{- range $versions -}}
-              {{- $pn := .productName | default "" -}}
-              {{- if and $pn (not (in $productNames $pn)) -}}
-                {{- $productNames = $productNames | append $pn -}}
-              {{- end -}}
+              {{- if not $ownName -}}{{- $ownName = .productName | default "" -}}{{- end -}}
             {{- end -}}
-            {{- $hasMultipleGroups := gt (len $productNames) 1 -}}
-            {{- $lastProductName := "" -}}
-            {{- /* OSS URLs: /docs/<section>/<version>/… — strip 4 leading segments.
-                 Enterprise production URLs: /<section>/<version>/… — strip matchedIdx+1.
-                 Enterprise local dev URLs: /<version>/… — matchedIdx=1, strip 2. */ -}}
-            {{- $filteredAfter := cond $isOSSShape 4 (add $matchedIdx 1) -}}
+            {{- /* Strip everything up to and including the version segment, so
+                   what's left is the path to re-attach under a different
+                   version. One rule for every shape, since version-root.html
+                   reports $matchedIdx for OSS too:
+                     OSS:                    /docs/<section>/<version>/… → 3+1
+                     Enterprise production:  /<section>/<version>/…      → 2+1
+                     Enterprise local dev:   /<version>/…                → 1+1
+                   This was `cond $isOSSShape 4 (add $matchedIdx 1)` only
+                   because the OSS branch used to leave $matchedIdx at 0; the
+                   hardcoded 4 and `add $matchedIdx 1` are now the same value. */ -}}
+            {{- $filteredAfter := add $matchedIdx 1 -}}
             {{- $filtered := after $filteredAfter $segments -}}
             {{- $newPath := printf "/%s" (delimit $filtered "/") -}}
             <span class="sidebar-mobile-row-label">{{ (T "version") | default "Version" }}</span>
             <div class="sidebar-mobile-scroller">
               <button type="button" class="sidebar-mobile-scroll-arrow sidebar-mobile-scroll-prev" aria-label="Scroll versions left" hidden>&lsaquo;</button>
               <div class="sidebar-mobile-version-row" data-scroll-track>
+              {{- /* Related groups declared `position = "before"`, in TOML order,
+                     ahead of this product's own chips — the desktop dropdown does
+                     the same, and static.spec.ts asserts the two href lists match
+                     exactly, order included. */ -}}
+              {{- range $related.before -}}
+                {{- partial "sidebar-version-related.html" . -}}
+              {{- end -}}
+              {{- if and $related.any $ownName -}}
+                <span class="sidebar-mobile-version-group">{{ $ownName }}</span>
+              {{- end -}}
               {{- range $versions -}}
-                {{- $isSameProduct := or (not $currentProduct) (eq (.product | default "") $currentProduct) -}}
-                {{- /* Only the current product's matching version is "active". */ -}}
-                {{- $isActive := and $isSameProduct (eq $currentVersion .linkVersion) -}}
-                {{- /* Insert a product group header when productName changes. */ -}}
-                {{- if $hasMultipleGroups -}}
-                  {{- $pn := .productName | default "" -}}
-                  {{- if and $pn (ne $pn $lastProductName) -}}
-                    <span class="sidebar-mobile-version-group">{{ $pn }}</span>
-                  {{- end -}}
-                  {{- $lastProductName = $pn -}}
-                {{- end -}}
-                {{- /* Build href. Same-product: swap version into the current
-                       path (GetPage lookups are relative to contentDir, so the
+                {{- $isActive := eq $currentVersion .linkVersion -}}
+                {{- /* Build href by swapping the version into the current path
+                       (GetPage lookups are relative to contentDir, so the
                        enterprise lookup omits $section even when the href uses
                        it — except when $section is actually a registered
                        section, which IS part of the contentDir-relative path)
-                       with a not-in-version fallback. Cross-product: use the
-                       configured url, exactly like navbar.html. */ -}}
+                       with a not-in-version fallback. Every entry is this
+                       product's, so there is no configured-url branch. */ -}}
                 {{- $href := "" -}}
-                {{- if $isSameProduct -}}
-                  {{- $targetPath := "" -}}
+                {{- $targetPath := "" -}}
                   {{- if $isOSSShape -}}
                     {{- $href = printf "/docs/%s/%s%s" $section .linkVersion $newPath -}}
                     {{- $targetPath = printf "/docs/%s/%s%s" $section .linkVersion $newPath -}}
@@ -336,15 +390,15 @@
                       {{- else -}}
                         {{- $href = printf "%s/%s/" $versionBase .linkVersion -}}
                       {{- end -}}
-                    {{- end -}}
                   {{- end -}}
-                {{- else -}}
-                  {{- $href = .url | default (printf "/%s%s" .linkVersion $newPath) -}}
                 {{- end -}}
                 <a href="{{ $href }}"
                    class="sidebar-mobile-version-link{{ if $isActive }} sidebar-mobile-version-active{{ end }}">
                   {{ .dropdown }}
                 </a>
+              {{- end -}}
+              {{- range $related.after -}}
+                {{- partial "sidebar-version-related.html" . -}}
               {{- end -}}
               </div>
               <button type="button" class="sidebar-mobile-scroll-arrow sidebar-mobile-scroll-next" aria-label="Scroll versions right" hidden>&rsaquo;</button>

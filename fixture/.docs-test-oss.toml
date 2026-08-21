@@ -67,4 +67,13 @@ versions        = ["v1", "v2", "main"]
 [allowlists]
 # The "unknown mode" warn is emitted on purpose by the table-display fixture
 # page to exercise the `table` shortcode's invalid-mode fallback path.
-hugoWarnings = ["\\.Site\\.Data was deprecated", "table shortcode: unknown mode"]
+# The last two are DELIBERATE relatedDocs config-error probes, present only in
+# hugo-oss.toml (an empty group, and a version with no `label` key), so the
+# enterprise fixture build stays warning-clean and would fail if either
+# warning started firing there. See tests/related-docs.spec.ts.
+hugoWarnings = [
+  "\\.Site\\.Data was deprecated",
+  "table shortcode: unknown mode",
+  "params\\.relatedDocs group \"Empty fixture product\" has no `versions`",
+  "params\\.relatedDocs group \"Sibling fixture product\" has a version with no `label` key",
+]

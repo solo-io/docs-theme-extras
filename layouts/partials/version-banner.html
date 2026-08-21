@@ -1,5 +1,14 @@
 {{- /* Render a version-specific banner if configured in [[params.versions]].
-       Matches the current page's URL path against linkVersion entries.
+       Delegates to utils/version-root.html for "what version is this page
+       in" — this used to walk .FirstSection.RelPermalink itself, which broke
+       silently once a page could sit under a section segment
+       (/<product>/<section>/<version>/…): .FirstSection there is the
+       section ("kubernetes"), not the version, so the `in $versionPath
+       .linkVersion` substring check never matched and the banner just
+       stopped appearing inside section subtrees. version-root.html already
+       has to solve that same "where's the version" problem correctly for
+       the sidebar and navbar; this reuses that answer instead of
+       re-deriving a second, independently-broken one.
 
        When a version entry sets `bannerID`, look up a per-language translation
        via i18n and fall back to the literal `banner` string when no translation
@@ -8,10 +17,10 @@
        translation string can interpolate its fields — e.g. a single shared key
        `"… the {{ .version }} version of {{ .productName }} …"` serves every
        older version instead of one hardcoded string per version. */ -}}
-{{- $versionPath := trim .FirstSection.RelPermalink "/" -}}
+{{- $root := partial "utils/version-root.html" . -}}
 {{- $bannerText := "" -}}
-{{- range .Site.Params.versions -}}
-  {{- if and (not $bannerText) .banner $versionPath (in $versionPath .linkVersion) -}}
+{{- with $root.versionEntry -}}
+  {{- if .banner -}}
     {{- $bannerText = .banner -}}
     {{- if .bannerID -}}
       {{- $translated := i18n .bannerID . -}}

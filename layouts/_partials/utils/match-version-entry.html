@@ -1,0 +1,71 @@
+{{- /*
+  match-version-entry.html — find the site.Params.versions entry for a URL
+  version segment, preferring the CURRENT product's entry.
+
+  Input:  dict "versions" <list> "candidate" <string>
+  Output: the matching entry, or "" when nothing matches.
+
+  WHY THE PRODUCT MATTERS. A version dropdown may list OTHER products' versions
+  (an entry whose `product` differs from site.Params.currentProduct), so the
+  same `linkVersion` can appear more than once in one list. That is not
+  hypothetical — hugo-gateway.toml has FOUR such collisions today, because it
+  lists Gloo Gateway 1.22.x–1.19.x alongside Gloo Edge 1.22.x–1.19.x, and
+  hugo-kgateway.toml lists both of those sets too:
+
+    [[params.versions]]  product = "gateway"  linkVersion = "1.21.x"  banner = "…"
+    [[params.versions]]  product = "edge"     linkVersion = "1.21.x"  # no banner
+
+  A plain `range … if eq .linkVersion $candidate` over that list is
+  ORDER-DEPENDENT, and gets it wrong in one direction or the other whichever
+  way you write it: last-match-wins picks Edge on /gateway/1.21.x/, and
+  first-match-wins picks the wrong entry as soon as someone lists the
+  cross-product group first — which hugo-kgateway.toml already does (its three
+  kgateway entries are preceded by nothing, but hugo-gateway.toml opens with
+  three cross-product kgateway entries).
+
+  That is a live bug, not a theoretical one. The version banner on
+  /gateway/1.21.x/ reads its text off the matched entry; matching Edge's
+  entry (which has no `banner`) silently removes the banner from every Gloo
+  Gateway version page. Production renders it today, so any resolver that
+  matches by linkVersion ALONE regresses it.
+
+  So: prefer the first entry that both matches the segment and belongs to the
+  current product; fall back to the first match of any product, which keeps a
+  build with no `currentProduct` set (agentgateway-oss-website, kgateway-oss —
+  neither sets one) behaving exactly as before.
+
+  CALLING THIS PARTIAL: assign the result, then test it —
+
+    {{- $m := partial "utils/match-version-entry.html" (dict …) -}}
+    {{- if $m -}}…{{- end -}}
+
+  NOT `{{ with partial "utils/match-version-entry.html" … }}`. `with` rebinds
+  the dot to the returned value, and Hugo's return-partial wrapper calls
+  `._pushPartialDecorator` on the dot, so the whole build fails with
+  `_partials/utils/version-root … is nil; wrap it in if or with` reported at
+  version-root.html:1:10 — a line that is inside a comment and has nothing to do
+  with the actual mistake. Both forms were built against the fixture to confirm
+  it: `with` fails, assign-then-`if` succeeds.
+
+  NOTE: if cross-product entries are ever moved out of params.versions into
+  their own key, this preference becomes unnecessary — one product's list
+  cannot contain a duplicate linkVersion, which is already a documented config
+  error (see utils/resolve-section-versions.html). Until then, this is what
+  keeps the resolver independent of config ordering.
+*/ -}}
+{{- $versions := .versions -}}
+{{- $candidate := .candidate -}}
+{{- $currentProduct := site.Params.currentProduct | default "" -}}
+{{- $sameProductMatch := "" -}}
+{{- $anyMatch := "" -}}
+{{- range $versions -}}
+  {{- if eq .linkVersion $candidate -}}
+    {{- if not $anyMatch -}}
+      {{- $anyMatch = . -}}
+    {{- end -}}
+    {{- if and (not $sameProductMatch) (or (not $currentProduct) (eq (.product | default "") $currentProduct)) -}}
+      {{- $sameProductMatch = . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- return (or $sameProductMatch $anyMatch) -}}

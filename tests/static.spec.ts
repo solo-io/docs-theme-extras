@@ -647,6 +647,33 @@ test.describe("mobile version chips match the desktop version dropdown", () => {
       ).toEqual(dropdownHrefs);
     });
   }
+
+  // A hidden version (whitespace-only `dropdown`) must be OMITTED from both
+  // lists, not emitted with an empty label. The navbar used to emit it and mark
+  // it `version-dropdown-hidden`, a class that only set `font-size: 0` — so it
+  // rendered as a ~4px row that was still clickable, still focusable, and still
+  // announced as a menuitem. The chips have always skipped hidden entries, so
+  // the two also disagreed, and the parity guard above missed it because it
+  // compares hrefs and both lists happened to be ordered the same.
+  //
+  // This is label-based on purpose: it needs no knowledge of WHICH versions a
+  // target hides, so it runs against a consumer build as well as the fixture.
+  // agentgateway hides 2.2.x and 2.1.x this way in production.
+  for (const page of TEST_PAGES) {
+    test(`${page.name}: no version link has an empty label`, () => {
+      const html = readFixture(page.filePath);
+      const linkRe =
+        /<a\s[^>]*class="[^"]*\b(?:version-dropdown-item|sidebar-mobile-version-link)\b[^"]*"[^>]*>([\s\S]*?)<\/a>/g;
+      const labels = [...html.matchAll(linkRe)].map((m) => m[1]);
+      test.skip(labels.length === 0, "page renders no version links");
+      const blank = labels.filter((l) => l.replace(/&nbsp;|\s/g, "") === "");
+      expect(
+        blank,
+        "a version link rendered with no visible text. A hidden version must be " +
+          "skipped outright, not emitted as an empty clickable menuitem.",
+      ).toEqual([]);
+    });
+  }
 });
 
 // Hextra's bundled main.js (core/menu.js) wires the mobile hamburger toggle

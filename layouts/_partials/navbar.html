@@ -101,7 +101,6 @@
         {{- end -}}
       {{- end -}}
 
-      {{- $currentProduct := $.Site.Params.currentProduct | default "" -}}
 
       {{- /* Match current version — check all entries (including hidden) so that
              manually navigating to a hidden version shows the correct label.
@@ -118,8 +117,11 @@
         {{- if and $visible (not $firstVisibleLabel) -}}
           {{- $firstVisibleLabel = $fullLabel -}}
         {{- end -}}
-        {{- $sameProduct := or (not $currentProduct) (eq (.product | default "") $currentProduct) -}}
-        {{- if and (not $currentLabel) $sameProduct $urlVersion -}}
+        {{- /* No same-product test any more: site.Params.versions holds ONLY this
+               product's versions. Other products' versions live in
+               site.Params.relatedDocs (CHANGELOG [1.0.0]) — see
+               utils/resolve-related-docs.html for why they were separated. */ -}}
+        {{- if and (not $currentLabel) $urlVersion -}}
           {{- if or (eq .linkVersion $urlVersion) (eq .version $urlVersion) -}}
             {{- $matchedVersion = true -}}
             {{- /* For hidden versions (empty dropdown), fall back to .version for the label */ -}}
@@ -171,43 +173,53 @@
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2.5 4l2.5 2.5L7.5 4"/></svg>
           </button>
           <ul class="version-dropdown-menu" role="menu">
-            {{- /* Check if there are multiple product groups to decide whether to show headers */ -}}
-            {{- $productNames := slice -}}
-            {{- range . -}}
-              {{- $pn := .productName | default "" -}}
-              {{- if and $pn (not (in $productNames $pn)) -}}
-                {{- $productNames = $productNames | append $pn -}}
+            {{- /* Other products' version groups, split by `position` and in TOML
+                   order. See utils/resolve-related-docs.html. Group headers appear
+                   only when there IS a related group — a single-product dropdown
+                   stays header-free, as before.
+
+                   This replaces a header rule that watched for `productName`
+                   changing between consecutive site.Params.versions entries, which
+                   emitted a DUPLICATE header for any product whose entries were
+                   not contiguous. Headers are now one per declared group. */ -}}
+            {{- $related := partial "utils/resolve-related-docs.html" . -}}
+            {{- range $i, $g := $related.before -}}
+              {{- partial "version-dropdown-related.html" (dict "group" $g "divider" (gt $i 0)) -}}
+            {{- end -}}
+            {{- if $related.any -}}
+              {{- /* Header for THIS product's group. Read off the first entry's
+                     `productName` rather than site.Params.product, because the two
+                     legitimately differ: gloo-mesh-enterprise sets
+                     product = "Gloo Mesh Enterprise" but labels the dropdown group
+                     "Gloo Mesh (Gloo Platform APIs)". */ -}}
+              {{- $ownName := "" -}}
+              {{- range . -}}
+                {{- if and (not $ownName) (ne (trim (.dropdown | default .version) " ") "") -}}
+                  {{- $ownName = .productName | default "" -}}
+                {{- end -}}
+              {{- end -}}
+              {{- if $related.before -}}
+              <li role="separator" class="version-dropdown-divider"></li>
+              {{- end -}}
+              {{- with $ownName -}}
+              <li role="none" class="version-dropdown-header">{{ . }}</li>
               {{- end -}}
             {{- end -}}
-            {{- $hasMultipleGroups := gt (len $productNames) 1 -}}
-            {{- $lastProductName := "" -}}
             {{- range . -}}
               {{- $label := .dropdown | default .version -}}
               {{- $visible := ne (trim $label " ") "" -}}
-              {{- if $visible -}}
-                {{- /* Insert a product group divider when productName changes */ -}}
-                {{- if $hasMultipleGroups -}}
-                  {{- $pn := .productName | default "" -}}
-                  {{- if and $pn (ne $pn $lastProductName) -}}
-                    {{- if $lastProductName -}}
-                      <li role="separator" class="version-dropdown-divider"></li>
-                    {{- end -}}
-                    <li role="none" class="version-dropdown-header">{{ $pn }}</li>
-                  {{- end -}}
-                  {{- $lastProductName = $pn -}}
-                {{- end -}}
-              {{- end -}}
-              {{- /* Build URL: for same-product entries, swap version and preserve path.
-                     For cross-product entries, use the configured URL. */ -}}
+              {{- /* Every entry here is THIS product's, so the href is always
+                     constructed: swap the version and keep the rest of the path.
+                     That is what makes a version switch land on the equivalent
+                     page instead of dumping the reader at the version root, and it
+                     is why a same-product `url` was never read. */ -}}
               {{- $versionUrl := "" -}}
-              {{- $isSameProduct := or (not $currentProduct) (eq (.product | default "") $currentProduct) -}}
-              {{- if $isSameProduct -}}
-                {{- if $includeFolder -}}
-                  {{- $versionUrl = printf "/%s%s%s/%s/%s" $folder $langPath $sectionPath .linkVersion $pathAfterVersion -}}
-                {{- else -}}
-                  {{- $versionUrl = printf "%s%s/%s/%s" $langPath $sectionPath .linkVersion $pathAfterVersion -}}
-                {{- end -}}
-                {{- /* If the same-path page does not exist in the target version, route
+              {{- if $includeFolder -}}
+                {{- $versionUrl = printf "/%s%s%s/%s/%s" $folder $langPath $sectionPath .linkVersion $pathAfterVersion -}}
+              {{- else -}}
+                {{- $versionUrl = printf "%s%s/%s/%s" $langPath $sectionPath .linkVersion $pathAfterVersion -}}
+              {{- end -}}
+              {{- /* If the same-path page does not exist in the target version, route
                        to that version's not-in-version fallback page (if one exists), so
                        the user lands on a helpful page instead of a 404. We only redirect
                        when the fallback page is present in the target version, so versions
@@ -215,32 +227,49 @@
                        rolled out per-product incrementally. Lookup paths are relative to
                        contentDir, which already absorbs any section segment's sibling
                        language prefix but not the section itself, so it's included here. */ -}}
-                {{- $targetLookupPath := printf "%s/%s/%s" $sectionPath .linkVersion (strings.TrimRight "/" $pathAfterVersion) -}}
-                {{- if not (site.GetPage $targetLookupPath) -}}
-                  {{- $fallbackLookupPath := printf "%s/%s/not-in-version" $sectionPath .linkVersion -}}
-                  {{- if site.GetPage $fallbackLookupPath -}}
-                    {{- if $includeFolder -}}
-                      {{- $versionUrl = printf "/%s%s%s/%s/not-in-version/" $folder $langPath $sectionPath .linkVersion -}}
-                    {{- else -}}
-                      {{- $versionUrl = printf "%s%s/%s/not-in-version/" $langPath $sectionPath .linkVersion -}}
-                    {{- end -}}
+              {{- $targetLookupPath := printf "%s/%s/%s" $sectionPath .linkVersion (strings.TrimRight "/" $pathAfterVersion) -}}
+              {{- if not (site.GetPage $targetLookupPath) -}}
+                {{- $fallbackLookupPath := printf "%s/%s/not-in-version" $sectionPath .linkVersion -}}
+                {{- if site.GetPage $fallbackLookupPath -}}
+                  {{- if $includeFolder -}}
+                    {{- $versionUrl = printf "/%s%s%s/%s/not-in-version/" $folder $langPath $sectionPath .linkVersion -}}
                   {{- else -}}
-                    {{- /* No not-in-version page either: fall back to the target
-                           version's landing page (always exists) so the switch
-                           can never 404. */ -}}
-                    {{- if $includeFolder -}}
-                      {{- $versionUrl = printf "/%s%s%s/%s/" $folder $langPath $sectionPath .linkVersion -}}
-                    {{- else -}}
-                      {{- $versionUrl = printf "%s%s/%s/" $langPath $sectionPath .linkVersion -}}
-                    {{- end -}}
+                    {{- $versionUrl = printf "%s%s/%s/not-in-version/" $langPath $sectionPath .linkVersion -}}
+                  {{- end -}}
+                {{- else -}}
+                  {{- /* No not-in-version page either: fall back to the target
+                         version's landing page (always exists) so the switch
+                         can never 404. */ -}}
+                  {{- if $includeFolder -}}
+                    {{- $versionUrl = printf "/%s%s%s/%s/" $folder $langPath $sectionPath .linkVersion -}}
+                  {{- else -}}
+                    {{- $versionUrl = printf "%s%s/%s/" $langPath $sectionPath .linkVersion -}}
                   {{- end -}}
                 {{- end -}}
-              {{- else -}}
-                {{- $versionUrl = .url | default (printf "/%s/%s" .linkVersion $pathAfterVersion) -}}
               {{- end -}}
+              {{- /* Skip a hidden version (whitespace `dropdown`) outright. This
+                     used to emit the <li> unconditionally and mark the non-visible
+                     ones `version-dropdown-hidden` — a class that only set
+                     `font-size: 0`, hiding nothing — so a hidden version rendered
+                     as a ~4px empty row that was still clickable, still focusable,
+                     and still announced as a menuitem. It also broke parity with
+                     the mobile chips in sidebar.html, which have always skipped
+                     them, while static.spec.ts asserted the two matched.
+                     tests/static.spec.ts now also fails on any version link with
+                     an empty label. */ -}}
+              {{- if $visible -}}
               <li role="none">
-                <a href="{{ $versionUrl }}" class="version-dropdown-item{{ if not $visible }} version-dropdown-hidden{{ end }}" role="menuitem">{{ if $visible }}{{ $label }}{{ end }}</a>
+                <a href="{{ $versionUrl }}" class="version-dropdown-item" role="menuitem">{{ $label }}</a>
               </li>
+              {{- end -}}
+            {{- end -}}
+            {{- /* Related groups below this product's versions — the common case
+                   (kgateway lists Gloo Gateway and Gloo Edge after its own;
+                   gloo-mesh-enterprise lists Solo Enterprise for Istio after).
+                   A divider always precedes these, since this product's own group
+                   is rendered above them. */ -}}
+            {{- range $related.after -}}
+              {{- partial "version-dropdown-related.html" (dict "group" . "divider" true) -}}
             {{- end -}}
           </ul>
         </div>

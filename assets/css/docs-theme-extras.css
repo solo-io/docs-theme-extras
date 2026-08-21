@@ -1621,12 +1621,6 @@ svg.section-card-icon {
   color: #9ca3af;
 }
 
-.version-dropdown-hidden {
-  padding: 2px 16px;
-  font-size: 0;
-  line-height: 0;
-}
-
 /* Search: "Other versions" collapsible section */
 .hextra-search-other-versions {
   border-top: 1px solid #e5e7eb;

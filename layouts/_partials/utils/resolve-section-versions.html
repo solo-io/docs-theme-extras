@@ -1,29 +1,90 @@
 {{- /*
-  resolve-section-versions.html — the version list to show for a given
-  section.
+  resolve-section-versions.html — the version list to show for a given section.
 
   This is the one piece of "which versions exist here" logic every consumer
   needs, regardless of URL shape: enterprise's navbar.html and sidebar.html
-  mobile version row, and each OSS-shaped site's own navbar-version.html /
-  nav.html (agentgateway-oss-website, kgateway-oss). Before this partial
-  existed, all four reimplemented the same isset/fallback check
-  independently.
+  mobile version row, version-cards.html, version-noindex.html, and each
+  OSS-shaped site's own navbar-version.html / nav.html
+  (agentgateway-oss-website, kgateway-oss).
 
-  Input: a section string (e.g. "kubernetes", "standalone", "envoy"), or ""
-         for a page with no section.
-  Output: the slice of version entries to render — from
-          site.Params.sections.<section>.versions when that key's table sets
-          one, otherwise the flat site.Params.versions list. A section
-          registered with no `versions:` override (see utils/
-          section-segment.html — the table entry still has to exist, for
-          detection) gets the flat list too, so only a section whose
-          versions genuinely differ from the top-level list needs one.
+  THERE IS EXACTLY ONE VERSION LIST: site.Params.versions. An entry names the
+  sections it belongs to:
+
+    [[params.versions]]
+      version     = "1.3.x"
+      linkVersion = "1.3.x"
+      sections    = ["kubernetes"]     # only this section
+
+    [[params.versions]]
+      version     = "latest"
+      linkVersion = "latest"
+      sections    = ["kubernetes", "standalone"]   # both
+      # equivalently: omit `sections` entirely, meaning "every section"
+
+  ONE ENTRY PER VERSION, listing every section it applies to — NOT one entry
+  per section/version pair. agentgateway ships `latest` in both kubernetes and
+  standalone; that is a single entry tagged with both, so two entries never
+  carry the same `linkVersion`. Duplicating a linkVersion across entries is a
+  config error: the version dropdown on a page with no section would offer the
+  same version twice.
+
+  WHAT THIS REPLACES (breaking, see CHANGELOG [1.0.0]). A section used to carry
+  its OWN `site.Params.sections.<x>.versions` list — a second, hand-maintained
+  representation of the same fact. Nothing kept the two in step, and everything
+  that reads `site.Params.versions` directly (reuse.html and rebase.html's
+  version remap, flexsearch's visibleVersions, the version banner, the noindex
+  partial) was blind to a version declared only per-section. That is not
+  hypothetical: it is the shared cause of the flexsearch empty-set bug, the
+  `link`/`link-hextra` dropped-version-segment bug (v0.2.1) and
+  version-noindex.html being wholly inert on agentgateway.dev. Tagging the one
+  list keeps every one of those readers correct by construction.
+
+  It also removes an asymmetry that was impossible to read: a section with the
+  same versions as the product wrote `[params.sections.kubernetes]` (an empty
+  table, meaning "inherit"), while a section with its own set wrote
+  `[[params.sections.standalone.versions]]` (a list). Same concept, two shapes.
+
+  Sections are still REGISTERED as keys under `site.Params.sections` — that is
+  how utils/section-segment.html detects a section segment in the URL, and an
+  empty table is the normal way to register one. Only the `.versions` sub-key
+  is gone.
+
+  Input: a section string ("kubernetes", "standalone", "envoy"), "" for a page
+         with no section, or any other string.
+  Output: the entries from site.Params.versions that apply.
+
+  FILTERING APPLIES ONLY TO A REGISTERED SECTION — a key under
+  site.Params.sections. For a registered section, an entry applies when it has
+  no `sections` field (every section) or its `sections` list names that section.
+  For "" or ANY unregistered string, every entry is returned.
+
+  That last rule is load-bearing, not defensive coding, because callers pass a
+  string that is only SOMETIMES a section:
+
+    - version-cards.html defaults `section` to the last URL segment, so on the
+      fixture's /test/ landing it passes "test".
+    - version-root.html sets `section` to the PRODUCT segment for an enterprise
+      page with no section segment, so the docs hub passes "kgateway",
+      "agentgateway", and so on.
+
+  Treating an unregistered string as a filter would silently reduce both to
+  "untagged entries only": the docs hub version dropdown would lose every
+  version the moment a product tagged them, and the enterprise agentgateway
+  version-root picker page (/agentgateway/<version>/, which chooses between
+  kubernetes/ and standalone/) would have nothing to switch between — even
+  though it sits ABOVE the section segment and must offer the product's full
+  version set so switching lands on the picker for that version.
+
+  Returning everything is safe because every entry is a real version with
+  content behind it. An entry with no content would put a 404 in the dropdown,
+  which is a config error under either rule.
 */ -}}
 {{- $section := . -}}
-{{- $versions := site.Params.versions -}}
-{{- if and $section site.Params.sections (isset site.Params.sections $section) -}}
-  {{- with (index site.Params.sections $section).versions -}}
-    {{- $versions = . -}}
+{{- $isRegistered := and $section site.Params.sections (isset site.Params.sections $section) -}}
+{{- $filtered := slice -}}
+{{- range site.Params.versions -}}
+  {{- if or (not $isRegistered) (not .sections) (in .sections $section) -}}
+    {{- $filtered = $filtered | append . -}}
   {{- end -}}
 {{- end -}}
-{{- return $versions -}}
+{{- return $filtered -}}

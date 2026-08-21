@@ -149,4 +149,68 @@ test.describe("link-hextra parameter contract", () => {
         "link ships unnoticed",
     ).toBe(true);
   });
+
+  // Migration guard for the tagged-versions model (CHANGELOG [1.0.0]). There is
+  // now exactly ONE versions list, site.Params.versions, and a version that
+  // belongs to only some sections says so in its own `sections` field. The old
+  // shape — a section carrying its own `params.sections.<x>.versions` list —
+  // meant every reader had to remember to walk BOTH lists, and most did not:
+  //
+  //   resolve-link.html            forgot -> 311 hrefs lost their version segment
+  //                                         on agentgateway.dev (v0.2.1)
+  //   flexsearch.js                forgot -> visibleVersions empty, search filter
+  //                                         silently inert
+  //   version-noindex.html         forgot -> partial entirely inert, no robots meta
+  //   warn-missing-description.html walked both (the only one that did)
+  //
+  // So this asserts the shape cannot come back: no active template code may read
+  // a per-section versions list. Comments are stripped first, since several files
+  // legitimately DESCRIBE the old shape in their migration notes.
+  test("no template reads a per-section versions list (the two-list shape stays gone)", () => {
+    const root = path.resolve(__dirname, "..");
+    test.skip(!fs.existsSync(path.join(root, "layouts")), "module-relative path only");
+
+    const files: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, e.name);
+        if (e.isDirectory()) walk(full);
+        else if (/\.(html|js)$/.test(e.name)) files.push(full);
+      }
+    };
+    walk(path.join(root, "layouts"));
+    const assets = path.join(root, "assets");
+    if (fs.existsSync(assets)) walk(assets);
+
+    // Strip Hugo template comments AND `//` line comments (flexsearch.js carries
+    // its Hugo template code inside JS comments, so both forms matter).
+    const strip = (src: string) =>
+      src
+        .replace(/\{\{-?\s*\/\*[\s\S]*?\*\/\s*-?\}\}/g, "")
+        .split("\n")
+        .filter((l) => !/^\s*\/\//.test(l) || /\{\{/.test(l))
+        .join("\n");
+
+    // `.versions` reached through a sections lookup, in any of the forms used
+    // before the migration.
+    const BAD = [
+      /\(index\s+(?:\$\.)?[Ss]ite\.Params\.sections\s+\$?\w+\)\.versions/,
+      /\$s\.versions/,
+      /\$data\.versions/,
+      /sections\.\w+\.versions/,
+    ];
+
+    const offenders: string[] = [];
+    for (const f of files) {
+      const src = strip(fs.readFileSync(f, "utf8"));
+      if (BAD.some((re) => re.test(src))) offenders.push(path.relative(root, f));
+    }
+    expect(
+      offenders,
+      "these files read a per-section versions list, which no longer exists. A " +
+        "version that applies to only some sections belongs in " +
+        "site.Params.versions with a `sections` field; resolve it through " +
+        "utils/resolve-section-versions.html rather than reading config directly.",
+    ).toEqual([]);
+  });
 });

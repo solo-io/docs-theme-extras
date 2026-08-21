@@ -146,6 +146,7 @@ pageContextMode = "siteParams"
 
 [[params.versions]]
   version = "v2"
+  sections = ["demo", "alt"]
   dropdown = "v2 (current)"
   linkVersion = "v2"
   url = "/v2"
@@ -154,6 +155,7 @@ pageContextMode = "siteParams"
 
 [[params.versions]]
   version = "v1"
+  sections = ["demo"]
   # Second ossVersion mapping, used only by the keepVersion collision probe in
   # conrefs/test/version-remap.md: it makes the token `v3` — which is also a
   # real version in this fixture — remap to `v1`. That is the production shape
@@ -170,6 +172,7 @@ pageContextMode = "siteParams"
 
 [[params.versions]]
   version = "main"
+  sections = ["alt"]
   dropdown = "main (dev)"
   linkVersion = "main"
   url = "/main"
@@ -226,18 +229,104 @@ pageContextMode = "siteParams"
   # always renders. Exercises tests/docs-tabs.spec.ts + docs-tabs-sidebar.spec.ts.
   hideSidebar = true
 
-# Section-keyed versions used by tests/version-cards.spec.ts — kept in
-# sync with hugo-enterprise.toml so `make server-enterprise` matches the
-# test build.
-[[params.sections.demo.versions]]
-  version = "v2"
-  dropdown = "demo override: v2 only"
-  linkVersion = "v2"
 
-[[params.sections.demo.versions]]
-  version = "v1"
-  dropdown = "demo override: v1 only"
-  linkVersion = "v1"
+# Hidden version. A whitespace-only `dropdown` is the "published but not
+# advertised" signal: flexsearch.js leaves it out of `visibleVersions`, so it
+# never surfaces under "Other versions" in search results.
+#
+# It is backed by real content (fixture/content/en/test/v8-link/), which matters
+# for two reasons. It matches production — agentgateway's 2.2.x and 2.1.x are
+# hidden this way and both have full content — and it is what exposed the navbar
+# bug fixed in CHANGELOG [1.0.0]: the navbar used to EMIT a hidden entry (as an
+# empty, still-clickable row) instead of skipping it, so a content-less hidden
+# version put a broken link in every version dropdown on the site. Keeping real
+# content here means a regression back to emitting shows up as a bad link rather
+# than as a silently-different DOM.
+#
+# It replaces the old `searchonly` section's two probes. The other thing they
+# tested — that the visible set is keyed on `linkVersion` rather than `version` —
+# is now covered by the v4 / v4-link entry above, which has real content, so a
+# second content-less probe for it was redundant.
+#
+# Asserted by tests/search-visible-versions.spec.ts.
+[[params.versions]]
+  version = "v8"
+  dropdown = "   "
+  linkVersion = "v8-link"
+  product = "test"
+  productName = "Docs framework test fixture"
+
+# Section REGISTRY. A section exists because it is a key here; an empty table is
+# the normal way to declare one, and it is what utils/section-segment.html uses
+# to recognize a section segment in a URL. Under the tagged-versions model
+# (CHANGELOG [1.0.0]) these tables no longer carry a `versions` list — a version
+# entry names its sections instead, in the ONE site.Params.versions list above.
+#
+# Two sections, with deliberately overlapping membership, so the filter in
+# utils/resolve-section-versions.html is exercised in both directions:
+#
+#   resolve("demo") -> v2, v1, v3, v4   (tagged demo, plus the untagged pair)
+#   resolve("alt")  -> v2, main, v3, v4 (tagged alt,  plus the untagged pair)
+#   resolve("")     -> every entry
+#
+# v2 belongs to both, v1 to demo only, main to alt only, and v3/v4 are untagged
+# ("every section"). A one-sided fixture — everything tagged, or everything
+# untagged — could not tell filtering from a no-op.
+[params.sections.demo]
+[params.sections.alt]
+
+# ── Related products ──────────────────────────────────────────────────────────
+# Other products whose versions share this product's version dropdown. This is
+# the ONLY place a version URL is written out by hand, because these point at
+# another site entirely (utils/resolve-related-docs.html explains why they were
+# split out of params.versions).
+#
+# ORDER IS TOML ORDER. `position` picks the side of this product's own versions;
+# "after" is the default, so only the rare "before" case says anything. Both
+# sides are populated here on purpose: the ordering is the whole point of the
+# design, and asserting it needs a group on each side plus TWO groups sharing a
+# side (to prove same-side order is declaration order, not alphabetical).
+#
+# Deliberately covered here and nowhere else in the suite:
+#   - a "before" group (only hugo-gateway.toml does this in production)
+#   - two "after" groups, so same-side ordering is observable
+#   - a version with a whitespace `label`, which must be SKIPPED, matching the
+#     hidden-version rule for this product's own versions
+#   - a group with no `versions`, which must warn and render no bare header
+# This is the enterprise-brand local-dev fixture config.
+
+[[params.relatedDocs]]
+  productName = "Upstream fixture product"
+  position = "before"
+  [[params.relatedDocs.versions]]
+    label = "u2 (upstream latest)"
+    url = "https://example.invalid/upstream/u2/"
+  [[params.relatedDocs.versions]]
+    label = "u1"
+    url = "https://example.invalid/upstream/u1/"
+
+[[params.relatedDocs]]
+  # No `position`, so this must land AFTER — the default is what production
+  # relies on (kgateway and gloo-mesh-enterprise both omit it).
+  productName = "Sibling fixture product"
+  [[params.relatedDocs.versions]]
+    label = "s3"
+    url = "https://example.invalid/sibling/s3/"
+  [[params.relatedDocs.versions]]
+    # Whitespace label = hidden, exactly as a whitespace `dropdown` hides one of
+    # this product's own versions. Must not render an empty clickable chip/row.
+    label = "   "
+    url = "https://example.invalid/sibling/s2/"
+
+[[params.relatedDocs]]
+  # Second "after" group. It is declared last and must RENDER last: same-side
+  # order is declaration order. Named to sort BEFORE "Sibling" alphabetically,
+  # so an accidental sort would be visible.
+  productName = "Downstream fixture product"
+  position = "after"
+  [[params.relatedDocs.versions]]
+    label = "d1"
+    url = "https://example.invalid/downstream/d1/"
 
 [[menu.main]]
   name = "Search"
