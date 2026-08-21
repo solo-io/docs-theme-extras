@@ -86,6 +86,24 @@
 {{- range $.Site.Params.versions -}}
   {{- $siteHasVersioning = true -}}
 {{- end -}}
+{{- /* A top-level `params.versions` list is not the only way a site declares
+       versioning. agentgateway-oss-website only ever defined its versions
+       under `params.sections.standalone.versions` / `.kubernetes.versions` —
+       its old forked link-hextra did its own path-segment walk regardless, so
+       it never needed a top-level list. Checking only the top level here
+       misclassified it as a flat, unversioned site (the same branch that's
+       correct for ambientmesh.io) and silently dropped the version segment
+       from every generated link (measured: 311 hrefs missing their
+       /standalone|kubernetes/<version> segment across the built site). If any
+       section declares versions, the site has versioning, even with no
+       top-level list. */ -}}
+{{- if not $siteHasVersioning -}}
+  {{- range $.Site.Params.sections -}}
+    {{- range .versions -}}
+      {{- $siteHasVersioning = true -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
 
 {{- /* If no version was passed (typical when called from inside a reuse-included */ -}}
 {{- /* snippet that the rebase shortcode didn't rewrite), infer from the current page's */ -}}
