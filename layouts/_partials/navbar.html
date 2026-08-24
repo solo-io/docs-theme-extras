@@ -288,22 +288,65 @@
                          Verify, then drop to the SECTION landing page, which is
                          the version picker for that doc set and therefore the
                          right destination for "this version exists, but not
-                         here". Only for a sectioned URL: with no section there
-                         is nothing above the version to fall back to, and a
-                         version in params.versions with no tree at all is a
-                         config error rather than a shape we should paper over. */ -}}
-                  {{- $versionLanding := printf "%s/%s" $sectionPath .linkVersion -}}
-                  {{- if or (site.GetPage $versionLanding) (eq $sectionPath "") -}}
+                         here".
+
+                         AN EMPTY $sectionPath IS NOT THE SAME AS "this product
+                         has no sections", and treating them as one was a bug.
+                         This used to short-circuit on `eq $sectionPath ""` and
+                         emit /<version>/ unverified, on the reasoning that with
+                         no section there is nothing above the version to fall
+                         back to. That holds for a product whose version trees
+                         sit at its root. It does NOT hold on the PRODUCT ROOT
+                         PAGE of a sectioned product: the URL carries no section
+                         (you are above them, choosing one) while every version
+                         tree lives under one. agentgateway.dev's hub root is
+                         exactly that, and it emitted three dead dropdown entries
+                         — /agentgateway/{latest,2026.7.1,2.3.x}/, none of which
+                         was ever built, because the trees are at
+                         /agentgateway/kubernetes/<version>/.
+
+                         So verify unconditionally, and when the root-level tree
+                         is absent, look for the version inside a section before
+                         giving up. Switching version from the chooser page then
+                         lands on that version in a real doc set instead of a
+                         404. Sections are tried in resolve-sections order
+                         (alphabetical by key) so the choice is deterministic
+                         rather than dependent on config ordering. */ -}}
+                  {{- $entry := . -}}
+                  {{- $versionLanding := printf "%s/%s" $sectionPath $entry.linkVersion -}}
+                  {{- if site.GetPage $versionLanding -}}
                     {{- if $includeFolder -}}
-                      {{- $versionUrl = printf "/%s%s%s/%s/" $folder $langPath $sectionPath .linkVersion -}}
+                      {{- $versionUrl = printf "/%s%s%s/%s/" $folder $langPath $sectionPath $entry.linkVersion -}}
                     {{- else -}}
-                      {{- $versionUrl = printf "%s%s/%s/" $langPath $sectionPath .linkVersion -}}
+                      {{- $versionUrl = printf "%s%s/%s/" $langPath $sectionPath $entry.linkVersion -}}
                     {{- end -}}
                   {{- else -}}
-                    {{- if $includeFolder -}}
-                      {{- $versionUrl = printf "/%s%s%s/" $folder $langPath $sectionPath -}}
+                    {{- /* No tree at $sectionPath/<version>. With a section in the
+                           URL, drop to that section's landing. With none, try each
+                           section for a tree at <section>/<version>; failing that,
+                           the product root, which always exists. */ -}}
+                    {{- $inSection := "" -}}
+                    {{- if eq $sectionPath "" -}}
+                      {{- range $sections -}}
+                        {{- if eq $inSection "" -}}
+                          {{- if site.GetPage (printf "%s/%s" .key $entry.linkVersion) -}}
+                            {{- $inSection = .key -}}
+                          {{- end -}}
+                        {{- end -}}
+                      {{- end -}}
+                    {{- end -}}
+                    {{- if $inSection -}}
+                      {{- if $includeFolder -}}
+                        {{- $versionUrl = printf "/%s%s/%s/%s/" $folder $langPath $inSection $entry.linkVersion -}}
+                      {{- else -}}
+                        {{- $versionUrl = printf "%s/%s/%s/" $langPath $inSection $entry.linkVersion -}}
+                      {{- end -}}
                     {{- else -}}
-                      {{- $versionUrl = printf "%s%s/" $langPath $sectionPath -}}
+                      {{- if $includeFolder -}}
+                        {{- $versionUrl = printf "/%s%s%s/" $folder $langPath $sectionPath -}}
+                      {{- else -}}
+                        {{- $versionUrl = printf "%s%s/" $langPath $sectionPath -}}
+                      {{- end -}}
                     {{- end -}}
                   {{- end -}}
                 {{- end -}}

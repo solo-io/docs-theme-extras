@@ -600,3 +600,49 @@ test.describe("version-less sections: versioned builds are unaffected", () => {
     );
   });
 });
+
+test.describe("version dropdown: an empty section path is verified, not assumed", () => {
+  // SOURCE-level guard, deliberately. The defect only reproduces on the PRODUCT
+  // ROOT PAGE of a product whose version trees live entirely under sections —
+  // the URL carries no section (you are above them, choosing one) while every
+  // version tree sits inside one. No fixture in this repo has that shape: the
+  // versioned fixture keeps version trees at its root AND registers sections, so
+  // /test/<version>/ always exists and the branch is never taken. Reproducing it
+  // would mean a fifth fixture build whose every version tree is section-nested.
+  //
+  // What it cost in production: agentgateway.dev's hub root emitted three dead
+  // version-dropdown entries — /agentgateway/{latest,2026.7.1,2.3.x}/, none ever
+  // built, because the trees are at /agentgateway/kubernetes/<version>/. The old
+  // code short-circuited on `eq $sectionPath ""` and emitted /<version>/ without
+  // checking, on the reasoning that "no section in the URL" means "this product
+  // has no sections". Those are different statements.
+  //
+  // Same pattern as tests/link-hextra-lts-version.spec.ts, which is source-level
+  // for the same reason: no fixture has an LTS tree.
+  const NAVBAR = path.resolve(
+    __dirname,
+    "..",
+    "layouts/_partials/navbar.html",
+  );
+
+  test("the version-landing check is not short-circuited by an empty section path", () => {
+    const src = fs.readFileSync(NAVBAR, "utf8");
+    // The exact shape of the old bug. Matching on the disjunction rather than on
+    // `eq $sectionPath ""` alone, because that comparison is legitimate
+    // elsewhere in the file.
+    expect(
+      src,
+      "version-landing existence check is being skipped when $sectionPath is empty",
+    ).not.toMatch(/if\s+or\s+\(site\.GetPage\s+\$versionLanding\)\s+\(eq\s+\$sectionPath\s+""\)/);
+  });
+
+  test("an absent root-level tree falls back to a section that has the version", () => {
+    const src = fs.readFileSync(NAVBAR, "utf8");
+    // The replacement behavior: with no section in the URL, scan the resolved
+    // sections for one that nests this version before giving up on the product
+    // root. Without this the fallback is the product root for every entry, which
+    // makes the dropdown a no-op rather than a 404 — quieter, still wrong.
+    expect(src).toMatch(/\$inSection\s*=\s*\.key/);
+    expect(src).toMatch(/site\.GetPage\s+\(printf\s+"%s\/%s"\s+\.key\s+\$entry\.linkVersion\)/);
+  });
+});

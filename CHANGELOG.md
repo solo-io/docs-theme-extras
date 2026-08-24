@@ -646,6 +646,39 @@ reports **34**. `(index hugo.Sites 0)` identifies the default-language site, the
 - **Verified.** The `static` project against `solo-io/docs` goes from 2 failed / 4990 passed to
   4991 passed, and the fixture run still exercises all five assertions on both brands.
 
+### Fix — the version dropdown on a sectioned product's ROOT page no longer emits URLs that were never built (`layouts/_partials/navbar.html`)
+
+- **Why.** The fix directly below added an existence check before falling back to a version's landing
+  page, but short-circuited it with `or … (eq $sectionPath "")` — on the reasoning that with no
+  section in the URL there is nothing above the version to fall back to. That conflates two different
+  statements: "this URL carries no section" and "this product has no sections". They come apart on the
+  **product root page** of a sectioned product, where the reader is *above* the sections choosing one,
+  so the URL has none, while every version tree lives inside one.
+- **What it cost.** `agentgateway`'s hub root shipped three dead version-dropdown entries —
+  `/agentgateway/latest/`, `/agentgateway/2026.7.1/` and `/agentgateway/2.3.x/`, none of which was
+  ever built, because the trees are at `/agentgateway/kubernetes/<version>/`. Every one 404s. It was
+  invisible in testing because the *only* page with an empty section path on a sectioned product is
+  that single root, and no fixture reproduces the shape.
+- **What it does now.** The landing check runs unconditionally. When no tree exists at
+  `<sectionPath>/<version>` and the URL carries no section, the resolved sections are scanned in order
+  for one that nests that version, and the link points there; only if none does it fall back to the
+  product root. So switching version from the chooser page now lands on that version in a real doc
+  set. Section order is `utils/resolve-sections.html` order (alphabetical by key), so the choice is
+  deterministic rather than dependent on config ordering.
+- **Verify in production.** <https://docs.solo.io/agentgateway/> — open the version dropdown; every
+  entry points at `/agentgateway/kubernetes/<version>/` and resolves. Previously all three pointed at
+  `/agentgateway/<version>/` and 404'd.
+- **How it was verified.** Guarded at SOURCE level in `tests/section-versionless.spec.ts`, for the
+  same reason `tests/link-hextra-lts-version.spec.ts` is: no fixture has the shape. The versioned
+  fixture keeps version trees at its root *and* registers sections, so `/test/<version>/` always
+  exists and the branch is never taken; reproducing it needs a fifth fixture build whose every
+  version tree is section-nested. One assertion pins the old disjunction as forbidden, another pins
+  the section-scan replacement; a probe restoring the old shortcut fails the first. Behaviorally
+  confirmed on the real build: agentgateway's EN broken-internal-link count went 9 → 3 (the remaining
+  three are a content-coverage gap in the enterprise standalone tree, not a link defect). Regression:
+  the six hub products not involved (17,283 files), `agentgateway.dev` and `kgateway.dev` (8,439
+  files) and both fixture brands all byte-identical.
+
 ### Fix — the version dropdown and mobile chips no longer offer a version tree the section does not have (`layouts/_partials/navbar.html`, `layouts/partials/sidebar.html`)
 
 - **Why.** Both templates ended their version-switch fallback chain at the target version's landing
