@@ -1533,6 +1533,47 @@ svg.section-card-icon {
   color: var(--theme-link);
 }
 
+/* A version-less site's selector renders inline at the head of the menu.main
+   row (see the `section-dropdown-inline` note in
+   layouts/_partials/components/section-dropdown.html), so it has plain Hextra
+   nav links as immediate neighbours and the styling above makes it the odd one
+   out four ways over: weight 600 against their inherited 400, a 0.3px
+   letter-spacing they do not have, `color: inherit` resolving darker than their
+   gray-600, and 12px of horizontal padding against their 8px.
+
+   That last one is the spacing tell. The navbar is `display:flex` with an 8px
+   gap, and every Hextra link carries p-2 with -ml-2, so the negative margin
+   cancels the gap and consecutive links sit 16px text-edge to text-edge
+   (8 + 8 - 8 + 8). At 12px the selector pushes its successor to 20px. Setting
+   the padding to 8px is the whole fix — the selector needs no negative margin
+   of its own, because the -8px lives on the FOLLOWING link, and the selector's
+   own left edge faces the logo's `mr-auto` free space where 8px is invisible.
+
+   The colours reference Hextra's own palette variables rather than restating
+   the values, so a Hextra palette change carries over instead of drifting.
+   They are declared on `:root, :host` in its compiled main.css, which every
+   consumer loads BEFORE this sheet, so they resolve; the literal fallbacks
+   cover a future Hextra that renames them. The chevron keeps the control
+   identifiable as a dropdown without needing extra weight to do it. */
+.section-dropdown-inline .section-dropdown-btn {
+  padding: 8px;
+  font-weight: 400;
+  letter-spacing: normal;
+  color: var(--hx-color-gray-600, #4b5563);
+}
+
+.section-dropdown-inline .section-dropdown-btn:hover {
+  color: var(--hx-color-gray-800, #1f2937);
+}
+
+.dark .section-dropdown-inline .section-dropdown-btn {
+  color: var(--hx-color-gray-400, #9ca3af);
+}
+
+.dark .section-dropdown-inline .section-dropdown-btn:hover {
+  color: var(--hx-color-gray-200, #e5e7eb);
+}
+
 .section-dropdown-btn svg,
 .version-dropdown-btn svg {
   transition: transform 0.2s;

@@ -6,6 +6,7 @@ public-oss-local/
 public-enterprise-local/
 public-flat/
 public-flat-root/
+public-section-title/
 public-local/
 resources/
 .hugo_build.lock

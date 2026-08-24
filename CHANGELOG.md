@@ -442,6 +442,51 @@ happened to ship identical version numbers.
 A new repo-wide assertion (`tests/link-hextra-shapes.spec.ts`) fails if any template reads a
 per-section versions list again, so the two-list shape cannot creep back.
 
+### Fix — a version-less site's section selector is styled as a nav-link peer, not as a control (`layouts/_partials/components/section-dropdown.html`, `assets/css/docs-theme-extras.css`)
+
+- **Why.** The selector renders from two call sites in `navbar.html`, and until this release both got
+  the same button styling. Their surroundings are not the same. On a **versioned** product it sits
+  between the logo and the version dropdown with the search box after it, so the two dropdowns read
+  as a cluster of controls and the shared 600-weight styling suits them. On a **version-less** site
+  the `else` branch emits it immediately before the `menu.main` loop, so its neighbours are plain
+  Hextra nav links.
+- **What it cost.** Against those links the shared rule was the odd one out four ways over:
+  `font-weight: 600` against their inherited 400, `letter-spacing: 0.3px` against normal,
+  `color: inherit` resolving darker than their `gray-600`, and 12px of horizontal padding against
+  their 8px. The padding one moved geometry rather than just weight: the navbar is flex with an 8px
+  gap and every Hextra link carries `p-2` with `-ml-2`, so the negative margin cancels the gap and
+  consecutive links sit 16px text-edge to text-edge (8 + 8 − 8 + 8). At 12px the selector pushed its
+  successor out to 20px, leaving one visibly wider gap in an otherwise even row.
+- **What it does now.** A `section-dropdown-inline` modifier, added only when the site declares no
+  `params.versions`, matches the nav links: 8px padding, weight 400, normal letter-spacing, and
+  `var(--hx-color-gray-600)` with a `gray-800` hover (`gray-400`/`gray-200` in dark). The colours
+  reference Hextra's own palette variables rather than restating the hex, so a Hextra palette change
+  carries over. The selector needs no negative margin of its own: the `-8px` lives on the FOLLOWING
+  link, and its own left edge faces the logo's `mr-auto` free space. The chevron keeps it
+  identifiable as a dropdown without extra weight doing that job.
+- **Verify in production.** <https://kagent.dev/docs/kagent/> — "Docs" in the navbar now matches
+  "Blog" and "Tools" in weight and colour, and the gap to "Blog" matches every other gap in the row.
+  The seven hub products are untouched: <https://docs.solo.io/agentgateway/kubernetes/latest/> keeps
+  the heavier selector, which is correct next to the version dropdown.
+- **How it was verified.** Measured in a real browser against a kagent build, comparing the button's
+  computed styles with the adjacent `Blog` link: weight, colour and letter-spacing identical in BOTH
+  themes, and the Docs→Blog text-edge gap 16px against Blog→Tools 16px. (The first dark-mode reading
+  disagreed and was a measurement error, not a CSS one — the button carries `transition: color 0.2s`,
+  so reading immediately after toggling `.dark` returns an interpolated mid-transition value, which
+  serialises as `oklab(…)` rather than `oklch(…)`. Waiting 500ms fixes the reading.) Four new
+  assertions in `tests/section-versionless.spec.ts`, each probe-verified by breaking what it claims
+  to catch: the modifier reaches every page of both version-less builds that renders a selector and
+  no page of a versioned build, the modifier rule holds the nav-link metrics, and the SHARED rule
+  still holds 600/12px so that "fixing" it globally, which would restyle all seven hub products,
+  fails here first. Regression: both fixture brands byte-identical to `v0.2.2-beta.5` across all 237
+  files apart from the CSS itself, which gains only inert rules.
+- **Also fixed here** (`Makefile`): `build-oss` and `build-enterprise` ran `cp -r fixture/static/images
+  public-<brand>/images` with no prior `rm -rf`. Hugo only owns `public-<brand>/test`, so that
+  directory survives a rebuild, and `cp -r src dst` copies INTO an existing `dst` — giving
+  `images/images/…` on the second run and every run after. It quietly added 6 files to the tree,
+  which corrupts byte-diffing one build against another. That is the technique used to prove a theme
+  change altered nothing, so the bug undermined the check rather than the build.
+
 ### Fix — a section is detected by POSITION, not just by name (`layouts/_partials/utils/section-segment.html`)
 
 - **Why.** Detection matched a registered section key **anywhere** in a page's path. So any ordinary

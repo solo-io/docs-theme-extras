@@ -240,10 +240,15 @@ for (const b of BUILDS) {
 
     test("renders a section dropdown despite there being no version dropdown", () => {
       const html = page(b, "alpha/first");
-      expect(html).toContain('class="section-dropdown"');
+      // Matched as a class LIST rather than an exact attribute value, because a
+      // version-less build also carries the `section-dropdown-inline` modifier
+      // (see "a nav-link peer, not a control" below). An exact-string assertion
+      // here broke the moment that modifier was added, which is a false alarm —
+      // the wrapper is still there, it just has a second class now.
+      expect(html).toMatch(/class="section-dropdown(?: [^"]*)?"/);
       // The selector must NOT drag a version dropdown along with it: the `else`
       // branch that renders it exists precisely because there are no versions.
-      expect(html).not.toContain('class="version-dropdown"');
+      expect(html).not.toMatch(/class="version-dropdown(?: [^"]*)?"/);
     });
 
     test("offers both sections, pointing at their landing pages", () => {
@@ -644,5 +649,120 @@ test.describe("version dropdown: an empty section path is verified, not assumed"
     // makes the dropdown a no-op rather than a 404 — quieter, still wrong.
     expect(src).toMatch(/\$inSection\s*=\s*\.key/);
     expect(src).toMatch(/site\.GetPage\s+\(printf\s+"%s\/%s"\s+\.key\s+\$entry\.linkVersion\)/);
+  });
+});
+
+test.describe("version-less selector: a nav-link peer, not a control", () => {
+  // The two call sites in navbar.html put the selector in two very different
+  // neighbourhoods, and the shared button styling only suits one of them.
+  //
+  //   versioned    logo | SELECTOR | version dropdown | search
+  //                Two dropdowns side by side reading as a cluster of controls,
+  //                no plain nav link within reach. 600-weight is right there.
+  //   version-less logo | SELECTOR | Blog | Tools | Agents | …
+  //                The `else` branch emits it immediately before the menu.main
+  //                loop, so its neighbours are plain Hextra nav links.
+  //
+  // Against those links the shared rule was the odd one out four ways over:
+  // font-weight 600 vs their inherited 400, letter-spacing 0.3px vs normal,
+  // `color: inherit` resolving darker than their gray-600, and 12px horizontal
+  // padding vs 8px. The padding is the one that moves geometry: the navbar is
+  // flex with an 8px gap and every Hextra link carries p-2 with -ml-2, so the
+  // negative margin cancels the gap and consecutive links sit 16px text-edge to
+  // text-edge (8 + 8 - 8 + 8); at 12px the selector pushed its successor to
+  // 20px. Reported from a screenshot of kagent, which is the first consumer to
+  // render the selector next to nav links at all — agentgateway.dev and
+  // kgateway.dev both shadow this navbar with their own and never render it.
+  //
+  // The CSS assertions are SOURCE-level, for the same reason the version-
+  // dropdown ones above are. No harness target serves a version-less build (see
+  // this file's header), so getComputedStyle is out of reach without a fifth
+  // fixture and its own playwright project. What IS asserted from the built
+  // output is the half that source can't prove: that the modifier reaches the
+  // markup on every page that renders a selector, and reaches NO page of a
+  // versioned build.
+
+  const CSS = path.resolve(
+    __dirname,
+    "..",
+    "assets/css/docs-theme-extras.css",
+  );
+
+  for (const b of BUILDS) {
+    test(`every page rendering a selector carries the modifier (${b.name})`, () => {
+      test.skip(!hasBuild(b), `${b.dir} not built; run make build-flat`);
+      const root = buildRoot(b);
+      const htmlFiles: string[] = [];
+      const walk = (d: string) => {
+        for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+          const p = path.join(d, e.name);
+          if (e.isDirectory()) walk(p);
+          else if (e.name.endsWith(".html")) htmlFiles.push(p);
+        }
+      };
+      walk(root);
+
+      // Pages that render the button but lack the modifier would be styled as
+      // controls in a nav-link row — the reported bug. Pages carrying the
+      // modifier without the button would mean the class is being emitted from
+      // somewhere it shouldn't. Both directions are checked.
+      const withBtn = htmlFiles.filter((f) =>
+        fs.readFileSync(f, "utf8").includes("section-dropdown-btn"),
+      );
+      const withMod = htmlFiles.filter((f) =>
+        fs.readFileSync(f, "utf8").includes("section-dropdown-inline"),
+      );
+      expect(
+        withBtn.length,
+        "the version-less build should render the selector somewhere",
+      ).toBeGreaterThan(0);
+      expect(withMod.sort()).toEqual(withBtn.sort());
+    });
+  }
+
+  test("a versioned build's selector carries no modifier", () => {
+    // The gate is `not site.Params.versions`. Without it every hub product's
+    // selector would be restyled as a nav link while sitting in a dropdown
+    // cluster — the same class of unrequested change the sidebar chips caused.
+    test.skip(!IS_FIXTURE_TARGET, "reads the bundled versioned fixture");
+    const f = path.join(target.productRoot, "v2", "everything", "index.html");
+    test.skip(!fs.existsSync(f), "no versioned fixture page in this build");
+    const html = fs.readFileSync(f, "utf8");
+    expect(
+      html,
+      "versioned fixture should still render a selector",
+    ).toContain("section-dropdown-btn");
+    expect(html).not.toContain("section-dropdown-inline");
+  });
+
+  test("the modifier rule matches Hextra's nav-link metrics", () => {
+    const src = fs.readFileSync(CSS, "utf8");
+    const rule = src.match(
+      /\.section-dropdown-inline \.section-dropdown-btn \{([^}]*)\}/,
+    );
+    expect(rule, "the inline modifier rule is missing").not.toBeNull();
+    const body = rule![1];
+    // 8px, not 12px: this is the declaration that makes the gap 16px like every
+    // other pair in the row.
+    expect(body).toMatch(/padding:\s*8px\s*;/);
+    expect(body).toMatch(/font-weight:\s*400\s*;/);
+    expect(body).toMatch(/letter-spacing:\s*normal\s*;/);
+    // Referencing Hextra's palette variable rather than restating the hex keeps
+    // the two in sync if Hextra retunes gray; the literal is only a fallback.
+    expect(body).toMatch(/color:\s*var\(--hx-color-gray-600,\s*#4b5563\)/);
+  });
+
+  test("the shared dropdown-button rule is left alone", () => {
+    // The tempting "fix" is to edit the shared rule instead of adding a
+    // modifier. That would restyle the version dropdown on all seven hub
+    // products, where 600-weight is deliberate and there is no nav link beside
+    // it to match. Pin the shared values so that edit fails here first.
+    const src = fs.readFileSync(CSS, "utf8");
+    const shared = src.match(
+      /\.section-dropdown-btn,\s*\n\.version-dropdown-btn \{([^}]*)\}/,
+    );
+    expect(shared, "the shared dropdown-button rule is missing").not.toBeNull();
+    expect(shared![1]).toMatch(/font-weight:\s*600\s*;/);
+    expect(shared![1]).toMatch(/padding:\s*6px 12px\s*;/);
   });
 });

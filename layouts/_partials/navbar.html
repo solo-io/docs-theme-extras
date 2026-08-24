@@ -110,6 +110,17 @@
       {{- $sections := partial "utils/resolve-sections.html" $page -}}
       {{- $hasSelector := gt (len $sections) 1 -}}
 
+      {{- /* …and whether it will show the PRODUCT NAME, which is the actual
+             question the three suppressions below are asking. The two came
+             apart when the button label became configurable: a product that
+             sets `[params.sectionDropdown] title` puts a short fixed word there
+             instead, so a selector exists but names nothing. Suppressing on
+             mere existence in that case would drop the product name from the
+             navbar entirely — the version button would read a bare "latest" and
+             nothing in the row would say which product it belongs to. */ -}}
+      {{- $selectorLabel := partial "utils/section-dropdown-label.html" $page -}}
+      {{- $selectorShowsProduct := and $hasSelector (not $selectorLabel.isOverride) -}}
+
       {{- /* Match current version — check all entries (including hidden) so that
              manually navigating to a hidden version shows the correct label.
              Match against the version segment from the URL, not Site.Params.version
@@ -125,7 +136,7 @@
                the root page showed the name twice while every versioned page
                showed it once. */ -}}
         {{- $fullLabel := $label -}}
-        {{- if not $hasSelector -}}
+        {{- if not $selectorShowsProduct -}}
           {{- with .productName -}}
             {{- $fullLabel = printf "%s - %s" . $label -}}
           {{- end -}}
@@ -198,7 +209,7 @@
                    agentgateway - 2026.8.0 (latest)". A product with no sections
                    renders no selector, so it keeps the prefix exactly as
                    before. */ -}}
-            {{- if and $currentProductName (not $hasSelector) -}}<span class="version-product-name">{{ $currentProductName }} - </span><span>{{ $currentVersionLabel }}</span>{{- else if $currentProductName -}}<span>{{ $currentVersionLabel }}</span>{{- else -}}<span>{{ $currentLabel }}</span>{{- end -}}
+            {{- if and $currentProductName (not $selectorShowsProduct) -}}<span class="version-product-name">{{ $currentProductName }} - </span><span>{{ $currentVersionLabel }}</span>{{- else if $currentProductName -}}<span>{{ $currentVersionLabel }}</span>{{- else -}}<span>{{ $currentLabel }}</span>{{- end -}}
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2.5 4l2.5 2.5L7.5 4"/></svg>
           </button>
           <ul class="version-dropdown-menu" role="menu">
@@ -234,7 +245,7 @@
                      product, for the same reason as the button above. Related
                      groups keep their headers regardless — those name OTHER
                      products, which the selector does not cover. */ -}}
-              {{- if not $hasSelector -}}
+              {{- if not $selectorShowsProduct -}}
                 {{- with $ownName -}}
               <li role="none" class="version-dropdown-header">{{ . }}</li>
                 {{- end -}}

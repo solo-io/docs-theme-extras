@@ -1,0 +1,48 @@
+{{- /*
+  section-dropdown-label.html — the string on the section selector's BUTTON, and
+  whether it was configured or derived.
+
+  DEFAULT: the product name (site.Params.product, falling back to site.Title).
+  That is deliberate and load-bearing — it is what distinguishes this control
+  from agentgateway-oss-website's generic "Docs" dropdown, and kagent-oss
+  depends on it: it deleted its own "Docs" menu entry precisely BECAUSE this
+  button already renders params.product (also "Docs" there), and keeping both
+  put two buttons reading "Docs" side by side in the navbar.
+
+  OVERRIDE: `[params.sectionDropdown] title = "…"`. A product whose name is too
+  long to sit in a navbar beside a version dropdown and a search box wants a
+  short fixed word on the button, with the sections named only inside the menu.
+  docs-hub agentgateway is the case that prompted this: "Solo Enterprise for
+  agentgateway" as a button label, next to "latest", crowded the row.
+
+  Opt-in on purpose. Making the selector stop showing the product name by
+  default would change every consumer's navbar at once and break kagent's setup
+  above, for a preference only one product has expressed.
+
+  RETURNS a dict, not a bare string, because navbar.html needs the second field:
+
+    label       string — what the button shows
+    isOverride  bool   — true when it came from params.sectionDropdown.title
+
+  navbar.html drops the product-name prefix from the VERSION button whenever the
+  section selector renders, on the assumption that the selector is showing that
+  name instead. Under an override the assumption is false, and suppressing it
+  there as well would erase the product name from the navbar entirely. That one
+  condition is the only reader of `isOverride`.
+
+  Takes the page as `.` for signature consistency with the sibling utils. The
+  resolution is site-level and does not use it.
+*/ -}}
+{{- $label := site.Params.product | default site.Title -}}
+{{- $isOverride := false -}}
+{{- /* `with` on the TABLE before the key. A bare site.Params.sectionDropdown
+       .title is a field access on nil for every consumer that does not declare
+       the table — which is all of them but one — and that aborts the build
+       rather than falling back. */ -}}
+{{- with site.Params.sectionDropdown -}}
+  {{- with .title -}}
+    {{- $label = . -}}
+    {{- $isOverride = true -}}
+  {{- end -}}
+{{- end -}}
+{{- return (dict "label" $label "isOverride" $isOverride) -}}
