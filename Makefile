@@ -101,9 +101,10 @@ test:
 
 clean:
 	rm -rf public-oss public-enterprise public-oss-local public-enterprise-local \
-	       public-flat \
+	       public-flat public-flat-root \
 	       resources test-results playwright-report \
-	       .build-oss.log .build-enterprise.log .build-flat.log \
+	       .build-oss.log .build-enterprise.log \
+	       .build-flat.log .build-flat-root.log \
 	       .build-oss-local.log .build-enterprise-local.log
 
 help:
@@ -116,7 +117,7 @@ help:
 	@echo ""
 	@echo "  build-oss            - static build, brand=oss        → public-oss/"
 	@echo "  build-enterprise     - static build, brand=enterprise → public-enterprise/"
-	@echo "  build-flat           - static build, VERSION-LESS sections    → public-flat/"
+	@echo "  build-flat           - static builds, VERSION-LESS sections   → public-flat/ + public-flat-root/"
 	@echo ""
 	@echo "  test-oss             - build-oss + run harness against the OSS fixture"
 	@echo "  test-enterprise      - build-enterprise + run harness against the enterprise fixture"
