@@ -104,22 +104,19 @@
 
       {{- /* Sections this product ships. Resolved HERE, before the label
              composition below, because whether the product name belongs on the
-             version dropdown depends on whether the section selector is going to
-             show it. $page, not `.` — this sits inside `with $navVersions`,
-             where the dot is the versions slice. */ -}}
+             version dropdown depends on whether a section selector renders at
+             all. $page, not `.` — this sits inside `with $navVersions`, where
+             the dot is the versions slice.
+
+             EXISTENCE, not what the button says. The selector's button is
+             relabellable (params.sectionDropdown), so it may well be showing a
+             section name rather than the product name — the product name still
+             comes off the version dropdown either way. The navbar carries it
+             once at most, in the sidebar logo, and a version control that reads
+             "Solo Enterprise for agentgateway - 2026.8.1 (latest)" beside a
+             "Kubernetes" button spends the whole row on naming. */ -}}
       {{- $sections := partial "utils/resolve-sections.html" $page -}}
       {{- $hasSelector := gt (len $sections) 1 -}}
-
-      {{- /* …and whether it will show the PRODUCT NAME, which is the actual
-             question the three suppressions below are asking. The two came
-             apart when the button label became configurable: a product that
-             sets `[params.sectionDropdown] title` puts a short fixed word there
-             instead, so a selector exists but names nothing. Suppressing on
-             mere existence in that case would drop the product name from the
-             navbar entirely — the version button would read a bare "latest" and
-             nothing in the row would say which product it belongs to. */ -}}
-      {{- $selectorLabel := partial "utils/section-dropdown-label.html" $page -}}
-      {{- $selectorShowsProduct := and $hasSelector (not $selectorLabel.isOverride) -}}
 
       {{- /* Match current version — check all entries (including hidden) so that
              manually navigating to a hidden version shows the correct label.
@@ -136,7 +133,7 @@
                the root page showed the name twice while every versioned page
                showed it once. */ -}}
         {{- $fullLabel := $label -}}
-        {{- if not $selectorShowsProduct -}}
+        {{- if not $hasSelector -}}
           {{- with .productName -}}
             {{- $fullLabel = printf "%s - %s" . $label -}}
           {{- end -}}
@@ -209,7 +206,7 @@
                    agentgateway - 2026.8.0 (latest)". A product with no sections
                    renders no selector, so it keeps the prefix exactly as
                    before. */ -}}
-            {{- if and $currentProductName (not $selectorShowsProduct) -}}<span class="version-product-name">{{ $currentProductName }} - </span><span>{{ $currentVersionLabel }}</span>{{- else if $currentProductName -}}<span>{{ $currentVersionLabel }}</span>{{- else -}}<span>{{ $currentLabel }}</span>{{- end -}}
+            {{- if and $currentProductName (not $hasSelector) -}}<span class="version-product-name">{{ $currentProductName }} - </span><span>{{ $currentVersionLabel }}</span>{{- else if $currentProductName -}}<span>{{ $currentVersionLabel }}</span>{{- else -}}<span>{{ $currentLabel }}</span>{{- end -}}
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2.5 4l2.5 2.5L7.5 4"/></svg>
           </button>
           <ul class="version-dropdown-menu" role="menu">
@@ -245,7 +242,7 @@
                      product, for the same reason as the button above. Related
                      groups keep their headers regardless — those name OTHER
                      products, which the selector does not cover. */ -}}
-              {{- if not $selectorShowsProduct -}}
+              {{- if not $hasSelector -}}
                 {{- with $ownName -}}
               <li role="none" class="version-dropdown-header">{{ . }}</li>
                 {{- end -}}

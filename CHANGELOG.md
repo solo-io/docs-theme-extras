@@ -249,6 +249,94 @@ marker, and navbar/drawer parity. The fixture gained a second section landing pa
 (`fixture/content/en/test/alt/`) because with one section there is nothing to select and
 the selector correctly renders nothing.
 
+### Add — the section selector's button reports the current section, the way the version dropdown reports the current version (`layouts/_partials/utils/section-dropdown-label.html`, `layouts/_partials/components/section-dropdown.html`, `layouts/_partials/navbar.html`)
+
+**Why.** The entry above puts the PRODUCT name on the selector button, and it is the wrong
+string twice over. It is too long — on docs-hub agentgateway it reads "Solo Enterprise for
+agentgateway", which with a version dropdown and a search box beside it leaves no room in the
+navbar row — and it is CONSTANT, so it repeats what the logo already says and never tells the
+reader which of the two doc sets they are in. The version dropdown next to it has neither
+problem: it carries no title at all, it just names the version you are on, and its menu is the
+list you move with. The section selector is the same kind of control and should read the same
+way.
+
+```
+before:   [ Solo Enterprise for agentgateway ▾ ]  [ latest ▾ ]  [search]
+after:    [ Kubernetes ▾ ]                        [ latest ▾ ]  [search]
+               Kubernetes                              latest
+               Standalone                              2026.7.1 (LTS)
+```
+
+**The settings, which compose rather than competing.**
+
+```toml
+[params.sectionDropdown]
+  showCurrentSection = true   # the button names the section being read
+  title = "Docs"              # what it falls back to when none is
+```
+
+Pages with no current section are normal, not edge cases: a product landing page renders the
+selector with every entry inactive, because the reader is above the sections choosing one
+(`/agentgateway/` and kagent's `/docs/` are both this). So resolution falls through — current
+section, then `title`, then `params.product`, then `site.Title` — and `title` stops being the
+always-label, becoming the label for exactly the pages that have no section to name. A
+consumer that sets `showCurrentSection` and no `title` gets the product name back on those
+pages, which is legal and probably not what it wanted.
+
+**The version dropdown is not involved.** It already drops its product-name prefix, its
+in-menu own-group header and its product-root fallback label whenever a selector renders at
+all, and that stays exactly as the entry above left it — a bare "latest", whatever the section
+button is showing. A draft of this change made those three suppressions ask whether the
+selector was showing the product NAME, so relabelling the button handed the name back to the
+version control; that was rejected, because the sidebar logo already carries it and two
+controls side by side each prefixed with "Solo Enterprise for agentgateway" is most of the
+navbar row spent on naming. The partial therefore returns the label string and nothing else,
+and one assertion exists purely to keep the rejected idea from creeping back
+("the version dropdown is untouched — the product name stays suppressed").
+
+**The active menu entry is no longer bolded** (`assets/css/docs-theme-extras.css`). It was the
+one place the two controls diverged, since the version menu marks its current entry not at
+all, and once the button names the section it emphasised the same word twice: an open menu
+reading "Kubernetes" in bold directly under a button already reading "Kubernetes". The
+`section-dropdown-item-active` class is unchanged — still emitted, still asserted by three
+specs, and still what takes an icon'd entry to full opacity. Only the weight went.
+
+**The partial takes the section slice, not the page.** `isCurrent` is computed in
+`utils/resolve-sections.html`, and re-deriving "which section is this page in" here would mean
+two implementations that can disagree. Before this the partial ignored its input entirely,
+which hid the fact that its two callers were passing DIFFERENT things — the page from
+`navbar.html`, the slice from `section-dropdown.html`. Harmless while unread, wrong the moment
+the label depends on it.
+
+**Opt-in, and deliberately so.** With neither key set, the button still carries
+`params.product` falling back to `site.Title`, byte-for-byte as before. Making the new shape
+the default would change every consumer's navbar at once and would break kagent-oss
+specifically: it deleted its own "Docs" menu entry *because* this button already renders its
+`params.product` ("Docs"), and two buttons reading "Docs" sat side by side. Verify the
+unaffected default on <https://docs.solo.io/kgateway/2.3.x/>, whose version button reads "Solo
+Enterprise for kgateway - 2.3.x (latest)" and must keep reading that; kgateway registers no
+sections, so no selector renders there. Note that no production site renders a section
+selector yet, so the new behavior cannot be pointed at in production today — the fixture
+builds below are the evidence until docs-hub agentgateway's section restructure ships.
+
+Verified: `make build-section-title` and `make build-section-current`, plus 10 assertions in
+`tests/section-dropdown-title.spec.ts`. Each mode needed a build of its own —
+`hugo-section-title.toml` and `hugo-section-current.toml`, both overlays on `hugo-oss.toml` —
+because what has to be checked is a whole navbar, section button and version dropdown
+together, on a versioned site. The version-less builds have no version dropdown, and setting
+the keys on a branded fixture would move the navbar under the ~1650 assertions those builds
+already carry. The current-section overlay sets `title` as well, deliberately: with
+`showCurrentSection` alone the fallback resolves to `params.product`, which is the DEFAULT
+label, so a regression that ignored `showCurrentSection` entirely would still have passed.
+Setting both makes each of the three reachable states a distinct string, and one assertion
+exists only to pin that ("showCurrentSection alone does not explain the result"). The spec
+reads the two overlays and the branded build page-for-page, so the default is pinned by the
+same run. Teeth confirmed by mutation: making the button ignore `showCurrentSection` fails
+exactly one assertion ("the button names the section being read") and leaves the other nine
+green. Both brands stay at 1659 passing in the `static` project.
+
+Takes effect when a consumer bumps its extras pin.
+
 ### Add — `extras-section-hollow`: the section registry now says when it disagrees with the content tree (`layouts/_partials/utils/resolve-sections.html`)
 
 - **Why.** The registry is hand-maintained config, and when it disagrees with content it fails

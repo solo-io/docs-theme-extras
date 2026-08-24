@@ -529,7 +529,55 @@ thing: registration with no options. That is the normal case.
    icon simply render as text, and a selector where no section sets one is
    byte-for-byte what it was before icons existed.
 
-10. **Do not re-document this in a consumer config.** Point at this file. Every
+10. **The selector's BUTTON can name the current section, or carry a fixed
+    title, instead of the product name.** By default it shows `params.product`,
+    falling back to `site.Title`. That suits a short name, crowds the navbar with
+    a long one, and either way never changes as the reader moves around. Two
+    keys adjust it, and they compose:
+
+    ```toml
+    [params.sectionDropdown]
+      showCurrentSection = true   # the button names the section being read
+      title = "Docs"              # what it falls back to when none is
+    ```
+
+    ```yaml
+    params:
+      sectionDropdown:
+        showCurrentSection: true
+        title: Docs
+    ```
+
+    `showCurrentSection` is the version dropdown's own behavior applied to
+    sections: closed, the control reports where you are, and the menu is the list
+    you move with. On docs-hub agentgateway the button reads "Kubernetes" under
+    `/kubernetes/` and "Standalone" under `/standalone/`.
+
+    **Set `title` as well if you set `showCurrentSection`.** Pages with no
+    current section are normal, not edge cases: a product landing page renders
+    the selector with every entry inactive, because the reader is above the
+    sections choosing one. Resolution falls through in this order:
+
+    | Page | Button shows |
+    | --- | --- |
+    | inside a section, `showCurrentSection` set | that section's label |
+    | in no section, `title` set | the title |
+    | in no section, no title | `params.product`, then `site.Title` |
+
+    Either key is button-only. The menu entries always carry each section's own
+    label, so the sections stay named where the reader is choosing between them.
+    An empty `title` is treated as unset rather than as a blank button; a bare
+    chevron would give the reader nothing to aim at.
+
+    Neither key touches the version dropdown. It drops its own product-name
+    prefix whenever a selector renders at all, so it reads a bare "2026.8.1
+    (latest)" regardless of what the section button says. That means a product
+    registering sections shows its name in the navbar through the sidebar logo
+    rather than through either control, which is the intent: two controls side by
+    side each prefixed with a long product name is most of the row spent on
+    naming.
+
+11. **Do not re-document this in a consumer config.** Point at this file. Every
    repo grew its own explanation of the same rules, and they drifted — one still
    claimed a section carried its own version list a release after that was
    removed. A one-line comment naming this section ages better than a paragraph.

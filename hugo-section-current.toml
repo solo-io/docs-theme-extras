@@ -1,0 +1,40 @@
+# SECTION SELECTOR THAT NAMES THE CURRENT SECTION.
+#
+# An OVERLAY, built the same way as hugo-section-title.toml and for the same
+# reasons (see that file's header — inherits the versioned OSS fixture, changes
+# only publishDir and the params under test):
+#
+#   hugo --config hugo-oss.toml,hugo-section-current.toml
+#
+# WHY A THIRD BUILD RATHER THAN A KEY ON THE TITLE OVERLAY. The two modes are not
+# alternatives, they COMPOSE, and the composition is the part worth pinning:
+# `showCurrentSection` names the active section where there is one, and falls
+# back to `title` on the pages where there is none. Setting both keys on the
+# title overlay would move that build off the fixed-title behaviour its own spec
+# asserts, so each mode needs its own output to read.
+#
+# Both keys are set here deliberately. A build with showCurrentSection alone
+# would leave the fallback resolving to params.product, which is the DEFAULT
+# label — indistinguishable from the feature being switched off, so a regression
+# that ignored showCurrentSection entirely would still pass. Setting title too
+# makes the fallback a distinct third string, so each of the three states the
+# resolution chain can reach is visible in the output:
+#
+#   a page inside a section  -> the section's label      (showCurrentSection)
+#   a page in no section     -> "Docs"                   (title fallback)
+#   neither key set          -> "Docs framework test fixture"  (params.product,
+#                               proven by the branded builds, not this one)
+#
+# Built by `make build-section-current`; asserted by
+# tests/section-dropdown-title.spec.ts alongside the fixed-title build, so the
+# two modes are compared against each other in one place. Reads
+# public-section-current/ directly rather than through DOCS_TEST_CONFIG.
+publishDir = "public-section-current/test"
+
+[params]
+  [params.sectionDropdown]
+    # The feature under test: the button reports the section being read.
+    showCurrentSection = true
+    # NOT the button's label any more — only what it falls back to on a page
+    # with no current section, such as the product landing page.
+    title = "Docs"

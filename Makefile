@@ -10,6 +10,7 @@ CONFIG  ?=
         clear-cache \
         server-oss server-enterprise \
         build-oss build-enterprise build-flat \
+        build-section-title build-section-current \
         test-oss test-enterprise test-all \
         test clean help
 
@@ -89,16 +90,24 @@ build-flat:
 build-section-title:
 	$(HUGO) --config hugo-oss.toml,hugo-section-title.toml --gc 2> .build-section-title.log
 
+# SECTION SELECTOR THAT NAMES THE CURRENT SECTION, on the same versioned base.
+# A third build rather than a key on the overlay above, because the two modes
+# COMPOSE (current section where there is one, the configured title where there
+# is not) and each needs its own output for the spec to compare. See
+# hugo-section-current.toml for why it sets both keys.
+build-section-current:
+	$(HUGO) --config hugo-oss.toml,hugo-section-current.toml --gc 2> .build-section-current.log
+
 # ── Tests against the bundled fixture ────────────────────────────────────
 
 # build-flat runs alongside each brand build so section-versionless.spec.ts has
 # something to read. It is brand-independent (the version-less code paths do not
 # touch the brand layer), so both brand runs assert against the same output —
 # cheap, and it keeps `make test-oss` self-contained.
-test-oss: build-oss build-flat build-section-title
+test-oss: build-oss build-flat build-section-title build-section-current
 	DOCS_TEST_CONFIG=$(abspath ./fixture/.docs-test-oss.toml) npx playwright test
 
-test-enterprise: build-enterprise build-flat build-section-title
+test-enterprise: build-enterprise build-flat build-section-title build-section-current
 	DOCS_TEST_CONFIG=$(abspath ./fixture/.docs-test-enterprise.toml) npx playwright test
 
 # Run both brand variants. CI default — surfaces brand-specific regressions
@@ -117,10 +126,11 @@ test:
 
 clean:
 	rm -rf public-oss public-enterprise public-oss-local public-enterprise-local \
-	       public-flat public-flat-root public-section-title \
+	       public-flat public-flat-root public-section-title public-section-current \
 	       resources test-results playwright-report \
 	       .build-oss.log .build-enterprise.log \
 	       .build-flat.log .build-flat-root.log \
+	       .build-section-title.log .build-section-current.log \
 	       .build-oss-local.log .build-enterprise-local.log
 
 help:
@@ -135,6 +145,7 @@ help:
 	@echo "  build-enterprise     - static build, brand=enterprise → public-enterprise/"
 	@echo "  build-flat           - static builds, VERSION-LESS sections   → public-flat/ + public-flat-root/"
 	@echo "  build-section-title  - static build, configured selector title → public-section-title/"
+	@echo "  build-section-current - static build, selector names current section → public-section-current/"
 	@echo ""
 	@echo "  test-oss             - build-oss + run harness against the OSS fixture"
 	@echo "  test-enterprise      - build-enterprise + run harness against the enterprise fixture"

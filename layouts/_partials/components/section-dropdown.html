@@ -45,14 +45,14 @@
 {{- $sections := . -}}
 {{- if gt (len $sections) 1 -}}
 {{- /* Button label resolved in utils/section-dropdown-label.html rather than
-       inline, because navbar.html has to know the SAME answer to decide whether
-       the version button still needs the product-name prefix. Two copies of
-       `site.Params.product | default site.Title` is exactly how the section
-       chips and this dropdown drifted apart the last time. */ -}}
+       inline. It is a three-way fall-through (current section, configured
+       title, product name) with a nil-guard on the config table, which is more
+       than belongs in the middle of markup, and keeping it addressable means
+       the mobile drawer can adopt it later without a second implementation. */ -}}
 {{- $btn := partial "utils/section-dropdown-label.html" . -}}
 <div class="section-dropdown{{ if not site.Params.versions }} section-dropdown-inline{{ end }}">
   <button type="button" class="section-dropdown-btn" aria-expanded="false" aria-haspopup="true">
-    <span>{{ $btn.label }}</span>
+    <span>{{ $btn }}</span>
     <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2.5 4l2.5 2.5L7.5 4"/></svg>
   </button>
   <ul class="section-dropdown-menu" role="menu">

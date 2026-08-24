@@ -2762,13 +2762,25 @@ a[class*="word-break:break-word"] {
   padding: 0.25rem 0.25rem 0.5rem;
 }
 
-/* Section dropdown — the product-name menu listing a product's parallel doc
-   sets (agentgateway: Kubernetes / Standalone). It sits beside the version
-   dropdown in the navbar and must look identical, so every rule above carries a
+/* Section dropdown — the menu listing a product's parallel doc sets
+   (agentgateway: Kubernetes / Standalone). It sits beside the version dropdown
+   in the navbar and must look identical, so every rule above carries a
    .section-dropdown twin selector rather than a forked copy that would drift.
    The -divider and -header rules are deliberately NOT shared: those are for the
    related-product groups inside the version menu, which the section menu has no
-   equivalent of. */
-.section-dropdown-item-active {
-  font-weight: 600;
-}
+   equivalent of.
+
+   NO TYPOGRAPHIC RULE OF ITS OWN, deliberately. This block used to give
+   .section-dropdown-item-active a font-weight of 600, and that was the one place
+   the two controls diverged — the version menu marks its current entry not at
+   all. It also emphasised the current section twice over once the
+   button started naming it (params.sectionDropdown.showCurrentSection), so the
+   open menu read "Kubernetes" in bold directly under a button already reading
+   "Kubernetes". Removed rather than matched on the version side, because the
+   button is where the reader looks for the answer.
+
+   The `section-dropdown-item-active` CLASS is still emitted and still asserted
+   (tests/section-selector.spec.ts, section-nested-versions, section-versionless),
+   and still drives one thing: an icon'd entry goes to full opacity at
+   `.section-dropdown-item-active .section-dropdown-icon` above. Do not delete the
+   class along with its weight. */

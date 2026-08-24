@@ -1,7 +1,9 @@
 {{- /*
   sidebar-section-row.html — the mobile drawer's section chip row, the drawer
-  counterpart of the navbar's product-name section dropdown
-  (_partials/components/section-dropdown.html). Both come from
+  counterpart of the navbar's section dropdown
+  (_partials/components/section-dropdown.html). This row is headed by a generic
+  "Section" label rather than by the product name, so it is unaffected by
+  `[params.sectionDropdown] title`, which renames only the navbar button. Both come from
   utils/resolve-sections.html so they offer the same sections, with the same
   labels and the same destinations — tests/static.spec.ts asserts the chips and
   the dropdown land on identical hrefs.
