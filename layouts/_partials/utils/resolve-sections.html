@@ -93,9 +93,11 @@
 
 {{- $out := slice -}}
 {{- $dropped := slice -}}
+{{- $hollow := slice -}}
 {{- range $keys -}}
   {{- $key := . -}}
   {{- $cfg := index site.Params.sections $key -}}
+
 
   {{- /* The section landing page, in whichever shape this site uses.
 
@@ -163,9 +165,50 @@
       {{- end -}}
     {{- end -}}
   {{- end -}}
+  {{- /* Does this section actually nest a version tree? Checked across ALL of
+         the section's versions, not just $targetVersion — a section may be
+         missing the target version and still have others. Feeds the
+         registry-vs-content warning at the bottom of this file; it is not used
+         to build the href. */ -}}
+  {{- $hasVersionTree := false -}}
+  {{- with $landing -}}
+    {{- $land := . -}}
+    {{- range partial "utils/resolve-section-versions.html" $key -}}
+      {{- if not $hasVersionTree -}}
+        {{- $want := printf "%s%s/" $land.RelPermalink .linkVersion -}}
+        {{- with $land.GetPage .linkVersion -}}
+          {{- if eq .RelPermalink $want -}}{{- $hasVersionTree = true -}}{{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+
   {{- with $cfg.externalURL -}}
     {{- $href = . -}}
     {{- $isExternal = true -}}
+  {{- end -}}
+
+  {{- /* Reported below. Requires a LANDING PAGE: the section has content at that
+         path but no version tree under it, so the registration is half-done and
+         this site is demonstrably the owner.
+
+         A key with no landing page at ALL is deliberately not reported, because
+         it is the shape an INHERITED key takes and the theme cannot tell an
+         inherited key from a typo'd one — Hugo merges an imported module's params
+         into the project's before templates run, and exposes no provenance
+         (`hugo.Modules` does not exist; it errors with "can't evaluate field
+         Modules"). solo-io/docs imports github.com/kgateway-dev/kgateway.dev for
+         content and so inherits its `sections.envoy`, which no hub product wrote
+         and none can delete. Warning about it gave those products nothing they
+         could act on, and the empty-nav bug it used to cause is fixed in
+         utils/section-segment.html rather than in config.
+
+         COST, accepted: a section key that names nothing anywhere — a typo — is
+         only caught when the product has 2+ other sections that DO resolve, via
+         the `extras-section-no-target` warning above. That is the same blind spot
+         already documented there, not a new one. */ -}}
+  {{- if and $landing (not $hasVersionTree) (not $cfg.externalURL) -}}
+    {{- $hollow = $hollow | append $key -}}
   {{- end -}}
 
   {{- /* A section with neither a landing page nor an externalURL has nowhere to
@@ -227,5 +270,45 @@
        silently omitting an entry. */ -}}
 {{- if and $dropped $isDefaultLang (gt (len $out) 1) -}}
   {{- warnidf "extras-section-no-target" "params.sections %v resolved to no landing page and no `externalURL`, so %s left out of the section selector while %d other section(s) render in it. Add a content page at that path, or set externalURL." $dropped (cond (eq (len $dropped) 1) "it is" "they are") (len $out) -}}
+{{- end -}}
+{{- /* REGISTRY vs CONTENT. The section registry is hand-maintained config, and
+       when it disagrees with the content tree it fails SILENTLY. Two instances
+       of that cost real time:
+
+         Deleting `params.sections` from agentgateway.dev removed the section
+         switcher from every docs page. The build stayed green, emitted no
+         warning, and every other section-aware behavior kept working, because
+         that site's own nav.html reads the section from URL POSITION and the
+         sidebar resolves through the /docs/<section>/<version>/ shape. Only the
+         switcher depends on the registry, so losing it looks like nothing.
+
+         solo-io/docs does not define params.sections for kgateway or gateway at
+         all. It INHERITS `sections.envoy` from the
+         github.com/kgateway-dev/kgateway.dev module, because Hugo deep-merges an
+         imported module's params into the project's — and an empty table in the
+         project cannot delete a merged key. The hub serves that content flat at
+         /kgateway/<version>/, so there is no /kgateway/envoy/ tree and never
+         should be.
+
+       So: report a registered section that nests no version tree AND sets no
+       `externalURL`. Those are the two ways a section can have something behind
+       it; with neither, the key is inert — it contributes nothing to the
+       selector and nothing to version scoping.
+
+       Default language only, same reasoning as the warning above: a section
+       whose tree exists in English but not in a translation is a translation
+       gap, not a config error.
+
+       DELIBERATE EXCEPTION, and why this is `warnidf` rather than an error: the
+       bundled fixture's `demo` and `alt` sections are exactly this shape on
+       purpose, to pin the "registered without nesting" fallback that this
+       resolver supports. No production consumer uses it — every real section
+       either nests trees (agentgateway kubernetes/standalone, kgateway envoy) or
+       sets externalURL (kgateway's agentgateway) — so the fixture allowlists
+       this warning rather than the theme special-casing its own fixture. If a
+       product ever does need the shape, that allowlist is the escape hatch. */ -}}
+{{- if and $hollow $isDefaultLang -}}
+  {{- $verbs := cond (eq (len $hollow) 1) "is registered but nests no version tree and sets no `externalURL`, so it is" "are registered but nest no version tree and set no `externalURL`, so they are" -}}
+  {{- warnidf "extras-section-hollow" "params.sections %v %s inert: nothing to select between and nothing to scope versions for. Either add content at that path, set `externalURL`, or remove the key. If the key came from an IMPORTED MODULE, an empty table cannot delete it — decline the inheritance with `[params.sections]` + `_merge = \"none\"`. See docs-theme-extras USAGE.md, \"Versions and sections\"." $hollow $verbs -}}
 {{- end -}}
 {{- return $out -}}

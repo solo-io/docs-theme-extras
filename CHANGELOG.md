@@ -249,6 +249,81 @@ marker, and navbar/drawer parity. The fixture gained a second section landing pa
 (`fixture/content/en/test/alt/`) because with one section there is nothing to select and
 the selector correctly renders nothing.
 
+### Add — `extras-section-hollow`: the section registry now says when it disagrees with the content tree (`layouts/_partials/utils/resolve-sections.html`)
+
+- **Why.** The registry is hand-maintained config, and when it disagrees with content it fails
+  silently. Two instances during this release:
+  - Deleting `params.sections` from `agentgateway.dev` removed the section switcher from every docs
+    page. The build stayed green and warned about nothing, because that site's own `nav.html` reads
+    the section from URL *position* and the sidebar resolves through the
+    `/docs/<section>/<version>/` shape — only the switcher depends on the registry, so losing it
+    looks like nothing.
+  - `solo-io/docs` does not define `params.sections` for `kgateway` or `gateway`. It **inherits**
+    `sections.envoy` from `github.com/kgateway-dev/kgateway.dev`, which both products import for
+    conrefs, snippets, pages, images and the glossary — Hugo deep-merges an imported module's params
+    along with its content. The hub serves that content flat at `/<product>/<version>/`, so there is
+    no `/kgateway/envoy/` tree and never should be.
+- **What it does.** Warns when a registered section HAS a landing page but nests no version tree and
+  sets no `externalURL` — a half-done registration on content this site demonstrably owns. A key with
+  no landing page at all is deliberately NOT reported: that is the shape an inherited key takes, and
+  the theme cannot tell an inherited key from a typo'd one, because Hugo merges an imported module's
+  params before templates run and exposes no provenance (`hugo.Modules` does not exist — it errors
+  with "can't evaluate field Modules"). The cost, accepted: a section key naming nothing anywhere is
+  caught only when the product has 2+ other sections that do resolve, via `extras-section-no-target`
+  — the same blind spot already documented there. Default content language only,
+  matching the neighbouring no-target warning: a section whose tree exists in English but not in a
+  translation is a translation gap, not a config error.
+- **The remedy is stock Hugo, not a theme flag.** An empty table cannot delete a merged key, so the
+  six affected hub configs now decline the inheritance with `[params.sections]` + `_merge = "none"`.
+  Verified that Hugo consumes `_merge` as a directive rather than exposing it as a section key: the
+  hub `kgateway` build reports zero registered sections.
+  - An earlier draft added a theme-level `ignore = true` per section instead. It was removed before
+    release: `_merge` already covers both directions (no sections of your own, or your own plus a
+    module's), it is one mechanism rather than two, and registering an `envoy` section in a Gloo
+    Gateway config in order to neutralize it describes an import accident as though it were a product
+    fact.
+- **Verified.** All eight hub products build with zero non-description warnings — `kgateway` and
+  `gateway` previously reported the inherited-`envoy` warning. `agentgateway.dev`, `kgateway.dev` and
+  `kagent.dev` build clean. The fixture's `demo` and `alt` sections trip the warning deliberately
+  (they pin the registered-without-nesting fallback) and are allowlisted in
+  `fixture/.docs-test-*.toml`, so the warning firing on a real consumer is not confused with the
+  fixture's own shape.
+
+### Fix — a section is detected by POSITION, not just by name (`layouts/_partials/utils/section-segment.html`)
+
+- **Why.** Detection matched a registered section key **anywhere** in a page's path. So any ordinary
+  content directory that happened to share a section's name was read as a section:
+  `version-root.html` built `lookupPath = "/<key>/<version>/"`, `site.GetPage` resolved a tree
+  unrelated to the page (or nothing at all), and the left nav came out wrong or **completely empty** —
+  with no error and no warning, so it reads as a content problem rather than a template one.
+- **The real instance, and why it matters for this release.** `solo-io/docs` imports
+  `github.com/kgateway-dev/kgateway.dev` for CONTENT — conrefs, snippets, pages, images, glossary —
+  and therefore inherits its `sections.envoy` key, because Hugo deep-merges an imported module's
+  params along with its content. The hub also ships
+  `content/en/kgateway/{2.3.x,2.2.x}/setup/customize/envoy/`: **five real pages**, every one of which
+  rendered with an empty left nav (0 links, against 281 on a sibling page). Production is unaffected
+  only because it pins `v0.2.0`, which has no `section-segment.html` at all — section detection is new
+  in this release, so this would have shipped with it.
+- **What changed.** A registered key is the section segment only where a section can legitimately sit:
+  - the next segment is a version (`/<section>/<version>/…`), or
+  - it is the last segment and **no version precedes it** — the section landing page.
+
+  The second condition needs both halves. Accepting "last segment" alone fixes the leaf pages and
+  breaks the directory index: `/kgateway/2.3.x/setup/customize/envoy/` would read as a section landing
+  page and have its nav *suppressed*, trading an empty nav for a missing one on the same pages. A
+  section sits ABOVE version trees, never below one.
+- **No consumer config is required.** An earlier draft had the six affected hub configs declare
+  `[params.sections]` + `_merge = "none"` to decline the inheritance. Measured against the fixed
+  theme, that changes **zero** bytes of output — the fix is entirely in the theme, so the configs were
+  reverted rather than carrying a line that reads like a fix and is not one.
+- **Verified.** All five hub `envoy` pages regain their full nav (281 links on 2.3.x, 259 on 2.2.x)
+  with `_merge` REMOVED, proving the theme fix stands alone. All eight hub products build with zero
+  non-description warnings; `agentgateway.dev` (285 nav links, both section chips),
+  `kgateway.dev` (240 links, external chip intact) and `kagent.dev` unchanged. Fixture probe
+  `/test/v2/nested/` — a content directory named after the registered `nested` section — is pinned by
+  four assertions, probe-verified to fail without the position constraint. `make test-oss` and
+  `make test-enterprise` both report 1950 passed / 17 skipped.
+
 ### Fix — section landing pages suppress the left nav in every URL shape, not just the OSS one (`layouts/partials/sidebar.html`)
 
 A section landing page is the "pick a version / deployment type" splash that sits ABOVE the
@@ -526,8 +601,9 @@ present.
 
 ### Verified
 
-- Fixture suite, both brands: **1941 passed**, 17 skipped, 0 failures (was 1874/14 earlier in this
-  release; +67 from the section selector, relatedDocs, breadcrumb, nested-shape and poison-url specs).
+- Fixture suite, both brands: **1950 passed**, 17 skipped, 0 failures (was 1874/14 earlier in this
+  release; +76 from the section selector, relatedDocs, breadcrumb, nested-shape, poison-url and
+  name-collision specs).
 - Fixture suite, both brands, earlier in this release: **1874 passed**, 14 skipped, 0 failures.
 - **docs hub agentgateway** (`make build PRODUCT=agentgateway`): `kubernetes/latest` offers its three
   visible versions, `standalone/latest` offers only `latest` (the tag filter working), and the

@@ -1,6 +1,6 @@
 # Usage and customizations: where this module differs from Hugo and Hextra
 
-This file is a reference for content authors and maintainers. It has four parts:
+This file is a reference for content authors and maintainers. It has five parts:
 
 - **[Authoring](#authoring-shortcodes-and-render-behavior)** — the shortcodes and
   render behavior that `docs-theme-extras` adds on top of, or changes from, stock
@@ -9,6 +9,9 @@ This file is a reference for content authors and maintainers. It has four parts:
 - **[Section tab navigation](#section-tab-navigation-doctabs)** — the opt-in
   `docTabs` feature that groups a version's top-level sections into tabs, and how
   it behaves on desktop versus in the mobile drawer.
+- **[Versions and sections](#versions-and-sections-the-configuration-contract)** —
+  the `params.versions` / `params.sections` contract every consumer config must
+  follow, in TOML and YAML, and the two shapes that were removed.
 - **[Logo placement](#logo-placement)** — the navbar / sidebar / footer logo
   slots, the common arrangements, and the mobile slide-out drawer logo.
 - **[Maintaining](#maintaining-the-shadows)** — the Hextra layout files this module
@@ -316,6 +319,177 @@ cannot leak below the breakpoint.
 > into a `hideSidebar` tab moves the article. That is the point of the flag (the
 > column is reclaimed rather than left blank), but it does mean the text's left
 > edge is not in the same place on every tab. The tab band itself does not move.
+
+---
+
+# Versions and sections (the configuration contract)
+
+Two params drive every version-aware and section-aware behavior in this module:
+the version dropdown and its mobile chips, the section selector, the left nav,
+the version banner, `noindex` on superseded versions, the search "other
+versions" filter, `{{< version-cards >}}`, `{{< version >}}` gating, and
+`link`/`link-hextra` version inference.
+
+**There is exactly one list of versions, and sections are a flat registry of
+keys.** Write it the same way in every repo. The shape below is the contract;
+the only thing that varies between consumers is TOML versus YAML syntax.
+
+## The pattern
+
+```toml
+# hugo-<product>.toml  (solo-io/docs)
+
+# THE version list. Newest first — TOML order is release order, and several
+# readers take "the first entry" to mean "the newest version".
+[[params.versions]]
+  version     = "latest"                        # canonical version
+  linkVersion = "latest"                        # URL segment (may differ)
+  dropdown    = "2026.8.1 (latest)"             # menu label; whitespace = hidden
+  sections    = ["kubernetes", "standalone"]    # which sections ship it
+
+[[params.versions]]
+  version     = "2.3.x"
+  linkVersion = "2.3.x"
+  dropdown    = "2.3.x"
+  sections    = ["kubernetes"]
+
+# Section registry, ALPHABETICAL. A section exists because it is a key here.
+[params.sections.kubernetes]
+[params.sections.standalone]
+```
+
+```yaml
+# hugo.yaml  (agentgateway.dev, kgateway.dev, kagent.dev)
+params:
+  versions:
+    - version: "1.5.x"
+      linkVersion: "main"
+      dropdown: "main"
+      sections: ["kubernetes", "standalone"]
+    - version: "1.4.x"
+      linkVersion: "latest"
+      dropdown: "1.4 (latest)"
+      sections: ["kubernetes", "standalone"]
+
+  sections:
+    kubernetes: {}
+    standalone: {}
+```
+
+An empty table (`[params.sections.x]`) and an empty map (`x: {}`) are the same
+thing: registration with no options. That is the normal case.
+
+## Rules
+
+1. **One entry per version, listing every section it applies to** — never one
+   entry per section/version pair. `latest` shipping in two sections is a single
+   entry tagged with both. Two entries sharing a `linkVersion` is a config error:
+   the dropdown would offer the same version twice, and any resolver matching a
+   URL segment by `linkVersion` becomes order-dependent.
+
+2. **Tag every entry explicitly, even when the tags are identical** — for a
+   product that registers sections at all. A product with no `params.sections`
+   has nothing to tag, and leaves `sections` off entirely (that is most of them:
+   `agentregistry`, `istio`, `kagent`, `ambientmesh.io`). Where sections do exist,
+   omitting `sections` means "every section", which is a live footgun: add a
+   section later and every untagged version silently claims to exist there. That is not
+   hypothetical — it put `/test/nested/v3/` in a version dropdown for a tree that
+   was never built (CHANGELOG [0.2.2]). Explicit tags make it unreachable, and
+   they cost nothing: adding them where the sets already match changes no
+   rendered output.
+
+3. **Newest first.** With no `main` version, the description lint and the book
+   pipeline both read the first entry as "the newest tree".
+
+4. **Register sections alphabetically.** The theme sorts keys itself, so order is
+   cosmetic — which is exactly why it should be consistent rather than arbitrary.
+
+5. **A section with no content needs `externalURL`.** `kgateway.dev` registers
+   `agentgateway` purely so its selector can point off-site; it has no
+   `/docs/agentgateway/` tree, so there is nothing to link to internally:
+
+   ```yaml
+   sections:
+     agentgateway:
+       externalURL: "https://agentgateway.dev/docs/kubernetes/latest/"
+     envoy: {}
+   ```
+
+   `title` is the other supported key, overriding the label that otherwise comes
+   from the section's landing page title.
+
+6. **An imported module's sections come along with its content.** Hugo
+   deep-merges an imported module's params into the project's, so a consumer that
+   imports a module for its FILES also inherits whatever sections that module
+   declares — and an empty table cannot delete a merged key. `solo-io/docs`
+   imports `github.com/kgateway-dev/kgateway.dev` for conrefs, snippets, pages,
+   images and the glossary in both its `kgateway` and `gateway` products, and so
+   inherits that module's `sections.envoy`.
+
+   **Nothing is required of the consumer.** Section detection is by position
+   (`utils/section-segment.html`), so an inherited key that matches no
+   `/<section>/<version>/` path is inert — including where the same word appears
+   as an ordinary content directory, which is the case here
+   (`content/en/kgateway/2.3.x/setup/customize/envoy/`). The theme does not report
+   it either, because it cannot distinguish an inherited key from a typo'd one:
+   Hugo exposes no param provenance to templates.
+
+   If you want the registry to state the truth anyway, stock Hugo
+   [config merge control](https://gohugo.io/configuration/introduction/#merge-configuration-from-themes)
+   declines the inheritance — `[params.sections]` with `_merge = "none"`.
+   Measured on the hub: it changes **zero** bytes of output, so treat it as
+   documentation, not a fix.
+
+7. **A registered section must have something behind it.** Either a version tree
+   at `/<section>/<version>/` or an `externalURL` (or decline it with `_merge` above). A
+   key with none of the three is inert, and the theme warns
+   (`extras-section-hollow`) because the failure is otherwise silent: the section
+   contributes nothing to the selector and nothing to version scoping, and the
+   build stays green.
+
+8. **Do not re-document this in a consumer config.** Point at this file. Every
+   repo grew its own explanation of the same rules, and they drifted — one still
+   claimed a section carried its own version list a release after that was
+   removed. A one-line comment naming this section ages better than a paragraph.
+
+## What NOT to write
+
+```toml
+# REMOVED in 0.2.2 — a second, hand-maintained version list per section.
+[[params.sections.standalone.versions]]
+  version = "latest"
+```
+
+Nothing reads it, so it fails silently rather than erroring. It caused four
+distinct bugs while it existed: `link`/`link-hextra` dropped the version segment
+from 311 hrefs, the search version filter went inert, the `noindex` partial
+emitted nothing at all, and the section-link version remap was dead code for a
+release. Move those versions into `params.versions` and tag them.
+
+```toml
+# INERT on a same-product entry — every reader constructs the href instead,
+# which is what preserves the reader's current page across a version switch.
+[[params.versions]]
+  url = "https://docs.solo.io/agentgateway/latest"
+```
+
+Another product's versions go in `params.relatedDocs`, which is the one place a
+version URL is written by hand.
+
+## Where the rules live in code
+
+| Behavior | File |
+| -------- | ---- |
+| Is this URL segment a section? | `utils/section-segment.html` |
+| Which versions apply to a section? | `utils/resolve-section-versions.html` |
+| Which entry does this URL segment match? | `utils/match-version-entry.html` |
+| What section/version is this page in? | `utils/version-root.html` |
+| The section selector's items | `utils/resolve-sections.html` |
+| Other products' version groups | `utils/resolve-related-docs.html` |
+
+Read config through these rather than reaching into `site.Params` directly.
+`tests/link-hextra-shapes.spec.ts` fails the build if any template reads a
+per-section versions list again.
 
 ---
 

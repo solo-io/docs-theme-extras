@@ -266,3 +266,91 @@ test.describe("section-nested version trees", () => {
     expect(labels[1], `second crumb was "${labels[1]}"`).toMatch(/^v2\b/);
   });
 });
+
+// POSITION, not just name: a registered section key that also exists as an
+// ordinary content directory must not be mistaken for a section.
+//
+// `section-segment.html` used to match a registered key ANYWHERE in the path. So
+// any content directory sharing a section's name silently broke that page:
+// version-root.html built `lookupPath = "/<key>/<version>/"`, `site.GetPage`
+// resolved a tree unrelated to the page (or nothing at all), and the left nav
+// came out wrong or empty — no error, no warning.
+//
+// The production instance, found while auditing consumers: `solo-io/docs`
+// imports github.com/kgateway-dev/kgateway.dev for CONTENT (conrefs, snippets,
+// pages, images, glossary) and therefore inherits its `sections.envoy` key,
+// because Hugo deep-merges an imported module's params. The hub also ships
+// content/en/kgateway/{2.3.x,2.2.x}/setup/customize/envoy/ — five real pages,
+// every one of which rendered with a COMPLETELY EMPTY left nav. Production was
+// unaffected only because it pins v0.2.0, which has no section detection at all;
+// this release introduces it, so the bug would have shipped with it.
+//
+// Detection is now constrained to the two positions a section can legitimately
+// occupy: immediately above a version tree, or as its own landing page with no
+// version above it. Fixture: /test/v2/nested/ is a content directory named after
+// the registered `nested` section, sitting below a version.
+test.describe("a section name reused as a content directory", () => {
+  test.skip(!IS_FIXTURE_TARGET, "asserts the bundled fixture's name collision");
+
+  const COLLIDE = ["v2/nested/index.html", "v2/nested/collision/index.html"];
+
+  test("the probe pages were built", () => {
+    for (const p of COLLIDE) {
+      expect(read(p), `${p} missing — this describe block is vacuous`).not.toBeNull();
+    }
+  });
+
+  test("keeps the version's own left nav instead of an empty one", () => {
+    // The control is /test/v2/everything/, an ordinary page in the same version
+    // tree: the collision pages must get the SAME nav, not a smaller one and
+    // certainly not an empty one.
+    const control = read("v2/everything/index.html");
+    test.skip(control === null, "control page not built");
+    const navLinks = (html: string) => {
+      const nav = html.match(/<nav[^>]*sidebar[\s\S]*?<\/nav>/);
+      return nav ? [...nav[0].matchAll(/href="(\/test\/v2\/[^"]*)"/g)].length : 0;
+    };
+    const want = navLinks(control!);
+    expect(want, "the control page has no nav either — bad baseline").toBeGreaterThan(0);
+    for (const p of COLLIDE) {
+      const html = read(p);
+      if (html === null) continue;
+      expect(
+        navLinks(html),
+        `${p}: the left nav differs from an ordinary page in the same version ` +
+          "tree. A content directory named after a registered section is being " +
+          "read as a section, so the version lookup resolves the wrong tree.",
+      ).toBe(want);
+    }
+  });
+
+  test("is not reported as being in that section", () => {
+    for (const p of COLLIDE) {
+      const html = read(p);
+      if (html === null) continue;
+      const active = sectionItems(html)
+        .filter((i) => i.active)
+        .map((i) => i.label);
+      expect(
+        active,
+        `${p}: marked as being inside the \`nested\` section. It is below a ` +
+          "version segment, so it is content — a section sits ABOVE version " +
+          "trees, never below one.",
+      ).toEqual([]);
+    }
+  });
+
+  test("the directory index is not treated as a section landing page", () => {
+    // The subtle half. Allowing "last segment" alone to mean "section landing"
+    // fixes the leaf page and breaks the _index: /test/v2/nested/ would read as
+    // a landing page and have its nav SUPPRESSED — trading an empty nav for a
+    // missing one on the same page. Hence the "no version precedes it" half of
+    // the rule.
+    const html = read("v2/nested/index.html");
+    test.skip(html === null, "probe not built");
+    expect(
+      html!,
+      "/test/v2/nested/ had its nav suppressed as a section landing page",
+    ).toContain("sidebar-nav-wrapper");
+  });
+});

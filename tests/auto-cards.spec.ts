@@ -94,6 +94,17 @@ const V2_ONLY_TOPICS = [
     title: "Card path",
     descriptionContains: "resolves against the current version root",
   },
+  // A content directory named after the registered `nested` section, sitting
+  // BELOW the version segment. It exists to pin that section detection is
+  // constrained by POSITION rather than name — see
+  // tests/section-nested-versions.spec.ts. It is an ordinary child topic of the
+  // v2 tree, so it gets an ordinary section card, and that is part of the point:
+  // if it were mistaken for a section it would not behave like normal content.
+  {
+    slug: "nested",
+    title: "Nested (name collision)",
+    descriptionContains: "share a name with a registered section",
+  },
 ];
 
 // removed-feature is a v1-ONLY page: it is the fixture's only page with no

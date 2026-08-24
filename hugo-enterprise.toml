@@ -377,7 +377,6 @@ pageContextMode = "siteParams"
 # The only section that NESTS its version trees, at /test/nested/<version>/.
 # demo and alt deliberately do not, so the two shapes are covered side by side.
 [params.sections.nested]
-
 # ── Related products ──────────────────────────────────────────────────────────
 # Other products whose versions share this product's version dropdown. This is
 # the ONLY place a version URL is written out by hand, because these point at
