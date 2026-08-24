@@ -22,7 +22,13 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
-## [0.2.2] — 2026-08-21
+## [0.2.2] — 2026-08-24
+
+> **Pin provenance.** `v0.2.2-beta.3` (2026-08-21), which consumers currently pin, predates part of
+> this section: the two version-less entries below ("sections no longer require versions" and "a
+> section can carry an `icon`"), the second flat fixture build, and the reworded
+> `extras-section-hollow` message all ship after beta.3. Everything else in this section is in the
+> beta.
 
 ### BREAKING — one tagged versions list replaces per-section version lists
 
@@ -273,6 +279,13 @@ the selector correctly renders nothing.
   — the same blind spot already documented there. Default content language only,
   matching the neighbouring no-target warning: a section whose tree exists in English but not in a
   translation is a translation gap, not a config error.
+- **The message says what keeps working (reworded after beta.3).** The beta.3 wording called the key
+  "inert: nothing to select between" — false for exactly the shape the warning fires on, since a
+  landing-backed section still renders in the selector (its entry links the landing page) and its
+  `sections` tags still scope version dropdowns. The message now states that, names the three real
+  remedies (nest the trees, set `externalURL`, or allowlist `extras-section-hollow` when the
+  scope-only shape is intended), and its first clause is unchanged so existing allowlist regexes
+  keep matching. USAGE.md rule 7 was corrected to match.
 - **The remedy is stock Hugo, not a theme flag.** An empty table cannot delete a merged key, so the
   six affected hub configs now decline the inheritance with `[params.sections]` + `_merge = "none"`.
   Verified that Hugo consumes `_merge` as a directive rather than exposing it as a section key: the
@@ -325,9 +338,39 @@ the selector correctly renders nothing.
   keeps the `site.Home` rooting it has always had — correct there, since every page belongs to the
   one tree.
 - **Internal.** The section dropdown moved to `_partials/components/section-dropdown.html` and the
-  mobile chip row to `partials/components/sidebar-section-row.html`. Both are now needed on two sides
-  of a scope boundary, and duplicating them across those call sites is how the chips and the dropdown
-  drifted apart last time.
+  mobile chip row to `_partials/components/sidebar-section-row.html`. Both are now needed on two
+  sides of a scope boundary, and duplicating them across those call sites is how the chips and the
+  dropdown drifted apart last time. Both live in the SAME partial root deliberately: Hextra v0.12+
+  resolves `_partials/` over `partials/`, so splitting a feature across the two roots leaves one
+  half silently shadowable by a future same-path file.
+- **Verify in production.** Once `kagent.dev` picks this up:
+  <https://kagent.dev/docs/kagent/concepts/agents/> — the navbar doc-set menu is
+  `div.section-dropdown` rendered by the theme, not the Hextra `hextra-nav-menu-toggle` the
+  hand-rolled `menu.main` children produced; and the left nav lists only `kagent` pages (79 links),
+  with no `/docs/kmcp/` entries. Compare <https://kagent.dev/docs/kmcp/deploy/server/>, which lists
+  only the 20 `kmcp` pages. <https://kagent.dev/docs/tags/> renders an empty `<aside>` with no
+  `<nav class="sidebar-nav">` at all.
+- **How it was verified.** TWO flat fixture builds (`make build-flat`), one per half of the
+  positional test in `utils/section-segment.html`, since no existing fixture could reach these
+  paths and each build can only ever reach its own half: `hugo-flat.toml` puts the docs root in the
+  baseURL (kagent.dev's real shape — `baseURL "https://kagent.dev/docs/"` — the primary rule), and
+  `hugo-flat-root.toml` puts it in a content directory literally named `docs/` below a marketing
+  home at `/` (the `docs`-alternative rule). `tests/section-versionless.spec.ts` runs its
+  assertions against both builds — 62 tests, and the two builds mount the same content so their
+  rendered hrefs are identical by construction. Six probes were run; two exposed real bugs rather
+  than test gaps (the condition-(b) hole above, and the merged tree on orphan pages), and one
+  showed an assertion was vacuous: a collision directory *below* a section cannot discriminate
+  positional from match-anywhere detection, because the resolver stops at its first match either
+  way. That test is kept for the ordering it does cover, with the limitation recorded, and a
+  discriminating case was added beside it. End-to-end: kagent.dev's working tree built against this
+  layer via a temporary local `replace` — 240 pages, no section warnings, selector and chips
+  render with both doc sets, the kagent sidebar carries zero `/docs/kmcp/` links, both landings
+  keep their nav, and `/docs/tags/` and the docs index render none. Regression: **32,531 built
+  files byte-identical** across all eight `solo-io/docs` products (including multilingual
+  `agentgateway` and the products that *inherit* `sections.envoy` from an imported module),
+  `agentgateway.dev`, `kgateway.dev`, and the two other version-less consumers `agentregistry.dev`
+  and `ambientmesh.io`. Both fixture brands after the second build landed: 2012 passed, 17 skipped
+  each.
 
 ### Add — a section can carry an `icon` (`layouts/_partials/utils/render-icon.html`, `layouts/_partials/utils/resolve-sections.html`)
 
@@ -373,26 +416,6 @@ the selector correctly renders nothing.
   Regression: **32,868 built files byte-identical** across all eight `solo-io/docs` products,
   `agentgateway.dev`, `kgateway.dev`, `agentregistry.dev` and `ambientmesh.io`. Both fixture brands:
   1981 passed, 17 skipped.
-- **Verify in production.** Once `kagent.dev` picks this up:
-  <https://kagent.dev/docs/kagent/concepts/agents/> — the navbar doc-set menu is
-  `div.section-dropdown` rendered by the theme, not the Hextra `hextra-nav-menu-toggle` the
-  hand-rolled `menu.main` children produced; and the left nav lists only `kagent` pages (79 links),
-  with no `/docs/kmcp/` entries. Compare <https://kagent.dev/docs/kmcp/deploy/server/>, which lists
-  only the 20 `kmcp` pages. <https://kagent.dev/docs/tags/> renders an empty `<aside>` with no
-  `<nav class="sidebar-nav">` at all.
-- **How it was verified.** A fourth fixture build (`make build-flat`, `hugo-flat.toml`) mirrors
-  kagent's shape — baseURL with a `/docs` prefix, two registered sections, no versions — since no
-  existing fixture could reach these paths. 23 assertions in
-  `tests/section-versionless.spec.ts`. Six probes were run against them; two exposed real bugs rather
-  than test gaps (the condition-(b) hole above, and the merged tree on orphan pages), and one showed
-  an assertion was vacuous: a collision directory *below* a section cannot discriminate positional
-  from match-anywhere detection, because the resolver stops at its first match either way. That test
-  is kept for the ordering it does cover, with the limitation recorded, and a discriminating case was
-  added beside it. Regression: **32,531 built files byte-identical** across all eight
-  `solo-io/docs` products (including multilingual `agentgateway` and the products that *inherit*
-  `sections.envoy` from an imported module), `agentgateway.dev`, `kgateway.dev`, and the two other
-  version-less consumers `agentregistry.dev` and `ambientmesh.io`. Both fixture brands: 1973 passed,
-  17 skipped.
 
 ### Fix — a section is detected by POSITION, not just by name (`layouts/_partials/utils/section-segment.html`)
 

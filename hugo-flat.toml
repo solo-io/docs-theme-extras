@@ -11,11 +11,17 @@
 # of them could be reached from the main fixture without giving it versions.
 #
 # Deliberately mirrors kagent's shape rather than inventing a new one:
-#   baseURL carries a /docs path prefix, so site.Home.RelPermalink is "/docs/"
-#   and $docsRootDepth is 1 — sections sit at URL index 1. That is the case with
-#   the most moving parts, since it satisfies BOTH halves of the positional test
-#   ($i == depth, and $i == depth+1 with parts[0] == "docs"), and a bug in
-#   either half stays hidden if only one is exercised.
+#   baseURL carries a /docs path prefix — kagent.dev ships
+#   baseURL "https://kagent.dev/docs/" — so site.Home.RelPermalink is "/docs/"
+#   and $docsRootDepth is 1: sections sit at URL index 1 and are accepted via
+#   the PRIMARY half of the positional test ($i == depth).
+#
+# This build exercises ONLY that primary half. The `docs`-ALTERNATIVE half
+# ($i == depth+1 with parts[depth] == "docs", for a site whose home is a
+# marketing page at "/" and whose docs live under a content directory named
+# docs/) can never fire here — parts[depth] is the section itself, never the
+# literal "docs". That half is covered by the companion hugo-flat-root.toml
+# build; a bug in either half stays hidden if only one is exercised.
 #
 # Built by `make build-flat`; asserted by tests/section-versionless.spec.ts,
 # which reads public-flat/ directly rather than through DOCS_TEST_CONFIG (the

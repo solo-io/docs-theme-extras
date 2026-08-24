@@ -440,12 +440,20 @@ thing: registration with no options. That is the normal case.
    Measured on the hub: it changes **zero** bytes of output, so treat it as
    documentation, not a fix.
 
-7. **A registered section must have something behind it.** Either a version tree
-   at `/<section>/<version>/` or an `externalURL` (or decline it with `_merge` above). A
-   key with none of the three is inert, and the theme warns
-   (`extras-section-hollow`) because the failure is otherwise silent: the section
-   contributes nothing to the selector and nothing to version scoping, and the
-   build stays green.
+7. **A registered section should nest its version trees, or set `externalURL`.**
+   A section backed only by a landing page still works — its selector entry
+   links the landing page, and its `sections` tags still scope version
+   dropdowns — but no tree answers `/<section>/<version>/` URLs, which usually
+   means a half-done migration. The theme warns (`extras-section-hollow`)
+   because that state is otherwise silent: the build stays green and the
+   selector looks right. If the scope-only shape is intended, allowlist the
+   warning; the bundled fixture's `demo` and `alt` sections use the shape
+   deliberately and do exactly that.
+
+   A key with nothing behind it at all (no landing page, no `externalURL`) is
+   inert, and deliberately NOT warned about: that is the shape an inherited key
+   takes (rule 6), and the theme cannot tell an inherited key from a typo'd
+   one.
 
 8. **Sections do not require versions.** A site can ship parallel doc sets with
    no version axis at all, and it registers them exactly as a versioned product

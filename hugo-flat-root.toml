@@ -1,0 +1,93 @@
+# VERSION-LESS fixture, ROOT SHAPE: the docs root is a content DIRECTORY, not
+# the baseURL.
+#
+# hugo-flat.toml covers the shape kagent.dev actually ships — the /docs prefix
+# comes from the baseURL ("https://kagent.dev/docs/"), so site.Home.RelPermalink
+# is "/docs/", $docsRootDepth is 1, and utils/section-segment.html accepts a
+# section via the PRIMARY positional rule ($i == depth).
+#
+# This config covers the OTHER half of that positional test: home is the
+# marketing page at "/" ($docsRootDepth 0) and the doc sets live under a content
+# directory literally named docs/, so a section sits at /docs/<section>/ and is
+# accepted only via the `docs`-ALTERNATIVE branch ($i == depth+1 with
+# parts[depth] == "docs"). No consumer ships this shape today, but the branch
+# exists precisely for a site that hosts its marketing home and its docs in one
+# Hugo project; without this build a regression in it would pass the entire
+# suite.
+#
+# Same content, same sections, same icons as hugo-flat.toml — the doc-set tree
+# is mounted under content/docs/ instead of at the content root, and a
+# fixture-only marketing home page (fixture/content-flat-root/_index.md) sits
+# above it. Rendered hrefs are therefore identical between the two builds
+# (/docs/<section>/…), which is what lets tests/section-versionless.spec.ts run
+# the same assertions against both; only the on-disk layout differs
+# (public-flat-root/docs/… versus public-flat/…).
+#
+# Built by `make build-flat` alongside hugo-flat.toml.
+baseURL = "/"
+languageCode = "en-us"
+title = "Version-less root fixture"
+linkTitle = "Flat root"
+publishDir = "public-flat-root"
+enableInlineShortcodes = true
+
+[module]
+  [[module.imports]]
+    path = "github.com/imfing/hextra"
+    disable = false
+
+  # The marketing home page (just _index.md, with the cascade trap — see the
+  # file), then the shared doc-set tree nested under docs/.
+  [[module.mounts]]
+    source = "fixture/content-flat-root"
+    target = "content"
+  [[module.mounts]]
+    source = "fixture/content-flat/en"
+    target = "content/docs"
+  [[module.mounts]]
+    source = "layouts"
+    target = "layouts"
+  [[module.mounts]]
+    source = "assets"
+    target = "assets"
+  [[module.mounts]]
+    source = "fixture/assets"
+    target = "assets"
+  [[module.mounts]]
+    source = "fixture/static"
+    target = "static"
+  [[module.mounts]]
+    source = "data"
+    target = "data"
+
+[markup]
+  [markup.goldmark.renderer]
+    unsafe = true
+  [markup.highlight]
+    noClasses = false
+
+[params]
+  # NO [[params.versions]] — same as hugo-flat.toml, and the same warning
+  # applies: one entry silently moves this build onto the versioned code paths.
+
+  product = "Flat product"
+
+  # Same registry as hugo-flat.toml, one section per utils/render-icon.html
+  # branch — see that file for the full rationale. Kept identical so the icon
+  # assertions hold against both builds.
+  [params.sections.alpha]
+    icon = "section-alpha.svg"
+  [params.sections.beta]
+    title = "Beta docs"
+    icon = "icons/section-beta.svg"
+  [params.sections.gamma]
+    icon = "solo"
+  [params.sections.delta]
+    icon = "rocket_launch"
+
+  [params.themeExtras]
+    brand = "oss"
+
+  [params.navbar]
+    displayTitle = true
+    displayLogo = false

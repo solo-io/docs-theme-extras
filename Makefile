@@ -65,8 +65,13 @@ build-enterprise:
 # versionless.spec.ts reads public-flat/ directly, so this needs no
 # .docs-test TOML, no extra playwright project and no extra CI leg. See that
 # spec's header for why.
+# Two builds, one per half of the positional test in utils/section-segment.html:
+# hugo-flat.toml puts the docs root in the baseURL (kagent's real shape, the
+# PRIMARY rule), hugo-flat-root.toml puts it in a content directory named docs/
+# (the `docs`-ALTERNATIVE rule). The spec asserts against both.
 build-flat:
 	$(HUGO) --config hugo-flat.toml --gc 2> .build-flat.log
+	$(HUGO) --config hugo-flat-root.toml --gc 2> .build-flat-root.log
 
 # ── Tests against the bundled fixture ────────────────────────────────────
 

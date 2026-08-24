@@ -307,10 +307,18 @@
          /kgateway/<version>/, so there is no /kgateway/envoy/ tree and never
          should be.
 
-       So: report a registered section that nests no version tree AND sets no
-       `externalURL`. Those are the two ways a section can have something behind
-       it; with neither, the key is inert — it contributes nothing to the
-       selector and nothing to version scoping.
+       So: report a registered section that has a LANDING PAGE but nests no
+       version tree and sets no `externalURL`. That shape usually means a
+       half-done migration: the registry and the landing page say the section
+       exists, but every /<section>/<version>/ URL the registration implies has
+       nothing behind it. Note what the message must NOT claim: the key is not
+       inert. The landing page keeps the section in the selector (its entry
+       links the landing, with no version appended — see the href fallback
+       above) and its `sections` tags keep scoping version dropdowns. Both
+       halves of that supported fallback are pinned by
+       tests/section-nested-versions.spec.ts, and an earlier wording that
+       called the key "inert: nothing to select between" sent readers hunting
+       for a selector bug that did not exist.
 
        Default language only, same reasoning as the warning above: a section
        whose tree exists in English but not in a translation is a translation
@@ -325,7 +333,7 @@
        this warning rather than the theme special-casing its own fixture. If a
        product ever does need the shape, that allowlist is the escape hatch. */ -}}
 {{- if and $hollow $isDefaultLang -}}
-  {{- $verbs := cond (eq (len $hollow) 1) "is registered but nests no version tree and sets no `externalURL`, so it is" "are registered but nest no version tree and set no `externalURL`, so they are" -}}
-  {{- warnidf "extras-section-hollow" "params.sections %v %s inert: nothing to select between and nothing to scope versions for. Either add content at that path, set `externalURL`, or remove the key. If the key came from an IMPORTED MODULE, an empty table cannot delete it — decline the inheritance with `[params.sections]` + `_merge = \"none\"`. See docs-theme-extras USAGE.md, \"Versions and sections\"." $hollow $verbs -}}
+  {{- $verbs := cond (eq (len $hollow) 1) "is registered but nests no version tree and sets no `externalURL`" "are registered but nest no version tree and set no `externalURL`" -}}
+  {{- warnidf "extras-section-hollow" "params.sections %v %s. The section still renders in the selector (its entry links the landing page, with no version appended) and its `sections` tags still scope version dropdowns, but no tree answers /<section>/<version>/ URLs. If the version trees were meant to nest under the section, move them there; set `externalURL` if the content lives off-site; or, if this scope-only registration is intended, allowlist `extras-section-hollow`. If the key came from an IMPORTED MODULE, an empty table cannot delete it — decline the inheritance with `[params.sections]` + `_merge = \"none\"`. See docs-theme-extras USAGE.md, \"Versions and sections\"." $hollow $verbs -}}
 {{- end -}}
 {{- return $out -}}
