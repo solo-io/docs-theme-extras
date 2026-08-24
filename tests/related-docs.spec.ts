@@ -291,3 +291,77 @@ test.describe("relatedDocs source contract", () => {
     }
   });
 });
+
+// The other half of the `url` migration: proving the field is really dead.
+//
+// `url` on a same-product params.versions entry was read by nobody even before
+// this release — every reader constructs the href, which is what preserves the
+// reader's current page across a version switch. The release removed the field
+// from all 27 real configs on that basis. But "nobody reads it" was an argument,
+// not a test: the fixture still carried `url` on all five same-product entries,
+// and every value was CORRECT, so a reader that consulted it would have produced
+// identical output and no test would have moved.
+//
+// The fixture now sets those to a poison host instead. Any reader that starts
+// consulting `url` again emits an unreachable link, and this fails.
+//
+// `relatedDocs` urls are the opposite case — they are the ONE place a version URL
+// is written by hand, and they MUST render — so they use a different host
+// (example.invalid) and are asserted present by the specs above.
+test.describe("the same-product `url` field is dead", () => {
+  test.skip(!IS_FIXTURE_TARGET, "reads the bundled fixture's poison values");
+
+  const POISON = "must-not-render.invalid";
+
+  function builtPages(): string[] {
+    if (!fs.existsSync(TEST_PRODUCT_ROOT)) return [];
+    const out: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, e.name);
+        if (e.isDirectory()) walk(full);
+        else if (e.name.endsWith(".html")) out.push(full);
+      }
+    };
+    walk(TEST_PRODUCT_ROOT);
+    return out;
+  }
+
+  test("the poison url never reaches a built page", () => {
+    const pages = builtPages();
+    expect(
+      pages.length,
+      "no built pages found — this assertion would pass vacuously",
+    ).toBeGreaterThan(0);
+    const offenders = pages
+      .filter((f) => fs.readFileSync(f, "utf8").includes(POISON))
+      .map((f) => path.relative(TEST_PRODUCT_ROOT, f));
+    expect(
+      offenders,
+      `these pages emitted the poison \`url\` from a same-product ` +
+        "params.versions entry. That field is not a supported input: the href " +
+        "must be constructed by swapping the version segment, so that a version " +
+        "switch lands on the equivalent page instead of a fixed destination. " +
+        "Other products' versions belong in params.relatedDocs, which is where " +
+        "a hand-written url IS read.",
+    ).toEqual([]);
+  });
+
+  test("the fixture actually carries a poison value, so the check can fail", () => {
+    // Guards the guard. If someone "cleans up" the fixture configs by deleting
+    // the field, the assertion above keeps passing forever while testing
+    // nothing — the same vacuous-pass trap the poison was introduced to close.
+    const configs = ["hugo-oss.toml", "hugo-enterprise.toml"].map((c) =>
+      path.resolve(__dirname, "..", c),
+    );
+    for (const c of configs) {
+      test.skip(!fs.existsSync(c), "module-relative path only");
+      expect(
+        fs.readFileSync(c, "utf8").includes(POISON),
+        `${path.basename(c)} no longer sets a poison \`url\` on its ` +
+          "same-product version entries, so the check above is vacuous. Keep " +
+          "the field present and unreachable rather than deleting it.",
+      ).toBe(true);
+    }
+  });
+});

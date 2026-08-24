@@ -58,6 +58,25 @@ test.describe("section landing pages suppress the left nav", () => {
     ).not.toContain("sidebar-nav-wrapper");
   });
 
+  test("/test/nested/ renders no nav tree either, though it HAS children", () => {
+    // The stronger case, and the one closest to production. `demo` has no
+    // descendants at all, so suppressing its nav is indistinguishable from
+    // having nothing to show. `nested` really does have children
+    // (/test/nested/v2/, /test/nested/v1/), so a tree COULD be rendered here —
+    // it would list version roots as if they were pages, which is exactly what
+    // agentgateway's /kubernetes/ and /standalone/ splash pages did.
+    const landing = path.join(TEST_PRODUCT_ROOT, "nested", "index.html");
+    test.skip(!fs.existsSync(landing), "nested section landing not built");
+    const html = fs.readFileSync(landing, "utf8");
+    expect(
+      sidebarState(html),
+      "a section landing page must not render the left nav even when it has " +
+        "version children — those are trees to choose between, not pages to " +
+        "list",
+    ).toBe("suppressed");
+    expect(html).not.toContain("sidebar-nav-wrapper");
+  });
+
   test("a versioned page still renders the nav", () => {
     // The control. Without it, suppressing EVERY page's nav would pass above.
     const versioned = path.join(TEST_PRODUCT_ROOT, "v2", "everything", "index.html");

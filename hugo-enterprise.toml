@@ -195,7 +195,7 @@ pageContextMode = "siteParams"
 
 [[params.versions]]
   version = "v2"
-  sections = ["demo", "alt"]
+  sections = ["demo", "alt", "nested"]
   # ossVersion drives reuse.html / rebase.html's OSS→enterprise version remap:
   # content authored with include-if="v2oss" is remapped to this entry's
   # `version` (v2). Exercised by content/en/test/{v2,v1}/version-remap.md +
@@ -204,7 +204,15 @@ pageContextMode = "siteParams"
   ossVersion = "v2oss"
   dropdown = "v2 (current)"
   linkVersion = "v2"
-  url = "/test/v2"
+  # POISON VALUE, deliberately. `url` on a same-product params.versions entry is
+  # DEAD: every reader constructs the href instead, which is what preserves the
+  # reader's current page across a version switch (CHANGELOG [0.2.2]). The real
+  # configs dropped the field; this fixture keeps it, set to a URL that must
+  # never appear in any built page, so that a reader which starts consulting it
+  # again FAILS instead of silently working. Held correct values before, which is
+  # exactly why nothing would have noticed.
+  # Asserted by tests/related-docs.spec.ts.
+  url = "https://must-not-render.invalid/dead-url-field/"
   product = "test"
   productName = "Docs framework test fixture"
   # Marks v2 as the CURRENT version, which is what switches on
@@ -220,7 +228,7 @@ pageContextMode = "siteParams"
 
 [[params.versions]]
   version = "v1"
-  sections = ["demo"]
+  sections = ["demo", "nested"]
   # Second ossVersion mapping, used only by the keepVersion collision probe in
   # conrefs/test/version-remap.md: it makes the token `v3` — which is also a
   # real version in this fixture — remap to `v1`. That is the production shape
@@ -231,7 +239,15 @@ pageContextMode = "siteParams"
   ossVersion = "v3"
   dropdown = "v1"
   linkVersion = "v1"
-  url = "/test/v1"
+  # POISON VALUE, deliberately. `url` on a same-product params.versions entry is
+  # DEAD: every reader constructs the href instead, which is what preserves the
+  # reader's current page across a version switch (CHANGELOG [0.2.2]). The real
+  # configs dropped the field; this fixture keeps it, set to a URL that must
+  # never appear in any built page, so that a reader which starts consulting it
+  # again FAILS instead of silently working. Held correct values before, which is
+  # exactly why nothing would have noticed.
+  # Asserted by tests/related-docs.spec.ts.
+  url = "https://must-not-render.invalid/dead-url-field/"
   product = "test"
   productName = "Docs framework test fixture"
 
@@ -240,7 +256,15 @@ pageContextMode = "siteParams"
   sections = ["alt"]
   dropdown = "main (dev)"
   linkVersion = "main"
-  url = "/test/main"
+  # POISON VALUE, deliberately. `url` on a same-product params.versions entry is
+  # DEAD: every reader constructs the href instead, which is what preserves the
+  # reader's current page across a version switch (CHANGELOG [0.2.2]). The real
+  # configs dropped the field; this fixture keeps it, set to a URL that must
+  # never appear in any built page, so that a reader which starts consulting it
+  # again FAILS instead of silently working. Held correct values before, which is
+  # exactly why nothing would have noticed.
+  # Asserted by tests/related-docs.spec.ts.
+  url = "https://must-not-render.invalid/dead-url-field/"
   banner = "This version of the documentation is currently under development. See the [v2 docs](/test/v2/) or the [upstream project](https://github.com/solo-io/docs)."
   product = "test"
   productName = "Docs framework test fixture"
@@ -252,7 +276,15 @@ pageContextMode = "siteParams"
   version = "v3"
   dropdown = "v3 (tabs demo)"
   linkVersion = "v3"
-  url = "/test/v3"
+  # POISON VALUE, deliberately. `url` on a same-product params.versions entry is
+  # DEAD: every reader constructs the href instead, which is what preserves the
+  # reader's current page across a version switch (CHANGELOG [0.2.2]). The real
+  # configs dropped the field; this fixture keeps it, set to a URL that must
+  # never appear in any built page, so that a reader which starts consulting it
+  # again FAILS instead of silently working. Held correct values before, which is
+  # exactly why nothing would have noticed.
+  # Asserted by tests/related-docs.spec.ts.
+  url = "https://must-not-render.invalid/dead-url-field/"
   product = "test"
   productName = "Docs framework test fixture"
 
@@ -283,7 +315,15 @@ pageContextMode = "siteParams"
   version = "v4"
   dropdown = "v4 (linkVersion probe)"
   linkVersion = "v4-link"
-  url = "/test/v4-link"
+  # POISON VALUE, deliberately. `url` on a same-product params.versions entry is
+  # DEAD: every reader constructs the href instead, which is what preserves the
+  # reader's current page across a version switch (CHANGELOG [0.2.2]). The real
+  # configs dropped the field; this fixture keeps it, set to a URL that must
+  # never appear in any built page, so that a reader which starts consulting it
+  # again FAILS instead of silently working. Held correct values before, which is
+  # exactly why nothing would have noticed.
+  # Asserted by tests/related-docs.spec.ts.
+  url = "https://must-not-render.invalid/dead-url-field/"
   product = "test"
   productName = "Docs framework test fixture"
 
@@ -334,6 +374,9 @@ pageContextMode = "siteParams"
 # untagged — could not tell filtering from a no-op.
 [params.sections.demo]
 [params.sections.alt]
+# The only section that NESTS its version trees, at /test/nested/<version>/.
+# demo and alt deliberately do not, so the two shapes are covered side by side.
+[params.sections.nested]
 
 # ── Related products ──────────────────────────────────────────────────────────
 # Other products whose versions share this product's version dropdown. This is

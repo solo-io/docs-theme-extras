@@ -116,18 +116,28 @@ test.describe("section selector", () => {
     }
   });
 
-  test("both sections are listed, sorted by key", () => {
+  test("every section is listed, sorted by key", () => {
     const html = read("v2/everything/index.html");
     test.skip(html === null, "page not built");
-    expect(items(html!).map((i) => i.label)).toEqual(["Alt", "Demo"]);
+    // Sorted by registry KEY (alt, demo, nested), not by label — the labels
+    // happen to sort the same way here, which is why the key sort is asserted
+    // through the key order rather than assumed.
+    expect(items(html!).map((i) => i.label)).toEqual(["Alt", "Demo", "Nested"]);
   });
 
   test("every section href points at a page that exists", () => {
-    // This fixture registers sections WITHOUT nesting version trees under them:
-    // `demo` and `alt` scope the version dropdowns, but the content lives at
+    // `demo` and `alt` register sections WITHOUT nesting version trees under
+    // them: they scope the version dropdowns, but the content lives at
     // /test/<version>/, not /test/demo/<version>/. So the resolver must fall
     // back to the section landing page rather than appending a version and
     // emitting /test/demo/v2/, which was never built.
+    //
+    // The OTHER branch — a section that does nest, where the version IS
+    // appended — is covered by tests/section-nested-versions.spec.ts against the
+    // `nested` section. Both branches now have behavioral coverage; before that
+    // section existed only this fallback did, and the append was pinned by a
+    // source assertion alone (see "a version is only appended when that page
+    // really is nested" below).
     //
     // static.spec.ts's on-disk href check caught exactly that when this was
     // first written, across 7 pages. Asserting it here too keeps the failure
@@ -155,12 +165,16 @@ test.describe("section selector", () => {
   });
 
   test("a version is only appended when that page really is nested", () => {
-    // Source contract, because this fixture has no nested section/version tree
-    // to observe the positive case on. Page.GetPage tries a relative lookup and
-    // then falls back to a SITE-WIDE one, so `$landing.GetPage "v2"` returns
-    // /test/v2/ even though /test/demo/v2/ does not exist. Testing that GetPage
-    // returned *something* therefore does not work — the resolved permalink has
-    // to be compared against the URL being built.
+    // Source contract, kept even though the positive case is now observable on
+    // the `nested` section, because it pins the MECHANISM rather than the
+    // outcome: Page.GetPage tries a relative lookup and then falls back to a
+    // SITE-WIDE one, so `$landing.GetPage "v2"` returns /test/v2/ even though
+    // /test/demo/v2/ does not exist. Testing that GetPage returned *something*
+    // therefore does not work — the resolved permalink has to be compared
+    // against the URL being built. A rewrite that reintroduced the truthiness
+    // test would still pass every behavioral assertion on `nested` (its v2 tree
+    // does exist) and only break `demo`/`alt`, so this is the assertion that
+    // names the actual trap.
     const f = path.resolve(
       __dirname,
       "../layouts/_partials/utils/resolve-sections.html",

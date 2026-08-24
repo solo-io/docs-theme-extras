@@ -359,13 +359,43 @@
                       {{- end -}}
                     {{- else -}}
                       {{- /* No not-in-version page either: fall back to the
-                             version's landing page (always exists) so switching
-                             versions can never 404 — the user lands in the target
-                             version and can navigate from its sidebar. */ -}}
-                      {{- if $isOSSShape -}}
-                        {{- $href = printf "/docs/%s/%s/" $section .linkVersion -}}
+                             version's landing page so switching versions can
+                             never 404 — the user lands in the target version and
+                             can navigate from its sidebar.
+
+                             That landing page is NOT guaranteed to exist once
+                             sections are in play: an UNTAGGED params.versions
+                             entry applies to every section, so a section with no
+                             tree for it still offers it and
+                             /<section>/<version>/ was never built. Verify, and
+                             drop to the SECTION landing page (the version picker
+                             for that doc set) when it is missing. Kept in step
+                             with the identical guard in navbar.html —
+                             static.spec.ts asserts the chips and the desktop
+                             dropdown land on the same destinations, so a fix in
+                             one is a divergence until it is in both. */ -}}
+                      {{- /* In the OSS shape the section segment is always
+                             present (/docs/<section>/<version>/), so both shapes
+                             have a section root to fall back to. In the
+                             enterprise shape only a REGISTERED section does;
+                             without one there is nothing above the version, and
+                             a configured version with no tree at all is a config
+                             error rather than a shape to paper over. */ -}}
+                      {{- $versionLanding := cond $isOSSShape (printf "/docs/%s/%s" $section .linkVersion) (cond (ne $sectionSegment "") (printf "/%s/%s" $sectionSegment .linkVersion) (printf "/%s" .linkVersion)) -}}
+                      {{- $hasSectionRoot := or $isOSSShape (ne $sectionSegment "") -}}
+                      {{- if or (site.GetPage $versionLanding) (not $hasSectionRoot) -}}
+                        {{- if $isOSSShape -}}
+                          {{- $href = printf "/docs/%s/%s/" $section .linkVersion -}}
+                        {{- else -}}
+                          {{- $href = printf "%s/%s/" $versionBase .linkVersion -}}
+                        {{- end -}}
+                      {{- else if $isOSSShape -}}
+                        {{- $href = printf "/docs/%s/" $section -}}
                       {{- else -}}
-                        {{- $href = printf "%s/%s/" $versionBase .linkVersion -}}
+                        {{- /* $versionBase is everything before the version
+                               segment, so it already carries the product,
+                               language and section prefixes. */ -}}
+                        {{- $href = printf "%s/" $versionBase -}}
                       {{- end -}}
                   {{- end -}}
                 {{- end -}}

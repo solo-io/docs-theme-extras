@@ -25,8 +25,10 @@
            Versions come from the single `params.versions` list (an entry that
            belongs to only some sections names them in its own `sections`
            field). A site with NO version config is linted in full; a versioned
-           site with no `main` version falls back to linting everything rather
-           than silently going quiet.
+           site with no `main` version falls back to its NEWEST tree (`latest`
+           if declared, else the first configured entry) rather than to every
+           tree — see the fallback block below for the measurements that
+           motivated that.
 
        Enabled by default on every consumer (no opt-in needed). Opt out per
        consumer only if necessary:
@@ -53,25 +55,81 @@
   {{- if eq .warnMissingDescription false -}}{{ $enabled = false }}{{ end -}}
 {{- end -}}
 
+{{- /* Only the DEFAULT content language is linted.
+
+       A translated page's front matter is produced from its English source by
+       the translation sync, so a `description` added directly to a translated
+       page is overwritten on the next run — the actionable fix is always on the
+       source page, and warning on both just reports the same gap twice under a
+       path the author cannot usefully edit.
+
+       Measured on the docs hub: of agentregistry's 69 warnings, 35 were
+       `/agentregistry/ja/latest/…`, near-duplicates of the 34 English ones.
+
+       `(index hugo.Sites 0)` is the default-language site — the same accessor
+       utils/resolve-sections.html uses, for the same reason: it does not depend
+       on `defaultContentLanguageInSubdir`, and on a single-language site there
+       is one entry so this is a no-op. */ -}}
+{{- if ne site.Language.Lang (index hugo.Sites 0).Language.Lang -}}
+  {{- $enabled = false -}}
+{{- end -}}
+
 {{- /* Every version entry. One list now — a section-scoped version tags itself
        rather than living under site.Params.sections.<s>.versions, so there is no
        second place to forget to walk. */ -}}
 {{- $entries := site.Params.versions | default slice -}}
 
-{{- /* Known = every version's URL segment; active = latest + main only. */ -}}
+{{- /* Known = every version's URL segment. Active = the ONE tree worth linting.
+       All of these are URL SEGMENTS (`linkVersion`), never the canonical
+       `.version`: the two legitimately diverge — gloo-mesh-enterprise and
+       gloo-mesh-gateway both ship `version = "2.14.x"` with
+       `linkVersion = "main"` — and the scope test below compares against URL
+       path segments. (This is also why utils/resolve-latest-version.html is not
+       reused here: it returns `.version`, which is the wrong coordinate.) */ -}}
 {{- $known := slice -}}
 {{- $active := slice -}}
+{{- $newestSeg := "" -}}
+{{- $latestSeg := "" -}}
 {{- range $entries -}}
   {{- $seg := .linkVersion | default .version -}}
-  {{- with $seg }}{{ $known = $known | append . }}{{ end -}}
+  {{- with $seg -}}
+    {{- $known = $known | append . -}}
+    {{- /* TOML order is release order, newest first, on every consumer config. */ -}}
+    {{- if not $newestSeg -}}{{- $newestSeg = . -}}{{- end -}}
+    {{- if eq . "latest" -}}{{- $latestSeg = . -}}{{- end -}}
+  {{- end -}}
   {{- if eq $seg "main" -}}
     {{- $active = $active | append $seg -}}
   {{- end -}}
 {{- end -}}
 
-{{- /* In scope unless the site is versioned AND this page sits in a known,
-       non-active version (or in no version at all). If the site is versioned
-       but no active version is detectable, lint everything (safe fallback). */ -}}
+{{- /* No `main` version? Fall back to the newest tree — `latest` if one is
+       declared, otherwise the first configured entry — NOT to "lint
+       everything".
+
+       "Lint everything" was the old fallback, and on a product with several
+       frozen version trees it multiplies one missing description by the number
+       of trees. Measured on the docs hub: kgateway reported 294 warnings for 96
+       distinct pages copied across 2.3.x/2.2.x/2.1.x, and gateway 43 for ~9
+       pages across five trees. Frozen trees are archived copies — a description
+       added there ships nowhere — so the newest tree is the only one where
+       fixing it changes what readers and crawlers see.
+
+       This is a strict reduction in what gets linted, so no consumer that
+       passes today can start failing: a product WITH `main` (gloo-mesh-*) is
+       unaffected, and a product without one goes from every tree to one.
+
+       Note this is deliberately still not the same as "the tree readers land
+       on" for a product whose newest release is not first in TOML order. Order
+       is the assumption; every consumer config holds it today, and getting it
+       wrong under-reports rather than mis-reports. */ -}}
+{{- if and (gt (len $known) 0) (not $active) -}}
+  {{- $active = slice (or $latestSeg $newestSeg) -}}
+{{- end -}}
+
+{{- /* In scope unless the site is versioned AND this page sits outside the
+       active version tree. A site with NO version config at all is linted in
+       full. */ -}}
 {{- $inScope := true -}}
 {{- if and (gt (len $known) 0) (gt (len $active) 0) -}}
   {{- $inScope = false -}}

@@ -2,6 +2,22 @@ import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import { TEST_PRODUCT_ROOT } from "./helpers/fixture";
+import { target } from "./helpers/target";
+
+// Two assertions below name specific fixture ENTRIES (`v4`/`v4-link`) rather
+// than a property that holds for any config, so they only mean something
+// against the bundled fixture. Every sibling spec that reads fixture-specific
+// config already carries this guard; this one had only a `set === null` skip,
+// which does not fire on a consumer that HAS a search bundle.
+//
+// The cost of the gap, measured: solo-io/docs keeps a hand-maintained partial
+// COPY of this fixture's config in hugo-preview-test.toml (plus hugo-test.toml
+// and hugo-local-test.toml), and the `v4` entry added in v0.2.2 was never
+// mirrored into it. So framework-test-static in that repo failed on a
+// difference between two fixture configs, not on a theme defect — while the
+// generic assertions in this file (non-empty set, linkVersion keying) kept
+// working there, which is exactly the coverage a consumer target should give.
+const IS_FIXTURE_TARGET = target.name.startsWith("docs-theme-extras-fixture");
 
 // `visibleVersions` in assets/js/flexsearch.js — the set that decides which
 // versions may appear under "Other versions" in search results.
@@ -88,8 +104,11 @@ test.describe("search visibleVersions", () => {
   test("entries are keyed on linkVersion, not version", () => {
     const set = builtSet();
     test.skip(set === null, "no built search bundle (consumer target)");
-    // The v4 entry declares version="v4" and linkVersion="v4-link".
-    expect(set).toContain("v4-link");
+    // The v4 entry declares version="v4" and linkVersion="v4-link", so the
+    // positive half needs that entry to exist. The negative half below does
+    // not, and is the one that actually catches the shipped bug — a set keyed
+    // on `version` leaks the raw value — so it runs everywhere.
+    if (IS_FIXTURE_TARGET) expect(set).toContain("v4-link");
     expect(
       set,
       "the raw `version` leaked into the set — the filter compares against URL " +
@@ -120,6 +139,7 @@ test.describe("search visibleVersions", () => {
   });
 
   test("the full set matches the fixture config exactly", () => {
+    test.skip(!IS_FIXTURE_TARGET, "EXPECTED is this fixture's version list");
     const set = builtSet();
     test.skip(set === null, "no built search bundle (consumer target)");
     expect(set).toEqual(EXPECTED);

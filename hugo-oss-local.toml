@@ -143,16 +143,24 @@ pageContextMode = "siteParams"
 
 [[params.versions]]
   version = "v2"
-  sections = ["demo", "alt"]
+  sections = ["demo", "alt", "nested"]
   dropdown = "v2 (current)"
   linkVersion = "v2"
-  url = "/v2"
+  # POISON VALUE, deliberately. `url` on a same-product params.versions entry is
+  # DEAD: every reader constructs the href instead, which is what preserves the
+  # reader's current page across a version switch (CHANGELOG [0.2.2]). The real
+  # configs dropped the field; this fixture keeps it, set to a URL that must
+  # never appear in any built page, so that a reader which starts consulting it
+  # again FAILS instead of silently working. Held correct values before, which is
+  # exactly why nothing would have noticed.
+  # Asserted by tests/related-docs.spec.ts.
+  url = "https://must-not-render.invalid/dead-url-field/"
   product = "test"
   productName = "Docs framework test fixture"
 
 [[params.versions]]
   version = "v1"
-  sections = ["demo"]
+  sections = ["demo", "nested"]
   # Second ossVersion mapping, used only by the keepVersion collision probe in
   # conrefs/test/version-remap.md: it makes the token `v3` — which is also a
   # real version in this fixture — remap to `v1`. That is the production shape
@@ -163,7 +171,15 @@ pageContextMode = "siteParams"
   ossVersion = "v3"
   dropdown = "v1"
   linkVersion = "v1"
-  url = "/v1"
+  # POISON VALUE, deliberately. `url` on a same-product params.versions entry is
+  # DEAD: every reader constructs the href instead, which is what preserves the
+  # reader's current page across a version switch (CHANGELOG [0.2.2]). The real
+  # configs dropped the field; this fixture keeps it, set to a URL that must
+  # never appear in any built page, so that a reader which starts consulting it
+  # again FAILS instead of silently working. Held correct values before, which is
+  # exactly why nothing would have noticed.
+  # Asserted by tests/related-docs.spec.ts.
+  url = "https://must-not-render.invalid/dead-url-field/"
   product = "test"
   productName = "Docs framework test fixture"
 
@@ -172,7 +188,15 @@ pageContextMode = "siteParams"
   sections = ["alt"]
   dropdown = "main (dev)"
   linkVersion = "main"
-  url = "/main"
+  # POISON VALUE, deliberately. `url` on a same-product params.versions entry is
+  # DEAD: every reader constructs the href instead, which is what preserves the
+  # reader's current page across a version switch (CHANGELOG [0.2.2]). The real
+  # configs dropped the field; this fixture keeps it, set to a URL that must
+  # never appear in any built page, so that a reader which starts consulting it
+  # again FAILS instead of silently working. Held correct values before, which is
+  # exactly why nothing would have noticed.
+  # Asserted by tests/related-docs.spec.ts.
+  url = "https://must-not-render.invalid/dead-url-field/"
 # The -local configs serve at baseURL "/" (the production ones use "/test"),
   # so the internal banner link must be root-relative WITHOUT the /test prefix or
   # it 404s in `make server-oss` — which reads as exactly the "banner link is
@@ -189,7 +213,15 @@ pageContextMode = "siteParams"
   version = "v3"
   dropdown = "v3 (tabs demo)"
   linkVersion = "v3"
-  url = "/v3"
+  # POISON VALUE, deliberately. `url` on a same-product params.versions entry is
+  # DEAD: every reader constructs the href instead, which is what preserves the
+  # reader's current page across a version switch (CHANGELOG [0.2.2]). The real
+  # configs dropped the field; this fixture keeps it, set to a URL that must
+  # never appear in any built page, so that a reader which starts consulting it
+  # again FAILS instead of silently working. Held correct values before, which is
+  # exactly why nothing would have noticed.
+  # Asserted by tests/related-docs.spec.ts.
+  url = "https://must-not-render.invalid/dead-url-field/"
   product = "test"
   productName = "Docs framework test fixture"
 
@@ -271,6 +303,9 @@ pageContextMode = "siteParams"
 # untagged — could not tell filtering from a no-op.
 [params.sections.demo]
 [params.sections.alt]
+# The only section that NESTS its version trees, at /test/nested/<version>/.
+# demo and alt deliberately do not, so the two shapes are covered side by side.
+[params.sections.nested]
 
 # ── Related products ──────────────────────────────────────────────────────────
 # Other products whose versions share this product's version dropdown. This is

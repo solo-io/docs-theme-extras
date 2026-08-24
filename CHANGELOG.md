@@ -342,6 +342,129 @@ the fix. Both forms were built against the fixture to confirm.
   way, no longer emits either in the dropdown, and the desktop/mobile parity assertions pass on both
   brands.
 
+### Fix — the "section has nowhere to point" warning no longer fires on translation gaps or on section keys inherited from an imported module (`layouts/_partials/utils/resolve-sections.html`)
+
+- **Why.** The new section resolver warned once per registered section that resolved to neither a
+  landing page nor an `externalURL`. That is the right guard, raised at the wrong granularity: it
+  fired four times per build across three hub products for two situations that are not config
+  errors, and because `solo-io/docs`'s `hugoWarnings` allowlist is deliberately near-empty, each one
+  failed `framework-test-content` outright.
+- **The two false positives, both real.**
+  - *A translated tree that has not been restructured.* `params.sections` is site-wide but content
+    is per-language. `content/en/agentgateway/` moved to `<section>/<version>/`, while
+    `content/ja/agentgateway/` still holds the flat `<version>/` layout with no section landing
+    pages, so both sections resolved in English and neither did in Japanese. The advice the warning
+    gave — "add a content page at that path" — was wrong for that case; the fix is to translate the
+    tree.
+  - *A section key the product never wrote.* Neither `hugo-kgateway.toml` nor `hugo-gateway.toml`
+    defines `params.sections` at all. They **inherit** `sections.envoy` from the
+    `github.com/kgateway-dev/kgateway.dev` module, because Hugo deep-merges an imported module's
+    params into the project's. The hub serves that content flat at `/kgateway/<version>/`, so
+    `/kgateway/envoy/` does not exist and must not. Worth knowing on its own: a product can gain a
+    section key from an OSS module it imports, and nothing it puts in its own config removes one —
+    an empty table does not delete a merged key.
+- **What changed.** Dropped sections are collected and reported once, and only when the omission is
+  user-visible: the default content language (a missing translation is a translation gap) **and**
+  more than one section still resolves (both callers gate the selector on `gt (len $sections) 1`, so
+  with 0 or 1 resolved sections no menu renders and nothing is missing from anything). The message
+  now names every dropped key and says how many sections do render. `(index hugo.Sites 0)` is used
+  to identify the default language rather than `site.LanguagePrefix == ""`, which only works while
+  `defaultContentLanguageInSubdir` is false.
+- **Accepted blind spot,** recorded in the source: a product registering exactly two sections and
+  resolving only one loses its selector silently, because that is indistinguishable from the
+  inherited-key case above.
+- **Verified.** `latest` on
+  [Solo Enterprise for agentgateway](https://docs.solo.io/agentgateway/kubernetes/latest/) still
+  renders the section selector (view-source: five `section-dropdown` matches), the Japanese tree
+  correctly renders none, and `kgateway`/`gateway`/`agentgateway` builds now emit no
+  `extras-section-no-target` warning at all — the only remaining `WARN` is the allowlisted
+  `.Site.Data` deprecation that Hextra itself raises. `make test-oss` and `make test-enterprise`
+  both report 1924 passed / 17 skipped.
+
+### Fix — the description lint scopes itself to where a fix is actually actionable: the newest version tree, in the default language (`layouts/partials/utils/warn-missing-description.html`)
+
+Two independent narrowings, both because the lint was reporting the same missing description several
+times under paths nobody can usefully edit.
+
+**1. Translated pages are no longer linted.** A translated page's front matter is produced from its
+English source by the translation sync, so a `description` added directly to a translated page is
+overwritten on the next run — the actionable fix is always on the source page. Of `agentregistry`'s 69
+warnings, **35** were `/agentregistry/ja/latest/…`, near-duplicates of the 34 English ones; it now
+reports **34**. `(index hugo.Sites 0)` identifies the default-language site, the same accessor
+`utils/resolve-sections.html` uses and for the same reason — it does not depend on
+`defaultContentLanguageInSubdir`, and on a single-language site it is a no-op.
+
+**2. No `main` version now falls back to the newest tree, not to every tree.**
+
+- **Why.** The lint normally scopes itself to the `main` (dev) tree. A product with no `main` version
+  fell back to linting **everything**, which multiplies one missing description by the number of
+  frozen version trees a product ships. Measured on the docs hub: `kgateway` reported **294** warnings
+  for **96** distinct pages copied across `2.3.x`/`2.2.x`/`2.1.x`, and `gateway` **43** for ~9 pages
+  across five trees. A frozen tree is an archived copy — a description added there ships nowhere — so
+  those duplicates are pure noise, and since `hugo-warnings.spec.ts` fails on any non-allowlisted
+  `WARN`, they fail CI too.
+- **Why it surfaced now.** Dropping the second version list (see the tagged-versions entry above)
+  changed `kgateway` and `gateway` from linting *nothing* to linting *everything*. Neither declares
+  `main`, but both **inherit** `sections.envoy.versions` from the `kgateway.dev` module — and that
+  list *does* contain `main`, which made the old two-list walk see an active version and skip every
+  page. So the lint had been silently disabled on both products by an inherited OSS config that has
+  nothing to do with the hub's own versions. Confirmed by restoring the old walk: `kgateway` goes back
+  to 0 warnings.
+- **What changed.** With no `main`, the active tree is now `latest` if declared, else the first
+  configured entry (TOML order is release order on every consumer config). All comparisons are on
+  `linkVersion` — the URL segment — never the canonical `.version`, because the two diverge
+  (gloo-mesh-enterprise ships `version = "2.14.x"` with `linkVersion = "main"`).
+  `utils/resolve-latest-version.html` is deliberately **not** reused: it returns `.version`, which is
+  the wrong coordinate for a path comparison.
+- **Both changes are strictly narrower,** so no consumer that passes today can start failing.
+  Verified across five hub products: `kgateway` 294 → **96**, `gateway` 43 → **9**, `agentregistry`
+  69 → **34**, `istio` **0**, `gloo-mesh-enterprise` **0**.
+- **Verified.** Observable on
+  [Solo Enterprise for kgateway 2.2.x](https://docs.solo.io/kgateway/2.2.x/) — pages in that frozen
+  tree no longer warn, while the same page under `2.3.x` still does. `make test-oss` and
+  `make test-enterprise` both report 1924 passed / 17 skipped.
+- **Known limitation.** "First in TOML order" is an assumption, not a derivation. Every consumer
+  config holds it today; where it did not, the effect would be under-reporting rather than reporting
+  the wrong pages.
+
+### Fix — `search-visible-versions.spec.ts` no longer asserts one fixture's version list against another consumer's (`tests/search-visible-versions.spec.ts`)
+
+- **Why.** Two of its assertions name specific fixture entries (`v4` / `v4-link`) rather than a
+  property that holds for any config, but the spec's only guard was "no built search bundle". A
+  consumer that *has* a bundle therefore ran them. `solo-io/docs` keeps a hand-maintained partial
+  copy of this fixture's config in `hugo-preview-test.toml` (and `hugo-test.toml`,
+  `hugo-local-test.toml`), and the `v4` entry added in this release was never mirrored into it — so
+  `framework-test-static` failed on a difference between two fixture configs rather than on any
+  theme defect.
+- **What changed.** Those two assertions now carry the same `IS_FIXTURE_TARGET` guard that every
+  sibling fixture-specific spec already uses. The generic half of the keying assertion — that the
+  raw `version` must not leak into the set, which is the bug that actually shipped — still runs on
+  every target, so consumer coverage is not weakened.
+- **Verified.** The `static` project against `solo-io/docs` goes from 2 failed / 4990 passed to
+  4991 passed, and the fixture run still exercises all five assertions on both brands.
+
+### Fix — the version dropdown and mobile chips no longer offer a version tree the section does not have (`layouts/_partials/navbar.html`, `layouts/partials/sidebar.html`)
+
+- **Why.** Both templates ended their version-switch fallback chain at the target version's landing
+  page, and both carried a comment asserting that page "always exists" so the switch "can never
+  404". That holds only without sections. An **untagged** `params.versions` entry applies to every
+  section by definition, so a section that nests no tree for it is still offered it, and
+  `/<section>/<version>/` was never built — a dead entry in both the desktop dropdown and the mobile
+  drawer.
+- **How it was found.** The moment a fixture section nested its version trees, its dropdown emitted
+  `/test/nested/v3/` and `/test/nested/v4-link/` for the two untagged entries. Nothing had ever built
+  a page at the section-then-version shape before, which is why an invariant stated in a comment
+  survived as long as it did.
+- **What changed.** Both now verify the target version's landing page exists and fall back to the
+  **section** landing page — the version picker for that doc set, and the right answer to "this
+  version exists, but not here". Only for a sectioned URL: without a section there is nothing above
+  the version, and a configured version with no tree at all is a config error rather than a shape to
+  paper over. The two are kept in step deliberately — `static.spec.ts` asserts the chips and the
+  dropdown land on identical destinations, so fixing one alone is a divergence.
+- **Verified.** Every internal href in the fixture's nested dropdown and chip row now resolves on
+  disk, and the two lists are equal. Re-checked against both OSS consumers, whose sidebars share this
+  code: `agentgateway.dev` (290 internal `/docs/` hrefs) and `kgateway.dev` (248) have no dead links.
+
 ### Changed — every reader now resolves versions through `utils/resolve-section-versions.html`
 
 `version-cards.html` had its own `sections.<x>.versions`-then-top-level lookup; `flexsearch.js` and
@@ -359,9 +482,53 @@ happened to ship identical version numbers.
 A new repo-wide assertion (`tests/link-hextra-shapes.spec.ts`) fails if any template reads a
 per-section versions list again, so the two-list shape cannot creep back.
 
+### Test coverage — the section-then-version URL shape, which had none (`fixture/content/en/test/nested/`, `tests/section-nested-versions.spec.ts`)
+
+- **Why.** `/<product>/<section>/<version>/…` is the shape this release exists for, and no fixture
+  page used it. `demo` and `alt` register sections **without** nesting version trees — their versions
+  live at `/test/<version>/` — so the fixture only ever exercised the fallback branch. Four behaviors
+  were pinned by SOURCE assertions reading template text, which cannot see a wrong answer, only
+  changed text: `version-root.html` prefixing `lookupPath` with the section,
+  `resolve-sections.html` appending a version, `breadcrumb.html` collapsing a version at depth 3, and
+  `resolve-section-versions.html` filtering by tag. The worst of those is silent — a section-less
+  `lookupPath` makes `site.GetPage` resolve nothing, the left nav renders **empty**, the page still
+  builds, and it reads as a content problem.
+- **What was added.** A third section, `nested`, with real trees at `/test/nested/v2/` and
+  `/test/nested/v1/` sharing a `page/` path, tagged on v2 and v1 but not on `main` (`alt`-only).
+  `demo` and `alt` stay non-nesting, so both branches of the resolver are now covered side by side.
+  The fixture's `contentDir` (`fixture/content/en/test`, `baseURL = /test`) already reproduces the
+  production enterprise shape — product segment in the URL, absent from the `GetPage` path — so
+  `/test/nested/v2/page/` resolves through `GetPage "/nested/v2/"`, the same two-coordinate
+  translation the docs hub performs.
+- **10 assertions**, covering: the nav tree resolves and is non-empty; it does not leak another
+  version's pages; the selector appends the version for a nesting section while the two non-nesting
+  ones still fall back; a section link remaps when the current version is absent there (the remap that
+  had been dead code since the migration); the dropdown is filtered to this section's tags and omits
+  `main`; a version switch preserves both section and path; no version link points at a missing tree;
+  chips and dropdown agree; and the breadcrumb shows the section between home and the version.
+- **Each assertion was probe-verified**, and one was wrong. The nav-tree check searched the enclosing
+  `<aside>`, which also holds the mobile version chips and section chips — so with the tree
+  **completely empty** it still found `/test/nested/v2/page/` and passed. Scoping it to the sidebar
+  `<nav>` makes it fail under the probe, as it should. That is the whole reason for probing rather than
+  trusting a green run.
+
+### Test coverage — proving the same-product `url` field is really dead (`tests/related-docs.spec.ts`)
+
+The release removed `url` from all 27 real configs on the argument that no reader consults it. That
+was an argument, not a test: the fixture still carried `url` on every same-product entry, and every
+value was **correct**, so a reader that did consult it would have produced identical output and moved
+no assertion. Those values are now a poison host (`must-not-render.invalid`), asserted absent from
+every built page — and a second assertion checks the poison is still *present in the config*, so
+"tidying up" the field cannot leave the first one passing vacuously. Probe-verified by making
+`navbar.html` prefer `.url`, which fails it. `relatedDocs` urls are the opposite case — the one place
+a version URL is written by hand and **must** render — so they use a different host and are asserted
+present.
+
 ### Verified
 
-- Fixture suite, both brands: **1874 passed**, 14 skipped, 0 failures.
+- Fixture suite, both brands: **1941 passed**, 17 skipped, 0 failures (was 1874/14 earlier in this
+  release; +67 from the section selector, relatedDocs, breadcrumb, nested-shape and poison-url specs).
+- Fixture suite, both brands, earlier in this release: **1874 passed**, 14 skipped, 0 failures.
 - **docs hub agentgateway** (`make build PRODUCT=agentgateway`): `kubernetes/latest` offers its three
   visible versions, `standalone/latest` offers only `latest` (the tag filter working), and the
   version-root picker page at `/agentgateway/latest/` offers the full set (the unregistered-section

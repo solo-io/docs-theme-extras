@@ -54,8 +54,33 @@
   `externalURL` on a section overrides the href entirely, for a section that
   exists only to scope version dropdowns and has no landing page of its own
   (kgateway's `agentgateway` section).
+
+  MULTILINGUAL. site.Params.sections is site-wide, but content is per-language,
+  so a section can exist in one language and not another. agentgateway is
+  exactly that: the EN tree was restructured to
+  content/en/agentgateway/<section>/<version>/, while content/ja/agentgateway/
+  still holds the flat <version>/ layout with no section landing pages at all.
+
+  A section with no landing page in THIS language does not exist in this
+  language, so it is left out of that language's selector — which is right:
+  pointing a Japanese reader at the English page is worse than omitting the
+  entry, and there is nothing else to point at.
+
+  The "you registered a section with nowhere to point" warning is therefore
+  raised only on the DEFAULT content language, and only when a selector actually
+  renders. See the warning block at the bottom of this file for the full rule
+  and the four real false positives that shaped it.
+
+  `(index hugo.Sites 0)` is the default-language site. Verified against the
+  agentgateway build (en + ja): it reports "en" from BOTH language sites. It is
+  used rather than `site.LanguagePrefix == ""` because that only identifies the
+  default language while `defaultContentLanguageInSubdir` is false — flip that
+  setting and every language gains a prefix, so the guard would silently stop
+  firing anywhere. A single-language site has one entry, so index 0 is that
+  language and the check is a no-op.
 */ -}}
 {{- $page := . -}}
+{{- $isDefaultLang := eq site.Language.Lang (index hugo.Sites 0).Language.Lang -}}
 {{- $root := partial "utils/version-root.html" $page -}}
 {{- $currentSection := (partial "utils/section-segment.html" $page).segment -}}
 {{- $currentVersion := $root.currentVersion -}}
@@ -67,6 +92,7 @@
 {{- $keys = sort $keys -}}
 
 {{- $out := slice -}}
+{{- $dropped := slice -}}
 {{- range $keys -}}
   {{- $key := . -}}
   {{- $cfg := index site.Params.sections $key -}}
@@ -143,7 +169,9 @@
   {{- end -}}
 
   {{- /* A section with neither a landing page nor an externalURL has nowhere to
-         point; emitting it would put a dead link in the menu. */ -}}
+         point; emitting it would put a dead link in the menu. Collect it and
+         decide whether that is worth reporting once the whole list is known —
+         see the warning block below. */ -}}
   {{- if $href -}}
     {{- $out = $out | append (dict
           "key" $key
@@ -152,7 +180,52 @@
           "isCurrent" $isCurrent
           "isExternal" $isExternal) -}}
   {{- else -}}
-    {{- warnidf "extras-section-no-target" "params.sections.%s has no landing page and no `externalURL`, so it is left out of the section selector. Add a content page at that path, or set externalURL." $key -}}
+    {{- $dropped = $dropped | append $key -}}
   {{- end -}}
+{{- end -}}
+
+{{- /* Report a dropped section only when it is USER-VISIBLE, which needs two
+       conditions to hold at once.
+
+       1. A selector actually renders. Both callers (navbar.html, sidebar.html)
+          gate on `gt (len $sections) 1`, so with 0 or 1 resolved sections there
+          is no menu, nothing is missing from anything, and the registration is
+          simply inert.
+
+       2. We are on the DEFAULT content language, because a section missing only
+          from a translated tree is a translation gap, not a config error.
+
+       Both conditions came from real false positives, and both were noisy
+       enough to fail tests/hugo-warnings.spec.ts in solo-io/docs (whose
+       allowlist is deliberately near-empty), on every build:
+
+         agentgateway  x2  content/ja/agentgateway/ was never restructured — it
+                           still holds the flat <version>/ layout while EN moved
+                           to <section>/<version>/ — so both sections resolved
+                           in EN and neither did in JA.
+         kgateway      x1  the hub does not define params.sections AT ALL. It
+                           INHERITS `sections.envoy` from the
+                           github.com/kgateway-dev/kgateway.dev module, because
+                           Hugo deep-merges an imported module's params into the
+                           project's. The hub serves that content flat at
+                           /kgateway/<version>/, so there is no
+                           /kgateway/envoy/ landing page and never should be.
+         gateway       x1  same inherited key, same reason.
+
+       That inheritance is the important one to know about: a product can gain a
+       section key it never wrote, from an OSS module it imports, and there is
+       nothing it can put in its own config to remove one (an empty table does
+       not delete a merged key). Warning per-key would therefore have pushed
+       three hub products toward creating landing pages for a section that must
+       not exist there.
+
+       KNOWN BLIND SPOT, accepted deliberately: a product that registers exactly
+       two sections and can resolve only one loses its selector entirely and is
+       not told. Condition 1 cannot distinguish that from the inherited-key case
+       above, since both look like "one section resolved". The guard still covers
+       the case that actually misleads a reader — a menu that renders while
+       silently omitting an entry. */ -}}
+{{- if and $dropped $isDefaultLang (gt (len $out) 1) -}}
+  {{- warnidf "extras-section-no-target" "params.sections %v resolved to no landing page and no `externalURL`, so %s left out of the section selector while %d other section(s) render in it. Add a content page at that path, or set externalURL." $dropped (cond (eq (len $dropped) 1) "it is" "they are") (len $out) -}}
 {{- end -}}
 {{- return $out -}}

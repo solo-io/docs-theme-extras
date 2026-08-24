@@ -294,12 +294,38 @@
                   {{- end -}}
                 {{- else -}}
                   {{- /* No not-in-version page either: fall back to the target
-                         version's landing page (always exists) so the switch
-                         can never 404. */ -}}
-                  {{- if $includeFolder -}}
-                    {{- $versionUrl = printf "/%s%s%s/%s/" $folder $langPath $sectionPath .linkVersion -}}
+                         version's landing page so the switch can never 404.
+                         That landing page is NOT guaranteed to exist once
+                         sections are in play, which is what this comment used to
+                         assert. An UNTAGGED entry in params.versions applies to
+                         every section by definition, so a section that does not
+                         nest a tree for it still offers it here, and
+                         /<section>/<version>/ was never built.
+                         `tests/section-nested-versions.spec.ts` covers it — the
+                         fixture's `nested` section offers untagged v3/v4-link
+                         and has trees only for v2/v1, which produced two dead
+                         menu entries.
+
+                         Verify, then drop to the SECTION landing page, which is
+                         the version picker for that doc set and therefore the
+                         right destination for "this version exists, but not
+                         here". Only for a sectioned URL: with no section there
+                         is nothing above the version to fall back to, and a
+                         version in params.versions with no tree at all is a
+                         config error rather than a shape we should paper over. */ -}}
+                  {{- $versionLanding := printf "%s/%s" $sectionPath .linkVersion -}}
+                  {{- if or (site.GetPage $versionLanding) (eq $sectionPath "") -}}
+                    {{- if $includeFolder -}}
+                      {{- $versionUrl = printf "/%s%s%s/%s/" $folder $langPath $sectionPath .linkVersion -}}
+                    {{- else -}}
+                      {{- $versionUrl = printf "%s%s/%s/" $langPath $sectionPath .linkVersion -}}
+                    {{- end -}}
                   {{- else -}}
-                    {{- $versionUrl = printf "%s%s/%s/" $langPath $sectionPath .linkVersion -}}
+                    {{- if $includeFolder -}}
+                      {{- $versionUrl = printf "/%s%s%s/" $folder $langPath $sectionPath -}}
+                    {{- else -}}
+                      {{- $versionUrl = printf "%s%s/" $langPath $sectionPath -}}
+                    {{- end -}}
                   {{- end -}}
                 {{- end -}}
               {{- end -}}
