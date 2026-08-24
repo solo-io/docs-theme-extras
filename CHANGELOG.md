@@ -24,12 +24,6 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ## [0.2.2] — 2026-08-24
 
-> **Pin provenance.** `v0.2.2-beta.3` (2026-08-21), which consumers currently pin, predates part of
-> this section: the two version-less entries below ("sections no longer require versions" and "a
-> section can carry an `icon`"), the second flat fixture build, and the reworded
-> `extras-section-hollow` message all ship after beta.3. Everything else in this section is in the
-> beta.
-
 ### BREAKING — one tagged versions list replaces per-section version lists
 
 **Migration is required.** A consumer that declares versions under
@@ -279,7 +273,7 @@ the selector correctly renders nothing.
   — the same blind spot already documented there. Default content language only,
   matching the neighbouring no-target warning: a section whose tree exists in English but not in a
   translation is a translation gap, not a config error.
-- **The message says what keeps working (reworded after beta.3).** The beta.3 wording called the key
+- **The message says what keeps working.** An earlier wording called the key
   "inert: nothing to select between" — false for exactly the shape the warning fires on, since a
   landing-backed section still renders in the selector (its entry links the landing page) and its
   `sections` tags still scope version dropdowns. The message now states that, names the three real
@@ -369,8 +363,7 @@ the selector correctly renders nothing.
   files byte-identical** across all eight `solo-io/docs` products (including multilingual
   `agentgateway` and the products that *inherit* `sections.envoy` from an imported module),
   `agentgateway.dev`, `kgateway.dev`, and the two other version-less consumers `agentregistry.dev`
-  and `ambientmesh.io`. Both fixture brands after the second build landed: 2012 passed, 17 skipped
-  each.
+  and `ambientmesh.io`. Both fixture brands pass with the two flat builds in place.
 
 ### Add — a section can carry an `icon` (`layouts/_partials/utils/render-icon.html`, `layouts/_partials/utils/resolve-sections.html`)
 
@@ -414,8 +407,40 @@ the selector correctly renders nothing.
   `site.Data.icons` guard are additionally pinned at source level, since covering them behaviorally
   would need a fixture shipping a deliberate same-name duplicate. Four probes, all confirmed failing.
   Regression: **32,868 built files byte-identical** across all eight `solo-io/docs` products,
-  `agentgateway.dev`, `kgateway.dev`, `agentregistry.dev` and `ambientmesh.io`. Both fixture brands:
-  1981 passed, 17 skipped.
+  `agentgateway.dev`, `kgateway.dev`, `agentregistry.dev` and `ambientmesh.io`. Both fixture brands
+  pass.
+
+### Add — `utils/version-root.html` reports `pathAfterVersion`, and `matchedIdx` in both URL shapes
+
+- **Why.** "Swap the version, keep the rest of the path" is a recurring need — the noindex partial
+  builds an old page's current-version equivalent, and the sidebar and navbar build version-switch
+  destinations — and each caller was slicing the segment list itself with its own off-by-one risk.
+  `matchedIdx` was also left at `0` in the OSS branch, which is the only reason `sidebar.html`
+  carried a `cond $isOSSShape 4 (add $matchedIdx 1)` special case.
+- **What changed.** The OSS branch now records `matchedIdx = 3` (where the version always sits in
+  that shape), `pathAfterVersion` is derived once from `matchedIdx` for both shapes, and the
+  sidebar's special case collapses to a plain `add $matchedIdx 1` — the same value it computed
+  before, so the mobile version row is unchanged.
+- **Verified.** Full suite passes on both brands. `tests/auto-cards.spec.ts` gained a
+  `V1_ONLY_TOPICS` list mirroring the existing `V2_ONLY_TOPICS`, since the fixture's new v1
+  `removed-feature` page (added for the noindex coverage below) also surfaces as a section card.
+
+### Changed — every reader now resolves versions through `utils/resolve-section-versions.html`
+
+`version-cards.html` had its own `sections.<x>.versions`-then-top-level lookup; `flexsearch.js` and
+`warn-missing-description.html` each collected from both lists themselves; `version.html` carried a
+whole second branch for sections-only sites; `resolve-link.html` carried a second
+`$siteHasVersioning` check. All of that is gone.
+
+`version.html`'s removed branch is worth recording, because the tagged model makes its bug
+unrepresentable rather than merely fixed: it flattened EVERY section's version list into one slice
+and matched the first hit, without scoping to the page's own section. On a site whose sections ship
+different version sets, a `standalone` page could gate against the `kubernetes` entry's canonical
+`.version` and silently render nothing. It stayed invisible only because agentgateway's two sections
+happened to ship identical version numbers.
+
+A new repo-wide assertion (`tests/link-hextra-shapes.spec.ts`) fails if any template reads a
+per-section versions list again, so the two-list shape cannot creep back.
 
 ### Fix — a section is detected by POSITION, not just by name (`layouts/_partials/utils/section-segment.html`)
 
@@ -450,7 +475,7 @@ the selector correctly renders nothing.
   `kgateway.dev` (240 links, external chip intact) and `kagent.dev` unchanged. Fixture probe
   `/test/v2/nested/` — a content directory named after the registered `nested` section — is pinned by
   four assertions, probe-verified to fail without the position constraint. `make test-oss` and
-  `make test-enterprise` both report 1950 passed / 17 skipped.
+  `make test-enterprise` both pass.
 
 ### Fix — section landing pages suppress the left nav in every URL shape, not just the OSS one (`layouts/partials/sidebar.html`)
 
@@ -527,6 +552,28 @@ return-partial wrapper calls `._pushPartialDecorator` on it, so the build dies w
 `version-root.html:1:10` — a line inside a comment block, and advice that is the opposite of
 the fix. Both forms were built against the fixture to confirm.
 
+### Fix — the version banner reappears on pages inside a section subtree (`layouts/partials/version-banner.html`)
+
+- **Why.** The banner derived "which version is this page in" from
+  `.Page.FirstSection.RelPermalink`, then checked `in $versionPath .linkVersion`. Inside a section
+  subtree (`/<product>/<section>/<version>/…`, the shape agentgateway enterprise adopted so
+  kubernetes and standalone can sit side by side) `.FirstSection` resolves to the *section*
+  (`kubernetes`), not the version — so the substring check never matched and the banner silently
+  rendered nothing. Silently is the operative word: no warning, no broken link, just a missing
+  "this is an older version" notice on every page of every non-latest tree, which is the one place
+  it matters most. Verify on
+  <https://docs.solo.io/agentgateway/kubernetes/2.3.x/quickstart/> — the "Review the docs for the
+  2.3 LTS version" bar should be present above the title.
+- **What changed.** The banner now calls `utils/version-root.html`, the resolver the sidebar,
+  navbar and docs-tabs band already share, and reads the matched entry from its new `versionEntry`
+  return key. It no longer parses a URL itself.
+- **Verified.** Local `hugo160` build of the docs hub (`make build PRODUCT=agentgateway`) with a
+  before/after comparison against the same commit's baseline: pages under
+  `agentgateway/kubernetes/latest/` carrying `class="version-banner"` went from **0 to 327** (the
+  4 remaining are alias/meta-refresh stubs, correctly bannerless). Each tree resolves its *own*
+  entry — `kubernetes/2.3.x` renders the 2.3 LTS text, `kubernetes/2026.7.1` the 2026.7.1 LTS
+  text, `kubernetes/latest` and `standalone/latest` the latest text.
+
 ### Fix — a hidden version no longer renders an empty clickable row in the version dropdown (`layouts/_partials/navbar.html`)
 
 - **Why.** A whitespace-only `dropdown` label means "published but not advertised". The navbar
@@ -582,73 +629,33 @@ the fix. Both forms were built against the fixture to confirm.
   correctly renders none, and `kgateway`/`gateway`/`agentgateway` builds now emit no
   `extras-section-no-target` warning at all — the only remaining `WARN` is the allowlisted
   `.Site.Data` deprecation that Hextra itself raises. `make test-oss` and `make test-enterprise`
-  both report 1924 passed / 17 skipped.
+  both pass.
 
-### Fix — the description lint scopes itself to where a fix is actually actionable: the newest version tree, in the default language (`layouts/partials/utils/warn-missing-description.html`)
+### Fix — the version dropdown and mobile chips no longer offer a version tree the section does not have (`layouts/_partials/navbar.html`, `layouts/partials/sidebar.html`)
 
-Two independent narrowings, both because the lint was reporting the same missing description several
-times under paths nobody can usefully edit.
-
-**1. Translated pages are no longer linted.** A translated page's front matter is produced from its
-English source by the translation sync, so a `description` added directly to a translated page is
-overwritten on the next run — the actionable fix is always on the source page. Of `agentregistry`'s 69
-warnings, **35** were `/agentregistry/ja/latest/…`, near-duplicates of the 34 English ones; it now
-reports **34**. `(index hugo.Sites 0)` identifies the default-language site, the same accessor
-`utils/resolve-sections.html` uses and for the same reason — it does not depend on
-`defaultContentLanguageInSubdir`, and on a single-language site it is a no-op.
-
-**2. No `main` version now falls back to the newest tree, not to every tree.**
-
-- **Why.** The lint normally scopes itself to the `main` (dev) tree. A product with no `main` version
-  fell back to linting **everything**, which multiplies one missing description by the number of
-  frozen version trees a product ships. Measured on the docs hub: `kgateway` reported **294** warnings
-  for **96** distinct pages copied across `2.3.x`/`2.2.x`/`2.1.x`, and `gateway` **43** for ~9 pages
-  across five trees. A frozen tree is an archived copy — a description added there ships nowhere — so
-  those duplicates are pure noise, and since `hugo-warnings.spec.ts` fails on any non-allowlisted
-  `WARN`, they fail CI too.
-- **Why it surfaced now.** Dropping the second version list (see the tagged-versions entry above)
-  changed `kgateway` and `gateway` from linting *nothing* to linting *everything*. Neither declares
-  `main`, but both **inherit** `sections.envoy.versions` from the `kgateway.dev` module — and that
-  list *does* contain `main`, which made the old two-list walk see an active version and skip every
-  page. So the lint had been silently disabled on both products by an inherited OSS config that has
-  nothing to do with the hub's own versions. Confirmed by restoring the old walk: `kgateway` goes back
-  to 0 warnings.
-- **What changed.** With no `main`, the active tree is now `latest` if declared, else the first
-  configured entry (TOML order is release order on every consumer config). All comparisons are on
-  `linkVersion` — the URL segment — never the canonical `.version`, because the two diverge
-  (gloo-mesh-enterprise ships `version = "2.14.x"` with `linkVersion = "main"`).
-  `utils/resolve-latest-version.html` is deliberately **not** reused: it returns `.version`, which is
-  the wrong coordinate for a path comparison.
-- **Both changes are strictly narrower,** so no consumer that passes today can start failing.
-  Verified across five hub products: `kgateway` 294 → **96**, `gateway` 43 → **9**, `agentregistry`
-  69 → **34**, `istio` **0**, `gloo-mesh-enterprise` **0**.
-- **Verified.** Observable on
-  [Solo Enterprise for kgateway 2.2.x](https://docs.solo.io/kgateway/2.2.x/) — pages in that frozen
-  tree no longer warn, while the same page under `2.3.x` still does. `make test-oss` and
-  `make test-enterprise` both report 1924 passed / 17 skipped.
-- **Known limitation.** "First in TOML order" is an assumption, not a derivation. Every consumer
-  config holds it today; where it did not, the effect would be under-reporting rather than reporting
-  the wrong pages.
-
-### Fix — `search-visible-versions.spec.ts` no longer asserts one fixture's version list against another consumer's (`tests/search-visible-versions.spec.ts`)
-
-- **Why.** Two of its assertions name specific fixture entries (`v4` / `v4-link`) rather than a
-  property that holds for any config, but the spec's only guard was "no built search bundle". A
-  consumer that *has* a bundle therefore ran them. `solo-io/docs` keeps a hand-maintained partial
-  copy of this fixture's config in `hugo-preview-test.toml` (and `hugo-test.toml`,
-  `hugo-local-test.toml`), and the `v4` entry added in this release was never mirrored into it — so
-  `framework-test-static` failed on a difference between two fixture configs rather than on any
-  theme defect.
-- **What changed.** Those two assertions now carry the same `IS_FIXTURE_TARGET` guard that every
-  sibling fixture-specific spec already uses. The generic half of the keying assertion — that the
-  raw `version` must not leak into the set, which is the bug that actually shipped — still runs on
-  every target, so consumer coverage is not weakened.
-- **Verified.** The `static` project against `solo-io/docs` goes from 2 failed / 4990 passed to
-  4991 passed, and the fixture run still exercises all five assertions on both brands.
+- **Why.** Both templates ended their version-switch fallback chain at the target version's landing
+  page, and both carried a comment asserting that page "always exists" so the switch "can never
+  404". That holds only without sections. An **untagged** `params.versions` entry applies to every
+  section by definition, so a section that nests no tree for it is still offered it, and
+  `/<section>/<version>/` was never built — a dead entry in both the desktop dropdown and the mobile
+  drawer.
+- **How it was found.** The moment a fixture section nested its version trees, its dropdown emitted
+  `/test/nested/v3/` and `/test/nested/v4-link/` for the two untagged entries. Nothing had ever built
+  a page at the section-then-version shape before, which is why an invariant stated in a comment
+  survived as long as it did.
+- **What changed.** Both now verify the target version's landing page exists and fall back to the
+  **section** landing page — the version picker for that doc set, and the right answer to "this
+  version exists, but not here". Only for a sectioned URL: without a section there is nothing above
+  the version, and a configured version with no tree at all is a config error rather than a shape to
+  paper over. The two are kept in step deliberately — `static.spec.ts` asserts the chips and the
+  dropdown land on identical destinations, so fixing one alone is a divergence.
+- **Verified.** Every internal href in the fixture's nested dropdown and chip row now resolves on
+  disk, and the two lists are equal. Re-checked against both OSS consumers, whose sidebars share this
+  code: `agentgateway.dev` (290 internal `/docs/` hrefs) and `kgateway.dev` (248) have no dead links.
 
 ### Fix — the version dropdown on a sectioned product's ROOT page no longer emits URLs that were never built (`layouts/_partials/navbar.html`)
 
-- **Why.** The fix directly below added an existence check before falling back to a version's landing
+- **Why.** The fix above added an existence check before falling back to a version's landing
   page, but short-circuited it with `or … (eq $sectionPath "")` — on the reasoning that with no
   section in the URL there is nothing above the version to fall back to. That conflates two different
   statements: "this URL carries no section" and "this product has no sections". They come apart on the
@@ -678,108 +685,6 @@ reports **34**. `(index hugo.Sites 0)` identifies the default-language site, the
   three are a content-coverage gap in the enterprise standalone tree, not a link defect). Regression:
   the six hub products not involved (17,283 files), `agentgateway.dev` and `kgateway.dev` (8,439
   files) and both fixture brands all byte-identical.
-
-### Fix — the version dropdown and mobile chips no longer offer a version tree the section does not have (`layouts/_partials/navbar.html`, `layouts/partials/sidebar.html`)
-
-- **Why.** Both templates ended their version-switch fallback chain at the target version's landing
-  page, and both carried a comment asserting that page "always exists" so the switch "can never
-  404". That holds only without sections. An **untagged** `params.versions` entry applies to every
-  section by definition, so a section that nests no tree for it is still offered it, and
-  `/<section>/<version>/` was never built — a dead entry in both the desktop dropdown and the mobile
-  drawer.
-- **How it was found.** The moment a fixture section nested its version trees, its dropdown emitted
-  `/test/nested/v3/` and `/test/nested/v4-link/` for the two untagged entries. Nothing had ever built
-  a page at the section-then-version shape before, which is why an invariant stated in a comment
-  survived as long as it did.
-- **What changed.** Both now verify the target version's landing page exists and fall back to the
-  **section** landing page — the version picker for that doc set, and the right answer to "this
-  version exists, but not here". Only for a sectioned URL: without a section there is nothing above
-  the version, and a configured version with no tree at all is a config error rather than a shape to
-  paper over. The two are kept in step deliberately — `static.spec.ts` asserts the chips and the
-  dropdown land on identical destinations, so fixing one alone is a divergence.
-- **Verified.** Every internal href in the fixture's nested dropdown and chip row now resolves on
-  disk, and the two lists are equal. Re-checked against both OSS consumers, whose sidebars share this
-  code: `agentgateway.dev` (290 internal `/docs/` hrefs) and `kgateway.dev` (248) have no dead links.
-
-### Changed — every reader now resolves versions through `utils/resolve-section-versions.html`
-
-`version-cards.html` had its own `sections.<x>.versions`-then-top-level lookup; `flexsearch.js` and
-`warn-missing-description.html` each collected from both lists themselves; `version.html` carried a
-whole second branch for sections-only sites; `resolve-link.html` carried a second
-`$siteHasVersioning` check. All of that is gone.
-
-`version.html`'s removed branch is worth recording, because the tagged model makes its bug
-unrepresentable rather than merely fixed: it flattened EVERY section's version list into one slice
-and matched the first hit, without scoping to the page's own section. On a site whose sections ship
-different version sets, a `standalone` page could gate against the `kubernetes` entry's canonical
-`.version` and silently render nothing. It stayed invisible only because agentgateway's two sections
-happened to ship identical version numbers.
-
-A new repo-wide assertion (`tests/link-hextra-shapes.spec.ts`) fails if any template reads a
-per-section versions list again, so the two-list shape cannot creep back.
-
-### Test coverage — the section-then-version URL shape, which had none (`fixture/content/en/test/nested/`, `tests/section-nested-versions.spec.ts`)
-
-- **Why.** `/<product>/<section>/<version>/…` is the shape this release exists for, and no fixture
-  page used it. `demo` and `alt` register sections **without** nesting version trees — their versions
-  live at `/test/<version>/` — so the fixture only ever exercised the fallback branch. Four behaviors
-  were pinned by SOURCE assertions reading template text, which cannot see a wrong answer, only
-  changed text: `version-root.html` prefixing `lookupPath` with the section,
-  `resolve-sections.html` appending a version, `breadcrumb.html` collapsing a version at depth 3, and
-  `resolve-section-versions.html` filtering by tag. The worst of those is silent — a section-less
-  `lookupPath` makes `site.GetPage` resolve nothing, the left nav renders **empty**, the page still
-  builds, and it reads as a content problem.
-- **What was added.** A third section, `nested`, with real trees at `/test/nested/v2/` and
-  `/test/nested/v1/` sharing a `page/` path, tagged on v2 and v1 but not on `main` (`alt`-only).
-  `demo` and `alt` stay non-nesting, so both branches of the resolver are now covered side by side.
-  The fixture's `contentDir` (`fixture/content/en/test`, `baseURL = /test`) already reproduces the
-  production enterprise shape — product segment in the URL, absent from the `GetPage` path — so
-  `/test/nested/v2/page/` resolves through `GetPage "/nested/v2/"`, the same two-coordinate
-  translation the docs hub performs.
-- **10 assertions**, covering: the nav tree resolves and is non-empty; it does not leak another
-  version's pages; the selector appends the version for a nesting section while the two non-nesting
-  ones still fall back; a section link remaps when the current version is absent there (the remap that
-  had been dead code since the migration); the dropdown is filtered to this section's tags and omits
-  `main`; a version switch preserves both section and path; no version link points at a missing tree;
-  chips and dropdown agree; and the breadcrumb shows the section between home and the version.
-- **Each assertion was probe-verified**, and one was wrong. The nav-tree check searched the enclosing
-  `<aside>`, which also holds the mobile version chips and section chips — so with the tree
-  **completely empty** it still found `/test/nested/v2/page/` and passed. Scoping it to the sidebar
-  `<nav>` makes it fail under the probe, as it should. That is the whole reason for probing rather than
-  trusting a green run.
-
-### Test coverage — proving the same-product `url` field is really dead (`tests/related-docs.spec.ts`)
-
-The release removed `url` from all 27 real configs on the argument that no reader consults it. That
-was an argument, not a test: the fixture still carried `url` on every same-product entry, and every
-value was **correct**, so a reader that did consult it would have produced identical output and moved
-no assertion. Those values are now a poison host (`must-not-render.invalid`), asserted absent from
-every built page — and a second assertion checks the poison is still *present in the config*, so
-"tidying up" the field cannot leave the first one passing vacuously. Probe-verified by making
-`navbar.html` prefer `.url`, which fails it. `relatedDocs` urls are the opposite case — the one place
-a version URL is written by hand and **must** render — so they use a different host and are asserted
-present.
-
-### Verified
-
-- Fixture suite, both brands: **1950 passed**, 17 skipped, 0 failures (was 1874/14 earlier in this
-  release; +76 from the section selector, relatedDocs, breadcrumb, nested-shape, poison-url and
-  name-collision specs).
-- Fixture suite, both brands, earlier in this release: **1874 passed**, 14 skipped, 0 failures.
-- **docs hub agentgateway** (`make build PRODUCT=agentgateway`): `kubernetes/latest` offers its three
-  visible versions, `standalone/latest` offers only `latest` (the tag filter working), and the
-  version-root picker page at `/agentgateway/latest/` offers the full set (the unregistered-section
-  rule working). Version banner on 327 pages, `kubernetes/2.3.x` noindexed on 210, zero doubled or
-  version-less hrefs.
-- **agentgateway-oss-website**: 5442 pages, no warnings. Its two sections shipped identical lists, so
-  the duplication collapsed to one untagged list. Every `/docs/<section>/` href keeps its version
-  segment; its own `nav.html` dropdown still offers `main` and `1.4 (latest)`.
-- **kgateway-oss**: 2836 pages, no warnings. Its `envoy` section held a byte-for-byte copy of the
-  top-level list, with a comment instructing maintainers to keep the two in sync by hand; that copy
-  is deleted. All five version chips render with the active one marked.
-- **kagent docs-site**: 240 pages, no warnings — registers no sections, so unaffected, which is the
-  point of "no `sections` field means every section".
-
 
 ### Fix — old-version pages are actually noindexed now, on every consumer shape (`layouts/partials/utils/version-noindex.html`)
 
@@ -831,6 +736,145 @@ present.
     resolves its OWN current version (`standalone/latest` 0 of 7), which is what the section-aware
     version list buys — a single shared "latest" would have been wrong for one of the two sections.
 
+### Fix — `link`/`link-hextra` version inference no longer re-derives its own answer (`layouts/_partials/utils/resolve-link.html`)
+
+- **Why.** Three partials each independently worked out which version tree a page was in, and each
+  had its own bug: this one dropped the version segment on a sections-only site (see v0.2.1), the
+  version banner stopped rendering inside section subtrees (above), and the sidebar rendered empty
+  when a section segment shifted the version's position. Fixing the class rather than the instances
+  means one implementation, so the next URL-shape change is one edit rather than three.
+- **What changed.** `resolve-link.html`'s ~90-line segment walk is replaced by a call to
+  `utils/version-root.html`. Two details the delegation has to get right, both documented inline:
+  the resolver returns a *published-URL* prefix (product and language included) while the URL
+  assembly here re-prepends `.Site.BaseURL`, so the baseURL path and language prefix are stripped
+  back off — passing it through unchanged emits `/kgateway/kgateway/2.1.x/…`. The flat-site
+  (`ambientmesh.io`) and sections-only (`agentgateway.dev`) branches are unchanged.
+- **Also fixed, found by the source guard this move tripped.** `version-root.html`'s own version
+  shape-fallback pattern was the narrow `^[0-9]+\.[0-9]+\.x$`, written out once per URL-shape
+  branch. It rejected fully qualified LTS versions (`2026.7.1`), the exact defect
+  `tests/link-hextra-lts-version.spec.ts` was created for after it broke once already in
+  `resolve-link.html`. The pattern is now declared once as `$versionShapeRE`, accepts `X.Y.Z`, and
+  a new assertion fails if an inline copy reappears beside it. No fixture has an LTS tree, so this
+  was invisible to every behavioral test — the source guard was the only thing that caught it.
+- **Verified.** Full suite passes on both brands. Consumer builds
+  against a local `replace`, all exit 0 with no new warnings: agentgateway-oss-website (5434
+  pages), kgateway-oss (2836), kagent docs-site (240), docs hub agentgateway (2125 EN + 821 JA).
+  Link-shape sweeps: every `href` into `/docs/<section>/` on agentgateway.dev (~577k) and
+  kgateway.dev carries a version segment; on the docs hub, a before/after baseline build shows the
+  doubled-product-segment count (4) and the version-dropped `card path=` count (178) **unchanged**,
+  confirming both are pre-existing defects of the section restructure rather than regressions from
+  this change. Both are tracked separately.
+- **Regression coverage.** Neither fixture (`hugo-oss.toml`, `hugo-enterprise.toml`) declares
+  versions *only* under `params.sections` — both also carry a top-level `params.versions`, so this
+  branch was never behaviorally exercised. Added a source assertion
+  (`tests/link-hextra-shapes.spec.ts`, "a sections-only versions declaration... still counts as
+  versioned") that fails if the sections-only fallback is ever removed from
+  `resolve-link.html`, until a fixture reproducing the real shape exists.
+
+### Fix — the description lint scopes itself to where a fix is actually actionable: the newest version tree, in the default language (`layouts/partials/utils/warn-missing-description.html`)
+
+Two independent narrowings, both because the lint was reporting the same missing description several
+times under paths nobody can usefully edit.
+
+**1. Translated pages are no longer linted.** A translated page's front matter is produced from its
+English source by the translation sync, so a `description` added directly to a translated page is
+overwritten on the next run — the actionable fix is always on the source page. Of `agentregistry`'s 69
+warnings, **35** were `/agentregistry/ja/latest/…`, near-duplicates of the 34 English ones; it now
+reports **34**. `(index hugo.Sites 0)` identifies the default-language site, the same accessor
+`utils/resolve-sections.html` uses and for the same reason — it does not depend on
+`defaultContentLanguageInSubdir`, and on a single-language site it is a no-op.
+
+**2. No `main` version now falls back to the newest tree, not to every tree.**
+
+- **Why.** The lint normally scopes itself to the `main` (dev) tree. A product with no `main` version
+  fell back to linting **everything**, which multiplies one missing description by the number of
+  frozen version trees a product ships. Measured on the docs hub: `kgateway` reported **294** warnings
+  for **96** distinct pages copied across `2.3.x`/`2.2.x`/`2.1.x`, and `gateway` **43** for ~9 pages
+  across five trees. A frozen tree is an archived copy — a description added there ships nowhere — so
+  those duplicates are pure noise, and since `hugo-warnings.spec.ts` fails on any non-allowlisted
+  `WARN`, they fail CI too.
+- **Why it surfaced now.** Dropping the second version list (see the tagged-versions entry above)
+  changed `kgateway` and `gateway` from linting *nothing* to linting *everything*. Neither declares
+  `main`, but both **inherit** `sections.envoy.versions` from the `kgateway.dev` module — and that
+  list *does* contain `main`, which made the old two-list walk see an active version and skip every
+  page. So the lint had been silently disabled on both products by an inherited OSS config that has
+  nothing to do with the hub's own versions. Confirmed by restoring the old walk: `kgateway` goes back
+  to 0 warnings.
+- **What changed.** With no `main`, the active tree is now `latest` if declared, else the first
+  configured entry (TOML order is release order on every consumer config). All comparisons are on
+  `linkVersion` — the URL segment — never the canonical `.version`, because the two diverge
+  (gloo-mesh-enterprise ships `version = "2.14.x"` with `linkVersion = "main"`).
+  `utils/resolve-latest-version.html` is deliberately **not** reused: it returns `.version`, which is
+  the wrong coordinate for a path comparison.
+- **Both changes are strictly narrower,** so no consumer that passes today can start failing.
+  Verified across five hub products: `kgateway` 294 → **96**, `gateway` 43 → **9**, `agentregistry`
+  69 → **34**, `istio` **0**, `gloo-mesh-enterprise` **0**.
+- **Verified.** Observable on
+  [Solo Enterprise for kgateway 2.2.x](https://docs.solo.io/kgateway/2.2.x/) — pages in that frozen
+  tree no longer warn, while the same page under `2.3.x` still does. `make test-oss` and
+  `make test-enterprise` both pass.
+- **Known limitation.** "First in TOML order" is an assumption, not a derivation. Every consumer
+  config holds it today; where it did not, the effect would be under-reporting rather than reporting
+  the wrong pages.
+
+### Fix — `search-visible-versions.spec.ts` no longer asserts one fixture's version list against another consumer's (`tests/search-visible-versions.spec.ts`)
+
+- **Why.** Two of its assertions name specific fixture entries (`v4` / `v4-link`) rather than a
+  property that holds for any config, but the spec's only guard was "no built search bundle". A
+  consumer that *has* a bundle therefore ran them. `solo-io/docs` keeps a hand-maintained partial
+  copy of this fixture's config in `hugo-preview-test.toml` (and `hugo-test.toml`,
+  `hugo-local-test.toml`), and the `v4` entry added in this release was never mirrored into it — so
+  `framework-test-static` failed on a difference between two fixture configs rather than on any
+  theme defect.
+- **What changed.** Those two assertions now carry the same `IS_FIXTURE_TARGET` guard that every
+  sibling fixture-specific spec already uses. The generic half of the keying assertion — that the
+  raw `version` must not leak into the set, which is the bug that actually shipped — still runs on
+  every target, so consumer coverage is not weakened.
+- **Verified.** The `static` project against `solo-io/docs` goes from 2 failed / 4990 passed to
+  4991 passed, and the fixture run still exercises all five assertions on both brands.
+
+### Test coverage — the section-then-version URL shape, which had none (`fixture/content/en/test/nested/`, `tests/section-nested-versions.spec.ts`)
+
+- **Why.** `/<product>/<section>/<version>/…` is the shape this release exists for, and no fixture
+  page used it. `demo` and `alt` register sections **without** nesting version trees — their versions
+  live at `/test/<version>/` — so the fixture only ever exercised the fallback branch. Four behaviors
+  were pinned by SOURCE assertions reading template text, which cannot see a wrong answer, only
+  changed text: `version-root.html` prefixing `lookupPath` with the section,
+  `resolve-sections.html` appending a version, `breadcrumb.html` collapsing a version at depth 3, and
+  `resolve-section-versions.html` filtering by tag. The worst of those is silent — a section-less
+  `lookupPath` makes `site.GetPage` resolve nothing, the left nav renders **empty**, the page still
+  builds, and it reads as a content problem.
+- **What was added.** A third section, `nested`, with real trees at `/test/nested/v2/` and
+  `/test/nested/v1/` sharing a `page/` path, tagged on v2 and v1 but not on `main` (`alt`-only).
+  `demo` and `alt` stay non-nesting, so both branches of the resolver are now covered side by side.
+  The fixture's `contentDir` (`fixture/content/en/test`, `baseURL = /test`) already reproduces the
+  production enterprise shape — product segment in the URL, absent from the `GetPage` path — so
+  `/test/nested/v2/page/` resolves through `GetPage "/nested/v2/"`, the same two-coordinate
+  translation the docs hub performs.
+- **10 assertions**, covering: the nav tree resolves and is non-empty; it does not leak another
+  version's pages; the selector appends the version for a nesting section while the two non-nesting
+  ones still fall back; a section link remaps when the current version is absent there (the remap that
+  had been dead code since the migration); the dropdown is filtered to this section's tags and omits
+  `main`; a version switch preserves both section and path; no version link points at a missing tree;
+  chips and dropdown agree; and the breadcrumb shows the section between home and the version.
+- **Each assertion was probe-verified**, and one was wrong. The nav-tree check searched the enclosing
+  `<aside>`, which also holds the mobile version chips and section chips — so with the tree
+  **completely empty** it still found `/test/nested/v2/page/` and passed. Scoping it to the sidebar
+  `<nav>` makes it fail under the probe, as it should. That is the whole reason for probing rather than
+  trusting a green run.
+
+### Test coverage — proving the same-product `url` field is really dead (`tests/related-docs.spec.ts`)
+
+The release removed `url` from all 27 real configs on the argument that no reader consults it. That
+was an argument, not a test: the fixture still carried `url` on every same-product entry, and every
+value was **correct**, so a reader that did consult it would have produced identical output and moved
+no assertion. Those values are now a poison host (`must-not-render.invalid`), asserted absent from
+every built page — and a second assertion checks the poison is still *present in the config*, so
+"tidying up" the field cannot leave the first one passing vacuously. Probe-verified by making
+`navbar.html` prefer `.url`, which fails it. `relatedDocs` urls are the opposite case — the one place
+a version URL is written by hand and **must** render — so they use a different host and are asserted
+present.
+
 ### Test coverage — the `card` shortcode's `path=` branch
 
 - **Why.** Not one fixture card used `path=` — every one passed `link=` — so the whole
@@ -855,7 +899,7 @@ present.
   the override made. That assertion is generic, so it runs against consumer builds too (verified on
   the `agentgateway-oss-website`, `kgateway-oss` and `docs` configs, where the fixture-shape
   assertions skip and this one still executes).
-- **Verified.** Full suite on both brands: **1874 passed**, 14 skipped, 0 failures.
+- **Verified.** Full suite passes on both brands.
 
 ### Test coverage — a fixture version whose `linkVersion` differs from its `version`
 
@@ -887,7 +931,7 @@ present.
   path too — gated content being *ejected* out of `div.content` (and so rendering unstyled) is a
   distinct failure from being gated wrongly, and only the ancestor-path snapshot catches it. The
   three rendered blocks now record `div.content > p`; the three suppressed ones are correctly absent.
-- **Verified.** Full suite on both brands: **1861 passed**, 14 skipped, 0 failures. The fixture's own
+- **Verified.** Full suite passes on both brands. The fixture's own
   `gate-form` lint caught the first draft of the new page for using angle-form gates
   (`{{< version >}}`) where content must use percent form — fixed, and worth noting as the lint doing
   its job. Both new specs were then run against the real `agentgateway-oss-website` and
@@ -895,80 +939,24 @@ present.
   and the 3 source-contract guards still execute, so a consumer keeps the regression protection
   without inheriting fixture-shape expectations.
 
-### Additive — `utils/version-root.html` reports `pathAfterVersion`, and `matchedIdx` in both URL shapes
+### Verified — release-wide
 
-- **Why.** "Swap the version, keep the rest of the path" is a recurring need — the noindex partial
-  builds an old page's current-version equivalent, and the sidebar and navbar build version-switch
-  destinations — and each caller was slicing the segment list itself with its own off-by-one risk.
-  `matchedIdx` was also left at `0` in the OSS branch, which is the only reason `sidebar.html`
-  carried a `cond $isOSSShape 4 (add $matchedIdx 1)` special case.
-- **What changed.** The OSS branch now records `matchedIdx = 3` (where the version always sits in
-  that shape), `pathAfterVersion` is derived once from `matchedIdx` for both shapes, and the
-  sidebar's special case collapses to a plain `add $matchedIdx 1` — the same value it computed
-  before, so the mobile version row is unchanged.
-- **Verified.** Full suite on both brands: **1851 passed**, 14 skipped, 0 failures (up from 1839;
-  the additions are the 9 noindex assertions plus the new fixture page's auto-card checks).
-  `tests/auto-cards.spec.ts` gained a `V1_ONLY_TOPICS` list mirroring the existing `V2_ONLY_TOPICS`,
-  since the new v1 page also surfaces as a section card.
-
-### Fix — the version banner reappears on pages inside a section subtree (`layouts/partials/version-banner.html`)
-
-- **Why.** The banner derived "which version is this page in" from
-  `.Page.FirstSection.RelPermalink`, then checked `in $versionPath .linkVersion`. Inside a section
-  subtree (`/<product>/<section>/<version>/…`, the shape agentgateway enterprise adopted so
-  kubernetes and standalone can sit side by side) `.FirstSection` resolves to the *section*
-  (`kubernetes`), not the version — so the substring check never matched and the banner silently
-  rendered nothing. Silently is the operative word: no warning, no broken link, just a missing
-  "this is an older version" notice on every page of every non-latest tree, which is the one place
-  it matters most. Verify on
-  <https://docs.solo.io/agentgateway/kubernetes/2.3.x/quickstart/> — the "Review the docs for the
-  2.3 LTS version" bar should be present above the title.
-- **What changed.** The banner now calls `utils/version-root.html`, the resolver the sidebar,
-  navbar and docs-tabs band already share, and reads the matched entry from its new `versionEntry`
-  return key. It no longer parses a URL itself.
-- **Verified.** Local `hugo160` build of the docs hub (`make build PRODUCT=agentgateway`) with a
-  before/after comparison against the same commit's baseline: pages under
-  `agentgateway/kubernetes/latest/` carrying `class="version-banner"` went from **0 to 327** (the
-  4 remaining are alias/meta-refresh stubs, correctly bannerless). Each tree resolves its *own*
-  entry — `kubernetes/2.3.x` renders the 2.3 LTS text, `kubernetes/2026.7.1` the 2026.7.1 LTS
-  text, `kubernetes/latest` and `standalone/latest` the latest text.
-
-### Fix — `link`/`link-hextra` version inference no longer re-derives its own answer (`layouts/_partials/utils/resolve-link.html`)
-
-- **Why.** Three partials each independently worked out which version tree a page was in, and each
-  had its own bug: this one dropped the version segment on a sections-only site (v0.2.1 above), the
-  version banner stopped rendering inside section subtrees (above), and the sidebar rendered empty
-  when a section segment shifted the version's position. Fixing the class rather than the instances
-  means one implementation, so the next URL-shape change is one edit rather than three.
-- **What changed.** `resolve-link.html`'s ~90-line segment walk is replaced by a call to
-  `utils/version-root.html`. Two details the delegation has to get right, both documented inline:
-  the resolver returns a *published-URL* prefix (product and language included) while the URL
-  assembly here re-prepends `.Site.BaseURL`, so the baseURL path and language prefix are stripped
-  back off — passing it through unchanged emits `/kgateway/kgateway/2.1.x/…`. The flat-site
-  (`ambientmesh.io`) and sections-only (`agentgateway.dev`) branches are unchanged.
-- **Also fixed, found by the source guard this move tripped.** `version-root.html`'s own version
-  shape-fallback pattern was the narrow `^[0-9]+\.[0-9]+\.x$`, written out once per URL-shape
-  branch. It rejected fully qualified LTS versions (`2026.7.1`), the exact defect
-  `tests/link-hextra-lts-version.spec.ts` was created for after it broke once already in
-  `resolve-link.html`. The pattern is now declared once as `$versionShapeRE`, accepts `X.Y.Z`, and
-  a new assertion fails if an inline copy reappears beside it. No fixture has an LTS tree, so this
-  was invisible to every behavioral test — the source guard was the only thing that caught it.
-- **Verified.** Full suite on both brands: **1839 passed**, 14 skipped, 0 failures. Consumer builds
-  against a local `replace`, all exit 0 with no new warnings: agentgateway-oss-website (5434
-  pages), kgateway-oss (2836), kagent docs-site (240), docs hub agentgateway (2125 EN + 821 JA).
-  Link-shape sweeps: every `href` into `/docs/<section>/` on agentgateway.dev (~577k) and
-  kgateway.dev carries a version segment; on the docs hub, a before/after baseline build shows the
-  doubled-product-segment count (4) and the version-dropped `card path=` count (178) **unchanged**,
-  confirming both are pre-existing defects of the section restructure rather than regressions from
-  this change. Both are tracked separately.
-
-- **Regression coverage.** Neither fixture (`hugo-oss.toml`, `hugo-enterprise.toml`) declares
-  versions *only* under `params.sections` — both also carry a top-level `params.versions`, so this
-  branch was never behaviorally exercised. Added a source assertion
-  (`tests/link-hextra-shapes.spec.ts`, "a sections-only versions declaration... still counts as
-  versioned") that fails if the sections-only fallback is ever removed from
-  `resolve-link.html`, until a fixture reproducing the real shape exists.
-
+- Fixture suite, both brands: **2012 passed**, 17 skipped, 0 failures.
+- **docs hub agentgateway** (`make build PRODUCT=agentgateway`): `kubernetes/latest` offers its three
+  visible versions, `standalone/latest` offers only `latest` (the tag filter working), and the
+  version-root picker page at `/agentgateway/latest/` offers the full set (the unregistered-section
+  rule working). Version banner on 327 pages, `kubernetes/2.3.x` noindexed on 210, zero doubled or
+  version-less hrefs.
+- **agentgateway-oss-website**: 5442 pages, no warnings. Its two sections shipped identical lists, so
+  the duplication collapsed to one untagged list. Every `/docs/<section>/` href keeps its version
+  segment; its own `nav.html` dropdown still offers `main` and `1.4 (latest)`.
+- **kgateway-oss**: 2836 pages, no warnings. Its `envoy` section held a byte-for-byte copy of the
+  top-level list, with a comment instructing maintainers to keep the two in sync by hand; that copy
+  is deleted. All five version chips render with the active one marked.
+- **kagent docs-site**: 240 pages, no warnings. Its shipped config registers no sections, so the
+  versions migration needs no edit there — the point of "no `sections` field means every section".
+  The version-less section support was verified separately against its working tree (kagent and
+  kmcp doc sets) via a temporary local `replace`; see that entry's verification.
 
 ## [0.2.1] — 2026-08-20
 
