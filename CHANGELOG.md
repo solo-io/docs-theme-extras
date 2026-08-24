@@ -289,6 +289,111 @@ the selector correctly renders nothing.
   `fixture/.docs-test-*.toml`, so the warning firing on a real consumer is not confused with the
   fixture's own shape.
 
+### Add — sections no longer require versions, so a version-less site can ship parallel doc sets (`layouts/_partials/utils/section-segment.html`, `layouts/partials/sidebar.html`, `layouts/_partials/navbar.html`)
+
+- **Why.** `kagent.dev` ships two parallel doc sets — `content/kagent/` and `content/kmcp/` — with no
+  version axis, because there are no release trains to version. That is exactly the shape
+  `params.sections` models, but registering them did nothing: the selector was resolved *inside*
+  navbar.html's `with $navVersions` block, so a site with no `params.versions` got no selector, and
+  `utils/resolve-sections.html` never ran there at all. So the repo carried an 88-line
+  `layouts/_partials/sidebar.html` that replaced the theme's sidebar wholesale, purely to root the
+  tree at the current doc set. The cost of that shadow was everything else the theme's sidebar does:
+  landing-page suppression, the mobile overlay, the sidebar logo, the `showOnLanding` opt-in.
+  Without it, extras roots the version-less tree at `site.Home` whenever the home page is
+  `type: docs` — which a `cascade` commonly makes true — so every page showed BOTH doc sets merged:
+  **202 links per page instead of the 158 / 40 that belong there.**
+- **What it does.** A registered section is now recognized on a site with no `params.versions`,
+  positionally: exactly one segment below the docs root, read off `site.Home.RelPermalink` so it
+  absorbs a baseURL subpath (`/docs/`), a per-product hub baseURL and a language prefix without
+  knowing which it is looking at. Such a site gets the navbar section selector, the mobile drawer's
+  section chips, and a left nav rooted at the current doc set. It does not get a version dropdown
+  (nothing to put in it) or the `extras-section-hollow` warning (vacuous with no versions to nest).
+- **A version-less site uses the positional rule ALONE, and that is a fix, not a simplification.**
+  The pre-existing condition (b) accepts "last path segment, and no version precedes it". On a
+  versioned site the second half carries the weight — nearly every content page sits under a version,
+  so a trailing segment that happens to share a section's name is rejected. Remove versions and
+  *nothing* ever has a version before it, so (b) started matching a registered name as a section at
+  any depth purely for being last. Caught by a fixture page at `/docs/topics/alpha/`, where `topics`
+  is not a section and `alpha` is: it resolved to section `alpha` and rendered the alpha tree on a
+  page belonging to neither doc set. Condition (a) is likewise vacuous with no versions. So the
+  positional test is the only meaningful one, and applying it alone is both simpler and tighter.
+- **A page in no doc set now gets no left nav.** Taxonomy terms and any top-level directory that is
+  not a registered section have no single tree to show, and the `site.Home` default renders every doc
+  set merged — a bare `/docs/tags/` page grew a 101-link tree spanning both of kagent's. Suppressed
+  instead, matching what the versioned path already does for a page above the version trees. Gated on
+  2+ registered sections, so a version-less site with none (`agentregistry.dev`, `ambientmesh.io`)
+  keeps the `site.Home` rooting it has always had — correct there, since every page belongs to the
+  one tree.
+- **Internal.** The section dropdown moved to `_partials/components/section-dropdown.html` and the
+  mobile chip row to `partials/components/sidebar-section-row.html`. Both are now needed on two sides
+  of a scope boundary, and duplicating them across those call sites is how the chips and the dropdown
+  drifted apart last time.
+
+### Add — a section can carry an `icon` (`layouts/_partials/utils/render-icon.html`, `layouts/_partials/utils/resolve-sections.html`)
+
+- **Why.** `kagent.dev`'s hand-rolled `menu.main` doc-set dropdown showed a product mark next to each
+  entry, inlined from `assets/icons/nav-<name>.svg`. Moving to the theme's section selector would have
+  dropped them, because `utils/resolve-sections.html` returned no icon and neither selector component
+  rendered one — a visible regression as the price of using the shared component.
+- **What it does.** `params.sections.<key>.icon` is emitted on the navbar selector entry and on the
+  matching mobile chip. Optional per section: entries without one render as text, and a selector where
+  no section sets an icon is byte-for-byte what it was before — which is every current consumer, since
+  none set one. The label is wrapped in `.section-dropdown-label` only when an icon is present, so no
+  empty wrapper appears in the no-icon markup and no flex gap is introduced.
+- **A shared resolver, and a NEW icon source.** The four-way resolution (`static/` svg → `assets/` svg
+  → `site.Data.icons` name → Material Icons ligature) is now one partial,
+  `utils/render-icon.html`, replacing three near-identical inline copies in `partials/sidebar.html`
+  (twice) and `partials/auto-section-cards.html`. The `assets/` branch is new: it exists so a consumer
+  can keep product marks in `assets/` instead of moving them into `static/`. `static/` deliberately
+  stays FIRST, since all three copies resolved it first and reordering would change which file an
+  existing `icon:` value picks up. `layouts/_shortcodes/card.html` was left alone: it is a two-branch
+  variant that calls Hextra's `utils/icon.html` UNGUARDED, and since that partial calls `errorf` on an
+  unknown name, one bad `icon=` there fails the build. The hub already filters card icons through an
+  allowlist, and widening this into shortcodes is separate work.
+- **Two details the extraction nearly lost, both caught by byte-diff rather than by review.** The
+  sidebar's inlined SVGs carry an extra `sidebar-icon-svg` hook its other branches do not, so the
+  partial takes an optional `svgClass`; without it every SVG icon in the left nav was silently
+  restyled. And the ligature branch keeps `material-icons` ahead of the caller's class, which is what
+  makes it render as a glyph rather than as the literal word.
+- **Verify in production.** Once `kagent.dev` picks this up:
+  <https://kagent.dev/docs/kagent/concepts/agents/> — each entry in the navbar doc-set menu carries an
+  inline `<svg class="section-dropdown-icon">` from `assets/icons/nav-kagent.svg` /
+  `nav-kmcp.svg`. Compare <https://agentgateway.dev/docs/kubernetes/latest/> — its sections set no
+  icon, so its selector entries have no `section-dropdown-icon` and no `section-dropdown-label`
+  wrapper at all.
+- **How it was verified.** Coverage went from one icon source to four. Before this, the ONLY icon
+  value anywhere in the fixture was a single `icon: rocket_launch` page — so the `static/` and
+  `site.Data.icons` branches had no coverage at all, despite running for every left-nav and
+  section-card icon. The version-less fixture now registers one section per branch, and its two SVGs
+  carry `data-fixture-icon` attributes so a test can assert WHICH branch produced the markup rather
+  than just that an `<svg>` appeared — without that, three of the four branches are
+  indistinguishable and a resolution-order bug passes silently. Resolution order and the
+  `site.Data.icons` guard are additionally pinned at source level, since covering them behaviorally
+  would need a fixture shipping a deliberate same-name duplicate. Four probes, all confirmed failing.
+  Regression: **32,868 built files byte-identical** across all eight `solo-io/docs` products,
+  `agentgateway.dev`, `kgateway.dev`, `agentregistry.dev` and `ambientmesh.io`. Both fixture brands:
+  1981 passed, 17 skipped.
+- **Verify in production.** Once `kagent.dev` picks this up:
+  <https://kagent.dev/docs/kagent/concepts/agents/> — the navbar doc-set menu is
+  `div.section-dropdown` rendered by the theme, not the Hextra `hextra-nav-menu-toggle` the
+  hand-rolled `menu.main` children produced; and the left nav lists only `kagent` pages (79 links),
+  with no `/docs/kmcp/` entries. Compare <https://kagent.dev/docs/kmcp/deploy/server/>, which lists
+  only the 20 `kmcp` pages. <https://kagent.dev/docs/tags/> renders an empty `<aside>` with no
+  `<nav class="sidebar-nav">` at all.
+- **How it was verified.** A fourth fixture build (`make build-flat`, `hugo-flat.toml`) mirrors
+  kagent's shape — baseURL with a `/docs` prefix, two registered sections, no versions — since no
+  existing fixture could reach these paths. 23 assertions in
+  `tests/section-versionless.spec.ts`. Six probes were run against them; two exposed real bugs rather
+  than test gaps (the condition-(b) hole above, and the merged tree on orphan pages), and one showed
+  an assertion was vacuous: a collision directory *below* a section cannot discriminate positional
+  from match-anywhere detection, because the resolver stops at its first match either way. That test
+  is kept for the ordering it does cover, with the limitation recorded, and a discriminating case was
+  added beside it. Regression: **32,531 built files byte-identical** across all eight
+  `solo-io/docs` products (including multilingual `agentgateway` and the products that *inherit*
+  `sections.envoy` from an imported module), `agentgateway.dev`, `kgateway.dev`, and the two other
+  version-less consumers `agentregistry.dev` and `ambientmesh.io`. Both fixture brands: 1973 passed,
+  17 skipped.
+
 ### Fix — a section is detected by POSITION, not just by name (`layouts/_partials/utils/section-segment.html`)
 
 - **Why.** Detection matched a registered section key **anywhere** in a page's path. So any ordinary

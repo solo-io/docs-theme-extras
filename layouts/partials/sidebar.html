@@ -128,11 +128,21 @@
        A flat, unversioned site that makes its home page the real docs entry
        opts back in with `[params.sidebar] showOnLanding = true`, below. */ -}}
 {{- $isDocsIndex := or $context.IsHome (and (eq $context.Section "docs") (eq $context.RelPermalink "/docs/")) -}}
+{{- /* VERSION-LESS SITES ARE EXCLUDED, and this is load-bearing. Suppressing the
+       nav on a section landing is right when that page is a version PICKER —
+       /agentgateway/kubernetes/ exists to send you to a version and has no tree
+       of its own. On a site with no versions the section landing is the doc set's
+       front page and owns the whole tree below it (kagent's /docs/kagent/), so
+       suppressing there would delete the nav from the most-visited page in each
+       section. Gated on site.Params.versions rather than on $isVersionedDocs
+       because that is resolved further down, after this. */ -}}
 {{- $isSectionLanding := false -}}
-{{- with (partial "utils/section-segment.html" $context).segment -}}
-  {{- $urlParts := split (strings.Trim $context.RelPermalink "/") "/" -}}
-  {{- if eq (index $urlParts (sub (len $urlParts) 1)) . -}}
-    {{- $isSectionLanding = true -}}
+{{- if site.Params.versions -}}
+  {{- with (partial "utils/section-segment.html" $context).segment -}}
+    {{- $urlParts := split (strings.Trim $context.RelPermalink "/") "/" -}}
+    {{- if eq (index $urlParts (sub (len $urlParts) 1)) . -}}
+      {{- $isSectionLanding = true -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
 {{- $isLandingPage := or $isDocsIndex $isSectionLanding -}}
@@ -235,32 +245,11 @@
                label so it's clear what the chips switch. */ -}}
         <div class="sidebar-mobile-only sidebar-mobile-header">
 
-          {{- /* Mobile section row — the drawer counterpart of the navbar's
-                 product-name section dropdown. Both come from
-                 utils/resolve-sections.html so they offer the same sections,
-                 with the same labels and the same destinations.
-
-                 That resolver replaced ~45 lines inlined here which (a) built
-                 hrefs as a literal `/docs/<section>/<version>/`, so this row was
-                 gated on $isOSSShape and the docs hub never showed it at all,
-                 and (b) remapped the target version by reading `$cfg.versions`
-                 — site.Params.sections.<key>.versions, removed in v0.2.2 — so
-                 the remap had silently no-opped since that migration and every
-                 chip reused the current version verbatim, pointing at pages that
-                 need not exist in the target section. */ -}}
-          {{- $sections := partial "utils/resolve-sections.html" $context -}}
-          {{- if gt (len $sections) 1 -}}
-            <span class="sidebar-mobile-row-label">{{ (T "section") | default "Section" }}</span>
-            <div class="sidebar-mobile-section-row">
-              {{- range $sections -}}
-                <a href="{{ .href }}"
-                   class="sidebar-mobile-section-link{{ if .isCurrent }} sidebar-mobile-section-active{{ end }}"
-                   {{ if .isExternal }}rel="noopener"{{ end }}>
-                  {{ .label }}
-                </a>
-              {{- end -}}
-            </div>
-          {{- end -}}
+          {{- /* Mobile section row. Markup lives in
+                 components/sidebar-section-row.html because the version-less
+                 branch at the bottom of this file needs the same row, outside
+                 this `if $isVersionedDocs`. */ -}}
+          {{- partial "components/sidebar-section-row.html" (partial "utils/resolve-sections.html" $context) -}}
 
           {{- /* utils/resolve-section-versions.html: the entries in
                  site.Params.versions that apply to $section — each entry names
@@ -489,6 +478,67 @@
       {{- partial "hextra/sidebar.html" (dict "context" $context) -}}
     {{- else -}}
       {{- $navRoot := cond (eq site.Home.Type "docs") site.Home $context.FirstSection -}}
+
+      {{- /* SECTIONS ON A VERSION-LESS SITE. A site can ship parallel doc sets
+             without versioning them — kagent's docs are `kagent` and `kmcp`. It
+             registers them under params.sections exactly like a versioned
+             product does, and utils/section-segment.html resolves them via its
+             positional condition (c).
+
+             Rooting at the SECTION is the whole point. The default above roots
+             at site.Home whenever the home page is type `docs`, which a
+             cascade commonly makes true — and that renders every doc set's tree
+             on every page, merged. Measured on kagent: 202 links per page
+             instead of the 158 (kagent) / 40 (kmcp) that belong there. That is
+             the concrete reason kagent carried a hand-written sidebar override
+             for this shape instead of using the theme's.
+
+             Resolved through site.GetPage on the section key, the same two
+             spellings utils/resolve-sections.html uses, so this needs no
+             knowledge of whether the prefix is /<section>/ or /docs/<section>/.
+             $context.FirstSection would usually agree, but only while content
+             sits directly under the section — GetPage keys off the registry,
+             which is what actually defines a section.
+
+             GATED ON THE SITE HAVING NO VERSIONS, not merely on this page being
+             outside a version tree. A versioned site reaches this branch too —
+             for its taxonomy pages and any page above the version trees — and
+             those pages must keep rendering exactly as before. Without the gate
+             the fixture's /test/tags/, /test/categories/, /test/flatguide/ and
+             /test/hextra-include-target/ all gained a section chip row: four
+             pages of unrequested change per brand, and the same class of change
+             on every hub product. */ -}}
+      {{- $sections := slice -}}
+      {{- $orphan := false -}}
+      {{- if not site.Params.versions -}}
+        {{- $sections = partial "utils/resolve-sections.html" $context -}}
+        {{- with $sectionSegment -}}
+          {{- $sectionRoot := site.GetPage (printf "/%s" .) -}}
+          {{- if not $sectionRoot -}}
+            {{- $sectionRoot = site.GetPage (printf "/docs/%s" .) -}}
+          {{- end -}}
+          {{- with $sectionRoot -}}{{- $navRoot = . -}}{{- end -}}
+        {{- end -}}
+        {{- /* A page in NO doc set, on a site that HAS doc sets: taxonomy terms
+               (/docs/tags/, /docs/categories/) and any top-level directory that
+               is not a registered section. There is no single tree to show, and
+               falling through to the site.Home default shows EVERY doc set
+               merged — 101 links spanning both of kagent's on a bare tags page.
+               Suppress instead, which is what the versioned path already does
+               for a page above the version trees.
+
+               Requires 2+ sections, so a version-less site with none
+               (agentregistry, ambientmesh.io) keeps the site.Home rooting it has
+               always had — every page there legitimately belongs to the one and
+               only tree. */ -}}
+        {{- if and (gt (len $sections) 1) (eq $sectionSegment "") -}}
+          {{- $orphan = true -}}
+        {{- end -}}
+      {{- end -}}
+
+      {{- if $orphan -}}
+      <aside class="sidebar-container hextra-sidebar-container hx:order-first hx:hidden hx:w-64 hx:shrink-0 hx:xl:block hx:print:hidden"></aside>
+      {{- else -}}
       <aside class="sidebar-container hextra-sidebar-container sidebar-mobile-panel hx:order-first hx:w-64 hx:shrink-0 hx:hidden hx:xl:block hx:print:hidden">
         {{- with site.Params.sidebar.logo -}}
           <div class="sidebar-product-logo hx:mb-1 hx:max-xl:hidden">
@@ -500,12 +550,24 @@
             </a>
           </div>
         {{- end -}}
+        {{- /* Mobile section chips. The drawer is the ONLY route between doc
+               sets below the desktop breakpoint, since the navbar's section
+               dropdown is part of the collapsed nav. Renders nothing below two
+               sections, so a single-doc-set unversioned site (agentregistry,
+               ambientmesh.io) emits no header at all and is byte-identical to
+               before. */ -}}
+        {{- if gt (len $sections) 1 -}}
+          <div class="sidebar-mobile-only sidebar-mobile-header">
+            {{- partial "components/sidebar-section-row.html" $sections -}}
+          </div>
+        {{- end -}}
         <div class="sidebar-nav-wrapper">
           <nav class="sidebar-nav">
             {{- template "render-sidebar-tree" (dict "page" $navRoot "current" $context "versionPrefix" "" "depth" 0) -}}
           </nav>
         </div>
       </aside>
+      {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
@@ -573,14 +635,7 @@
                class="sidebar-link {{ if $childIsActive }}sidebar-active-item{{ end }}"
                {{ if $childIsActive }}aria-current="page"{{ end }}>
               {{- with $icon -}}
-                {{- $svgIconPath := printf "static/%s" (replaceRE "^/" "" .) -}}
-                {{- if and (findRE `\.svg$` .) (fileExists $svgIconPath) -}}
-                  {{- readFile $svgIconPath | replaceRE "<svg" `<svg class="sidebar-icon sidebar-icon-svg" aria-hidden="true"` | safeHTML -}}
-                {{- else if index site.Data.icons . -}}
-                  {{- partial "utils/icon.html" (dict "name" . "attributes" `class="sidebar-icon" aria-hidden="true"`) -}}
-                {{- else -}}
-                  <i class="material-icons sidebar-icon" aria-hidden="true">{{ . }}</i>
-                {{- end -}}
+                {{- partial "utils/render-icon.html" (dict "icon" . "class" "sidebar-icon" "svgClass" "sidebar-icon sidebar-icon-svg") -}}
               {{- end -}}
               <span class="hx:flex-1">{{ $navLabel }}
                 {{- if .Params.enterprise }} <span class="sidebar-badge sidebar-badge-enterprise">Enterprise</span>{{ end -}}
@@ -625,14 +680,7 @@
              class="sidebar-link {{ if $isActive }}sidebar-active-item{{ end }}"
              {{ if $isActive }}aria-current="page"{{ end }}>
             {{- with $icon -}}
-              {{- $svgIconPath := printf "static/%s" (replaceRE "^/" "" .) -}}
-              {{- if and (findRE `\.svg$` .) (fileExists $svgIconPath) -}}
-                {{- readFile $svgIconPath | replaceRE "<svg" `<svg class="sidebar-icon sidebar-icon-svg" aria-hidden="true"` | safeHTML -}}
-              {{- else if index site.Data.icons . -}}
-                {{- partial "utils/icon.html" (dict "name" . "attributes" `class="sidebar-icon" aria-hidden="true"`) -}}
-              {{- else -}}
-                <i class="material-icons sidebar-icon" aria-hidden="true">{{ . }}</i>
-              {{- end -}}
+              {{- partial "utils/render-icon.html" (dict "icon" . "class" "sidebar-icon" "svgClass" "sidebar-icon sidebar-icon-svg") -}}
             {{- end -}}
             <span class="hx:flex-1">{{ $navLabel }}</span>
           </a>

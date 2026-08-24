@@ -447,7 +447,81 @@ thing: registration with no options. That is the normal case.
    contributes nothing to the selector and nothing to version scoping, and the
    build stays green.
 
-8. **Do not re-document this in a consumer config.** Point at this file. Every
+8. **Sections do not require versions.** A site can ship parallel doc sets with
+   no version axis at all, and it registers them exactly as a versioned product
+   does — one key per doc set, no `params.versions` anywhere. `kagent.dev` is the
+   worked example: `content/kagent/` and `content/kmcp/`, two doc sets, no
+   releases to version.
+
+   ```yaml
+   params:
+     # No params.versions. Registering sections is all a version-less site needs.
+     sections:
+       kagent:
+         icon: icons/nav-kagent.svg   # optional, see below
+       kmcp:
+         icon: icons/nav-kmcp.svg
+     product: "Docs"   # label on the selector button; else it falls back to site.Title
+   ```
+
+   Version-less sites get the same three behaviors a versioned one does: the
+   navbar section selector, the mobile drawer's section chips, and a left nav
+   rooted at the **current** doc set rather than at `site.Home`. That last one is
+   the reason to bother — without a section registry the theme roots the tree at
+   `site.Home` whenever the home page is `type: docs` (which a `cascade`
+   commonly makes true), so every doc set renders on every page, merged.
+
+   Two consequences worth knowing:
+
+   - **Detection is positional, and version-less sites use position ALONE.** A
+     section must sit exactly one segment below the docs root — `/<section>/`,
+     `/docs/<section>/`, `/<product>/<section>/`, `/<lang>/<section>/`, read off
+     `site.Home.RelPermalink`. A versioned site additionally recognizes a section
+     directly above a version tree, or as a trailing landing segment; neither
+     rule means anything without versions, and the trailing-segment one is
+     actively wrong there — it would match any page whose last segment happens to
+     share a section's name, at any depth.
+   - **A page in no doc set gets no left nav.** Taxonomy terms and any top-level
+     directory that is not a registered section have no single tree to show, so
+     the nav is suppressed rather than falling back to the merged `site.Home`
+     tree. This applies only once 2+ sections are registered; a version-less site
+     with no sections (`agentregistry.dev`, `ambientmesh.io`) keeps `site.Home`
+     rooting, which is correct there — every page belongs to the one tree.
+
+   Do **not** add a `params.versions` entry to a version-less site to make
+   something else work. One entry moves the whole site onto the versioned code
+   paths, where a section is only recognized above a version tree — of which
+   there are none.
+
+   What a version-less site does *not* get: the version dropdown (there is
+   nothing to put in it), and the `extras-section-hollow` warning, which is
+   vacuous when there are no versions to nest.
+
+9. **A section may set an `icon`, and it is optional per section.** It appears on
+   the navbar selector entry and on the matching mobile chip. The value is
+   resolved by `utils/render-icon.html`, the same resolver behind left-nav icons
+   and section-card icons, so a section accepts every source the rest of the
+   theme does. **First match wins**, in this order:
+
+   | Value | Resolved as |
+   | --- | --- |
+   | `foo.svg` present under `static/` | inlined with `readFile` |
+   | `icons/foo.svg` resolvable in `assets/` | inlined via `resources.Get` |
+   | a key in `site.Data.icons` (e.g. `solo`) | Hextra's named-icon partial |
+   | anything else (e.g. `rocket_launch`) | a Material Icons ligature |
+
+   `static/` deliberately precedes `assets/`, because every call site resolved
+   static first before this was one shared partial, and reordering would change
+   which file an existing `icon:` value picks up.
+
+   Two things to know. A value that matches nothing renders as a **Material
+   Icons ligature**, which shows the literal string when the font has no glyph
+   for it — that is the failure mode for a typo, not a build error. And mixing
+   icon'd with icon-less sections in one selector is allowed; entries without an
+   icon simply render as text, and a selector where no section sets one is
+   byte-for-byte what it was before icons existed.
+
+10. **Do not re-document this in a consumer config.** Point at this file. Every
    repo grew its own explanation of the same rules, and they drifted — one still
    claimed a section carried its own version list a release after that was
    removed. A one-line comment naming this section ages better than a paragraph.

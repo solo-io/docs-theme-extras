@@ -1,0 +1,84 @@
+{{- /*
+  render-icon.html — resolve one icon value to markup, for every icon source the
+  theme supports.
+
+  Input dict:
+    icon   string — the configured value (front-matter `icon:`, a section's
+                    `icon`, a shortcode arg). Required; "" renders nothing.
+    class  string — CSS class to put on the emitted element. Required, because
+                    each call site sizes and colors its icons differently
+                    (`sidebar-icon`, `section-card-icon`, `section-dropdown-icon`).
+    svgClass string — optional override for the INLINED-SVG branches (1 and 2).
+                    Defaults to `class`. It exists because the sidebar's inlined
+                    SVGs carry an extra `sidebar-icon-svg` hook that its data-icon
+                    and ligature branches do not, and dropping that silently
+                    restyled every SVG icon in the left nav.
+
+  The Material Icons branch keeps the `material-icons` class ahead of `class`,
+  which is what makes the ligature render as a glyph rather than as the literal
+  word. Same reason: it was in all three copies and is easy to lose in an
+  extraction.
+
+  RESOLUTION ORDER, and it is significant — the first match wins:
+
+    1. `<path>.svg` present under static/  → inlined with readFile
+    2. `<path>.svg` resolvable in assets/  → inlined via resources.Get
+    3. a key in site.Data.icons            → Hextra's utils/icon.html
+    4. anything else                       → a Material Icons ligature
+
+  Static comes before assets so no existing consumer's output can change: every
+  call site had branches 1, 3 and 4 inlined, in that order, and this preserves
+  them exactly. Branch 2 is new, and it is what lets a consumer keep its product
+  marks in assets/ rather than having to move them into static/ — kagent's
+  `assets/icons/nav-kagent.svg` is the case that motivated it. A value that
+  matched nothing before fell through to branch 4 and rendered a nonsense
+  ligature, so nothing sane can regress by being picked up at 2 instead.
+
+  THE site.Data.icons GUARD IS LOAD-BEARING. Hextra's utils/icon.html calls
+  `errorf` when the name is not in the data file, which ABORTS the build. Every
+  copy of this logic guarded it with `index site.Data.icons .` first, and that
+  guard has to survive extraction. (layouts/_shortcodes/card.html calls
+  utils/icon.html UNGUARDED and is therefore one bad `icon=` away from a failed
+  build — deliberately left alone here, since the hub already filters card icons
+  through an allowlist and widening this change into shortcodes is a separate
+  piece of work.)
+
+  Extracted from four near-identical copies: sidebar.html (twice — the tree
+  renderer and the flat-list renderer), auto-section-cards.html, and the two new
+  section-selector components, which needed the same thing again. The copies had
+  already drifted in one respect: card.html dropped the guard.
+*/ -}}
+{{- $icon := .icon | default "" -}}
+{{- $class := .class -}}
+{{- $svgClass := .svgClass | default .class -}}
+{{- with $icon -}}
+  {{- $staticPath := printf "static/%s" (replaceRE "^/" "" .) -}}
+  {{- $isSvg := findRE `\.svg$` . -}}
+  {{- $svgAttrs := printf `<svg class="%s" aria-hidden="true"` $svgClass -}}
+  {{- /* An `aria-hidden` already on the source <svg> is dropped first, or the
+         injected one lands beside it and the element carries the attribute
+         twice. Browsers take the first and move on, but it fails HTML
+         validation and it is the kind of thing that gets "fixed" later by
+         removing the injected copy — which would silently unhide every icon
+         from screen readers. No consumer's SVGs currently declare it (checked
+         across agentgateway.dev, kgateway.dev and solo-io/docs: zero), so this
+         changes nothing today; kagent's assets/icons/nav-*.svg do, which is how
+         it surfaced. Scoped to the opening tag by matching up to the first `>`,
+         so an aria-hidden on an inner <path> is left alone. */ -}}
+  {{- $stripAria := `(<svg[^>]*?)\s+aria-hidden="[^"]*"` -}}
+  {{- if and $isSvg (fileExists $staticPath) -}}
+    {{- readFile $staticPath | replaceRE $stripAria "$1" | replaceRE "<svg" $svgAttrs | safeHTML -}}
+  {{- else -}}
+    {{- $asset := "" -}}
+    {{- if $isSvg -}}
+      {{- $asset = resources.Get . -}}
+    {{- end -}}
+    {{- if $asset -}}
+      {{- $asset.Content | replaceRE $stripAria "$1" | replaceRE "<svg" $svgAttrs | safeHTML -}}
+    {{- else if index site.Data.icons . -}}
+      {{- partial "utils/icon.html" (dict "name" . "attributes" (printf `class="%s" aria-hidden="true"` $class)) -}}
+    {{- else -}}
+      <i class="material-icons {{ $class }}" aria-hidden="true">{{ . }}</i>
+    {{- end -}}
+  {{- end -}}
+{{- end -}}

@@ -9,7 +9,7 @@ CONFIG  ?=
 .PHONY: install \
         clear-cache \
         server-oss server-enterprise \
-        build-oss build-enterprise \
+        build-oss build-enterprise build-flat \
         test-oss test-enterprise test-all \
         test clean help
 
@@ -59,12 +59,25 @@ build-enterprise:
 	$(HUGO) --config hugo-enterprise.toml --gc 2> .build-enterprise.log
 	cp -r fixture/static/images public-enterprise/images
 
+# VERSION-LESS fixture (hugo-flat.toml): parallel doc sets registered under
+# params.sections with NO params.versions — the shape kagent ships. It is a
+# separate BUILD rather than a separate harness TARGET: tests/section-
+# versionless.spec.ts reads public-flat/ directly, so this needs no
+# .docs-test TOML, no extra playwright project and no extra CI leg. See that
+# spec's header for why.
+build-flat:
+	$(HUGO) --config hugo-flat.toml --gc 2> .build-flat.log
+
 # ── Tests against the bundled fixture ────────────────────────────────────
 
-test-oss: build-oss
+# build-flat runs alongside each brand build so section-versionless.spec.ts has
+# something to read. It is brand-independent (the version-less code paths do not
+# touch the brand layer), so both brand runs assert against the same output —
+# cheap, and it keeps `make test-oss` self-contained.
+test-oss: build-oss build-flat
 	DOCS_TEST_CONFIG=$(abspath ./fixture/.docs-test-oss.toml) npx playwright test
 
-test-enterprise: build-enterprise
+test-enterprise: build-enterprise build-flat
 	DOCS_TEST_CONFIG=$(abspath ./fixture/.docs-test-enterprise.toml) npx playwright test
 
 # Run both brand variants. CI default — surfaces brand-specific regressions
@@ -83,8 +96,9 @@ test:
 
 clean:
 	rm -rf public-oss public-enterprise public-oss-local public-enterprise-local \
+	       public-flat \
 	       resources test-results playwright-report \
-	       .build-oss.log .build-enterprise.log \
+	       .build-oss.log .build-enterprise.log .build-flat.log \
 	       .build-oss-local.log .build-enterprise-local.log
 
 help:
@@ -97,6 +111,7 @@ help:
 	@echo ""
 	@echo "  build-oss            - static build, brand=oss        → public-oss/"
 	@echo "  build-enterprise     - static build, brand=enterprise → public-enterprise/"
+	@echo "  build-flat           - static build, VERSION-LESS sections    → public-flat/"
 	@echo ""
 	@echo "  test-oss             - build-oss + run harness against the OSS fixture"
 	@echo "  test-enterprise      - build-enterprise + run harness against the enterprise fixture"

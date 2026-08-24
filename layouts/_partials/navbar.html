@@ -183,34 +183,13 @@
       {{- $isVersionless := and $urlVersion (not $matchedVersion) (not $versionMarker) -}}
 
       {{- if and $currentLabel (not $isVersionless) -}}
-        {{- /* Section selector — the product-name dropdown, listing this
-               product's parallel doc sets (agentgateway's Kubernetes and
-               Standalone). Modelled on agentgateway-oss-website's "Docs"
-               dropdown, but labelled with the PRODUCT name rather than "Docs",
-               and driven by utils/resolve-sections.html instead of two
-               hardcoded <a> tags, so it works for any product that registers
-               sections and in any URL shape.
-
-               utils/resolve-sections.html returns an EMPTY slice for a product
-               with no sections, so this renders nothing at all for the other
-               eight hub products and both OSS sites — and a product with a
-               single section gets no selector either, since there is nothing to
-               select between. */ -}}
-        {{- if gt (len $sections) 1 -}}
-        <div class="section-dropdown">
-          <button type="button" class="section-dropdown-btn" aria-expanded="false" aria-haspopup="true">
-            <span>{{ site.Params.product | default site.Title }}</span>
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2.5 4l2.5 2.5L7.5 4"/></svg>
-          </button>
-          <ul class="section-dropdown-menu" role="menu">
-            {{- range $sections -}}
-            <li role="none">
-              <a href="{{ .href }}" class="section-dropdown-item{{ if .isCurrent }} section-dropdown-item-active{{ end }}" role="menuitem"{{ if .isExternal }} rel="noopener"{{ end }}>{{ .label }}</a>
-            </li>
-            {{- end -}}
-          </ul>
-        </div>
-        {{- end -}}
+        {{- /* Section selector. Markup lives in
+               components/section-dropdown.html because the version-less branch
+               at the bottom of this `with` needs the same thing, on the other
+               side of a scope boundary. The partial renders nothing for fewer
+               than two sections, so this is a no-op for the eight hub products
+               and both OSS sites that register none. */ -}}
+        {{- partial "components/section-dropdown.html" $sections -}}
         <div class="version-dropdown">
           <button type="button" class="version-dropdown-btn" aria-expanded="false" aria-haspopup="true">
             {{- /* The product name is dropped from this button when the section
@@ -356,6 +335,27 @@
           </ul>
         </div>
       {{- end -}}
+    {{- else -}}
+      {{- /* VERSION-LESS site. utils/resolve-section-versions.html returned
+             nothing, so there is no version dropdown to render — but a site can
+             ship parallel doc sets without versioning them (kagent's `kagent`
+             and `kmcp`), and those still need the selector.
+
+             This is an `else` rather than a hoist of the section dropdown above
+             the whole `with` on purpose. Hoisting would also change WHEN the
+             selector renders for the sites that do have versions: the block
+             above is additionally gated on `and $currentLabel (not
+             $isVersionless)`, which suppresses it on a page whose URL carries an
+             unrecognized version segment. Every existing consumer has versions
+             and therefore takes the branch above, unchanged — so this addition
+             cannot alter their output. Verified by byte-diffing all eight hub
+             products, agentgateway.dev, kgateway.dev and both fixture brands.
+
+             utils/resolve-sections.html returns an empty slice for a site with
+             no sections, and the partial renders nothing below two, so an
+             ordinary unversioned single-doc-set site (agentregistry,
+             ambientmesh.io) emits nothing here either. */ -}}
+      {{- partial "components/section-dropdown.html" (partial "utils/resolve-sections.html" $page) -}}
     {{- end -}}
 
     {{- $currentPage := . -}}

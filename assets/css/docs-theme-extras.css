@@ -1585,6 +1585,47 @@ svg.section-card-icon {
   background: #f9fafb;
 }
 
+/* ── Section-selector icons (optional per section) ─────────────────────
+   A section may set `icon` in params.sections.<key>; utils/render-icon.html
+   resolves it and the two selector components emit it. Both rules are scoped to
+   the icon classes, so a selector whose sections set no icon keeps `display:
+   block` above and is unaffected — no consumer currently sets one, and the
+   no-icon markup is byte-identical to before this existed.
+
+   The flex switch lives on the ITEM rather than the icon because the label has
+   to sit on the icon's baseline; `display: block` with an inline svg drops the
+   text below it. `:has()` is not needed — the label is wrapped in
+   .section-dropdown-label only when an icon is present, so that class is itself
+   the signal. */
+.section-dropdown-item:has(.section-dropdown-icon) {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.section-dropdown-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.section-dropdown-item-active .section-dropdown-icon {
+  opacity: 1;
+}
+
+/* Material Icons ligature fallback: utils/render-icon.html emits an <i>, which
+   needs a font size rather than a box size. */
+i.section-dropdown-icon {
+  font-size: 1.15rem;
+  width: auto;
+  height: auto;
+}
+
+.section-dropdown-label {
+  min-width: 0;
+}
+
 /* ── Version dropdown dark mode ──────────────────────────────────────── */
 .dark .section-dropdown-btn,
 .dark .version-dropdown-btn {
@@ -2080,6 +2121,26 @@ details[open].hextra-search-other-versions > summary::before {
 }
 .sidebar-mobile-section-link:hover {
   background: rgb(243, 244, 246);
+}
+/* Optional per-section icon in the mobile chips, mirroring the navbar selector.
+   The chip is already center-aligned text, so it becomes a centered flex row
+   rather than the left-aligned one the dropdown uses. Scoped to the icon class,
+   so icon-less chips are untouched. */
+.sidebar-mobile-section-link:has(.sidebar-mobile-section-icon) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+}
+.sidebar-mobile-section-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex-shrink: 0;
+}
+i.sidebar-mobile-section-icon {
+  font-size: 1.05rem;
+  width: auto;
+  height: auto;
 }
 .dark .sidebar-mobile-section-link {
   color: rgb(156, 163, 175);

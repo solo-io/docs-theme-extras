@@ -7,6 +7,14 @@
             key        string — the registry key ("kubernetes")
             label      string — what to show
             href       string — where the chip/menu item points
+            icon       string — the section's `icon`, verbatim; "" when unset.
+                                Resolved by utils/render-icon.html at the render
+                                site, so a section can use any icon source the
+                                rest of the theme supports (an svg under static/,
+                                an svg in assets/, a site.Data.icons name, or a
+                                Material Icons ligature). Optional per section:
+                                mixing icon'd and icon-less entries in one
+                                selector is allowed and renders as such.
             isCurrent  bool   — the page being rendered is in this section
             isExternal bool   — href came from `externalURL`, so rel=noopener
 
@@ -207,7 +215,15 @@
          only caught when the product has 2+ other sections that DO resolve, via
          the `extras-section-no-target` warning above. That is the same blind spot
          already documented there, not a new one. */ -}}
-  {{- if and $landing (not $hasVersionTree) (not $cfg.externalURL) -}}
+  {{- /* Not reported on a VERSION-LESS site either. "Nests no version tree" is
+         vacuously true when the site has no versions to nest, so every section
+         would be reported on every build — and the registration is doing real
+         work there, scoping the selector and the sidebar (see
+         utils/section-segment.html, condition (c)). The href above already
+         degrades correctly for this case with no change: $currentVersion is ""
+         so $targetVersion is "", the `with $targetVersion` block never fires,
+         and the link stays on the section landing page. */ -}}
+  {{- if and $landing (not $hasVersionTree) (not $cfg.externalURL) site.Params.versions -}}
     {{- $hollow = $hollow | append $key -}}
   {{- end -}}
 
@@ -220,6 +236,7 @@
           "key" $key
           "label" $label
           "href" $href
+          "icon" ($cfg.icon | default "")
           "isCurrent" $isCurrent
           "isExternal" $isExternal) -}}
   {{- else -}}
