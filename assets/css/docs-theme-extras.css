@@ -1935,6 +1935,7 @@ details[open].hextra-search-other-versions > summary::before {
   flex-wrap: wrap;
 }
 .solo-breadcrumb-home,
+.solo-breadcrumb-back,
 .solo-breadcrumb-link {
   color: #6b7280;
   text-decoration: none;
@@ -1944,6 +1945,7 @@ details[open].hextra-search-other-versions > summary::before {
   align-items: center;
 }
 .solo-breadcrumb-link:hover,
+.solo-breadcrumb-back:hover,
 .solo-breadcrumb-home:hover {
   color: #374151;
 }
@@ -1952,6 +1954,7 @@ details[open].hextra-search-other-versions > summary::before {
 }
 .dark .solo-breadcrumb,
 .dark .solo-breadcrumb-home,
+.dark .solo-breadcrumb-back,
 .dark .solo-breadcrumb-link {
   color: #9ca3af;
 }
@@ -1959,8 +1962,39 @@ details[open].hextra-search-other-versions > summary::before {
   color: #4b5563;
 }
 .dark .solo-breadcrumb-link:hover,
+.dark .solo-breadcrumb-back:hover,
 .dark .solo-breadcrumb-home:hover {
   color: #e5e7eb;
+}
+
+/* THE LONE-HOME BREADCRUMB — a section landing, where the left nav is
+   suppressed by design (it sits above the version trees) and the product logo
+   that normally carries the up-link goes with it. With no ancestors to list,
+   the home link is labelled rather than left as a bare icon; see
+   _partials/breadcrumb.html.
+
+   The base rule's 0.1875rem top margin nudges a 16px icon onto the baseline of
+   the crumbs beside it. Here the row is a line of text that needs no nudging,
+   and the extra room below separates it from the <h1> it now sits above rather
+   than beside. */
+.solo-breadcrumb-lone {
+  margin-top: 0;
+  margin-bottom: 1.25rem;
+}
+
+/* inline-flex, not flex: the anchor is the only child of a flex container, and
+   a block-level flex anchor would stretch the full content width, making the
+   whole line a click target well past the end of the label. */
+.solo-breadcrumb-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+/* The arrow is decoration (aria-hidden), so it must not shrink or wrap away
+   from the label it belongs to. */
+.solo-breadcrumb-back svg {
+  flex: none;
 }
 
 /* ── Navbar dropdowns ────────────────────────────────────────────────────
