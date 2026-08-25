@@ -22,7 +22,7 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
-## [0.2.2] — 2026-08-24
+## [0.3.0] — 2026-08-24
 
 ### BREAKING — one tagged versions list replaces per-section version lists
 
@@ -965,6 +965,72 @@ reports **34**. `(index hugo.Sites 0)` identifies the default-language site, the
   every target, so consumer coverage is not weakened.
 - **Verified.** The `static` project against `solo-io/docs` goes from 2 failed / 4990 passed to
   4991 passed, and the fixture run still exercises all five assertions on both brands.
+
+### Fix — the mobile drawer's section chips are the version chips' twins (`assets/css/docs-theme-extras.css`)
+
+- **Why.** The drawer header stacks two switcher rows, and they looked like two different widgets:
+  the section chips were full-width centered text with a blue-tint active state, while the version
+  chips directly below are outlined pills whose active entry gets the brand tint, a solid border,
+  and bold. Same drawer, same kind of choice, two visual languages — and the section row's forked
+  rules were one restyle away from drifting further.
+- **What changed.** The section chip rules are gone as a fork: `.sidebar-mobile-section-link` /
+  `-active` are now twin selectors on every `.sidebar-mobile-version-link` / `-active` rule (the
+  same pattern the desktop selector uses against the version dropdown), and the section row scrolls
+  horizontally like the version row instead of stretching chips to fill the width. Only the row
+  container and the optional per-section icon rules remain section-specific.
+- **Where to see it.** Open any versioned agentgateway page below 1280px — e.g.
+  <https://docs.solo.io/agentgateway/kubernetes/latest/about/> — and tap the hamburger: the SECTION
+  and VERSION rows read as one control family, active chips included. (Production shows the old
+  fork until the docs hub bumps its pin.)
+- **Verified.** New browser tests in `tests/mobile-drawer.spec.ts` compare the computed styles of an
+  inactive section chip against an inactive version chip, and of the ACTIVE pair (fill, border
+  color, weight included), so the rows cannot silently fork again. Both brand fixture suites pass.
+
+### Fix — the drawer labels its page tree CONTENTS on every page; the header's divider line is gone (`layouts/partials/sidebar.html`, `assets/css/docs-theme-extras.css`)
+
+- **Why.** The CONTENTS heading over the drawer's page tree only rendered on tabbed pages, where
+  the tab chips brought it along. Everywhere else the tree started unlabeled under a bare border
+  line, so the drawer's axes (SECTION, VERSION, then… a list) stopped being self-describing exactly
+  where the tabs weren't there to help.
+- **What changed.** The heading is unconditional in the versioned drawer, and the version-less
+  drawer emits it whenever a section row renders above the tree. The header's `border-bottom` is
+  removed: the axes are delimited by their headings alone. A single-doc-set unversioned site
+  (agentregistry, ambientmesh.io) has neither header nor heading and its output is byte-identical.
+- **Where to see it.** The same drawer as above — every drawer now reads SECTION / VERSION /
+  CONTENTS with no divider between the version chips and the heading.
+- **Verified.** `tests/mobile-drawer.spec.ts` asserts the heading is visible on a non-tabbed
+  drawer page and that `.sidebar-mobile-header` computes to a 0px bottom border.
+
+### Fix — landing pages get a real drawer, so the phone navbar matches content pages and the hamburger actually opens something (`layouts/partials/sidebar.html`, `layouts/_partials/components/sidebar-mobile-logo.html`, `assets/css/docs-theme-extras.css`)
+
+- **Why.** A product root or section landing rendered no drawer at all, which broke the phone
+  navbar twice over. First, with no `.sidebar-mobile-panel` on the page, the CSS kept the navbar
+  section/version dropdowns visible as "the only selector" — but the two buttons don't fit beside
+  the logo at phone widths, and the justify-end navbar spilled the overflow off the LEFT edge,
+  clipping the hamburger and hiding the logo entirely, so landing pages showed a different (and
+  broken-looking) top nav than content pages. Second, the hamburger that remained was DEAD:
+  `mobile-nav.js` intercepts its click on every page and calls `toggleMobileSidebar()`, which
+  no-ops without a panel.
+- **What changed.** Landing pages now render a MOBILE-ONLY drawer (`sidebar-mobile-only`, never
+  part of the desktop layout — the desktop suppression that keeps a 324KB tree off these pages is
+  untouched) carrying what a landing page actually offers: the section chips, plus version chips
+  when they are unambiguous (a section landing's own list; the whole list on a section-less
+  product's root). Each version chip is emitted only when its tree really exists below the landing,
+  via a `path.Join`-anchored `site.GetPage` — a relative lookup falls back beyond the page's own
+  children and happily resolved a sibling section's `/v3/`. The dropdowns hide below 768px on every
+  page, and the drawer logo block moved to `components/sidebar-mobile-logo.html` so the two panels
+  share it. The 768–1279px band on drawerless pages is unchanged.
+- **Where to see it.** <https://docs.solo.io/agentgateway/> and
+  <https://docs.solo.io/agentgateway/kubernetes/> at a phone width: today production shows the
+  clipped, logo-less navbar and a dead hamburger; after the pin bump both show the standard
+  logo-and-hamburger navbar, and the hamburger opens a drawer offering the sections (and, on the
+  section landing, that section's versions).
+- **Verified.** New tests in `tests/mobile-drawer.spec.ts` (hamburger opens the landing drawer at
+  phone width, dropdowns hidden there, dropdown still the desktop selector, drawer absent from the
+  desktop layout) and `tests/section-landing.spec.ts` (landing pages keep suppressing the DESKTOP
+  nav; the drawer must be `sidebar-mobile-only`). Also exercised against a local docs-hub
+  agentgateway build: content, root, and section-landing pages all open the drawer, and the root
+  drawer lists exactly the Kubernetes/Standalone sections.
 
 ### Test coverage — the section-then-version URL shape, which had none (`fixture/content/en/test/nested/`, `tests/section-nested-versions.spec.ts`)
 

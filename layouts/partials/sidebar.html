@@ -163,6 +163,70 @@
   {{- else -}}
     <aside class="hx:hidden"></aside>
   {{- end -}}
+  {{- /* LANDING PAGES STILL GET A DRAWER — mobile-only, choices only, no tree.
+         Suppressing the sidebar here is a DESKTOP decision: these pages sit
+         above the version trees and have no single tree to show. But the
+         navbar hamburger is wired to toggleMobileSidebar() on every page
+         (mobile-nav.js intercepts it), so on a page with no
+         .sidebar-mobile-panel at all it was a dead button. Render the panel
+         with what a landing page actually offers — the section chips, and the
+         version chips when they are unambiguous — and gate it on having at
+         least one of those to show, so a page with nothing to offer (e.g. a
+         version-less single-doc-set site's home) emits nothing, as before.
+
+         Version chips are UNAMBIGUOUS on a section landing (that section's
+         list) and on the docs index of a section-less product (the whole
+         list). The docs index of a SECTIONED product renders none: each
+         section has its own version list, so there is no one list to offer —
+         pick a section first, exactly like the cards in the page body.
+
+         Each chip is emitted only when the version's tree really exists below
+         this landing ($context.GetPage on the child segment), mirroring the
+         content drawer, whose chips skip versions the section does not have —
+         an untagged params.versions entry applies to every section by
+         definition, whether or not the section nests a tree for it. */ -}}
+  {{- if and $isLandingPage (not $disableSidebar) -}}
+    {{- $landingSections := partial "utils/resolve-sections.html" $context -}}
+    {{- $landingSeg := "" -}}
+    {{- if $isSectionLanding -}}
+      {{- $landingSeg = (partial "utils/section-segment.html" $context).segment -}}
+    {{- end -}}
+    {{- $landingVersions := slice -}}
+    {{- if or $isSectionLanding (lt (len $landingSections) 2) -}}
+      {{- range partial "utils/resolve-section-versions.html" $landingSeg -}}
+        {{- $label := .dropdown | default .version -}}
+        {{- /* Anchored via path.Join on $context.Path, NOT a relative
+               $context.GetPage: relative lookup falls back beyond the page's
+               own children, so a section landing whose section lacks a v3
+               tree happily resolved the site-level /v3/ and emitted a chip
+               pointing at a page outside the section. */ -}}
+        {{- if and (ne (trim $label " ") "") (site.GetPage (path.Join $context.Path .linkVersion)) -}}
+          {{- $landingVersions = $landingVersions | append (dict "label" $label "href" (printf "%s%s/" $context.RelPermalink .linkVersion)) -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+    {{- if or (gt (len $landingSections) 1) $landingVersions -}}
+      <div class="sidebar-mobile-overlay" onclick="closeMobileSidebar()"></div>
+      <aside class="sidebar-container hextra-sidebar-container sidebar-mobile-panel sidebar-mobile-only hx:print:hidden">
+        {{- partial "components/sidebar-mobile-logo.html" $context -}}
+        <div class="sidebar-mobile-only sidebar-mobile-header">
+          {{- partial "components/sidebar-section-row.html" $landingSections -}}
+          {{- if $landingVersions -}}
+            <span class="sidebar-mobile-row-label">{{ (T "version") | default "Version" }}</span>
+            <div class="sidebar-mobile-scroller">
+              <button type="button" class="sidebar-mobile-scroll-arrow sidebar-mobile-scroll-prev" aria-label="Scroll versions left" hidden>&lsaquo;</button>
+              <div class="sidebar-mobile-version-row" data-scroll-track>
+                {{- range $landingVersions -}}
+                <a href="{{ .href }}" class="sidebar-mobile-version-link">{{ .label }}</a>
+                {{- end -}}
+              </div>
+              <button type="button" class="sidebar-mobile-scroll-arrow sidebar-mobile-scroll-next" aria-label="Scroll versions right" hidden>&rsaquo;</button>
+            </div>
+          {{- end -}}
+        </div>
+      </aside>
+    {{- end -}}
+  {{- end -}}
 {{- else -}}
   {{- /* Version-root detection lives in utils/version-root.html so the sidebar
          and the docs-tabs band (issue solo-io/docs#3164) share one
@@ -196,28 +260,9 @@
     {{- if $docsSection -}}
       <aside class="sidebar-container hextra-sidebar-container sidebar-mobile-panel{{ if $hideDesktopNav }} sidebar-desktop-hidden{{ end }} hx:order-first hx:w-64 hx:shrink-0 hx:hidden hx:xl:block hx:print:hidden">
 
-        {{- /* Mobile-only product logo, pinned to the top of the slide-out
-               drawer where the navbar logo would be (the drawer overlays the
-               navbar's left region, so the navbar logo is hidden while the
-               drawer is open). Prefer an explicit sidebar.logo, else fall back
-               to the navbar logo — OSS leaves sidebar.logo unset but always has
-               a navbar logo. The CSS collapses the drawer's navbar spacer
-               (padding-top) when this block is present. */ -}}
-        {{- $mobileLogo := "" -}}
-        {{- with site.Params.sidebar -}}{{- $mobileLogo = .logo -}}{{- end -}}
-        {{- if not $mobileLogo -}}
-          {{- with site.Params.navbar -}}{{- $mobileLogo = .logo -}}{{- end -}}
-        {{- end -}}
-        {{- with $mobileLogo -}}
-          <div class="sidebar-mobile-only sidebar-mobile-logo">
-            <a href="{{ site.Home.RelPermalink }}">
-              <img class="sidebar-logo-light" src="{{ relURL .path }}" alt="{{ site.Title }}" />
-              {{- with .dark -}}
-                <img class="sidebar-logo-dark" src="{{ relURL . }}" alt="{{ site.Title }}" />
-              {{- end -}}
-            </a>
-          </div>
-        {{- end -}}
+        {{- /* Mobile-only product logo (components/sidebar-mobile-logo.html —
+               shared with the landing-page drawer below). */ -}}
+        {{- partial "components/sidebar-mobile-logo.html" $context -}}
 
         {{- /* Desktop-only product logo. Hidden on mobile because the drawer
                shows the same logo via .sidebar-mobile-logo above. Consumers opt

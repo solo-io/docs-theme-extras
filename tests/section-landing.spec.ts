@@ -23,9 +23,14 @@ const IS_FIXTURE_TARGET = target.name.startsWith("docs-theme-extras-fixture");
 
 const LANDING = path.join(TEST_PRODUCT_ROOT, "demo", "index.html");
 
-/** The real sidebar renders a nav tree; the suppressed one is a bare hidden aside. */
+/** The real sidebar is an aside that joins the DESKTOP layout (hx:xl:block);
+ *  the suppressed one is a bare hidden aside. A landing page's MOBILE-ONLY
+ *  drawer (`sidebar-mobile-only`, never hx:xl:block) deliberately does not
+ *  count as "rendered": it exists so the navbar hamburger has something to
+ *  open below the sidebar breakpoint, and no desktop width ever shows it. */
 function sidebarState(html: string): "rendered" | "suppressed" | "absent" {
-  if (/<aside class="sidebar-container/.test(html)) return "rendered";
+  const asides = html.match(/<aside class="sidebar-container[^"]*"/g) ?? [];
+  if (asides.some((a) => a.includes("hx:xl:block"))) return "rendered";
   if (/<aside class="hx:hidden"><\/aside>/.test(html)) return "suppressed";
   return "absent";
 }
@@ -56,6 +61,18 @@ test.describe("section landing pages suppress the left nav", () => {
       html,
       "no nav tree markup at all should reach a landing page",
     ).not.toContain("sidebar-nav-wrapper");
+    // The landing drawer: present so the navbar hamburger opens something
+    // (it used to be a dead button here), but strictly mobile chrome.
+    const drawer = html.match(/<aside class="[^"]*sidebar-mobile-panel[^"]*"/);
+    expect(
+      drawer,
+      "a landing page must render the mobile-only drawer for the hamburger",
+    ).not.toBeNull();
+    expect(drawer![0]).toContain("sidebar-mobile-only");
+    expect(
+      drawer![0],
+      "the landing drawer must never join the desktop layout",
+    ).not.toContain("hx:xl:block");
   });
 
   test("/test/nested/ renders no nav tree either, though it HAS children", () => {

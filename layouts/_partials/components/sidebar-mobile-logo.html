@@ -1,0 +1,33 @@
+{{- /*
+  sidebar-mobile-logo.html — the product logo pinned to the top of the mobile
+  slide-out drawer, where the navbar logo would be (the drawer overlays the
+  navbar's left region, so the navbar logo is hidden while the drawer is open).
+
+  Prefers an explicit sidebar.logo, else falls back to the navbar logo — OSS
+  sites leave sidebar.logo unset but always have a navbar logo. The CSS
+  collapses the drawer's navbar spacer (padding-top) when this block is
+  present. Renders nothing when neither logo is configured.
+
+  Extracted from sidebar.html when landing pages gained a drawer of their own
+  (the hamburger used to be a dead button there): the versioned-docs panel and
+  the landing panel both start with this block, and an inline copy in each is
+  how drawer headers drift apart.
+
+  Input: the current page (passed as `.`, unused today but kept so a future
+  per-page logo override has somewhere to land).
+*/ -}}
+{{- $mobileLogo := "" -}}
+{{- with site.Params.sidebar -}}{{- $mobileLogo = .logo -}}{{- end -}}
+{{- if not $mobileLogo -}}
+  {{- with site.Params.navbar -}}{{- $mobileLogo = .logo -}}{{- end -}}
+{{- end -}}
+{{- with $mobileLogo -}}
+  <div class="sidebar-mobile-only sidebar-mobile-logo">
+    <a href="{{ site.Home.RelPermalink }}">
+      <img class="sidebar-logo-light" src="{{ relURL .path }}" alt="{{ site.Title }}" />
+      {{- with .dark -}}
+        <img class="sidebar-logo-dark" src="{{ relURL . }}" alt="{{ site.Title }}" />
+      {{- end -}}
+    </a>
+  </div>
+{{- end -}}
