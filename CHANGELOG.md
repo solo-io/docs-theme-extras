@@ -22,6 +22,61 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
+## [Unreleased]
+
+### Fix — the lone home crumb on a section landing is a bare house icon that names nothing (`layouts/_partials/breadcrumb.html`, `assets/css/docs-theme-extras.css`)
+
+**Why.** 0.3.1 stopped a section landing from deleting its own breadcrumb, which gave
+agentgateway's `/kubernetes/` page the up-link it had no other route to (see the entry below
+for the three affordances that all miss that page). What it rendered was the same 16px house
+icon every other breadcrumb leads with — and alone, with no crumbs after it, that icon does
+not carry.
+
+A leading house works on a normal breadcrumb because the crumbs beside it say what it leads
+back to: `[home] / Kubernetes / 2026.8.1 / …` is legible as a trail. Sitting by itself above
+the `<h1>`, it is a glyph the reader has to decode, floating in whitespace with nothing to
+anchor it. Observable at
+<https://preview-solo-docs--pr3505-kkb-standalone-test-ipeoxciz.web.app/agentgateway/kubernetes/>
+once that preview rebuilds on 0.3.1; compare <https://docs.solo.io/agentgateway/latest/>,
+where the same icon reads fine because it heads an actual trail.
+
+When there is no ancestor to list, the home link is now **labelled**: a left arrow plus the
+home page's own title, so `/agentgateway/kubernetes/` reads
+`← Solo Enterprise for agentgateway`. Naming the destination is precisely what the icon was
+borrowing from its neighbours.
+
+**Scoped to the no-ancestor case, deliberately.** On a page with a real trail the icon is
+already doing its job, and widening it to a full product name would put a long label in front
+of every crumb row on the site. The `.solo-breadcrumb-lone` marker class carries the one
+spacing difference the labelled row needs: the base rule's `0.1875rem` top margin exists to
+baseline a 16px glyph against the text beside it, and there is no such text here.
+
+The label comes from the same `utils/title` the ancestor crumbs use, falling back to
+`site.Title` when home has none, so it follows however a consumer titles its product root
+rather than introducing a second source of the product name.
+
+**A product logo was tried here first and rejected.** It looked like the stronger answer — the
+mark the reader already knows as the up-link, since on every page WITH a left nav that logo
+sits at the top of it carrying this exact href. It reads badly in practice, and it also hits a
+real layout trap worth recording: `.solo-breadcrumb` is `display: flex`, so a logo anchor
+becomes a flex item of indefinite width, the image's `max-width: 100%` has no base to resolve
+against, and both collapse to 0×0 — an empty band where the mark should be. The sidebar copy
+escapes this only because its container is a definite 256px column. Anything that puts a
+percentage-sized replaced element in this nav needs `display: block` on the row first.
+
+**Verified.** Rendered against the bundled fixture in both light and dark at 1280px. Four
+cases in `tests/breadcrumb-labels.spec.ts`: the landing renders `solo-breadcrumb-back` and not
+the icon-only variant, the label is non-empty (an empty `<span>` means `utils/title` returned
+nothing and the `site.Title` fallback did not fire), the row carries `solo-breadcrumb-lone`,
+and a page WITH ancestors keeps the compact icon and gains neither the label nor the lone
+spacing class. The spec's shared nav matcher was pinned to `class="solo-breadcrumb"` with a
+closing quote, so the added second class made it return null — a silent "no breadcrumb here"
+rather than a failure, for a helper every assertion in the file routes through; it now matches
+`class="solo-breadcrumb[ "]`. Full suite green on both brands: 2057 passed, 17 skipped, 0
+failed.
+
+---
+
 ## [0.3.1] — 2026-08-25
 
 ### Add — version-aware 404 page
