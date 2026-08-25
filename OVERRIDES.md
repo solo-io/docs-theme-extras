@@ -47,7 +47,7 @@ layouts, which is the opposite of the signal this table is for.
 | consumer | same-path shadows | slot overrides (OK) | duplicated selectors | of which divergent | contract divergences |
 |---|---|---|---|---|---|
 | docs | 2 | 0 | 0 | 0 | 1 |
-| kgateway-oss | 1 | 2 | 0 | 0 | 1 |
+| kgateway-oss | 2 | 2 | 0 | 0 | 1 |
 | agentgateway-oss-website | 2 | 5 | 0 | 0 | 2 |
 | agentregistry-oss-website | 0 | 0 | 0 | 0 | 0 |
 | kagent-oss-website | 0 | 0 | 0 | 0 | 0 |
@@ -165,13 +165,28 @@ fixture-only-valid. This is exactly how `tab-code-fences.spec.ts` came to sit in
 
 ### kgateway-oss
 
-Three same-path shadows remain (four before `link-hextra.html` was deleted).
+Four same-path shadows remain (five before `link-hextra.html` was deleted).
 
 | shadow | verdict |
 |---|---|
 | `layouts/_partials/navbar.html` | **KEEP.** 29,118B against extras' 20,921B — a full fork with its own class vocabulary (`nav-container`, `dropdown`, `github-white-icon`) rather than extras' (`hextra-nav-container`, `version-dropdown`, `solo-sidebar-trigger-tabletonly`). Deleting it is a visual redesign of the site header, not a cleanup |
+| `layouts/404.html` | **KEEP for now — revisit.** Predates extras' own `layouts/404.html` (v0.3.1) and does a job that one deliberately does not: it AUTO-REDIRECTS for this site's `/docs/{version}/` → `/docs/envoy/{version}/` restructure, and hardcodes the `envoy` and `agentgateway` section names. It also renders `nav.html`, so it is the one 404 in the fleet with site chrome. Deleting it would drop those restructure redirects on the floor. See the note below |
 | `layouts/partials/docs/width-class.html` | **SLOT OVERRIDE — sanctioned.** Routes the wrapper class through `utils/page-width` so this site's `page.width: wide` is honoured |
 | `layouts/partials/docs/content-class.html` | **SLOT OVERRIDE — sanctioned.** `hx:max-w-6xl` content column |
+
+**On the 404 shadow (v0.3.1).** These two files now overlap in purpose, and the overlap is
+worth closing later rather than now. Both answer "the reader is on a URL that does not
+exist, in a versioned tree"; they differ on what to do about it. kgateway-oss AUTO-REDIRECTS
+(`window.location.assign`) on a guess derived from a regex over `/docs/([a-zA-Z0-9.]+)/`,
+with no check that the destination exists — so a wrong guess replaces one broken URL with
+another, and the reader cannot see what happened. Extras probes with HEAD and OFFERS a link
+it has confirmed resolves. The kgateway rules are also genuinely site-specific: no other
+consumer has a `/docs/envoy/` section split.
+
+Converging them means teaching extras' 404 a consumer-supplied "path rewrite" hook and
+proving the restructure redirects still fire, which is its own change with its own tests.
+Until then this shadow is correct, and the cost is that kgateway-oss does not get the
+version-aware suggestions the other consumers get.
 
 **Resolved (v0.2.0-beta.3):** `layouts/docs/single.html` and `layouts/docs/list.html`
 deleted, replaced by the two slot overrides above. The site **gained a visible page

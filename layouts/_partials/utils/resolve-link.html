@@ -112,8 +112,21 @@
        real second implementation here, and it had to be fixed on its own
        (agentgateway-oss-website's shape, see CHANGELOG [0.2.1]) because
        nothing kept it in sync with the canonical one. */ -}}
-{{- if not $ver -}}
-  {{- if not $siteHasVersioning -}}
+{{- /* $versionRoot is derived on EVERY call, not just when the version has to be
+       inferred. It answers a different question than $ver does: $ver is "which
+       version tree", $versionRoot is "what sits between the baseURL and the
+       version segment on this site" — the /docs/<section> mount on an OSS site,
+       or a hub product's section segment (agentgateway's /kubernetes).
+
+       This used to live inside `if not $ver`, so any caller that passed
+       `version=` got $versionRoot="" and lost that prefix. rebase.html injects
+       `version=` into every link / link-hextra call in rebased content, so on
+       the docs hub that was every link on every rebased agentgateway page:
+       /agentgateway/latest/… instead of /agentgateway/kubernetes/latest/…. It
+       went unnoticed while no hub product had a section segment, because ""
+       was then the right answer anyway. */ -}}
+{{- if not $siteHasVersioning -}}
+  {{- if not $ver -}}
     {{- /* Flat, unversioned site (ambientmesh.io; agentregistry oss has
            the same shape but no live `link`/`link-hextra` calls yet). There
            is no version segment to resolve — $siteHasVersioning already
@@ -125,10 +138,15 @@
            site, since there's no version/product segment to misidentify it
            as. */ -}}
     {{- $versionRoot = strings.TrimSuffix "/" .Page.FirstSection.RelPermalink -}}
-  {{- else -}}
-    {{- $root := partial "utils/version-root.html" .Page -}}
-    {{- if $root.isVersioned -}}
-      {{- $ver = $root.currentVersion -}}
+  {{- end -}}
+{{- else -}}
+  {{- $root := partial "utils/version-root.html" .Page -}}
+  {{- if $root.isVersioned -}}
+      {{- /* Only INFER the version when the caller didn't pass one. The
+             $versionRoot derivation below runs either way. */ -}}
+      {{- if not $ver -}}
+        {{- $ver = $root.currentVersion -}}
+      {{- end -}}
       {{- /* TWO DIFFERENT COORDINATE SYSTEMS — do not pass $root.versionBase
              through unchanged. version-root.html returns a PUBLISHED-URL
              prefix, so on the docs hub (baseURL https://host/<product>/) it
@@ -148,7 +166,6 @@
       {{- with .Site.LanguagePrefix -}}
         {{- $versionRoot = strings.TrimPrefix . $versionRoot -}}
       {{- end -}}
-    {{- end -}}
   {{- end -}}
 {{- end -}}
 

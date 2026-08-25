@@ -32,8 +32,12 @@
 {{- $html = $html | replaceRE `(?s)<a\s+class="section-card"[^>]*href="([^"]*)"[^>]*>.*?<p\s+class="section-card-title"[^>]*>([^<]+)(?:<[^>]*>[^<]*)*</p>.*?</a>` "<p><a href=\"$1\">$2</a></p>" -}}
 {{- $html = $html | replaceRE `(?s)<div class="section-cards"[^>]*>(.*?)</div>` "$1" -}}
 
-{{- /* Chroma linenos=table: keep code cell, drop line-number cell. */ -}}
-{{- $html = $html | replaceRE `(?s)<table class="lntable"><tr><td class="lntd">\s*<pre[^>]*><code><span class="lnt">.*?</td>\s*<td class="lntd">\s*(<pre[^>]*><code[^>]*>.*?</code></pre>)\s*</td>\s*</tr>\s*</table>` "$1" -}}
+{{- /* Chroma linenos=table: keep code cell, drop line-number cell. Inter-tag
+       whitespace is `(?:\s|&#10;)*`, not `\s*`, because a code block that
+       reached .Content through utils/flatten-rendered ({{< reuse >}}, or a
+       whole rebased page) has every newline replaced by the `&#10;` entity —
+       see the twin pass in partials/copy-markdown.html. */ -}}
+{{- $html = $html | replaceRE `(?s)<table class="?lntable"?>(?:\s|&#10;)*<tr>(?:\s|&#10;)*<td class="?lntd"?>(?:\s|&#10;)*<pre[^>]*><code[^>]*>(?:\s|&#10;)*<span[^>]*>.*?</td>(?:\s|&#10;)*<td class="?lntd"?>(?:\s|&#10;)*(<pre[^>]*><code[^>]*>.*?</code></pre>)(?:\s|&#10;)*</td>(?:\s|&#10;)*</tr>(?:\s|&#10;)*</table>` "$1" -}}
 
 {{- /* Tabs: unhide via the shared partial (also used by book/PDF stitching). */ -}}
 {{- $html = partial "utils/unhide-tabs.html" $html -}}

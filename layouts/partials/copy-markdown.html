@@ -40,8 +40,20 @@
 {{- $html = $html | replaceRE `(?s)<div class="section-cards"[^>]*>(.*?)</div>` "$1" -}}
 {{- /* Chroma linenos=table: replace the two-cell table with just the code-side <pre>.
        Otherwise HTMLToMarkdown serializes the line-number <td> as its own fenced block
-       above the actual code, producing an orphan "1\n2\n..." block in the copy output. */ -}}
-{{- $html = $html | replaceRE `(?s)<table class="lntable"><tr><td class="lntd">\s*<pre[^>]*><code><span class="lnt">.*?</td>\s*<td class="lntd">\s*(<pre[^>]*><code[^>]*>.*?</code></pre>)\s*</td>\s*</tr>\s*</table>` "$1" -}}
+       above the actual code, producing an orphan "1\n2\n..." block in the copy output —
+       and, once the GFM-table pass below picks the <table> up, a two-column markdown
+       table whose first cell is the line-number gutter.
+
+       Inter-tag whitespace is matched as `(?:\s|&#10;)*`, not `\s*`, because a code
+       block that reaches .Content through utils/flatten-rendered (a {{< reuse >}}
+       snippet, or a whole rebased page) has had every newline replaced by the `&#10;`
+       entity. Those pages kept the un-stripped lntable and shipped the mangled
+       two-column table into the copy output / translation export.
+
+       The lnt cell is matched as <pre><code><span…> rather than by class, because
+       hl_lines wraps the highlighted gutter number in <span class="hl">, so the first
+       child is not always <span class="lnt">. class="lntable" is the real guard. */ -}}
+{{- $html = $html | replaceRE `(?s)<table class="?lntable"?>(?:\s|&#10;)*<tr>(?:\s|&#10;)*<td class="?lntd"?>(?:\s|&#10;)*<pre[^>]*><code[^>]*>(?:\s|&#10;)*<span[^>]*>.*?</td>(?:\s|&#10;)*<td class="?lntd"?>(?:\s|&#10;)*(<pre[^>]*><code[^>]*>.*?</code></pre>)(?:\s|&#10;)*</td>(?:\s|&#10;)*</tr>(?:\s|&#10;)*</table>` "$1" -}}
 {{- /* Tabs cleanup — we run two pattern sets so the same partial works for both
        tab variants. Each set is a no-op against markup the other consumer emits.
 

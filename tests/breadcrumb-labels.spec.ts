@@ -149,3 +149,121 @@ test.describe("breadcrumb source contract", () => {
     ).toBe(true);
   });
 });
+
+// The breadcrumb on a page whose ONLY ancestor is home.
+//
+// WHY THIS EXISTS. The nav used to require at least one NON-home ancestor,
+// which silently deleted the whole <nav> — home link included — from any page
+// sitting one level under home. On the docs hub each product is its own site
+// with baseURL=/<product>/, so that is exactly a section landing:
+// /agentgateway/kubernetes/ had home as its only ancestor.
+//
+// That is the one page shape with no other route back to the product root.
+// sidebar.html suppresses the left nav there by design (see
+// section-landing.spec.ts), and the product logo carrying
+// href="{{ site.Home.RelPermalink }}" lives inside that sidebar, so it goes
+// with it. In production the only /agentgateway/ link left on
+// /agentgateway/kubernetes/ sat inside .sidebar-mobile-only, which the CSS
+// hides above 1280px — reachable on a phone and nowhere else.
+//
+// The fixture probe is the same one section-landing.spec.ts uses:
+// fixture/content/en/test/demo/ is a registered section, so /test/demo/ is
+// the enterprise-shaped section landing.
+const SECTION_LANDING = path.join(TEST_PRODUCT_ROOT, "demo", "index.html");
+const FIXTURE_HOME = path.join(TEST_PRODUCT_ROOT, "index.html");
+
+function nav(file: string): string | null {
+  if (!fs.existsSync(file)) return null;
+  const m = fs
+    .readFileSync(file, "utf8")
+    .match(/<nav [^>]*class="solo-breadcrumb"[\s\S]*?<\/nav>/);
+  return m ? m[0] : null;
+}
+
+test.describe("breadcrumb with no non-home ancestor", () => {
+  test.skip(!IS_FIXTURE_TARGET, "asserts the bundled fixture's section registry");
+
+  test("the fixture actually built the probe pages", () => {
+    // Without this a moved or unbuilt page turns the assertions below into
+    // vacuous passes rather than failures.
+    expect(
+      fs.existsSync(SECTION_LANDING),
+      `${SECTION_LANDING} not built — the section-landing probe is gone`,
+    ).toBe(true);
+    expect(
+      fs.existsSync(FIXTURE_HOME),
+      `${FIXTURE_HOME} not built — the home probe is gone`,
+    ).toBe(true);
+  });
+
+  test("a section landing renders the nav, so the home link survives", () => {
+    test.skip(!fs.existsSync(SECTION_LANDING), "probe not built");
+    const n = nav(SECTION_LANDING);
+    expect(
+      n,
+      "a section landing page must render the breadcrumb. It is the only up-" +
+        "link it has: the left nav is suppressed there by design, and the " +
+        "product logo that would link home lives inside that nav.",
+    ).not.toBeNull();
+    expect(
+      n!,
+      "the home link is the entire payload of this crumb — without it the nav " +
+        "is decoration",
+    ).toMatch(/<a [^>]*class="solo-breadcrumb-home"/);
+  });
+
+  test("that nav is home ONLY — no crumb, and no dangling separator", () => {
+    test.skip(!fs.existsSync(SECTION_LANDING), "probe not built");
+    const n = nav(SECTION_LANDING)!;
+    expect(
+      [...n.matchAll(/class="solo-breadcrumb-link"/g)].length,
+      "a section landing has no non-home ancestor, so the home icon must " +
+        "stand alone",
+    ).toBe(0);
+    expect(
+      n,
+      "the separator is emitted per ancestor; with none, emitting one would " +
+        "render a trailing slash after the home icon",
+    ).not.toContain("solo-breadcrumb-sep");
+  });
+
+  test("the home page itself renders no breadcrumb", () => {
+    test.skip(!fs.existsSync(FIXTURE_HOME), "probe not built");
+    expect(
+      nav(FIXTURE_HOME),
+      "home's only crumb would link to home, so the nav must not render there",
+    ).toBeNull();
+  });
+});
+
+test.describe("breadcrumb redirect-stub guard", () => {
+  const FILE = path.resolve(__dirname, "../layouts/_partials/breadcrumb.html");
+
+  // A lone home crumb is worse than none when home is a REDIRECT STUB. Six of
+  // the seven products on the docs hub give their root `type: "default"`, which
+  // layouts/default/list.html renders as a meta-refresh to
+  // params.defaultVersion. A reader in /kgateway/2.3.x/ who clicks a lone home
+  // crumb does not land on a product root — they are bounced to
+  // /kgateway/latest/, silently switching version.
+  //
+  // Source-level because no fixture variant has a stub home, and building one
+  // to assert an ABSENCE would be a lot of machinery for one boolean. The
+  // rendered halves above cover the case that does exist.
+  test("the lone home crumb is suppressed when home redirects", () => {
+    test.skip(!fs.existsSync(FILE), "module-relative path only");
+    const src = fs
+      .readFileSync(FILE, "utf8")
+      .replace(/\{\{-?\s*\/\*[\s\S]*?\*\/\s*-?\}\}/g, "");
+    expect(
+      /site\.Home\.Type.*"default"/.test(src),
+      "the guard is gone: every version root on a redirect-stub product now " +
+        "shows a home icon that bounces the reader to a different version",
+    ).toBe(true);
+    expect(
+      /len \$ancestors\) 0/.test(src),
+      "the guard must apply ONLY when home is the whole breadcrumb. A page " +
+        "with real ancestors needs those crumbs, and dropping the nav to " +
+        "avoid one imperfect home link takes the useful ones with it.",
+    ).toBe(true);
+  });
+});

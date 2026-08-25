@@ -1,0 +1,423 @@
+{{- /*
+  404.html — version-aware "page not found".
+
+  WHY THIS EXISTS. Hextra ships a 404 that says "This page could not be found."
+  and nothing else. On a VERSIONED docs site that is the least useful answer
+  available, because the overwhelmingly common way to reach a 404 here is a
+  stale link into a version tree — either a retired version that is no longer
+  built (agentgateway 2.1.x/2.2.x are archived as .zip in the hub, so every URL
+  under them 404s), or a live version where the topic has since moved. In both
+  cases the page the reader wants usually still exists, one version segment
+  away, and we can find it for them.
+
+  Reported as solo-io Slack: "can we setup a redirect so that old version urls
+  go to latest instead of 404", e.g. /agentgateway/2.1.x/install/ui/setup/ →
+  /agentgateway/latest/install/ui/setup/.
+
+  THIS IS THE SECOND LAYER, NOT THE FIRST. A retired version should be caught
+  by a path-preserving 301 in the consumer's hosting config (firebase.json in
+  solo-io/docs), which is cheaper, keeps the SEO signal, and costs no round
+  trip. This template handles what a blanket redirect CANNOT: the topic that
+  does not exist at the same path in the destination version. Do not read the
+  presence of this file as a reason to skip the redirect rules.
+
+  WHY IT IS STANDALONE (no navbar, no sidebar, no baseof). A 404 has no real
+  page context: it is emitted once per build and served for arbitrary paths, so
+  `.RelPermalink` is "/404.html" for every request it answers. Every chrome
+  partial in this theme (sidebar.html, version-banner.html, breadcrumb.html)
+  resolves its state through utils/version-root.html against that RelPermalink,
+  so on this page they would all render the "not versioned" branch — a navbar
+  and sidebar for nowhere. Rendering them is also seven products × two brands of
+  build risk for chrome nobody reads. Hextra's own 404 is standalone for the
+  same reason; this keeps that shape and spends the page on the one thing a 404
+  can usefully do.
+
+  WHAT IT DOES NOT DO. It never auto-redirects. The reader is already at a
+  broken URL and an automatic bounce would hide that fact, strand them
+  somewhere they did not ask for, and (when the guess is wrong) look like the
+  site is malfunctioning. Every destination is offered as a link.
+
+  DARK MODE uses `prefers-color-scheme` only, not Hextra's `.dark` class. The
+  class is set by Hextra's theme script, which is loaded from baseof.html —
+  absent here by design. A reader whose site preference disagrees with their OS
+  preference sees the OS one on this page alone. That is the accepted cost of
+  staying standalone.
+*/ -}}
+
+{{- /* Version data for the client. Hugo knows three things the browser cannot:
+       which version is `latest`, which version segments are legitimate, and
+       where this site's root is. Everything else is derived at runtime from
+       location.pathname, because that is the only place the REQUESTED path
+       exists — Hugo built this file without knowing it.
+
+       Product filtering matters. site.Params.versions may list OTHER products'
+       versions (hugo-gateway.toml carries Gloo Edge's 1.19.x–1.22.x alongside
+       Gloo Gateway's, and hugo-gloo-mesh-enterprise.toml carries Solo Istio's),
+       so an unfiltered list would let /gateway/1.21.x/ resolve against Edge's
+       entry. Prefer entries belonging to site.Params.currentProduct, exactly as
+       utils/match-version-entry.html does; fall back to the whole list on a
+       site that sets no currentProduct (agentgateway-oss-website and
+       kgateway-oss both omit it). */ -}}
+{{- $curProd := site.Params.currentProduct | default "" -}}
+{{- $ownVersions := slice -}}
+{{- range site.Params.versions -}}
+  {{- if or (eq $curProd "") (eq (.product | default "") $curProd) -}}
+    {{- $ownVersions = $ownVersions | append . -}}
+  {{- end -}}
+{{- end -}}
+{{- if not $ownVersions -}}{{- $ownVersions = site.Params.versions | default slice -}}{{- end -}}
+
+{{- /* RETIRED VERSIONS STAY IN THIS LIST ON PURPOSE. agentgateway keeps 2.1.x
+       and 2.2.x in params.versions (hidden from the dropdown via a blank
+       `dropdown`) after archiving their content. Including them here is what
+       lets the client RECOGNIZE /agentgateway/2.1.x/… as a version segment
+       rather than a content path. This list answers "is this segment a
+       version?", never "does this version still build" — the HEAD probes
+       answer that, and they are authoritative because they ask the server. */ -}}
+{{- $known := slice -}}
+{{- range $ownVersions -}}
+  {{- with .linkVersion -}}{{- $known = $known | append . -}}{{- end -}}
+{{- end -}}
+
+{{- /* The destination version. `latest` when the site declares one, else the
+       first configured entry — a site with no `latest` entry (some OSS sites
+       ship only numbered trees) still gets a usable target instead of "". */ -}}
+{{- $latest := "" -}}
+{{- range $ownVersions -}}
+  {{- if and (eq $latest "") (eq (.linkVersion | default "") "latest") -}}
+    {{- $latest = .linkVersion -}}
+  {{- end -}}
+{{- end -}}
+{{- if eq $latest "" -}}
+  {{- range first 1 $ownVersions -}}{{- $latest = .linkVersion | default "" -}}{{- end -}}
+{{- end -}}
+
+{{- $cfg := dict
+      "home" site.Home.RelPermalink
+      "latest" $latest
+      "versions" $known
+      "productName" (site.Params.product | default site.Title | default "the documentation")
+-}}
+
+<!doctype html>
+<html lang="{{ site.Language.Lang | default "en" }}" dir="{{ partial "utils/hugo-compat/language-direction.html" site.Language | default "ltr" }}">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {{- /* A 404 must never be indexed, and must never be treated as a
+           canonical destination for the URL that produced it. */ -}}
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Page not found</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --pnf-fg: #171717;
+        --pnf-muted: #666;
+        --pnf-bg: #fff;
+        --pnf-line: rgba(0, 0, 0, 0.12);
+        --pnf-card: rgba(0, 0, 0, 0.03);
+        --pnf-link: #2563eb;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --pnf-fg: #ededed;
+          --pnf-muted: #a1a1a1;
+          --pnf-bg: #111;
+          --pnf-line: rgba(255, 255, 255, 0.15);
+          --pnf-card: rgba(255, 255, 255, 0.05);
+          --pnf-link: #7aa2f7;
+        }
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 1.25rem;
+        box-sizing: border-box;
+        background: var(--pnf-bg);
+        color: var(--pnf-fg);
+        font-family: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif,
+          "Apple Color Emoji", "Segoe UI Emoji";
+        line-height: 1.55;
+      }
+      main {
+        width: 100%;
+        max-width: 34rem;
+      }
+      .pnf-code {
+        font-size: 0.8125rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--pnf-muted);
+        margin: 0 0 0.5rem;
+      }
+      h1 {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin: 0 0 0.75rem;
+      }
+      p {
+        margin: 0 0 1rem;
+        color: var(--pnf-muted);
+      }
+      a {
+        color: var(--pnf-link);
+      }
+      /* The suggestion block is hidden until the script has something real to
+         put in it. An empty bordered box on a page that already failed reads
+         as a second failure. */
+      #pnf-suggestions[hidden] {
+        display: none;
+      }
+      #pnf-suggestions {
+        border: 1px solid var(--pnf-line);
+        background: var(--pnf-card);
+        border-radius: 0.5rem;
+        padding: 1rem 1.125rem;
+        margin: 0 0 1.25rem;
+      }
+      #pnf-suggestions h2 {
+        font-size: 0.8125rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--pnf-muted);
+        margin: 0 0 0.625rem;
+      }
+      #pnf-suggestions ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      #pnf-suggestions li + li {
+        margin-top: 0.5rem;
+      }
+      #pnf-suggestions .pnf-note {
+        display: block;
+        font-size: 0.8125rem;
+        color: var(--pnf-muted);
+      }
+      /* Announce the probe so a screen-reader user is not left on a page that
+         silently changes a second later. Removed once the result renders. */
+      #pnf-status {
+        font-size: 0.875rem;
+        color: var(--pnf-muted);
+      }
+    </style>
+  </head>
+  <body>
+    <main id="content">
+      <p class="pnf-code">Error 404</p>
+      <h1>This page could not be found.</h1>
+      <p id="pnf-lede">
+        The page you requested does not exist. It may have been moved, renamed, or
+        removed from this version of the documentation.
+      </p>
+
+      <p id="pnf-status" hidden>Looking for this page in other versions&hellip;</p>
+
+      <section id="pnf-suggestions" hidden aria-live="polite">
+        <h2>Try instead</h2>
+        <ul id="pnf-suggestion-list"></ul>
+      </section>
+
+      <p>
+        <a id="pnf-home" href="{{ $cfg.home }}">Go to the {{ $cfg.productName }} documentation</a>
+      </p>
+
+      <script>
+        (function () {
+          "use strict";
+
+          var CFG = {{ $cfg | jsonify | safeJS }};
+
+          // Same version-segment shape as utils/version-root.html. Kept
+          // deliberately identical so a path this theme considers versioned
+          // server-side is considered versioned here too. The `\d+` branch of
+          // the third group is load-bearing for fully qualified LTS trees
+          // (/agentgateway/2026.7.1/…), which are real and would otherwise be
+          // read as an ordinary path segment. Anchored at both ends so
+          // "mainline" cannot match on the strength of its "main" prefix.
+          var VERSION_SHAPE = /^(?:\d+\.\d+\.(?:x|\d+)|latest|main)$/;
+
+          // Cap on server round trips. Every probe is a HEAD against our own
+          // origin, but a reader who lands here from a deep path should not
+          // pay for a dozen of them, and the useful answer is always in the
+          // first few candidates.
+          var MAX_PROBES = 8;
+
+          var listEl = document.getElementById("pnf-suggestion-list");
+          var boxEl = document.getElementById("pnf-suggestions");
+          var statusEl = document.getElementById("pnf-status");
+
+          function isVersion(seg) {
+            return CFG.versions.indexOf(seg) !== -1 || VERSION_SHAPE.test(seg);
+          }
+
+          // Build "/a/b/c/" from a segment list. Directory-style with a
+          // trailing slash, matching how Hugo publishes pages (uglyURLs is off
+          // everywhere this theme is used), so a probe hits the real file
+          // rather than a host-level redirect to it.
+          function toPath(segs) {
+            return segs.length ? "/" + segs.join("/") + "/" : "/";
+          }
+
+          // HEAD, not GET: we only need the status, and a docs page is far
+          // larger than its headers. `redirect: "follow"` is the default and
+          // is what we want — a candidate that 301s to a live page (the
+          // hosting-layer retired-version rules) is still a good answer.
+          function exists(url) {
+            return fetch(url, { method: "HEAD", redirect: "follow" })
+              .then(function (r) {
+                return r.ok ? url : null;
+              })
+              .catch(function () {
+                // Offline, blocked, or served over file:// — treat as "cannot
+                // tell" rather than "does not exist", so the page degrades to
+                // the plain 404 it would otherwise have been.
+                return null;
+              });
+          }
+
+          // Try candidates in order, stop at the first that exists. Sequential
+          // on purpose: the list is ranked, and firing all of them in parallel
+          // would spend every request to learn something the first answer
+          // usually settles.
+          function firstThatExists(cands, i) {
+            i = i || 0;
+            if (i >= cands.length) return Promise.resolve(null);
+            return exists(cands[i].url).then(function (hit) {
+              if (hit) return cands[i];
+              return firstThatExists(cands, i + 1);
+            });
+          }
+
+          function addSuggestion(href, text, note) {
+            var li = document.createElement("li");
+            var a = document.createElement("a");
+            a.href = href;
+            a.textContent = text;
+            li.appendChild(a);
+            if (note) {
+              var s = document.createElement("span");
+              s.className = "pnf-note";
+              s.textContent = note;
+              li.appendChild(s);
+            }
+            listEl.appendChild(li);
+            boxEl.hidden = false;
+          }
+
+          var segs = location.pathname.split("/").filter(Boolean);
+
+          // Locate the version segment. First match wins: a product segment
+          // never looks like a version, and a content path that does (a page
+          // literally named "main") sits deeper than the real version anyway.
+          var vIdx = -1;
+          for (var i = 0; i < segs.length; i++) {
+            if (isVersion(segs[i])) {
+              vIdx = i;
+              break;
+            }
+          }
+
+          // No version in the path means there is nothing version-aware to
+          // offer, and the generic 404 already rendered. Leave it alone.
+          if (vIdx === -1 || !CFG.latest) return;
+
+          var current = segs[vIdx];
+          var before = segs.slice(0, vIdx);
+          var after = segs.slice(vIdx + 1);
+
+          function underVersion(version, tail) {
+            return toPath(before.concat([version], tail));
+          }
+
+          var candidates = [];
+
+          // 1. The same topic in the latest version. This is the case the
+          //    Slack report is about and the only one that lands the reader
+          //    exactly where they meant to go, so it is ranked first.
+          //
+          //    Skipped when the reader is ALREADY on latest — which is the
+          //    normal state after a hosting-level retired-version redirect has
+          //    rewritten /2.1.x/foo/ to /latest/foo/ and that page turned out
+          //    not to exist either. The ancestor probes below still apply.
+          if (current !== CFG.latest && after.length) {
+            candidates.push({
+              url: underVersion(CFG.latest, after),
+              note:
+                "This page is not in " +
+                current +
+                ", but it exists in the latest version.",
+            });
+          }
+
+          // 2. Nearest surviving ancestor IN THE READER'S OWN VERSION. Ranked
+          //    above latest's ancestors because a reader on 2.3.x is probably
+          //    running 2.3.x, and a neighbouring page in their version beats a
+          //    parent section in a version whose instructions may not match
+          //    their cluster.
+          for (var a = after.length - 1; a > 0; a--) {
+            candidates.push({
+              url: underVersion(current, after.slice(0, a)),
+              note: "The closest section still in " + current + ".",
+            });
+          }
+
+          // 3. Nearest surviving ancestor in latest.
+          if (current !== CFG.latest) {
+            for (var b = after.length - 1; b > 0; b--) {
+              candidates.push({
+                url: underVersion(CFG.latest, after.slice(0, b)),
+                note: "The closest section in the latest version.",
+              });
+            }
+          }
+
+          // 4. THE FLOOR: the root of the latest version. Always a real page as
+          //    long as that version builds, so it is the one candidate
+          //    guaranteed to answer.
+          //
+          //    Appended AFTER the MAX_PROBES slice, never inside it. A deep
+          //    enough path generates more ancestor candidates than the cap
+          //    allows, and slicing a list that ended in the floor would drop
+          //    the only entry certain to resolve — turning the deepest broken
+          //    URLs, which need help most, into the ones that get none.
+          //
+          //    Kept unconditional rather than gated on `current !== latest`.
+          //    When the reader is already on latest this is the version root
+          //    they are in, which is still the right floor, and gating it
+          //    left a shallow path on latest (/agentgateway/latest/gone/) with
+          //    no candidates at all.
+          candidates = candidates.slice(0, MAX_PROBES - 1);
+          candidates.push({
+            url: underVersion(CFG.latest, []),
+            note:
+              current === CFG.latest
+                ? "The documentation home for this version."
+                : "The latest version of the documentation.",
+          });
+
+          statusEl.hidden = false;
+          firstThatExists(candidates).then(function (hit) {
+            statusEl.hidden = true;
+            if (!hit) return;
+            addSuggestion(hit.url, hit.url, hit.note);
+          });
+        })();
+      </script>
+
+      <noscript>
+        <p>
+          If you followed a link to an older version of the documentation, that
+          version may no longer be published. Try the same page under
+          <code>/{{ $cfg.latest }}/</code>.
+        </p>
+      </noscript>
+    </main>
+  </body>
+</html>

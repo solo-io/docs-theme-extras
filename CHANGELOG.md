@@ -22,6 +22,206 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
+## [0.3.1] — 2026-08-25
+
+### Add — version-aware 404 page
+
+**Why.** Hextra's stock 404 says "This page could not be found." and offers nothing else, and
+that is what every Solo docs site serves today — see
+<https://docs.solo.io/agentgateway/latest/this-page-does-not-exist-xyz/> (view source: a bare
+`hextra-error-h1`, no links, no search, no way back into the docs). On a versioned site that
+is the least useful answer available, because the common way to reach a 404 here is a stale
+link into a version tree, and the page the reader wants usually still exists one version
+segment away.
+
+The reported case: <https://docs.solo.io/agentgateway/2.1.x/install/ui/setup/> returns a bare
+404, while <https://docs.solo.io/agentgateway/latest/install/ui/setup/> is a live page. The
+agentgateway 2.1.x and 2.2.x trees are archived as `.zip` in solo-io/docs, so every URL under
+them 404s, and `params.versions` still lists them.
+
+`layouts/404.html` now reads the requested path at runtime, finds the version segment, and
+probes ranked candidates with HEAD requests until one resolves: the same topic in the latest
+version, then the nearest surviving ancestor in the reader's own version, then in latest,
+then the latest version root as a guaranteed floor. It offers the first hit as a link.
+
+**It never auto-redirects.** The reader is already on a broken URL, and a silent bounce hides
+that, strands them somewhere they did not ask for, and looks like a malfunction when the
+guess is wrong. Every candidate is verified to resolve before it is offered, so the page
+cannot answer one broken link with another.
+
+**This is the second layer, not the first.** A retired version should be caught by a
+path-preserving 301 in the consumer's hosting config (`firebase.json` in solo-io/docs), which
+is cheaper, costs no round trip, and keeps the SEO signal on the destination. This template
+handles only what a blanket redirect cannot: the topic that does not exist at the same path
+in the destination version. Shipping it is not a reason to skip the redirect rules.
+
+Standalone by design — no navbar, sidebar, or `baseof`. A 404 is built once and served for
+arbitrary paths, so `.RelPermalink` is `/404.html` for every request it answers, and every
+chrome partial in this theme resolves its state through `utils/version-root.html` against
+that value. Rendering them would produce a sidebar for nowhere across seven products and two
+brands. Dark mode therefore follows `prefers-color-scheme` rather than Hextra's `.dark`
+class, which is set by a script `baseof.html` loads.
+
+**Consumers must publish it at the served root.** Hugo writes `404.html` under the baseURL
+path (`public/<product>/404.html`), but hosts look for it at the root of the published
+directory. solo-io/docs already does this (`cp public/<product>/404.html public/404.html` in
+`firebase-hosting-merge.yml` and `oss-rebuild-in-ent.yml`), so it needs no change; a consumer
+that does not is serving its host's default 404 regardless of this template.
+
+**kgateway-oss is unaffected.** It carries its own `layouts/404.html` that auto-redirects for
+its `/docs/envoy/` restructure, so it shadows this one. Recorded in `OVERRIDES.md` with the
+reasoning and what converging them would take.
+
+**Verified.** `tests/not-found.spec.ts` (new, `browser` project, registered in
+`playwright.config.ts` — a spec absent from `testMatch` silently never runs) drives a real
+browser against genuinely missing URLs: 10 cases covering the reported case, HTTP status,
+`noindex`, each ranking tier, the deep-path floor, the no-version-segment case, and the
+absence of console errors. One case navigates the suggested link and asserts it returns 200.
+Full suite green on both brands: 2026 passed, 17 skipped, 0 failed.
+
+### Fix — a section landing page has no link back to the product root (`layouts/_partials/breadcrumb.html`)
+
+**Why.** A reader on agentgateway's Kubernetes landing page cannot get back up a level on a
+desktop. See
+<https://preview-solo-docs--pr3505-kkb-standalone-test-ipeoxciz.web.app/agentgateway/kubernetes/>
+— every `href` on that page was extracted, and the only one pointing at `/agentgateway/` sits
+inside `<aside class="… sidebar-mobile-only">`, which `docs-theme-extras.css` hides with
+`display: none !important` above 1280px. The link exists in the DOM and no desktop width can
+reach it. (The shape is not in production yet; the preview is where it is observable. One
+level deeper, <https://docs.solo.io/agentgateway/latest/> shows the breadcrumb working
+normally, which is the behavior a landing page was missing.)
+
+Three separate up-links all miss this page, and each for a defensible reason:
+
+1. **The breadcrumb deleted itself.** It collected non-home ancestors, then wrapped the whole
+   `<nav>` in `if gt (len $ancestors) 0`. On the hub each product is its own site with
+   `baseURL=/<product>/`, so a section landing's only ancestor IS home — the list emptied and
+   the nav vanished, taking its home link with it. The home link was always the payload here;
+   the ancestors are context.
+2. **The product logo went with the sidebar.** `sidebar.html` suppresses the left nav on a
+   section landing by design (it sits above the version trees and has no tree to show), and
+   the `sidebar-product-logo` block carrying `href="{{ site.Home.RelPermalink }}"` is nested
+   inside it.
+3. **The navbar logo leaves the product on purpose.** When a consumer sets
+   `params.sidebar.logo`, `partials/navbar-title.html` treats the navbar mark as the Solo
+   corporate one and links it to `docs.solo.io`.
+
+The section dropdown renders, but it only moves sideways to `/agentgateway/standalone/`.
+
+`_partials/schema.html` has emitted `Home` unconditionally in its `BreadcrumbList` since it
+was written, so the structured data already described a trail the reader could not see. The
+visible breadcrumb was the odd one out. It now renders on every page except home itself.
+
+**With one guard, because a lone home crumb can be worse than none.** Six of the seven hub
+products give their root `type: "default"`, which `layouts/default/list.html` renders as a
+meta-refresh to `params.defaultVersion`. A reader in `/kgateway/2.3.x/` clicking a lone home
+crumb would not arrive at a product root — they would be bounced to `/kgateway/latest/`,
+silently switching version. So when home is the WHOLE breadcrumb and home is a redirect stub,
+nothing renders, exactly as before. A page with real ancestors is unaffected: it needs those
+crumbs, and dropping the nav to avoid one imperfect home link would take the useful ones with
+it. agentgateway's root is a real chooser page rather than a stub, so it renders; any product
+that stops redirecting its root gets the crumb automatically.
+
+**Verified.** Built both affected products against this branch with a local module replace.
+`/agentgateway/kubernetes/` gained `<a href="/agentgateway/" class="solo-breadcrumb-home">`;
+`/agentgateway/` (home) still emits nothing; `/agentgateway/kubernetes/latest/` is unchanged.
+On kgateway, `/kgateway/2.1.x/`, `/2.2.x/` and `/2.3.x/` still emit no breadcrumb — the guard
+holds — while deeper pages keep theirs. The Japanese tree, whose root is also a stub, is
+likewise unchanged. Five cases added to `tests/breadcrumb-labels.spec.ts` (already in
+`testMatch`, so no `playwright.config.ts` change: a spec absent from it silently never runs);
+reverting the partial fails three of them, so they are not vacuous. Full suite green on both
+brands: 2055 passed, 17 skipped, 0 failed.
+
+### Fix — `linenos=table` code blocks are exported as a two-column table instead of a fence (`layouts/partials/copy-markdown.html`, `layouts/_partials/page-to-markdown.html`)
+
+**Why.** Every page-to-markdown consumer — the `.md` output format, `llms.txt`, the
+"Copy as Markdown" button, and the Japanese translation export — turns a code block written
+as ` ```json {linenos=table} ` into a **markdown table** whose first cell is the line-number
+gutter. See <https://docs.solo.io/agentgateway/latest/resiliency/timeouts/idle.md>, line 63:
+
+```
+| ``` 1 2 3 4 5 … 29 ``` | ```json { "key": "frontend/agentgateway-system/idle-time…" … ``` |
+```
+
+The reader gets no code block, the JSON is collapsed onto one line, and anything consuming
+the markdown (an LLM, a paste into an editor) gets a table where a config example should be.
+12 pages in agentgateway's `latest` tree ship this today; `linenos=table` appears in 491
+source files across the kgateway/OSS content the hub builds from, so the blast radius is the
+whole corpus, not one product.
+
+Both partials **already had** a strip for this — and neither ever matched. Two reasons, and a
+page needs only one of them to be affected:
+
+1. **Whitespace between tags is not whitespace.** `layouts/_shortcodes/reuse.html` routes its
+   body through `utils/flatten-rendered.html` with `bypassPre: false`, so every newline in a
+   reuse'd or rebased code block becomes the `&#10;` **entity**. The rendered HTML reads
+   `<td class="lntd">&#10;<pre …`, and the pattern's `\s*` cannot match an entity. Standard
+   (non-reuse) pages keep real newlines, which is why this shipped: the same line worked
+   there.
+2. **Attributes are not quoted.** Production builds with `--minify`, which emits
+   `<table class=lntable><tr><td class=lntd>`. `class="lntable"` never matches it — so on the
+   live site the strip was inert for *every* page, reuse'd or not.
+
+Two further mismatches: the pattern required `<code>` with no attributes, but Chroma emits
+`<code class="language-json" data-lang="json">` on the code cell; and it required the gutter
+cell's first child to be `<span class="lnt">`, but with `hl_lines` the highlighted number is
+wrapped in `<span class="hl">` first.
+
+The pattern now matches `(?:\s|&#10;)*` between tags, accepts `class="?lntable"?` /
+`class="?lntd"?`, accepts `<code[^>]*>`, and accepts any first `<span…>`. `class=lntable`
+remains the real guard, so this cannot swallow a data table.
+
+**Verified.** Against the live minified HTML of the page linked above (fetched, not
+simulated) the old pattern does not match and the new one does. `tests/helpers/copy-md.ts`
+gains an **`lntable-mangled`** detector — `htmlHasLnTable` plus `mdLnTableGutterRows`, which
+keys on a table row whose first cell is a code span of nothing but digits — wired into
+`findCopyMdDefects`, so the `copy-md-fidelity` **content**-project scan now fails on any
+consumer build that reproduces this, against the consumer's own pages rather than only the
+fixture. Three unit tests pin the entity-flattened shape, the digits-only gutter match, and
+the no-false-positive case (a data table whose first cell is an ordinary code span).
+
+No new fixture was needed: `fixture/assets/conrefs/test/everything.md` already carries
+`linenos=true` blocks and reaches the page through `{{< reuse >}}`, so `/test/v2/everything/`
+reproduced the defect (2 mangled rows, caught by the new scan before the fix) while
+`/test/v2/rebased/` covered the unflattened path. Also verified end-to-end against
+solo-io/docs via a temporary `replace` directive: exporting agentgateway on the pinned
+v0.2.0 versus this branch changes **exactly 12 of 327 files** — precisely the 12 known-bad
+pages, with the other 315 byte-identical — and mangled rows go 12 → 0. On
+`llm/guardrails/regex.md` the fence count goes 80 → 82, **matching its source's 82**, which
+also clears the export's `fence count mismatch` warning that had been forcing a lossy
+opener-FIFO fallback around those blocks. Full suite green on both brands: 2050 passed,
+17 skipped, 0 failed.
+
+### Fix — passing `version=` dropped the section segment from every generated link (`layouts/_partials/utils/resolve-link.html`)
+
+**Why.** `$versionRoot` — the URL prefix between the baseURL and the version segment — was
+derived only inside `if not $ver`, so a caller that passed `version=` explicitly got `""` and
+lost that prefix. `rebase.html` injects `version=` into *every* `link` / `link-hextra` call in
+rebased content, so on the docs hub that was every link on every rebased page.
+
+It stayed invisible while `""` happened to be the right answer: on the hub the product lives
+in the baseURL, and until agentgateway registered `sections = ["kubernetes", "standalone"]`
+no hub product had anything between the baseURL and the version. The moment one did, every
+rebased link pointed one segment short — `/agentgateway/latest/…` instead of
+`/agentgateway/kubernetes/latest/…`. Reported against
+<https://docs.solo.io/agentgateway/kubernetes/latest/traffic-management/transformations/templating-language/>,
+where the body link to "Create redirect URLs" resolved to
+`/agentgateway/latest/traffic-management/transformations/forward/` (404) while the sidebar
+link beside it, which does not go through this partial, was correct.
+
+`$ver` and `$versionRoot` answer different questions — "which version tree" versus "what
+prefix does this site put in front of it" — so only the version *inference* is now gated on
+`not $ver`; the `$versionRoot` derivation runs on every call.
+
+**Verified.** Full suite green on both brands (2055 passed, 17 skipped, 0 failed). Also built
+solo-io/docs `PRODUCT=agentgateway` through the repo's existing local `replace` and ran lychee
+over all 2059 built pages: 320,546 links checked, errors 35 — every one of them an ordinary
+missing target (`observability/otel-stack/`, `security/authorization/`,
+`llm/multiple-inference-pools/`, `traffic-management/load-balancing/`), with zero remaining
+section-segment failures.
+
+---
+
 ## [0.3.0] — 2026-08-24
 
 ### BREAKING — one tagged versions list replaces per-section version lists

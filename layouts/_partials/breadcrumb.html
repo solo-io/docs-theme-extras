@@ -25,7 +25,58 @@
   {{- end -}}
 {{- end -}}
 
-{{- if gt (len $ancestors) 0 -}}
+{{- /* Render for every page except the home page itself.
+
+       This used to require at least one non-home ancestor, which silently
+       deleted the whole <nav> — home link included — from any page sitting
+       ONE level under home. On the docs hub each product is its own site with
+       baseURL=/<product>/, so that is exactly a section landing:
+       /agentgateway/kubernetes/ has home as its only ancestor, so the list
+       emptied and the nav never rendered.
+
+       That is the one page shape with no other route back to the product root.
+       sidebar.html suppresses the left nav there by design (a landing sits
+       above the version trees), and the product logo that carries
+       href="{{ site.Home.RelPermalink }}" lives INSIDE that sidebar, so it goes
+       with it. The navbar logo is no help either: when a consumer sets
+       params.sidebar.logo the navbar carries the Solo corporate mark and points
+       at docs.solo.io (see partials/navbar-title.html), off the product
+       entirely. Net effect on production: the only /agentgateway/ link on
+       /agentgateway/kubernetes/ was inside .sidebar-mobile-only, which
+       docs-theme-extras.css hides above 1280px — reachable on a phone, and
+       nowhere else.
+
+       The home crumb was always the payload here; the ancestors are context.
+       _partials/schema.html has emitted Home unconditionally in its
+       BreadcrumbList since it was written, so the structured data already
+       described a trail the reader could not see.
+
+       Home itself is excluded because its only crumb would link to itself. */ -}}
+{{- $render := not $page.IsHome -}}
+
+{{- /* …unless Home is a REDIRECT STUB, in which case a lone Home crumb is worse
+       than none. Six of the seven products on the docs hub give their root
+       `type: "default"`, which layouts/default/list.html renders as a
+       meta-refresh to params.defaultVersion. So on kgateway a reader sitting in
+       /kgateway/2.3.x/ who clicks a Home crumb does not arrive at a product
+       root — they are bounced to /kgateway/latest/, silently switching version.
+
+       Only when Home is the WHOLE breadcrumb, though. A page with real
+       ancestors still renders, because there the crumbs it needs are the
+       ancestors and the home icon is a bonus; suppressing the nav to avoid one
+       imperfect link would take the useful ones with it. (Those pages already
+       carry that home icon today, so this changes nothing for them — the
+       stub-redirect problem is older than this branch and worth fixing at the
+       stub.)
+
+       agentgateway is the product this exists for, and its root is a real
+       chooser page rather than a stub, so it renders. Any other product that
+       stops redirecting its root gets the crumb automatically. */ -}}
+{{- if and $render (eq (len $ancestors) 0) (eq site.Home.Type "default") -}}
+  {{- $render = false -}}
+{{- end -}}
+
+{{- if $render -}}
   <nav class="solo-breadcrumb" aria-label="Breadcrumb">
     {{- /* The mobile sidebar trigger that used to live here was moved to
            each consumer's navbar (top-of-page, next to the logo) so it's
