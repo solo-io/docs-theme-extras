@@ -1499,6 +1499,22 @@ svg.section-card-icon {
     display: none !important;
   }
 }
+/* On phones (< 768px, Hextra's md breakpoint) the dropdowns hide on EVERY
+   page, drawer or not. A landing page kept them as "its only selector", but
+   the navbar is justify-end and the two buttons don't fit beside the logo at
+   phone widths — the overflow spilled off the LEFT edge, clipping the
+   hamburger and hiding the logo entirely, so landing pages showed a different
+   (and broken-looking) top nav than content pages. A landing page's body is
+   its own selector at this size: the product root lists its sections and a
+   section landing lists its versions as cards. The 768–1279px band above
+   keeps the :has() scope — there a drawerless page still has room for the
+   dropdowns and no body cards are guaranteed above the fold. */
+@media (max-width: 767px) {
+  .section-dropdown,
+  .version-dropdown {
+    display: none !important;
+  }
+}
 
 .version-product-name {
   display: none;
