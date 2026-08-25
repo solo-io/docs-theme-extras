@@ -59,14 +59,21 @@
   {{- end -}}
   {{- $section = $folder -}}
   {{- $condition = .Site.Params.buildCondition | default "" -}}
+  {{- /* The language segment sits between the product and the section
+         (/<product>/<lang>/<section>/<version>/), and $prefix is REBUILT from
+         params rather than sliced off the page's own URL, so it silently
+         dropped it. Every {{< card >}} on a translated page then linked to the
+         English copy — 67 hrefs on one agentgateway ja build. LanguagePrefix is
+         "" for the default language, so English output is byte-identical. */ -}}
+  {{- $lang := .Site.LanguagePrefix | default "" -}}
   {{- if and $folder $version -}}
     {{- if $sectionSeg -}}
-      {{- $prefix = printf "/%s/%s/%s" $folder $sectionSeg $version -}}
+      {{- $prefix = printf "/%s%s/%s/%s" $folder $lang $sectionSeg $version -}}
     {{- else -}}
-      {{- $prefix = printf "/%s/%s" $folder $version -}}
+      {{- $prefix = printf "/%s%s/%s" $folder $lang $version -}}
     {{- end -}}
   {{- else if $folder -}}
-    {{- $prefix = printf "/%s" $folder -}}
+    {{- $prefix = printf "/%s%s" $folder $lang -}}
   {{- end -}}
 {{- else -}}
   {{/* url mode */}}

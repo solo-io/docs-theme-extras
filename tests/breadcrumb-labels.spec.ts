@@ -33,11 +33,16 @@ const IS_ENTERPRISE = (process.env.BRAND ?? "").includes("enterprise")
 
 const VERSION_DIRS = ["v2", "v1", "main"];
 
+// `solo-breadcrumb` may be followed by a second class (`solo-breadcrumb-lone`
+// on a landing page), so the closing quote cannot be part of the match. Pinning
+// it to `class="solo-breadcrumb"` made this return null the moment the lone
+// variant shipped — a silent "no breadcrumb here", not a failure, which is the
+// worse outcome for a helper every assertion in this file routes through.
+const NAV_RE = /<nav [^>]*class="solo-breadcrumb[ "][\s\S]*?<\/nav>/;
+
 function crumbs(file: string): string[] | null {
   if (!fs.existsSync(file)) return null;
-  const nav = fs
-    .readFileSync(file, "utf8")
-    .match(/<nav [^>]*class="solo-breadcrumb"[\s\S]*?<\/nav>/);
+  const nav = fs.readFileSync(file, "utf8").match(NAV_RE);
   if (!nav) return null;
   return [...nav[0].matchAll(/class="solo-breadcrumb-link">([^<]*)</g)].map((m) =>
     m[1].trim(),
@@ -174,9 +179,7 @@ const FIXTURE_HOME = path.join(TEST_PRODUCT_ROOT, "index.html");
 
 function nav(file: string): string | null {
   if (!fs.existsSync(file)) return null;
-  const m = fs
-    .readFileSync(file, "utf8")
-    .match(/<nav [^>]*class="solo-breadcrumb"[\s\S]*?<\/nav>/);
+  const m = fs.readFileSync(file, "utf8").match(NAV_RE);
   return m ? m[0] : null;
 }
 
@@ -209,7 +212,35 @@ test.describe("breadcrumb with no non-home ancestor", () => {
       n!,
       "the home link is the entire payload of this crumb — without it the nav " +
         "is decoration",
-    ).toMatch(/<a [^>]*class="solo-breadcrumb-home"/);
+    ).toMatch(/<a [^>]*class="solo-breadcrumb-back"/);
+  });
+
+  test("the lone home link is LABELLED, not a bare house icon", () => {
+    // A house icon leading a trail is legible because the crumbs beside it say
+    // what it leads back to. Alone above the <h1> it is a glyph the reader has
+    // to decode, which is the state this replaced.
+    test.skip(!fs.existsSync(SECTION_LANDING), "probe not built");
+    const n = nav(SECTION_LANDING)!;
+    expect(
+      n,
+      "the lone home link must not fall back to the icon-only `home` variant — " +
+        "that is the bare-glyph rendering this exists to avoid",
+    ).not.toContain('class="solo-breadcrumb-home"');
+    const label = n.match(/<span>([^<]+)<\/span>/);
+    expect(
+      label,
+      "the back link must name where it goes. An arrow with no label is the " +
+        "same decode problem as the house icon, minus the icon.",
+    ).not.toBeNull();
+    expect(
+      label![1].trim().length,
+      "an empty <span> means utils/title returned nothing for site.Home and " +
+        "the site.Title fallback did not fire",
+    ).toBeGreaterThan(0);
+    // The marker class the lone-only CSS keys off. Without it the row keeps the
+    // icon-row metrics (0.1875rem top nudge) that exist to baseline a 16px
+    // glyph against text that is not there.
+    expect(n).toMatch(/<nav [^>]*class="[^"]*solo-breadcrumb-lone/);
   });
 
   test("that nav is home ONLY — no crumb, and no dangling separator", () => {
@@ -217,14 +248,36 @@ test.describe("breadcrumb with no non-home ancestor", () => {
     const n = nav(SECTION_LANDING)!;
     expect(
       [...n.matchAll(/class="solo-breadcrumb-link"/g)].length,
-      "a section landing has no non-home ancestor, so the home icon must " +
+      "a section landing has no non-home ancestor, so the back link must " +
         "stand alone",
     ).toBe(0);
     expect(
       n,
       "the separator is emitted per ancestor; with none, emitting one would " +
-        "render a trailing slash after the home icon",
+        "render a trailing slash after the back link",
     ).not.toContain("solo-breadcrumb-sep");
+  });
+
+  test("a page WITH ancestors keeps the icon, and is not widened", () => {
+    // The labelled variant is scoped to the no-ancestor case on purpose. On a
+    // real trail the crumbs already say where the icon leads, and swapping in a
+    // full product name would put a long label in front of every crumb line on
+    // the site.
+    const found = firstPageWithCrumbs();
+    test.skip(found === null, "no built breadcrumb");
+    const n = nav(found!.file)!;
+    expect(
+      n,
+      `${found!.file}: a page with ancestors must keep the compact home icon`,
+    ).toMatch(/<a [^>]*class="solo-breadcrumb-home"/);
+    expect(
+      n,
+      "the labelled back link leaked onto a page that has a real crumb trail",
+    ).not.toContain("solo-breadcrumb-back");
+    expect(
+      n,
+      "the lone-only spacing class leaked onto a normal crumb row",
+    ).not.toContain("solo-breadcrumb-lone");
   });
 
   test("the home page itself renders no breadcrumb", () => {

@@ -22,6 +22,108 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
+## [0.3.2] — 2026-08-25
+
+### Fix — every link and card on a translated page pointed into the English tree (`layouts/_partials/utils/resolve-link.html`, `utils/version-root.html`, `utils/page-context.html`, `tests/link-hextra-lang-prefix.spec.ts`)
+
+**Why.** A Japanese page carries a language segment in its permalink
+(`/<product>/ja/<version>/…`). Any URL the theme *reads* off the page kept it; every URL the
+theme *builds* dropped it. So a reader on
+<https://docs.solo.io/agentregistry/ja/latest/setup/oidc/> who clicked almost anything landed
+on <https://docs.solo.io/agentregistry/latest/setup/oidc/> — silently back in English, with no
+way to tell they had left the translation. Measured before the fix: **339** such links on
+agentregistry ja and **1011** on agentgateway ja. After: 3 and 8, all of them deliberate
+"view this page in English" pointers.
+
+Three independent defects produced it.
+
+**1. `resolve-link.html` stripped the language and nothing put it back.** The strip was
+justified in-comment by "the assembly re-prepends `.Site.BaseURL`, which already carries
+both" the product and the language. True of the product, false of the language:
+`.Site.BaseURL` is the *configured* base (`https://host/<product>/`) and Hugo does not fold
+the language into it. The local/localhost branch of that same assembly drops `.Site.BaseURL`
+entirely, so there the segment had no route back at all. This governs `{{< link >}}` and
+`{{< link-hextra >}}`, which is most links on a page.
+
+**2. `version-root.html` did not know the language+section shape.** Candidate version
+positions were 2 (`/<product>/<version>/`), 3 (`/<product>/<lang>/<version>/` *or*
+`/<product>/<section>/<version>/`) and 1 (local dev). A product that uses **both** a language
+and a section puts the version at 4, and nothing tried it. agentgateway is the first such
+product — its versions moved under `kubernetes/` in solo-io/docs#3505 — and every Japanese
+page of it failed inference: **831** `could not infer a version` warnings in one build, each
+falling back to a version-less English URL. Now 0. Position 4 is appended after 3 and before
+the local-dev 1, so the existing shapes keep matching first.
+
+**3. `page-context.html` rebuilt its prefix from params, not from the URL.** `prefix` (which
+`{{< card >}}` uses) is assembled as `folder + section + version`, a form with no slot for the
+language, so it dropped it by construction — 67 card hrefs on one agentgateway ja build.
+
+Verified on production-shaped builds of both translated products: **zero** English HTML files
+change, in either product. `Site.LanguagePrefix` is empty for the default language, which is
+exactly why this shipped unnoticed.
+
+**The test asserted the bug.** `link-hextra-lang-prefix.spec.ts` required the language strip
+to be present, so the defect was pinned in place and every run went green. Its own header
+explained why it could not do better: the bundled fixture is single-language, so the code
+under test is a no-op there and a *source-shape* assertion was standing in for a *behavioral*
+one. The spec now asserts the corrected shape and says plainly that it still cannot observe a
+rendered URL. **Follow-up worth doing:** a multilingual fixture variant (second language, own
+build target and `testMatch` entry, in the shape of `content-flat`/`build-flat`) asserting
+emitted hrefs directly. That is the only thing that would have caught this class of bug.
+
+### Fix — the lone home crumb on a section landing is a bare house icon that names nothing (`layouts/_partials/breadcrumb.html`, `assets/css/docs-theme-extras.css`)
+
+**Why.** 0.3.1 stopped a section landing from deleting its own breadcrumb, which gave
+agentgateway's `/kubernetes/` page the up-link it had no other route to (see the entry below
+for the three affordances that all miss that page). What it rendered was the same 16px house
+icon every other breadcrumb leads with — and alone, with no crumbs after it, that icon does
+not carry.
+
+A leading house works on a normal breadcrumb because the crumbs beside it say what it leads
+back to: `[home] / Kubernetes / 2026.8.1 / …` is legible as a trail. Sitting by itself above
+the `<h1>`, it is a glyph the reader has to decode, floating in whitespace with nothing to
+anchor it. Observable at
+<https://preview-solo-docs--pr3505-kkb-standalone-test-ipeoxciz.web.app/agentgateway/kubernetes/>
+once that preview rebuilds on 0.3.1; compare <https://docs.solo.io/agentgateway/latest/>,
+where the same icon reads fine because it heads an actual trail.
+
+When there is no ancestor to list, the home link is now **labelled**: a left arrow plus the
+home page's own title, so `/agentgateway/kubernetes/` reads
+`← Solo Enterprise for agentgateway`. Naming the destination is precisely what the icon was
+borrowing from its neighbours.
+
+**Scoped to the no-ancestor case, deliberately.** On a page with a real trail the icon is
+already doing its job, and widening it to a full product name would put a long label in front
+of every crumb row on the site. The `.solo-breadcrumb-lone` marker class carries the one
+spacing difference the labelled row needs: the base rule's `0.1875rem` top margin exists to
+baseline a 16px glyph against the text beside it, and there is no such text here.
+
+The label comes from the same `utils/title` the ancestor crumbs use, falling back to
+`site.Title` when home has none, so it follows however a consumer titles its product root
+rather than introducing a second source of the product name.
+
+**A product logo was tried here first and rejected.** It looked like the stronger answer — the
+mark the reader already knows as the up-link, since on every page WITH a left nav that logo
+sits at the top of it carrying this exact href. It reads badly in practice, and it also hits a
+real layout trap worth recording: `.solo-breadcrumb` is `display: flex`, so a logo anchor
+becomes a flex item of indefinite width, the image's `max-width: 100%` has no base to resolve
+against, and both collapse to 0×0 — an empty band where the mark should be. The sidebar copy
+escapes this only because its container is a definite 256px column. Anything that puts a
+percentage-sized replaced element in this nav needs `display: block` on the row first.
+
+**Verified.** Rendered against the bundled fixture in both light and dark at 1280px. Four
+cases in `tests/breadcrumb-labels.spec.ts`: the landing renders `solo-breadcrumb-back` and not
+the icon-only variant, the label is non-empty (an empty `<span>` means `utils/title` returned
+nothing and the `site.Title` fallback did not fire), the row carries `solo-breadcrumb-lone`,
+and a page WITH ancestors keeps the compact icon and gains neither the label nor the lone
+spacing class. The spec's shared nav matcher was pinned to `class="solo-breadcrumb"` with a
+closing quote, so the added second class made it return null — a silent "no breadcrumb here"
+rather than a failure, for a helper every assertion in the file routes through; it now matches
+`class="solo-breadcrumb[ "]`. Full suite green on both brands: 2057 passed, 17 skipped, 0
+failed.
+
+---
+
 ## [0.3.1] — 2026-08-25
 
 ### Add — version-aware 404 page
