@@ -22,7 +22,54 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
-## [Unreleased]
+## [0.3.2] — 2026-08-25
+
+### Fix — every link and card on a translated page pointed into the English tree (`layouts/_partials/utils/resolve-link.html`, `utils/version-root.html`, `utils/page-context.html`, `tests/link-hextra-lang-prefix.spec.ts`)
+
+**Why.** A Japanese page carries a language segment in its permalink
+(`/<product>/ja/<version>/…`). Any URL the theme *reads* off the page kept it; every URL the
+theme *builds* dropped it. So a reader on
+<https://docs.solo.io/agentregistry/ja/latest/setup/oidc/> who clicked almost anything landed
+on <https://docs.solo.io/agentregistry/latest/setup/oidc/> — silently back in English, with no
+way to tell they had left the translation. Measured before the fix: **339** such links on
+agentregistry ja and **1011** on agentgateway ja. After: 3 and 8, all of them deliberate
+"view this page in English" pointers.
+
+Three independent defects produced it.
+
+**1. `resolve-link.html` stripped the language and nothing put it back.** The strip was
+justified in-comment by "the assembly re-prepends `.Site.BaseURL`, which already carries
+both" the product and the language. True of the product, false of the language:
+`.Site.BaseURL` is the *configured* base (`https://host/<product>/`) and Hugo does not fold
+the language into it. The local/localhost branch of that same assembly drops `.Site.BaseURL`
+entirely, so there the segment had no route back at all. This governs `{{< link >}}` and
+`{{< link-hextra >}}`, which is most links on a page.
+
+**2. `version-root.html` did not know the language+section shape.** Candidate version
+positions were 2 (`/<product>/<version>/`), 3 (`/<product>/<lang>/<version>/` *or*
+`/<product>/<section>/<version>/`) and 1 (local dev). A product that uses **both** a language
+and a section puts the version at 4, and nothing tried it. agentgateway is the first such
+product — its versions moved under `kubernetes/` in solo-io/docs#3505 — and every Japanese
+page of it failed inference: **831** `could not infer a version` warnings in one build, each
+falling back to a version-less English URL. Now 0. Position 4 is appended after 3 and before
+the local-dev 1, so the existing shapes keep matching first.
+
+**3. `page-context.html` rebuilt its prefix from params, not from the URL.** `prefix` (which
+`{{< card >}}` uses) is assembled as `folder + section + version`, a form with no slot for the
+language, so it dropped it by construction — 67 card hrefs on one agentgateway ja build.
+
+Verified on production-shaped builds of both translated products: **zero** English HTML files
+change, in either product. `Site.LanguagePrefix` is empty for the default language, which is
+exactly why this shipped unnoticed.
+
+**The test asserted the bug.** `link-hextra-lang-prefix.spec.ts` required the language strip
+to be present, so the defect was pinned in place and every run went green. Its own header
+explained why it could not do better: the bundled fixture is single-language, so the code
+under test is a no-op there and a *source-shape* assertion was standing in for a *behavioral*
+one. The spec now asserts the corrected shape and says plainly that it still cannot observe a
+rendered URL. **Follow-up worth doing:** a multilingual fixture variant (second language, own
+build target and `testMatch` entry, in the shape of `content-flat`/`build-flat`) asserting
+emitted hrefs directly. That is the only thing that would have caught this class of bug.
 
 ### Fix — the lone home crumb on a section landing is a bare house icon that names nothing (`layouts/_partials/breadcrumb.html`, `assets/css/docs-theme-extras.css`)
 

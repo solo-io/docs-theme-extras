@@ -149,6 +149,15 @@
   {{- $candidatePositions := slice -}}
   {{- if ge (len $segments) 3 -}}{{- $candidatePositions = $candidatePositions | append 2 -}}{{- end -}}
   {{- if ge (len $segments) 4 -}}{{- $candidatePositions = $candidatePositions | append 3 -}}{{- end -}}
+  {{- /* Production + language + SECTION: /<product>/<lang>/<section>/<version>/…
+         puts the version at [4]. Sections and languages were each handled, but
+         never TOGETHER, so the first product to combine them (agentgateway,
+         whose versions moved under kubernetes/ and standalone/) matched no
+         candidate on any Japanese page: 831 "could not infer" warnings on one
+         build, each falling back to a version-less English URL. Appended after
+         [3] and before the local-dev [1] so the existing shapes keep winning
+         their own matches first. */ -}}
+  {{- if ge (len $segments) 5 -}}{{- $candidatePositions = $candidatePositions | append 4 -}}{{- end -}}
   {{- $candidatePositions = $candidatePositions | append 1 -}}
   {{- range $candidatePositions -}}
     {{- $i := . -}}

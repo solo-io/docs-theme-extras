@@ -163,9 +163,21 @@
       {{- with $baseURLPath -}}
         {{- $versionRoot = strings.TrimPrefix . $versionRoot -}}
       {{- end -}}
-      {{- with .Site.LanguagePrefix -}}
-        {{- $versionRoot = strings.TrimPrefix . $versionRoot -}}
-      {{- end -}}
+      {{- /* Do NOT also strip .Site.LanguagePrefix here. The comment above is
+             right that $root.versionBase carries BOTH the baseURL path and the
+             language, but only the baseURL path is re-supplied downstream:
+             .Site.BaseURL is the CONFIGURED base (https://host/<product>/), and
+             Hugo does not fold the language segment into it. Worse, the local /
+             localhost branch of the assembly drops .Site.BaseURL entirely, so
+             there the language had no way back at all.
+
+             Stripping it therefore emitted the ENGLISH url from every
+             translated page: measured on docs.solo.io, 339 links on
+             agentregistry ja and 1011 on agentgateway ja, e.g.
+             https://docs.solo.io/agentregistry/ja/latest/setup/oidc/ rendered
+             its links as https://docs.solo.io/agentregistry/latest/setup/oidc/.
+             The default language is unaffected — LanguagePrefix is "" there, so
+             this was a no-op for English and stayed invisible. */ -}}
   {{- end -}}
 {{- end -}}
 
