@@ -1,0 +1,339 @@
+{{- /*
+  resolve-sections.html — the sections this product ships, with a label and a
+  working href for each, in any URL shape.
+
+  Input:  a Page (passed as `.`)
+  Output: a slice of dicts, sorted by section key:
+            key        string — the registry key ("kubernetes")
+            label      string — what to show
+            href       string — where the chip/menu item points
+            icon       string — the section's `icon`, verbatim; "" when unset.
+                                Resolved by utils/render-icon.html at the render
+                                site, so a section can use any icon source the
+                                rest of the theme supports (an svg under static/,
+                                an svg in assets/, a site.Data.icons name, or a
+                                Material Icons ligature). Optional per section:
+                                mixing icon'd and icon-less entries in one
+                                selector is allowed and renders as such.
+            isCurrent  bool   — the page being rendered is in this section
+            isExternal bool   — href came from `externalURL`, so rel=noopener
+
+  A product registers a section by adding a key under site.Params.sections; see
+  utils/section-segment.html. A product with none gets an EMPTY slice, so every
+  caller can render unconditionally and single-section products are untouched.
+
+  LABEL, in order: the section's own `title` in the registry, then the section
+  landing page's title, then the humanized key. The landing page is where the
+  title naturally lives ("Kubernetes", "Standalone"), so most products need no
+  registry `title` at all.
+
+  HREF resolves through site.GetPage rather than string arithmetic, because the
+  section root is at a different depth in each shape:
+
+      /docs/<section>/<version>/…            OSS
+      /<section>/<version>/…                 docs hub under `hugo server`
+      /<product>/<section>/<version>/…        docs hub in production
+
+  GetPage paths are contentDir-relative, which already absorbs the product and
+  language prefixes, so looking up the landing page and reading its
+  .RelPermalink gets the published prefix right in all three without this
+  partial needing to know which one it is. The previous inline implementation
+  in sidebar.html hardcoded `/docs/%s/%s/` and was gated on `$isOSSShape`, so
+  the hub simply never showed a section selector.
+
+  VERSION REMAP. Section version sets do not always align: agentgateway's
+  kubernetes section ships 2.3.x and 2026.7.1 while standalone ships only
+  latest. Pointing another section's link at the CURRENT version can therefore
+  land on a page that does not exist. So for a section that is not the current
+  one, prefer an exact linkVersion match, then a `latest` entry, then that
+  section's first configured version.
+
+  That remap used to read `$cfg.versions` — i.e.
+  site.Params.sections.<key>.versions, which v0.2.2 REMOVED. `$cfg.versions`
+  has been nil ever since, so the whole remap silently no-opped and every
+  section link reused the current version verbatim. It survived the migration
+  sweep because the lookup was split across two statements
+  (`$cfg := index site.Params.sections .` then `$cfg.versions`), which the
+  repo-wide single-expression guard in tests/link-hextra-shapes.spec.ts could
+  not see. That guard now covers the split form too. Versions come from
+  utils/resolve-section-versions.html here, the one place that knows the
+  tagged-list rule.
+
+  `externalURL` on a section overrides the href entirely, for a section that
+  exists only to scope version dropdowns and has no landing page of its own
+  (kgateway's `agentgateway` section).
+
+  MULTILINGUAL. site.Params.sections is site-wide, but content is per-language,
+  so a section can exist in one language and not another. agentgateway is
+  exactly that: the EN tree was restructured to
+  content/en/agentgateway/<section>/<version>/, while content/ja/agentgateway/
+  still holds the flat <version>/ layout with no section landing pages at all.
+
+  A section with no landing page in THIS language does not exist in this
+  language, so it is left out of that language's selector — which is right:
+  pointing a Japanese reader at the English page is worse than omitting the
+  entry, and there is nothing else to point at.
+
+  The "you registered a section with nowhere to point" warning is therefore
+  raised only on the DEFAULT content language, and only when a selector actually
+  renders. See the warning block at the bottom of this file for the full rule
+  and the four real false positives that shaped it.
+
+  `(index hugo.Sites 0)` is the default-language site. Verified against the
+  agentgateway build (en + ja): it reports "en" from BOTH language sites. It is
+  used rather than `site.LanguagePrefix == ""` because that only identifies the
+  default language while `defaultContentLanguageInSubdir` is false — flip that
+  setting and every language gains a prefix, so the guard would silently stop
+  firing anywhere. A single-language site has one entry, so index 0 is that
+  language and the check is a no-op.
+*/ -}}
+{{- $page := . -}}
+{{- $isDefaultLang := eq site.Language.Lang (index hugo.Sites 0).Language.Lang -}}
+{{- $root := partial "utils/version-root.html" $page -}}
+{{- $currentSection := (partial "utils/section-segment.html" $page).segment -}}
+{{- $currentVersion := $root.currentVersion -}}
+
+{{- $keys := slice -}}
+{{- range $k, $_ := site.Params.sections -}}
+  {{- $keys = $keys | append $k -}}
+{{- end -}}
+{{- $keys = sort $keys -}}
+
+{{- $out := slice -}}
+{{- $dropped := slice -}}
+{{- $hollow := slice -}}
+{{- range $keys -}}
+  {{- $key := . -}}
+  {{- $cfg := index site.Params.sections $key -}}
+
+
+  {{- /* The section landing page, in whichever shape this site uses.
+
+         LEADING SLASH IS REQUIRED. A bare `site.GetPage "envoy"` is a fuzzy
+         lookup, and on docs-hub kgateway it aborts the whole build with
+         `page reference "envoy" is ambiguous` — the word matches more than one
+         page across its version trees. A rooted path is resolved against
+         contentDir only, so it cannot be ambiguous and cannot accidentally
+         match a same-named page deep in a version tree. */ -}}
+  {{- $landing := site.GetPage (printf "/%s" $key) -}}
+  {{- if not $landing -}}
+    {{- $landing = site.GetPage (printf "/docs/%s" $key) -}}
+  {{- end -}}
+
+  {{- $isCurrent := eq $key $currentSection -}}
+
+  {{- /* Label */ -}}
+  {{- $label := $key | humanize -}}
+  {{- with $landing -}}{{- $label = partial "utils/title" . -}}{{- end -}}
+  {{- with $cfg.title -}}{{- $label = . -}}{{- end -}}
+
+  {{- /* Target version within THIS section. */ -}}
+  {{- $targetVersion := $currentVersion -}}
+  {{- if not $isCurrent -}}
+    {{- $sectionVersions := partial "utils/resolve-section-versions.html" $key -}}
+    {{- with $sectionVersions -}}
+      {{- $match := false -}}
+      {{- $hasLatest := false -}}
+      {{- range . -}}
+        {{- if eq .linkVersion $currentVersion -}}{{- $match = true -}}{{- end -}}
+        {{- if eq .linkVersion "latest" -}}{{- $hasLatest = true -}}{{- end -}}
+      {{- end -}}
+      {{- if not $match -}}
+        {{- $targetVersion = cond $hasLatest "latest" (index . 0).linkVersion -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- /* Href */ -}}
+  {{- $href := "" -}}
+  {{- $isExternal := false -}}
+  {{- with $landing -}}
+    {{- $href = .RelPermalink -}}
+    {{- /* Append the version ONLY when that page actually exists. A product may
+           register a section WITHOUT nesting its version trees under it — the
+           section then exists purely to scope version dropdowns for shared
+           paths, and the versions live at /<product>/<version>/. Appending
+           blindly emits /<section>/<version>/ for pages that were never built,
+           which is a dead menu entry.
+
+           Relative GetPage off the landing page, so this needs no knowledge of
+           whether the prefix is /docs/<section>/, /<section>/ or
+           /<product>/<section>/. Falling back to the landing page itself is
+           always safe: it is the page the reader picks a version on. */ -}}
+    {{- $land := . -}}
+    {{- with $targetVersion -}}
+      {{- $want := printf "%s%s/" $land.RelPermalink . -}}
+      {{- /* Compare the RESOLVED permalink, don't just test that GetPage
+             returned something. Page.GetPage tries a relative lookup and then
+             falls back to a SITE-WIDE one, so `$land.GetPage "v2"` happily
+             returns /test/v2/ when /test/demo/v2/ does not exist — which is
+             exactly the dead link this check exists to prevent. */ -}}
+      {{- with $land.GetPage . -}}
+        {{- if eq .RelPermalink $want -}}{{- $href = $want -}}{{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- /* Does this section actually nest a version tree? Checked across ALL of
+         the section's versions, not just $targetVersion — a section may be
+         missing the target version and still have others. Feeds the
+         registry-vs-content warning at the bottom of this file; it is not used
+         to build the href. */ -}}
+  {{- $hasVersionTree := false -}}
+  {{- with $landing -}}
+    {{- $land := . -}}
+    {{- range partial "utils/resolve-section-versions.html" $key -}}
+      {{- if not $hasVersionTree -}}
+        {{- $want := printf "%s%s/" $land.RelPermalink .linkVersion -}}
+        {{- with $land.GetPage .linkVersion -}}
+          {{- if eq .RelPermalink $want -}}{{- $hasVersionTree = true -}}{{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- with $cfg.externalURL -}}
+    {{- $href = . -}}
+    {{- $isExternal = true -}}
+  {{- end -}}
+
+  {{- /* Reported below. Requires a LANDING PAGE: the section has content at that
+         path but no version tree under it, so the registration is half-done and
+         this site is demonstrably the owner.
+
+         A key with no landing page at ALL is deliberately not reported, because
+         it is the shape an INHERITED key takes and the theme cannot tell an
+         inherited key from a typo'd one — Hugo merges an imported module's params
+         into the project's before templates run, and exposes no provenance
+         (`hugo.Modules` does not exist; it errors with "can't evaluate field
+         Modules"). solo-io/docs imports github.com/kgateway-dev/kgateway.dev for
+         content and so inherits its `sections.envoy`, which no hub product wrote
+         and none can delete. Warning about it gave those products nothing they
+         could act on, and the empty-nav bug it used to cause is fixed in
+         utils/section-segment.html rather than in config.
+
+         COST, accepted: a section key that names nothing anywhere — a typo — is
+         only caught when the product has 2+ other sections that DO resolve, via
+         the `extras-section-no-target` warning above. That is the same blind spot
+         already documented there, not a new one. */ -}}
+  {{- /* Not reported on a VERSION-LESS site either. "Nests no version tree" is
+         vacuously true when the site has no versions to nest, so every section
+         would be reported on every build — and the registration is doing real
+         work there, scoping the selector and the sidebar (see
+         utils/section-segment.html, condition (c)). The href above already
+         degrades correctly for this case with no change: $currentVersion is ""
+         so $targetVersion is "", the `with $targetVersion` block never fires,
+         and the link stays on the section landing page. */ -}}
+  {{- if and $landing (not $hasVersionTree) (not $cfg.externalURL) site.Params.versions -}}
+    {{- $hollow = $hollow | append $key -}}
+  {{- end -}}
+
+  {{- /* A section with neither a landing page nor an externalURL has nowhere to
+         point; emitting it would put a dead link in the menu. Collect it and
+         decide whether that is worth reporting once the whole list is known —
+         see the warning block below. */ -}}
+  {{- if $href -}}
+    {{- $out = $out | append (dict
+          "key" $key
+          "label" $label
+          "href" $href
+          "icon" ($cfg.icon | default "")
+          "isCurrent" $isCurrent
+          "isExternal" $isExternal) -}}
+  {{- else -}}
+    {{- $dropped = $dropped | append $key -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* Report a dropped section only when it is USER-VISIBLE, which needs two
+       conditions to hold at once.
+
+       1. A selector actually renders. Both callers (navbar.html, sidebar.html)
+          gate on `gt (len $sections) 1`, so with 0 or 1 resolved sections there
+          is no menu, nothing is missing from anything, and the registration is
+          simply inert.
+
+       2. We are on the DEFAULT content language, because a section missing only
+          from a translated tree is a translation gap, not a config error.
+
+       Both conditions came from real false positives, and both were noisy
+       enough to fail tests/hugo-warnings.spec.ts in solo-io/docs (whose
+       allowlist is deliberately near-empty), on every build:
+
+         agentgateway  x2  content/ja/agentgateway/ was never restructured — it
+                           still holds the flat <version>/ layout while EN moved
+                           to <section>/<version>/ — so both sections resolved
+                           in EN and neither did in JA.
+         kgateway      x1  the hub does not define params.sections AT ALL. It
+                           INHERITS `sections.envoy` from the
+                           github.com/kgateway-dev/kgateway.dev module, because
+                           Hugo deep-merges an imported module's params into the
+                           project's. The hub serves that content flat at
+                           /kgateway/<version>/, so there is no
+                           /kgateway/envoy/ landing page and never should be.
+         gateway       x1  same inherited key, same reason.
+
+       That inheritance is the important one to know about: a product can gain a
+       section key it never wrote, from an OSS module it imports, and there is
+       nothing it can put in its own config to remove one (an empty table does
+       not delete a merged key). Warning per-key would therefore have pushed
+       three hub products toward creating landing pages for a section that must
+       not exist there.
+
+       KNOWN BLIND SPOT, accepted deliberately: a product that registers exactly
+       two sections and can resolve only one loses its selector entirely and is
+       not told. Condition 1 cannot distinguish that from the inherited-key case
+       above, since both look like "one section resolved". The guard still covers
+       the case that actually misleads a reader — a menu that renders while
+       silently omitting an entry. */ -}}
+{{- if and $dropped $isDefaultLang (gt (len $out) 1) -}}
+  {{- warnidf "extras-section-no-target" "params.sections %v resolved to no landing page and no `externalURL`, so %s left out of the section selector while %d other section(s) render in it. Add a content page at that path, or set externalURL." $dropped (cond (eq (len $dropped) 1) "it is" "they are") (len $out) -}}
+{{- end -}}
+{{- /* REGISTRY vs CONTENT. The section registry is hand-maintained config, and
+       when it disagrees with the content tree it fails SILENTLY. Two instances
+       of that cost real time:
+
+         Deleting `params.sections` from agentgateway.dev removed the section
+         switcher from every docs page. The build stayed green, emitted no
+         warning, and every other section-aware behavior kept working, because
+         that site's own nav.html reads the section from URL POSITION and the
+         sidebar resolves through the /docs/<section>/<version>/ shape. Only the
+         switcher depends on the registry, so losing it looks like nothing.
+
+         solo-io/docs does not define params.sections for kgateway or gateway at
+         all. It INHERITS `sections.envoy` from the
+         github.com/kgateway-dev/kgateway.dev module, because Hugo deep-merges an
+         imported module's params into the project's — and an empty table in the
+         project cannot delete a merged key. The hub serves that content flat at
+         /kgateway/<version>/, so there is no /kgateway/envoy/ tree and never
+         should be.
+
+       So: report a registered section that has a LANDING PAGE but nests no
+       version tree and sets no `externalURL`. That shape usually means a
+       half-done migration: the registry and the landing page say the section
+       exists, but every /<section>/<version>/ URL the registration implies has
+       nothing behind it. Note what the message must NOT claim: the key is not
+       inert. The landing page keeps the section in the selector (its entry
+       links the landing, with no version appended — see the href fallback
+       above) and its `sections` tags keep scoping version dropdowns. Both
+       halves of that supported fallback are pinned by
+       tests/section-nested-versions.spec.ts, and an earlier wording that
+       called the key "inert: nothing to select between" sent readers hunting
+       for a selector bug that did not exist.
+
+       Default language only, same reasoning as the warning above: a section
+       whose tree exists in English but not in a translation is a translation
+       gap, not a config error.
+
+       DELIBERATE EXCEPTION, and why this is `warnidf` rather than an error: the
+       bundled fixture's `demo` and `alt` sections are exactly this shape on
+       purpose, to pin the "registered without nesting" fallback that this
+       resolver supports. No production consumer uses it — every real section
+       either nests trees (agentgateway kubernetes/standalone, kgateway envoy) or
+       sets externalURL (kgateway's agentgateway) — so the fixture allowlists
+       this warning rather than the theme special-casing its own fixture. If a
+       product ever does need the shape, that allowlist is the escape hatch. */ -}}
+{{- if and $hollow $isDefaultLang -}}
+  {{- $verbs := cond (eq (len $hollow) 1) "is registered but nests no version tree and sets no `externalURL`" "are registered but nest no version tree and set no `externalURL`" -}}
+  {{- warnidf "extras-section-hollow" "params.sections %v %s. The section still renders in the selector (its entry links the landing page, with no version appended) and its `sections` tags still scope version dropdowns, but no tree answers /<section>/<version>/ URLs. If the version trees were meant to nest under the section, move them there; set `externalURL` if the content lives off-site; or, if this scope-only registration is intended, allowlist `extras-section-hollow`. If the key came from an IMPORTED MODULE, an empty table cannot delete it — decline the inheritance with `[params.sections]` + `_merge = \"none\"`. See docs-theme-extras USAGE.md, \"Versions and sections\"." $hollow $verbs -}}
+{{- end -}}
+{{- return $out -}}

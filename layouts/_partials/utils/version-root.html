@@ -11,16 +11,29 @@
     versionBase    string  — URL prefix before the version segment (carries
                              product + /<lang>/ for enterprise/multilingual)
     currentVersion string  — the matched version segment (e.g. "2.10.x")
-    matchedIdx     int     — index of the version segment (enterprise shapes)
+    matchedIdx     int     — index of the version segment, in BOTH shapes
+                             (always 3 for OSS)
+    pathAfterVersion string — the path below the version, no surrounding
+                             slashes ("" on a version root), for callers that
+                             swap the version and keep the rest
     versionPrefix  string  — published-URL prefix through the version segment,
                              for hasPrefix filtering of page RelPermalinks
     lookupPath     string  — path for site.GetPage (relative to contentDir in
                              enterprise; == versionPrefix in OSS)
     docsSection    Page    — the resolved version root page (nil if not found)
+    versionEntry   dict    — the matched entry from site.Params.versions
+                             ("" if not versioned), so a caller that only
+                             needs "what version is this page, and what's its
+                             banner/product/etc." doesn't need a second pass
+                             over the list to re-find it
 
-  Keep this in sync with any URL-shape changes; both callers depend on it.
+  This is the canonical "what section/version is this page in" answer —
+  resolve-link.html and version-banner.html call it instead of re-deriving
+  their own. Keep it in sync with any URL-shape changes; every caller
+  depends on it.
 */ -}}
 {{- $context := . -}}
+{{- $curProd := site.Params.currentProduct | default "" -}}
 
 {{- /* Two URL shapes to support:
          OSS (kgw, agw):     /docs/<section>/<version>/…
@@ -56,29 +69,68 @@
        published URLs still include it. */ -}}
 {{- $versionPrefix := "" -}}
 {{- $lookupPath := "" -}}
+{{- $versionEntry := "" -}}
+
+{{- /* Shape fallback for a version segment that matches no configured
+       site.Params.versions entry. Declared ONCE and used by both URL-shape
+       branches below: it was written out twice, and the two copies were the
+       narrower `^[0-9]+\.[0-9]+\.x$`.
+
+       `x|\d+` — the `\d+` alternative is load-bearing. A FULLY QUALIFIED LTS
+       version (/agentgateway/2026.7.1/…) matches only `X.Y.Z`, and when it
+       failed to match, inference fell through to the "latest" fallback:
+       every reuse-nested link on an LTS tree pointed at /latest/… and the
+       build emitted a `link-hextra called with no version` WARN per link.
+       That incident is why tests/link-hextra-lts-version.spec.ts exists, and
+       it is a SOURCE-level guard because no fixture has an LTS tree to catch
+       it behaviorally.
+
+       Anchored at both ends so an ordinary path segment can't be mistaken for
+       a version and stop the walk early — `mainline` is the specific trap,
+       since it starts with `main`. */ -}}
+{{- $versionShapeRE := `^(?:\d+\.\d+\.(?:x|\d+)|latest|main)$` -}}
 
 {{- if and (ge (len $segments) 4) (eq (index $segments 1) "docs") -}}
   {{- /* OSS shape: /docs/<section>/<version>/… */ -}}
   {{- $isOSSShape = true -}}
   {{- $section = index $segments 2 -}}
   {{- $candidate := index $segments 3 -}}
-  {{- if and site.Params.sections (isset site.Params.sections $section) -}}
-    {{- range (index site.Params.sections $section).versions -}}
-      {{- if eq .linkVersion $candidate -}}
-        {{- $currentVersion = $candidate -}}
-        {{- $isVersionedDocs = true -}}
-      {{- end -}}
-    {{- end -}}
+  {{- /* utils/resolve-section-versions.html is the one place that knows which
+         entries in site.Params.versions apply to a section (each entry names
+         its sections; an untagged entry applies to all). This used to read the
+         config inline, which meant the rule lived in four places and drifted.
+
+         utils/match-version-entry.html picks WHICH matching entry wins when a
+         linkVersion appears more than once — see its header. */ -}}
+  {{- $match := partial "utils/match-version-entry.html" (dict
+        "versions" (partial "utils/resolve-section-versions.html" $section)
+        "candidate" $candidate) -}}
+  {{- if $match -}}
+    {{- $currentVersion = $candidate -}}
+    {{- $isVersionedDocs = true -}}
+    {{- $versionEntry = $match -}}
   {{- end -}}
   {{- if not $isVersionedDocs -}}
-    {{- if or (eq $candidate "latest") (eq $candidate "main") (findRE `^[0-9]+\.[0-9]+\.x$` $candidate) -}}
+    {{- if findRE $versionShapeRE $candidate -}}
       {{- $currentVersion = $candidate -}}
       {{- $isVersionedDocs = true -}}
     {{- end -}}
   {{- end -}}
   {{- if $isVersionedDocs -}}
+    {{- /* The version always sits at segment 3 in this shape. Recording it
+           means every caller can use one uniform `add $matchedIdx 1` to skip
+           past the version instead of special-casing OSS — sidebar.html
+           carried a `cond $isOSSShape 4 …` purely because this was left 0. */ -}}
+    {{- $matchedIdx = 3 -}}
     {{- $versionPrefix = printf "/docs/%s/%s/" $section $currentVersion -}}
     {{- $lookupPath = $versionPrefix -}}
+    {{- /* "/docs/<section>", matching the enterprise branch's convention of
+           everything before the version segment. Existing callers
+           (sidebar.html) only read $versionBase in the isOSSShape=false
+           branch, so populating it here is additive — it exists so
+           resolve-link.html can get a version ROOT for OSS shapes the same
+           way it does for enterprise ones, instead of re-deriving it. */ -}}
+    {{- $versionBase = delimit (first 3 $segments) "/" -}}
   {{- end -}}
 {{- else if and (ge (len $segments) 2) (ne (index $segments 1) "") -}}
   {{- /* Enterprise shape, three layouts:
@@ -102,15 +154,38 @@
     {{- $i := . -}}
     {{- if not $isVersionedDocs -}}
       {{- $candidate := index $segments $i -}}
-      {{- range site.Params.versions -}}
-        {{- if eq .linkVersion $candidate -}}
-          {{- $currentVersion = $candidate -}}
-          {{- $isVersionedDocs = true -}}
-          {{- $matchedIdx = $i -}}
-        {{- end -}}
+      {{- /* Product-preferring match — NOT a bare `range … if eq .linkVersion`.
+             That form is order-dependent, and this list can legitimately hold
+             two entries with the same linkVersion (hugo-gateway.toml holds four
+             such pairs: Gloo Gateway 1.22.x–1.19.x alongside Gloo Edge
+             1.22.x–1.19.x). Matching Edge's entry on /gateway/1.21.x/ takes the
+             version banner off every Gloo Gateway page, because the banner text
+             is read off whichever entry this resolves to and the Edge entries
+             set no `banner`. See utils/match-version-entry.html. */ -}}
+      {{- /* Product-preferring match — NOT a bare `range … if eq .linkVersion`.
+             That form is order-dependent, and this list can legitimately hold
+             two entries with the same linkVersion (hugo-gateway.toml holds four
+             such pairs: Gloo Gateway 1.22.x–1.19.x alongside Gloo Edge
+             1.22.x–1.19.x). Matching Edge's entry on /gateway/1.21.x/ takes the
+             version banner off every Gloo Gateway page, because the banner text
+             is read off whichever entry this resolves to and the Edge entries
+             set no `banner`. See utils/match-version-entry.html.
+
+             ASSIGN, then `if` — do NOT write `{{ with partial … }}`. `with`
+             rebinds the dot to the returned value, and Hugo's return-partial
+             wrapper calls `._pushPartialDecorator` on the dot, so the build
+             dies with `_partials/utils/version-root … is nil` pointing at
+             version-root.html:1:10 — a location that has nothing to do with the
+             real mistake. Verified both ways against the fixture. */ -}}
+      {{- $m := partial "utils/match-version-entry.html" (dict "versions" site.Params.versions "candidate" $candidate) -}}
+      {{- if $m -}}
+        {{- $currentVersion = $candidate -}}
+        {{- $isVersionedDocs = true -}}
+        {{- $matchedIdx = $i -}}
+        {{- $versionEntry = $m -}}
       {{- end -}}
       {{- if not $isVersionedDocs -}}
-        {{- if or (eq $candidate "latest") (eq $candidate "main") (findRE `^[0-9]+\.[0-9]+\.x$` $candidate) -}}
+        {{- if findRE $versionShapeRE $candidate -}}
           {{- $currentVersion = $candidate -}}
           {{- $isVersionedDocs = true -}}
           {{- $matchedIdx = $i -}}
@@ -127,12 +202,20 @@
            along — multilingual URLs (/<product>/<lang>/<version>/…) would
            otherwise filter to nothing and leave an empty sidebar. */ -}}
     {{- $versionPrefix = printf "%s/" (delimit (first (add $matchedIdx 1) $segments) "/") -}}
-    {{- /* $section is the product segment, used to look up per-section version
-           lists. Only the production shape (version at [2], product at [1])
-           exposes one; the local-dev and language-prefixed shapes leave it
-           empty. The mobile version row builds hrefs from $versionBase instead,
-           which keeps the language prefix the language-prefixed shape drops. */ -}}
-    {{- if eq $matchedIdx 2 -}}
+    {{- $sectionInfo := partial "utils/section-segment.html" $context -}}
+    {{- /* $section normally holds the product segment, used to look up
+           per-section version lists — only the production shape (version at
+           [2], product at [1]) exposes one; the local-dev and
+           language-prefixed shapes leave it empty (the mobile version row
+           builds hrefs from $versionBase instead, which keeps the language
+           prefix those shapes drop). A product that registers
+           site.Params.sections entries (utils/section-segment.html)
+           repurposes $section to hold that section instead — the same
+           site.Params.sections.<key>.versions lookup OSS sites already use,
+           just detected generically instead of by a fixed URL position. */ -}}
+    {{- if $sectionInfo.segment -}}
+      {{- $section = $sectionInfo.segment -}}
+    {{- else if eq $matchedIdx 2 -}}
       {{- $section = index $segments 1 -}}
     {{- else -}}
       {{- $section = "" -}}
@@ -142,14 +225,45 @@
     {{- $versionBase = delimit (first $matchedIdx $segments) "/" -}}
     {{- /* GetPage paths are relative to contentDir, which is set to the
            product subtree (and is per-language: content/<lang>/<product>),
-           so the lookup never includes the product or language prefix. */ -}}
-    {{- $lookupPath = printf "/%s/" $currentVersion -}}
+           so the lookup never includes the product or language prefix.
+           A product that registers site.Params.sections entries (utils/
+           section-segment.html) nests version trees one level deeper, under
+           the section segment (content/<lang>/<product>/<section>/<version>/…),
+           so the lookup path needs the section segment too or GetPage
+           resolves nothing and the sidebar silently renders empty. */ -}}
+    {{- if $sectionInfo.segment -}}
+      {{- $lookupPath = printf "/%s/%s/" $sectionInfo.segment $currentVersion -}}
+    {{- else -}}
+      {{- $lookupPath = printf "/%s/" $currentVersion -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
 
 {{- $docsSection := "" -}}
 {{- if $isVersionedDocs -}}
   {{- $docsSection = site.GetPage $lookupPath -}}
+{{- end -}}
+
+{{- /* Everything AFTER the version segment, with no leading or trailing slash
+       ("" on a version root itself). Both URL shapes derive it the same way
+       now that the OSS branch records $matchedIdx, so there is no per-shape
+       arithmetic for callers to get wrong.
+
+       This exists because "swap the version, keep the rest of the path" is a
+       real, recurring need — version-noindex.html builds an old page's
+       current-version equivalent, and the sidebar and navbar build the
+       version-switch destinations. Each was slicing the segment list itself
+       with its own off-by-one risk. Note the trailing empty segment that
+       `split` leaves on a directory-style RelPermalink ("/a/b/" → […, ""]) is
+       dropped, so the result never ends in "/". */ -}}
+{{- $pathAfterVersion := "" -}}
+{{- if $isVersionedDocs -}}
+  {{- $tail := after (add $matchedIdx 1) $segments -}}
+  {{- $keep := slice -}}
+  {{- range $tail -}}
+    {{- if ne . "" -}}{{- $keep = $keep | append . -}}{{- end -}}
+  {{- end -}}
+  {{- $pathAfterVersion = delimit $keep "/" -}}
 {{- end -}}
 
 {{- return (dict
@@ -162,4 +276,6 @@
       "versionPrefix" $versionPrefix
       "lookupPath" $lookupPath
       "docsSection" $docsSection
+      "versionEntry" $versionEntry
+      "pathAfterVersion" $pathAfterVersion
    ) -}}

@@ -17,14 +17,7 @@
       {{- range $children -}}
         <a class="section-card" href="{{ .Permalink }}">
           {{- with .Params.icon }}
-            {{- $svgIconPath := printf "static/%s" (replaceRE "^/" "" .) -}}
-            {{- if and (findRE `\.svg$` .) (fileExists $svgIconPath) -}}
-              {{- readFile $svgIconPath | replaceRE "<svg" `<svg class="section-card-icon" aria-hidden="true"` | safeHTML -}}
-            {{- else if index site.Data.icons . -}}
-              {{- partial "utils/icon.html" (dict "name" . "attributes" `class="section-card-icon" aria-hidden="true"`) -}}
-            {{- else -}}
-              <i class="material-icons section-card-icon" aria-hidden="true">{{ . }}</i>
-            {{- end -}}
+            {{- partial "utils/render-icon.html" (dict "icon" . "class" "section-card-icon") -}}
           {{- end }}
           <div class="section-card-body">
             <p class="section-card-title">

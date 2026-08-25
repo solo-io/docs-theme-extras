@@ -1,0 +1,42 @@
+# SECTION SELECTOR WITH A CONFIGURED BUTTON TITLE.
+#
+# An OVERLAY, not a standalone fixture. Built as
+#
+#   hugo --config hugo-oss.toml,hugo-section-title.toml
+#
+# so it inherits the whole versioned OSS fixture — content, sections, versions,
+# module imports — and changes exactly two things: where it publishes, and the
+# one param under test. Hugo merges comma-joined config files with the later
+# file winning per key, so `[params.sectionDropdown]` lands beside the inherited
+# params rather than replacing them.
+#
+# WHY AN OVERLAY BUILD RATHER THAN A KEY ON AN EXISTING FIXTURE. The interaction
+# worth testing is versioned-AND-overridden, which is the docs-hub agentgateway
+# shape: a section selector next to a version dropdown, where suppressing the
+# product name on BOTH would leave the navbar with no product name at all.
+# Neither existing option can reach it —
+#
+#   - the version-less fixtures (hugo-flat*.toml) have no version dropdown, so
+#     the suppression this covers does not exist there
+#   - setting the key on hugo-oss.toml or hugo-enterprise.toml would change the
+#     navbar under all ~1900 assertions those builds already carry, and would
+#     invalidate the product-name assertions in tests/section-selector.spec.ts
+#     that pin the DEFAULT behavior
+#
+# Keeping the two builds side by side is what tests both branches at once: the
+# branded builds prove the default still names the product, this one proves the
+# override replaces it and hands the name back to the version button.
+#
+# Built by `make build-section-title`; asserted by
+# tests/section-dropdown-title.spec.ts, which reads public-section-title/
+# directly rather than through DOCS_TEST_CONFIG (same arrangement as the flat
+# builds — see the header of tests/section-versionless.spec.ts).
+publishDir = "public-section-title/test"
+
+[params]
+  # The feature under test. A short fixed word on the selector button, in place
+  # of the inherited params.product ("Docs framework test fixture"), with the
+  # sections named only inside the menu. Chosen to match what docs-hub
+  # agentgateway sets, so the fixture and production exercise one string shape.
+  [params.sectionDropdown]
+    title = "Docs"

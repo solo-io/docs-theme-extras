@@ -1,0 +1,43 @@
+{{- /*
+  version-dropdown-related.html — render one params.relatedDocs group inside the
+  desktop version dropdown (navbar.html).
+
+  Input: dict "group" <a params.relatedDocs entry> "divider" <bool>
+
+  Emits an optional separator, the group's header, and one <li> per version.
+  A related group's href is the configured `url` verbatim: it points at ANOTHER
+  product's docs, so there is nothing here to construct it from — and the values
+  are irregular in ways no rule could derive (Gloo Edge lives at /gloo-edge/, its
+  newest version is served at /latest/ rather than /1.22.x/, and its 1.19.x alone
+  is /v1.19.x with a `v`).
+
+  This does NOT use `return`, so it is safe to call from anywhere. See
+  utils/match-version-entry.html for the `with partial` trap that applies only to
+  return-partials.
+*/ -}}
+{{- $group := .group -}}
+{{- if .divider -}}
+<li role="separator" class="version-dropdown-divider"></li>
+{{- end -}}
+{{- with $group.productName -}}
+<li role="none" class="version-dropdown-header">{{ . }}</li>
+{{- end -}}
+{{- range $group.versions -}}
+  {{- /* A WHITESPACE label hides the entry silently — the same "published but
+         not advertised" signal a whitespace `dropdown` carries on this product's
+         own versions, which also never warns. A MISSING label is different: it
+         is a config error, and rendering it would produce the empty-but-clickable
+         menuitem that hidden versions used to (see navbar.html). There is no
+         `version` field here to fall back on. */ -}}
+  {{- if not (isset . "label") -}}
+    {{- warnidf "extras-relateddocs-nolabel" "params.relatedDocs group %q has a version with no `label` key; skipped rather than rendered as an empty menu row. Use a whitespace label to hide one deliberately." ($group.productName | default "(unnamed)") -}}
+  {{- else if ne (trim .label " ") "" -}}
+    {{- if .url -}}
+<li role="none">
+  <a href="{{ .url }}" class="version-dropdown-item" role="menuitem">{{ .label }}</a>
+</li>
+    {{- else -}}
+      {{- warnidf "extras-relateddocs-nourl" "params.relatedDocs: %q has no `url`, so it cannot be linked and is skipped. A related group points at another product's site; there is no path to construct." .label -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}

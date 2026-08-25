@@ -342,3 +342,231 @@ test.describe("mobile drawer: AJAX section/version swap", () => {
     ).toHaveAttribute("href", ownHref!);
   });
 });
+
+// ── Drawer header: chip parity and the CONTENTS heading ────────────────────
+//
+// The drawer's section chips are styled as TWIN SELECTORS on the version chip
+// rules (see the .sidebar-mobile-section-link block in docs-theme-extras.css):
+// the two rows must read as the same kind of control. They forked once —
+// full-width centered section chips with a blue-tint active against outlined
+// version pills with the brand-tint active — and these tests pin the styles
+// together so a restyle of one row cannot silently leave the other behind.
+//
+// The header also draws NO divider line any more: the CONTENTS heading is what
+// separates the section/version rows from the page tree, so it must be present
+// on every drawer, not just on tabbed pages (where it originally lived).
+
+/** First built page whose drawer carries BOTH chip rows. `wantActive`
+ *  additionally requires an active chip of each kind, for the active-state
+ *  comparison (a page outside every section has a section row but no active
+ *  section chip). */
+function findTwoRowPage(wantActive: boolean): string | null {
+  for (const p of crawlBuiltRoot()) {
+    if (!isServable(p.url)) continue;
+    let html: string;
+    try {
+      html = fs.readFileSync(p.filePath, "utf8");
+    } catch {
+      continue;
+    }
+    if (anchorsWithClass(html, "sidebar-mobile-section-link").length < 2) continue;
+    if (anchorsWithClass(html, "sidebar-mobile-version-link").length < 1) continue;
+    if (
+      wantActive &&
+      !(
+        html.includes("sidebar-mobile-section-active") &&
+        html.includes("sidebar-mobile-version-active")
+      )
+    )
+      continue;
+    return p.url;
+  }
+  return null;
+}
+
+const TWO_ROW_PAGE = findTwoRowPage(false);
+const TWO_ROW_ACTIVE_PAGE = findTwoRowPage(true);
+
+/** The computed properties that make the two chip kinds "the same control".
+ *  Colors are deliberately included for the ACTIVE pair (brand tint + brand
+ *  border) but not the inactive pair, whose grey text differs per dark-mode
+ *  state the fixture doesn't pin. */
+const SHAPE_PROPS = [
+  "fontSize",
+  "fontWeight",
+  "paddingTop",
+  "paddingRight",
+  "borderTopWidth",
+  "borderTopStyle",
+  "borderTopLeftRadius",
+] as const;
+const ACTIVE_PROPS = [
+  ...SHAPE_PROPS,
+  "backgroundColor",
+  "borderTopColor",
+] as const;
+
+function computedOf(
+  page: import("@playwright/test").Page,
+  selector: string,
+  props: readonly string[],
+) {
+  return page.evaluate(
+    ([sel, keys]) => {
+      const el = document.querySelector(sel as string);
+      if (!el) return null;
+      const cs = getComputedStyle(el);
+      return Object.fromEntries(
+        (keys as string[]).map((k) => [k, cs[k as keyof CSSStyleDeclaration]]),
+      );
+    },
+    [selector, props] as const,
+  );
+}
+
+test.describe("mobile drawer: section chips are the version chips' twins", () => {
+  test.use({ viewport: PHONE });
+
+  test("an inactive section chip and an inactive version chip share their shape", async ({ page }) => {
+    test.skip(TWO_ROW_PAGE === null, "no built page has both chip rows");
+    await page.goto(TWO_ROW_PAGE!);
+    await page.evaluate(() =>
+      (window as unknown as { toggleMobileSidebar: () => void }).toggleMobileSidebar(),
+    );
+    const section = await computedOf(
+      page,
+      ".sidebar-mobile-section-link:not(.sidebar-mobile-section-active)",
+      SHAPE_PROPS,
+    );
+    const version = await computedOf(
+      page,
+      ".sidebar-mobile-version-link:not(.sidebar-mobile-version-active)",
+      SHAPE_PROPS,
+    );
+    expect(section, "no inactive section chip").not.toBeNull();
+    expect(version, "no inactive version chip").not.toBeNull();
+    expect(section).toEqual(version);
+  });
+
+  test("the ACTIVE section chip and the ACTIVE version chip share fill, border, and weight", async ({ page }) => {
+    test.skip(
+      TWO_ROW_ACTIVE_PAGE === null,
+      "no built page has an active chip in both rows",
+    );
+    await page.goto(TWO_ROW_ACTIVE_PAGE!);
+    await page.evaluate(() =>
+      (window as unknown as { toggleMobileSidebar: () => void }).toggleMobileSidebar(),
+    );
+    const section = await computedOf(
+      page,
+      ".sidebar-mobile-section-active",
+      ACTIVE_PROPS,
+    );
+    const version = await computedOf(
+      page,
+      ".sidebar-mobile-version-active",
+      ACTIVE_PROPS,
+    );
+    expect(section, "no active section chip").not.toBeNull();
+    expect(version, "no active version chip").not.toBeNull();
+    expect(section).toEqual(version);
+  });
+
+  test("the drawer labels its page tree CONTENTS and draws no divider under the header", async ({ page }) => {
+    test.skip(DRAWER === null, "no built page has a drawer version row");
+    await page.goto(DRAWER!.url);
+    await page.evaluate(() =>
+      (window as unknown as { toggleMobileSidebar: () => void }).toggleMobileSidebar(),
+    );
+    const panel = page.locator(".sidebar-mobile-panel");
+    await expect(panel).toHaveClass(/mobile-sidebar-open/);
+    // The heading is unconditional — this target page is chosen by version
+    // chips alone, so it covers non-tabbed drawers, where the heading used to
+    // be missing entirely.
+    await expect(
+      panel.locator(".sidebar-nav-wrapper .sidebar-mobile-row-label").first(),
+      "no CONTENTS heading above the drawer's page tree",
+    ).toBeVisible();
+    const border = await computedOf(page, ".sidebar-mobile-header", [
+      "borderBottomWidth",
+    ]);
+    if (border) {
+      expect(
+        border.borderBottomWidth,
+        "the header divider is back — the CONTENTS heading replaced it",
+      ).toBe("0px");
+    }
+  });
+});
+
+// ── Landing pages: the phone navbar matches content pages, and the hamburger
+//    opens a real drawer ────────────────────────────────────────────────────
+//
+// A landing page (the product root, a section landing) used to render no
+// drawer at all and keep the navbar section/version dropdowns at every width
+// as "its only selector". Two failures came from that:
+//   - at phone widths the two dropdowns don't fit beside the logo, and the
+//     justify-end navbar spilled the overflow off the LEFT edge — clipping the
+//     hamburger and hiding the logo, so landing pages showed a different (and
+//     broken-looking) top nav than content pages;
+//   - the hamburger that remained was DEAD: mobile-nav.js wires its click to
+//     toggleMobileSidebar(), which no-ops without a .sidebar-mobile-panel.
+// Landing pages now render a mobile-only drawer carrying the page's actual
+// choices (section chips, and version chips where unambiguous), so the
+// hamburger works, and the phone navbar hides the dropdowns exactly as it
+// does on content pages.
+
+/** First built landing page: it has the landing drawer (a panel with a
+ *  section chip row but NO page tree) plus the navbar version dropdown. */
+function findLandingDrawerPage(): string | null {
+  for (const p of crawlBuiltRoot()) {
+    if (!isServable(p.url)) continue;
+    let html: string;
+    try {
+      html = fs.readFileSync(p.filePath, "utf8");
+    } catch {
+      continue;
+    }
+    if (!html.includes("version-dropdown-btn")) continue;
+    if (!html.includes("sidebar-mobile-panel")) continue;
+    if (!html.includes("sidebar-mobile-section-row")) continue;
+    if (html.includes("sidebar-nav-wrapper")) continue;
+    return p.url;
+  }
+  return null;
+}
+
+const LANDING = findLandingDrawerPage();
+
+test.describe("landing page navbar and drawer: phone", () => {
+  test.use({ viewport: PHONE });
+
+  test("the dropdowns are hidden, and the hamburger opens the landing drawer", async ({ page }) => {
+    test.skip(LANDING === null, "no built landing page has a landing drawer");
+    await page.goto(LANDING!);
+    // Same navbar as a content page: no dropdowns eating the row.
+    await expect(page.locator(".version-dropdown")).toBeHidden();
+    // The hamburger is not a dead button any more: it opens the drawer, which
+    // offers the landing page's choices as section chips.
+    const burger = page.locator(".hextra-hamburger-menu");
+    await expect(burger).toBeVisible();
+    await burger.click();
+    const panel = page.locator(".sidebar-mobile-panel");
+    await expect(panel).toHaveClass(/mobile-sidebar-open/);
+    await expect(
+      panel.locator(".sidebar-mobile-section-link").first(),
+    ).toBeVisible();
+  });
+});
+
+test.describe("landing page navbar: desktop", () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test("the version dropdown is still the selector at desktop width", async ({ page }) => {
+    test.skip(LANDING === null, "no built landing page has a landing drawer");
+    await page.goto(LANDING!);
+    await expect(page.locator(".version-dropdown-btn").first()).toBeVisible();
+    // The landing drawer is mobile chrome; the desktop layout must not show it.
+    await expect(page.locator(".sidebar-mobile-panel")).toBeHidden();
+  });
+});

@@ -222,16 +222,21 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 
   /* ── Version dropdown toggle ── */
-  document.querySelectorAll('.version-dropdown').forEach(function(dd){
-    var btn = dd.querySelector('.version-dropdown-btn');
+  // The section dropdown (product name -> Kubernetes / Standalone) is the same
+  // control as the version dropdown and shares its open/close behaviour, so
+  // both class prefixes are wired here rather than duplicating the handler.
+  document.querySelectorAll('.version-dropdown, .section-dropdown').forEach(function(dd){
+    var isSection = dd.classList.contains('section-dropdown');
+    var btn = dd.querySelector(isSection ? '.section-dropdown-btn' : '.version-dropdown-btn');
     if(!btn) return;
     btn.addEventListener('click', function(e){
       e.stopPropagation();
       var wasOpen = dd.classList.contains('open');
       /* Close all dropdowns first */
-      document.querySelectorAll('.version-dropdown.open').forEach(function(d){
+      document.querySelectorAll('.version-dropdown.open, .section-dropdown.open').forEach(function(d){
         d.classList.remove('open');
-        d.querySelector('.version-dropdown-btn').setAttribute('aria-expanded','false');
+        var b = d.querySelector('.version-dropdown-btn, .section-dropdown-btn');
+        if(b) b.setAttribute('aria-expanded','false');
       });
       if(!wasOpen){
         dd.classList.add('open');
@@ -240,9 +245,10 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   });
   document.addEventListener('click', function(){
-    document.querySelectorAll('.version-dropdown.open').forEach(function(d){
+    document.querySelectorAll('.version-dropdown.open, .section-dropdown.open').forEach(function(d){
       d.classList.remove('open');
-      d.querySelector('.version-dropdown-btn').setAttribute('aria-expanded','false');
+      var b = d.querySelector('.version-dropdown-btn, .section-dropdown-btn');
+      if(b) b.setAttribute('aria-expanded','false');
     });
   });
 

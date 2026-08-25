@@ -1,0 +1,111 @@
+# VERSION-LESS fixture: parallel doc sets, no version axis.
+#
+# Why a fourth config rather than another brand of the main fixture: every other
+# fixture build is VERSIONED, so nothing in this repo exercised the shape kagent
+# ships — two top-level doc sets registered under params.sections with NO
+# params.versions at all. That shape has its own code paths in
+# utils/section-segment.html (positional condition (c)),
+# utils/resolve-sections.html (no version to append; no hollow warning),
+# _partials/navbar.html (the `else` of `with $navVersions`) and
+# partials/sidebar.html (the version-less branch roots at the SECTION), and none
+# of them could be reached from the main fixture without giving it versions.
+#
+# Deliberately mirrors kagent's shape rather than inventing a new one:
+#   baseURL carries a /docs path prefix — kagent.dev ships
+#   baseURL "https://kagent.dev/docs/" — so site.Home.RelPermalink is "/docs/"
+#   and $docsRootDepth is 1: sections sit at URL index 1 and are accepted via
+#   the PRIMARY half of the positional test ($i == depth).
+#
+# This build exercises ONLY that primary half. The `docs`-ALTERNATIVE half
+# ($i == depth+1 with parts[depth] == "docs", for a site whose home is a
+# marketing page at "/" and whose docs live under a content directory named
+# docs/) can never fire here — parts[depth] is the section itself, never the
+# literal "docs". That half is covered by the companion hugo-flat-root.toml
+# build; a bug in either half stays hidden if only one is exercised.
+#
+# Built by `make build-flat`; asserted by tests/section-versionless.spec.ts,
+# which reads public-flat/ directly rather than through DOCS_TEST_CONFIG (the
+# harness target stays the versioned fixture — see that spec's header).
+baseURL = "/docs"
+languageCode = "en-us"
+title = "Version-less fixture"
+linkTitle = "Flat"
+contentDir = "fixture/content-flat/en"
+publishDir = "public-flat"
+enableInlineShortcodes = true
+
+[module]
+  [[module.imports]]
+    path = "github.com/imfing/hextra"
+    disable = false
+
+  [[module.mounts]]
+    source = "fixture/content-flat/en"
+    target = "content"
+  [[module.mounts]]
+    source = "layouts"
+    target = "layouts"
+  [[module.mounts]]
+    source = "assets"
+    target = "assets"
+  [[module.mounts]]
+    source = "fixture/assets"
+    target = "assets"
+  [[module.mounts]]
+    source = "fixture/static"
+    target = "static"
+  [[module.mounts]]
+    source = "data"
+    target = "data"
+
+[markup]
+  [markup.goldmark.renderer]
+    unsafe = true
+  [markup.highlight]
+    noClasses = false
+
+[params]
+  # NO [[params.versions]]. That absence is the whole point of this fixture, and
+  # it is what every version-less code path keys off (`not site.Params.versions`).
+  # Adding even one entry here silently moves this build onto the versioned paths
+  # and the spec's assertions stop meaning anything.
+
+  product = "Flat product"
+
+  # Parallel doc sets, registered exactly as a versioned product registers them.
+  # `alpha` takes its label from its landing page's title; `beta` overrides it
+  # here, so the spec can pin both label sources.
+  #
+  # ONE SECTION PER ICON SOURCE. utils/render-icon.html resolves four ways, and
+  # before this fixture existed only the LAST had any coverage anywhere in the
+  # repo (a single `icon: rocket_launch` page in the versioned fixture) — even
+  # though the same resolution runs for every icon in the left nav and on every
+  # auto-generated section card. Each section below pins one branch:
+  #
+  #   alpha   an svg under static/            → readFile, inlined
+  #   beta    an svg in assets/               → resources.Get, inlined  (NEW)
+  #   gamma   a site.Data.icons name          → Hextra's utils/icon.html
+  #   delta   anything else                   → Material Icons ligature
+  #
+  # The two fixture SVGs carry data-fixture-icon attributes so a test can tell
+  # which branch produced the markup rather than just that "an svg appeared".
+  #
+  # The NO-icon path is deliberately not covered here — it is covered by the
+  # versioned fixture, whose demo/alt/nested sections set no icons and whose
+  # exact selector markup tests/section-selector.spec.ts already pins.
+  [params.sections.alpha]
+    icon = "section-alpha.svg"
+  [params.sections.beta]
+    title = "Beta docs"
+    icon = "icons/section-beta.svg"
+  [params.sections.gamma]
+    icon = "solo"
+  [params.sections.delta]
+    icon = "rocket_launch"
+
+  [params.themeExtras]
+    brand = "oss"
+
+  [params.navbar]
+    displayTitle = true
+    displayLogo = false

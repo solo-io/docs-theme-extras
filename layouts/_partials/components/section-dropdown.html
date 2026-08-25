@@ -1,0 +1,71 @@
+{{- /*
+  section-dropdown.html — the navbar's section selector, listing a product's
+  parallel doc sets (agentgateway's Kubernetes and Standalone; kagent's kagent
+  and kmcp).
+
+  Modelled on agentgateway-oss-website's "Docs" dropdown, but labelled with the
+  PRODUCT name rather than "Docs", and driven by utils/resolve-sections.html
+  instead of two hardcoded <a> tags, so it works for any product that registers
+  sections and in any URL shape.
+
+  Extracted from navbar.html because navbar.html needs it in TWO places, and the
+  two are on opposite sides of a `with $navVersions`:
+
+    - a versioned site renders it next to the version dropdown, inside that
+      block, where the version state is in scope
+    - a VERSION-LESS site has no version dropdown at all, so it renders this on
+      its own from the `else`
+
+  Duplicating 13 lines of markup across those two call sites is how the section
+  chips and the section dropdown drifted apart the last time, so it lives here.
+
+  Input: the resolved section slice from utils/resolve-sections.html (passed as
+  `.`). Renders NOTHING for fewer than two sections: a product with no sections
+  gets an empty slice, and a product with one has nothing to select between.
+  That check is inside this partial so no caller can forget it.
+*/ -}}
+{{- /*
+  The `section-dropdown-inline` modifier tracks WHICH of those two call sites
+  rendered this, because the surroundings differ and the styling has to follow.
+
+    - versioned: the selector sits between the logo and the version dropdown,
+      with the search box after it and no plain nav link anywhere near. The two
+      dropdowns read as a cluster of controls, so the shared 600-weight button
+      styling is right.
+    - version-less: navbar.html's `else` emits the selector immediately before
+      the `menu.main` loop, so it lands at the HEAD of a row of Hextra nav links
+      (kagent: Docs, then Blog, Tools, Agents, …). Against those the shared
+      styling reads as heavier, darker and 4px wider-spaced than its neighbours.
+
+  Gating on `site.Params.versions` rather than passing a flag keeps the caller
+  contract a plain section slice. The two coincide exactly: a version-less site
+  is the only one whose selector renders from the `else`, and therefore the only
+  one with nav links beside it.
+*/ -}}
+{{- $sections := . -}}
+{{- if gt (len $sections) 1 -}}
+{{- /* Button label resolved in utils/section-dropdown-label.html rather than
+       inline. It is a three-way fall-through (current section, configured
+       title, product name) with a nil-guard on the config table, which is more
+       than belongs in the middle of markup, and keeping it addressable means
+       the mobile drawer can adopt it later without a second implementation. */ -}}
+{{- $btn := partial "utils/section-dropdown-label.html" . -}}
+<div class="section-dropdown{{ if not site.Params.versions }} section-dropdown-inline{{ end }}">
+  <button type="button" class="section-dropdown-btn" aria-expanded="false" aria-haspopup="true">
+    <span>{{ $btn }}</span>
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2.5 4l2.5 2.5L7.5 4"/></svg>
+  </button>
+  <ul class="section-dropdown-menu" role="menu">
+    {{- range $sections -}}
+    <li role="none">
+      {{- /* The icon is optional per section, and the label is wrapped only when
+             one is present. Emitting an empty wrapper for icon-less sections
+             would add a flex gap to every existing consumer's selector — none of
+             them set icons — so the no-icon path stays byte-for-byte what it
+             was. */ -}}
+      <a href="{{ .href }}" class="section-dropdown-item{{ if .isCurrent }} section-dropdown-item-active{{ end }}" role="menuitem"{{ if .isExternal }} rel="noopener"{{ end }}>{{ with .icon }}{{ partial "utils/render-icon.html" (dict "icon" . "class" "section-dropdown-icon") }}<span class="section-dropdown-label">{{ end }}{{ .label }}{{ with .icon }}</span>{{ end }}</a>
+    </li>
+    {{- end -}}
+  </ul>
+</div>
+{{- end -}}

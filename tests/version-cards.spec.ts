@@ -165,14 +165,32 @@ const FIXTURE_BLOCKS = [
       // v3 = the tab-navigation demo version (issue solo-io/docs#3164), last in
       // the top-level params.versions list, so it renders as the final card.
       { href: `${FIXTURE_BASE}/v3/`, title: "v3 (tabs demo)" },
+      // v4 is the linkVersion-divergence probe (version "v4", linkVersion
+      // "v4-link"). Its card href must use the linkVersion — a card pointing at
+      // /v4/ would 404, since the content tree is published at /v4-link/.
+      { href: `${FIXTURE_BASE}/v4-link/`, title: "v4 (linkVersion probe)" },
     ],
   },
   {
-    label: "section-keyed lookup",
+    // The `section=` argument now FILTERS the one versions list by each entry's
+    // `sections` tag (CHANGELOG [0.2.2]) instead of reading a separate
+    // per-section list. So `demo` gets the entries tagged demo (v2, v1) plus the
+    // untagged ones (v3, v4), and NOT `main`, which is tagged ["alt"] — that
+    // exclusion is the whole assertion. Block 1 above is the unfiltered set, so
+    // the pair together distinguishes filtering from a no-op.
+    //
+    // Titles are the entries' own `dropdown` labels now. The old per-section
+    // list could relabel the same version per section ("demo override: v2
+    // only"); one entry carries one label, so that capability is gone. No
+    // consumer used it — agw-oss and kgw-oss used per-section lists only to say
+    // WHICH versions a section has, which is exactly what a tag expresses.
+    label: "section-tag filter",
     expectedDesc: "Use the framework with the demo section config.",
     expectedCards: [
-      { href: `${FIXTURE_BASE}/v2/`, title: "demo override: v2 only" },
-      { href: `${FIXTURE_BASE}/v1/`, title: "demo override: v1 only" },
+      { href: `${FIXTURE_BASE}/v2/`, title: "v2 (current)" },
+      { href: `${FIXTURE_BASE}/v1/`, title: "v1" },
+      { href: `${FIXTURE_BASE}/v3/`, title: "v3 (tabs demo)" },
+      { href: `${FIXTURE_BASE}/v4-link/`, title: "v4 (linkVersion probe)" },
     ],
   },
 ];

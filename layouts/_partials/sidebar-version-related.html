@@ -1,0 +1,35 @@
+{{- /*
+  sidebar-version-related.html — render one params.relatedDocs group as mobile
+  version chips (the sidebar slide-menu counterpart of
+  version-dropdown-related.html).
+
+  Input: a params.relatedDocs entry (passed as `.`).
+
+  The two MUST offer the same destinations in the same order:
+  tests/static.spec.ts compares the ordered href list of
+  `.version-dropdown-item` against `.sidebar-mobile-version-link` and fails on
+  any difference. Keep the skip rules here identical to the dropdown's — a group
+  with no `versions`, a version with no `label`, and a version with no `url` are
+  all skipped in both.
+
+  No chip here is ever marked active: the active chip is the page's own version,
+  which by definition belongs to this product, not a related one.
+
+  This does NOT use `return`, so it is safe to call from anywhere. See
+  utils/match-version-entry.html for the `with partial` trap that applies only to
+  return-partials.
+*/ -}}
+{{- with .productName -}}
+<span class="sidebar-mobile-version-group">{{ . }}</span>
+{{- end -}}
+{{- range .versions -}}
+  {{- /* Same skip rules as version-dropdown-related.html, minus the warnings —
+         that partial already warned for this build, and warnidf dedupes by
+         message, so repeating them here would be noise. A whitespace label
+         hides silently; a missing label or url is skipped. */ -}}
+  {{- if and (isset . "label") (ne (trim (.label | default "") " ") "") .url -}}
+<a href="{{ .url }}" class="sidebar-mobile-version-link">
+  {{ .label }}
+</a>
+  {{- end -}}
+{{- end -}}

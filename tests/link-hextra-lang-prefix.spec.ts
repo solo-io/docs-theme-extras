@@ -2,92 +2,131 @@ import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
-// Source-level guard for the link-hextra language-prefix fix.
+// Source-level guard for correct link-hextra version inference on a
+// non-default-language page, and for the prefix translation that inference now
+// depends on.
 //
-// link-hextra infers the target version by regex-matching the page's permalink
-// (e.g. `.../kgateway/2.3.x/...`). On a non-default-language page the permalink
-// carries a language segment (`/<product>/ja/<version>/...`), which the version
-// regex doesn't expect — so version inference fell through to "latest" and the
-// cross-doc link pointed at the wrong version tree. The fix strips
-// `.Site.LanguagePrefix` from the permalink before matching (a no-op on the
-// default language, whose prefix is empty).
+// THE REQUIREMENT (unchanged): on a localized page the permalink carries a
+// language segment (`/<product>/ja/<version>/...`). If that segment isn't
+// accounted for, version inference falls through to "latest" and every
+// cross-doc link points at the wrong version tree.
 //
-// Why a SOURCE check, not a rendered-output check: the bundled fixture is
+// THE MECHANISM (changed): inference used to live in resolve-link.html, which
+// stripped `.Site.LanguagePrefix` out of a local `$relURL` copy BEFORE running
+// its own segment walk. That walk is gone — resolve-link.html now delegates to
+// utils/version-root.html, the one resolver the sidebar, navbar, docs-tabs and
+// version banner also use. So the language handling splits in two, and this
+// file guards both halves:
+//
+//   1. version-root.html must recognize the language-shifted shape, i.e. try
+//      the version at segment 3 (`/<product>/<lang>/<version>/`) and not only
+//      at 2 (`/<product>/<version>/`).
+//
+//   2. resolve-link.html must strip BOTH the baseURL path and the language
+//      prefix off the version root it gets back. version-root.html returns a
+//      PUBLISHED-URL prefix (product and language included); the URL assembly
+//      in resolve-link.html re-prepends `.Site.BaseURL`, which already carries
+//      both. Skipping either strip emits `/kgateway/kgateway/2.1.x/…` on the
+//      hub, or leaves a stale `/ja` in every link on a localized page.
+//
+// Why SOURCE checks, not rendered-output checks: the bundled fixture is
 // single-language (see language-switch.spec.ts), so `.Site.LanguagePrefix` is
-// empty and this branch is a no-op in the fixture build — there is nothing to
-// assert in the HTML. A rendered guard would need a second language added to
+// empty and this whole path is a no-op in the fixture build — there is nothing
+// to assert in the HTML. A rendered guard would need a second language added to
 // the fixture, which shifts every page URL the rest of the suite asserts on
-// (deliberately deferred, same as language-switch). This reads the shipped
-// shortcode and fails if the language-prefix strip is dropped or reordered
-// after the version regex. Self-skips when the file isn't at the
-// module-relative path (a consumer build, where the module lives under
-// hugo_cache rather than ../layouts).
+// (deliberately deferred, same as language-switch). Self-skips when the files
+// aren't at the module-relative path (a consumer build, where the module lives
+// under hugo_cache rather than ../layouts).
 
-const SHORTCODE = path.resolve(
+const RESOLVE_LINK = path.resolve(
   __dirname,
   "../layouts/_partials/utils/resolve-link.html",
 );
+const VERSION_ROOT = path.resolve(
+  __dirname,
+  "../layouts/_partials/utils/version-root.html",
+);
 
 // Strip Go/Hugo template comments (`{{- /* … */ -}}`) so the assertions match
-// ACTIVE code, not the explanatory comment (which also mentions
-// `.Site.LanguagePrefix`).
-function activeSrc(): string {
+// ACTIVE code, not the explanatory comments (which also mention
+// `.Site.LanguagePrefix` and the example URLs).
+function activeSrc(file: string): string {
   return fs
-    .readFileSync(SHORTCODE, "utf8")
+    .readFileSync(file, "utf8")
     .replace(/\{\{-?\s*\/\*[\s\S]*?\*\/\s*-?\}\}/g, "");
 }
 
-test.describe("link-hextra strips the language prefix before version inference", () => {
+test.describe("localized-page version inference", () => {
   test.skip(
-    !fs.existsSync(SHORTCODE),
-    "link-hextra.html not at the module-relative path (consumer build)",
+    !fs.existsSync(RESOLVE_LINK) || !fs.existsSync(VERSION_ROOT),
+    "partials not at the module-relative path (consumer build)",
   );
 
-  test("`.Site.LanguagePrefix` is stripped from the permalink before the version regex", () => {
-    const src = activeSrc();
+  test("version-root.html tries the language-shifted version position", () => {
+    const src = activeSrc(VERSION_ROOT);
 
-    // The version-inference step. Its position is the boundary the language
-    // strip must precede.
-    //
-    // This used to look for `findRE \`(?:kgateway…\``, the product-name-anchored
-    // regex. That regex is gone: it only recognized the docs hub's URL shape, so
-    // OSS sites could not infer a version at all and had to fork this file.
-    // Version inference is now a segment walk; the marker is the per-segment
-    // version pattern.
-    const verMatchIdx = src.search(/findRE\s+`\^\(\?:\\d\+/);
+    // The candidate-position list is what makes the shape tolerant: 2 for
+    // `/<product>/<version>/`, 3 for `/<product>/<lang>/<version>/`, 1 for
+    // local dev. Dropping 3 breaks every localized page's inference.
     expect(
-      verMatchIdx,
-      "version-inference `findRE` not found — the shortcode changed shape; " +
-        "re-check that the language-prefix strip still precedes it.",
+      /\$candidatePositions\s*=\s*\$candidatePositions\s*\|\s*append\s+3\b/.test(
+        src,
+      ),
+      "version-root.html no longer tries segment 3 as a version candidate — " +
+        "localized permalinks (/<product>/<lang>/<version>/) can't infer a " +
+        "version, so their links fall back to `latest`.",
+    ).toBe(true);
+  });
+
+  test("resolve-link.html strips the baseURL path and language prefix off the version root", () => {
+    const src = activeSrc(RESOLVE_LINK);
+
+    // It must delegate rather than re-derive. If a second segment walk ever
+    // reappears here, the two implementations drift — which is the bug class
+    // this consolidation removed.
+    const rootCallIdx = src.search(
+      /partial\s+"utils\/version-root\.html"/,
+    );
+    expect(
+      rootCallIdx,
+      "resolve-link.html no longer calls utils/version-root.html — version " +
+        "inference has been re-forked, so it can drift from the sidebar/navbar.",
     ).toBeGreaterThan(-1);
 
-    // The language-prefix handling must be present …
+    // The language prefix must be removed from the returned root …
+    expect(
+      /\{\{-?\s*with\s+\.Site\.LanguagePrefix/.test(src),
+      "`.Site.LanguagePrefix` is not read under a `with` guard — the default " +
+        "language (empty prefix) must be a no-op.",
+    ).toBe(true);
     const langIdx = src.search(/\.Site\.LanguagePrefix/);
     expect(
       langIdx,
-      "no `.Site.LanguagePrefix` handling — the localized-page version " +
-        "inference fix was dropped, so JA/localized links fall back to `latest`.",
+      "no `.Site.LanguagePrefix` handling — a localized page keeps its `/ja` " +
+        "in the version root and every emitted link doubles it.",
     ).toBeGreaterThan(-1);
 
-    // … and it must run BEFORE the version regex, so the language segment is
-    // gone by the time the version is matched.
+    // … and so must the baseURL path, or the hub doubles its product segment.
+    expect(
+      /replaceRE\s+`\^https\?:\/\/\[\^\/\]\*`\s+""\s+\.Site\.BaseURL/.test(src),
+      "the baseURL path is no longer derived from `.Site.BaseURL` — " +
+        "version-root.html returns a published-URL prefix that already " +
+        "contains the product, and the assembly step re-prepends baseURL, so " +
+        "hub links come out as /kgateway/kgateway/2.1.x/….",
+    ).toBe(true);
+
+    // Both strips operate on the resolver's OUTPUT, so they must come after it.
     expect(
       langIdx,
-      "`.Site.LanguagePrefix` is referenced but not before the version regex — " +
-        "the strip must run first or the language segment breaks inference.",
-    ).toBeLessThan(verMatchIdx);
+      "the language strip runs before the version-root call — it has nothing " +
+        "to strip yet.",
+    ).toBeGreaterThan(rootCallIdx);
 
-    // And it must actually STRIP the prefix from the URL var, not merely read
-    // it: a `with .Site.LanguagePrefix` block that `replace`s it out of $relURL.
+    // And they must actually strip from $versionRoot, not merely be mentioned.
     expect(
-      /\{\{-?\s*with\s+\.Site\.LanguagePrefix/.test(src),
-      "`.Site.LanguagePrefix` is read without a `with` guard — the default " +
-        "language (empty prefix) must be a no-op.",
-    ).toBe(true);
-    expect(
-      /replace\s+\$relURL\b/.test(src),
-      "no `replace $relURL …` — the language prefix is never removed from the " +
-        "permalink before version inference.",
+      /strings\.TrimPrefix\s+\.\s+\$versionRoot/.test(src),
+      "no `strings.TrimPrefix . $versionRoot` — the prefixes are computed but " +
+        "never removed from the version root.",
     ).toBe(true);
   });
 });

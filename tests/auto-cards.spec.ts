@@ -86,13 +86,50 @@ const V2_ONLY_TOPICS = [
     title: "Nav group",
     descriptionContains: "collapsible branch",
   },
+  // card-path is the fixture's only page using `{{< card path= >}}` (every other
+  // card passes `link=`), added to cover that resolution branch — see
+  // tests/card-path.spec.ts. Plain child topic, so it also gets a section card.
+  {
+    slug: "card-path",
+    title: "Card path",
+    descriptionContains: "resolves against the current version root",
+  },
+  // A content directory named after the registered `nested` section, sitting
+  // BELOW the version segment. It exists to pin that section detection is
+  // constrained by POSITION rather than name — see
+  // tests/section-nested-versions.spec.ts. It is an ordinary child topic of the
+  // v2 tree, so it gets an ordinary section card, and that is part of the point:
+  // if it were mistaken for a section it would not behave like normal content.
+  {
+    slug: "nested",
+    title: "Nested (name collision)",
+    descriptionContains: "share a name with a registered section",
+  },
+];
+
+// removed-feature is a v1-ONLY page: it is the fixture's only page with no
+// counterpart in the current version (v2), which is what makes
+// utils/version-noindex.html's "a page that exists only in an old version stays
+// indexable" branch observable — see tests/version-noindex.spec.ts. Like the
+// v2-only pages above it is a plain child topic, so it also surfaces as a
+// section card, on the v1 index only.
+const V1_ONLY_TOPICS = [
+  {
+    slug: "removed-feature",
+    title: "Removed feature",
+    descriptionContains: "old-version history stays indexable",
+  },
 ];
 
 const sectionPages: SectionCheck[] = target.versions
   .map((v) => ({
     name: `${v} section index`,
     filePath: path.join(TEST_PRODUCT_ROOT, v, "index.html"),
-    expected: [...CHILD_TOPICS, ...(v === "v2" ? V2_ONLY_TOPICS : [])].map(
+    expected: [
+      ...CHILD_TOPICS,
+      ...(v === "v2" ? V2_ONLY_TOPICS : []),
+      ...(v === "v1" ? V1_ONLY_TOPICS : []),
+    ].map(
       (t) => ({
         href: `${BASE_URL}/${v}/${t.slug}/`,
         title: t.title,

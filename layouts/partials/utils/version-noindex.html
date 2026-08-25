@@ -39,10 +39,35 @@
        canonical-to-current tag can instead set `.Params.canonical` via a config
        cascade on its old version paths and leave `latest` unset here.)
 
-       Existence lookup and version-segment extraction mirror _partials/navbar.html
-       (folder/language-prefix aware). Called once per page from head-end.html. */ -}}
+       WHERE THE VERSION COMES FROM. `utils/version-root.html`, the one resolver
+       the sidebar, navbar, docs-tabs band, version banner and link shortcodes
+       also use. This partial used to scan the URL and build the lookup path
+       itself, and being the only copy nobody tested, it was broken in two of
+       the three consumer shapes:
 
-{{- with site.Params.versions -}}
+         1. On the docs hub it built the lookup path from the full
+            RelPermalink, so it kept the /<product>/ segment — but hub
+            GetPage paths are relative to contentDir (content/<lang>/<product>),
+            so `site.GetPage "/gloo-mesh-enterprise/latest/getting_started"`
+            was ALWAYS nil and no duplicate was ever marked noindex. Measured:
+            gme 2.10.x–2.12.x `getting_started` all served `index, follow`.
+            `version-root.lookupPath` is exactly the contentDir-relative path
+            this needs; sidebar.html and navbar.html strip the prefix for the
+            same reason.
+         2. On a sections-only site (agentgateway.dev, whose versions live
+            under params.sections.<x>.versions with no top-level list) the
+            `with site.Params.versions` gate made the whole partial inert — no
+            robots meta at all, while kgateway.dev got both tags correctly.
+            `utils/resolve-section-versions.html` is the canonical answer to
+            "which versions apply here" and handles both config shapes.
+
+       Resolving the section's OWN version list also makes "latest" mean the
+       latest of THIS section, which matters once two sections ship different
+       version sets (agentgateway's kubernetes has more versions than
+       standalone). Called once per page from head-end.html. */ -}}
+
+{{- $root := partial "utils/version-root.html" . -}}
+{{- with partial "utils/resolve-section-versions.html" $root.section -}}
   {{- /* The current version's URL segment. Two detection paths, in order:
          1. An explicit `latest = true` flag on the current version entry. This
             is the deliberate opt-in and works for ANY convention — a repo whose
@@ -59,50 +84,29 @@
     {{- range . -}}{{ if eq (.linkVersion | default "") "latest" }}{{ $latestSeg = "latest" }}{{ end }}{{- end -}}
   {{- end -}}
 
-  {{- if $latestSeg -}}
-    {{- /* Find the version segment by SCANNING the URL for the first segment that
-           matches a known version's linkVersion/version, rather than assuming a
-           fixed position. Consumers differ in how many segments precede the
-           version (dev: /<version>/…; docs hub: /<version>/…; kgw-oss:
-           /docs/envoy/<version>/…) and not all set params.folder, so a positional
-           skip is unreliable. Version strings ("2.2.x", "latest", "main") don't
-           collide with real content or language segments in practice. */ -}}
-    {{- $segments := split (trim $.RelPermalink "/") "/" -}}
-    {{- $urlVersion := "" -}}
-    {{- $versionIdx := -1 -}}
-    {{- range $i, $seg := $segments -}}
-      {{- if lt $versionIdx 0 -}}
-        {{- range $.Site.Params.versions -}}
-          {{- if or (eq (.linkVersion | default .version) $seg) (eq .version $seg) -}}
-            {{- $urlVersion = $seg -}}
-            {{- $versionIdx = $i -}}
-          {{- end -}}
-        {{- end -}}
-      {{- end -}}
-    {{- end -}}
+  {{- /* Only proceed for a page on a KNOWN, NON-latest version. Pages with no
+         version segment (landings) and pages already on the latest version are
+         left alone. */ -}}
+  {{- if and $latestSeg $root.isVersioned (ne $root.currentVersion $latestSeg) -}}
+    {{- /* Build the current-version equivalent of THIS page as a GetPage path:
+           take the version root's lookup path, swap the version segment for the
+           latest one, and re-attach the path below the version. If that page
+           exists, this old-version page is a duplicate → noindex it. A page that
+           exists ONLY in the old version has no equivalent and stays indexable,
+           which is the whole point of doing this per page rather than marking
+           every old version wholesale.
 
-    {{- /* Only proceed for a KNOWN, NON-latest version segment. Pages with no
-           version segment (landings) or already on the latest version are left
-           alone. */ -}}
-    {{- if and (ge $versionIdx 0) (ne $urlVersion $latestSeg) -}}
-      {{- /* Rebuild this page's URL with the latest version swapped in, preserving
-             any prefix segments before the version (e.g. /docs/envoy/). If that
-             page exists, this old-version page is a duplicate → noindex it. A page
-             that exists ONLY in the old version has no equivalent and is left
-             indexable. */ -}}
-      {{- $prefix := "" -}}
-      {{- if gt $versionIdx 0 -}}{{ $prefix = delimit (first $versionIdx $segments) "/" }}{{- end -}}
-      {{- $after := delimit (after (add $versionIdx 1) $segments) "/" -}}
-      {{- $latestEquiv := "" -}}
-      {{- if $prefix -}}
-        {{- $latestEquiv = printf "/%s/%s/%s" $prefix $latestSeg $after -}}
-      {{- else -}}
-        {{- $latestEquiv = printf "/%s/%s" $latestSeg $after -}}
-      {{- end -}}
-      {{- $latestEquiv = strings.TrimRight "/" $latestEquiv -}}
-      {{- if site.GetPage $latestEquiv -}}
+           $lookupPath is "<prefix>/<currentVersion>/" — contentDir-relative on
+           the docs hub (so no product segment) and "/docs/<section>/<version>/"
+           on an OSS site, where contentDir is the repo root and the prefix is
+           genuinely part of the path. Trimming the version off the END rather
+           than string-replacing it keeps a section whose name happens to equal
+           a version string from being rewritten. */ -}}
+    {{- $lookupPrefix := strings.TrimSuffix (printf "%s/" $root.currentVersion) $root.lookupPath -}}
+    {{- $latestEquiv := printf "%s%s/%s" $lookupPrefix $latestSeg $root.pathAfterVersion -}}
+    {{- $latestEquiv = strings.TrimRight "/" $latestEquiv -}}
+    {{- if site.GetPage $latestEquiv -}}
   <meta name="robots" content="noindex, follow" />
-      {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}

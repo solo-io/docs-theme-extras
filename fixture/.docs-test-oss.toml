@@ -67,4 +67,19 @@ versions        = ["v1", "v2", "main"]
 [allowlists]
 # The "unknown mode" warn is emitted on purpose by the table-display fixture
 # page to exercise the `table` shortcode's invalid-mode fallback path.
-hugoWarnings = ["\\.Site\\.Data was deprecated", "table shortcode: unknown mode"]
+# The last two are DELIBERATE relatedDocs config-error probes, present only in
+# hugo-oss.toml (an empty group, and a version with no `label` key), so the
+# enterprise fixture build stays warning-clean and would fail if either
+# warning started firing there. See tests/related-docs.spec.ts.
+hugoWarnings = [
+  "\\.Site\\.Data was deprecated",
+  "table shortcode: unknown mode",
+  "params\\.relatedDocs group \"Empty fixture product\" has no `versions`",
+  "params\\.relatedDocs group \"Sibling fixture product\" has a version with no `label` key",
+  # `demo` and `alt` are registered sections that deliberately do NOT nest their
+  # version trees, pinning the "registered without nesting" fallback in
+  # utils/resolve-sections.html. No production consumer uses that shape, so the
+  # theme warns on it rather than special-casing its own fixture — see
+  # tests/section-nested-versions.spec.ts and the warning block in that partial.
+  "params\\.sections \\[alt demo\\] are registered but nest no version tree",
+]

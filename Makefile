@@ -9,7 +9,8 @@ CONFIG  ?=
 .PHONY: install \
         clear-cache \
         server-oss server-enterprise \
-        build-oss build-enterprise \
+        build-oss build-enterprise build-flat \
+        build-section-title build-section-current \
         test-oss test-enterprise test-all \
         test clean help
 
@@ -51,20 +52,62 @@ server-enterprise: clear-cache
 # see fixture/.docs-test-*.toml) is the parent of that "test" dir precisely to
 # give such assets a place to live — mirror fixture/static there too so
 # card-image.spec.ts's ROOTED case has a real file to resolve against.
+# The `rm -rf` before each cp is load-bearing on a REBUILD. Hugo only owns
+# "public-<brand>/test" (its publishDir), so "public-<brand>/images" survives a
+# rebuild, and `cp -r src dst` copies INTO dst when dst already exists — giving
+# "public-<brand>/images/images/…" on the second run and every run after. That
+# silently adds files to the tree, which breaks byte-diffing one build against
+# another; it is the technique used to prove a theme change altered nothing, so
+# a stale nested copy shows up as phantom "only in" entries.
 build-oss:
 	$(HUGO) --config hugo-oss.toml --gc 2> .build-oss.log
-	cp -r fixture/static/images public-oss/images
+	rm -rf public-oss/images && cp -r fixture/static/images public-oss/images
 
 build-enterprise:
 	$(HUGO) --config hugo-enterprise.toml --gc 2> .build-enterprise.log
-	cp -r fixture/static/images public-enterprise/images
+	rm -rf public-enterprise/images && cp -r fixture/static/images public-enterprise/images
+
+# VERSION-LESS fixture (hugo-flat.toml): parallel doc sets registered under
+# params.sections with NO params.versions — the shape kagent ships. It is a
+# separate BUILD rather than a separate harness TARGET: tests/section-
+# versionless.spec.ts reads public-flat/ directly, so this needs no
+# .docs-test TOML, no extra playwright project and no extra CI leg. See that
+# spec's header for why.
+# Two builds, one per half of the positional test in utils/section-segment.html:
+# hugo-flat.toml puts the docs root in the baseURL (kagent's real shape, the
+# PRIMARY rule), hugo-flat-root.toml puts it in a content directory named docs/
+# (the `docs`-ALTERNATIVE rule). The spec asserts against both.
+build-flat:
+	$(HUGO) --config hugo-flat.toml --gc 2> .build-flat.log
+	$(HUGO) --config hugo-flat-root.toml --gc 2> .build-flat-root.log
+
+# SECTION SELECTOR WITH A CONFIGURED BUTTON TITLE, on a VERSIONED site — the
+# docs-hub agentgateway shape. An overlay on hugo-oss.toml (comma-joined, later
+# file wins) rather than a fixture of its own, so it inherits that build's
+# content and versions and differs only in publishDir and the one param. Read
+# directly by tests/section-dropdown-title.spec.ts; see hugo-section-title.toml
+# for why the key cannot just be set on an existing branded fixture.
+build-section-title:
+	$(HUGO) --config hugo-oss.toml,hugo-section-title.toml --gc 2> .build-section-title.log
+
+# SECTION SELECTOR THAT NAMES THE CURRENT SECTION, on the same versioned base.
+# A third build rather than a key on the overlay above, because the two modes
+# COMPOSE (current section where there is one, the configured title where there
+# is not) and each needs its own output for the spec to compare. See
+# hugo-section-current.toml for why it sets both keys.
+build-section-current:
+	$(HUGO) --config hugo-oss.toml,hugo-section-current.toml --gc 2> .build-section-current.log
 
 # ── Tests against the bundled fixture ────────────────────────────────────
 
-test-oss: build-oss
+# build-flat runs alongside each brand build so section-versionless.spec.ts has
+# something to read. It is brand-independent (the version-less code paths do not
+# touch the brand layer), so both brand runs assert against the same output —
+# cheap, and it keeps `make test-oss` self-contained.
+test-oss: build-oss build-flat build-section-title build-section-current
 	DOCS_TEST_CONFIG=$(abspath ./fixture/.docs-test-oss.toml) npx playwright test
 
-test-enterprise: build-enterprise
+test-enterprise: build-enterprise build-flat build-section-title build-section-current
 	DOCS_TEST_CONFIG=$(abspath ./fixture/.docs-test-enterprise.toml) npx playwright test
 
 # Run both brand variants. CI default — surfaces brand-specific regressions
@@ -83,8 +126,11 @@ test:
 
 clean:
 	rm -rf public-oss public-enterprise public-oss-local public-enterprise-local \
+	       public-flat public-flat-root public-section-title public-section-current \
 	       resources test-results playwright-report \
 	       .build-oss.log .build-enterprise.log \
+	       .build-flat.log .build-flat-root.log \
+	       .build-section-title.log .build-section-current.log \
 	       .build-oss-local.log .build-enterprise-local.log
 
 help:
@@ -97,6 +143,9 @@ help:
 	@echo ""
 	@echo "  build-oss            - static build, brand=oss        → public-oss/"
 	@echo "  build-enterprise     - static build, brand=enterprise → public-enterprise/"
+	@echo "  build-flat           - static builds, VERSION-LESS sections   → public-flat/ + public-flat-root/"
+	@echo "  build-section-title  - static build, configured selector title → public-section-title/"
+	@echo "  build-section-current - static build, selector names current section → public-section-current/"
 	@echo ""
 	@echo "  test-oss             - build-oss + run harness against the OSS fixture"
 	@echo "  test-enterprise      - build-enterprise + run harness against the enterprise fixture"

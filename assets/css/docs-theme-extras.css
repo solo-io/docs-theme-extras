@@ -1482,6 +1482,7 @@ svg.section-card-icon {
 /* ── Version dropdown ────────────────────────────────────────────────── */
 /* Replicates the docs-theme-lotus version switcher styling */
 
+.section-dropdown,
 .version-dropdown {
   position: relative;
 }
@@ -1493,7 +1494,24 @@ svg.section-card-icon {
    dropdown as their only selector. The 1279px bound matches the
    .sidebar-mobile-panel breakpoint. The dropdown stays on desktop (>= 1280px). */
 @media (max-width: 1279px) {
+  body:has(.sidebar-mobile-panel) .section-dropdown,
   body:has(.sidebar-mobile-panel) .version-dropdown {
+    display: none !important;
+  }
+}
+/* On phones (< 768px, Hextra's md breakpoint) the dropdowns hide on EVERY
+   page, drawer or not. A landing page kept them as "its only selector", but
+   the navbar is justify-end and the two buttons don't fit beside the logo at
+   phone widths — the overflow spilled off the LEFT edge, clipping the
+   hamburger and hiding the logo entirely, so landing pages showed a different
+   (and broken-looking) top nav than content pages. A landing page's body is
+   its own selector at this size: the product root lists its sections and a
+   section landing lists its versions as cards. The 768–1279px band above
+   keeps the :has() scope — there a drawerless page still has room for the
+   dropdowns and no body cards are guaranteed above the fold. */
+@media (max-width: 767px) {
+  .section-dropdown,
+  .version-dropdown {
     display: none !important;
   }
 }
@@ -1508,6 +1526,7 @@ svg.section-card-icon {
   }
 }
 
+.section-dropdown-btn,
 .version-dropdown-btn {
   display: inline-flex;
   align-items: center;
@@ -1525,19 +1544,64 @@ svg.section-card-icon {
   transition: color 0.2s, border-color 0.2s;
 }
 
+.section-dropdown-btn:hover,
 .version-dropdown-btn:hover {
   color: var(--theme-link);
 }
 
+/* A version-less site's selector renders inline at the head of the menu.main
+   row (see the `section-dropdown-inline` note in
+   layouts/_partials/components/section-dropdown.html), so it has plain Hextra
+   nav links as immediate neighbours and the styling above makes it the odd one
+   out four ways over: weight 600 against their inherited 400, a 0.3px
+   letter-spacing they do not have, `color: inherit` resolving darker than their
+   gray-600, and 12px of horizontal padding against their 8px.
+
+   That last one is the spacing tell. The navbar is `display:flex` with an 8px
+   gap, and every Hextra link carries p-2 with -ml-2, so the negative margin
+   cancels the gap and consecutive links sit 16px text-edge to text-edge
+   (8 + 8 - 8 + 8). At 12px the selector pushes its successor to 20px. Setting
+   the padding to 8px is the whole fix — the selector needs no negative margin
+   of its own, because the -8px lives on the FOLLOWING link, and the selector's
+   own left edge faces the logo's `mr-auto` free space where 8px is invisible.
+
+   The colours reference Hextra's own palette variables rather than restating
+   the values, so a Hextra palette change carries over instead of drifting.
+   They are declared on `:root, :host` in its compiled main.css, which every
+   consumer loads BEFORE this sheet, so they resolve; the literal fallbacks
+   cover a future Hextra that renames them. The chevron keeps the control
+   identifiable as a dropdown without needing extra weight to do it. */
+.section-dropdown-inline .section-dropdown-btn {
+  padding: 8px;
+  font-weight: 400;
+  letter-spacing: normal;
+  color: var(--hx-color-gray-600, #4b5563);
+}
+
+.section-dropdown-inline .section-dropdown-btn:hover {
+  color: var(--hx-color-gray-800, #1f2937);
+}
+
+.dark .section-dropdown-inline .section-dropdown-btn {
+  color: var(--hx-color-gray-400, #9ca3af);
+}
+
+.dark .section-dropdown-inline .section-dropdown-btn:hover {
+  color: var(--hx-color-gray-200, #e5e7eb);
+}
+
+.section-dropdown-btn svg,
 .version-dropdown-btn svg {
   transition: transform 0.2s;
 }
 
+.section-dropdown.open .section-dropdown-btn svg,
 .version-dropdown.open .version-dropdown-btn svg {
   transform: rotate(180deg);
 }
 
 /* Menu — hidden by default, shown when .open is on parent */
+.section-dropdown-menu,
 .version-dropdown-menu {
   display: none !important;
   position: absolute;
@@ -1557,10 +1621,12 @@ svg.section-card-icon {
   list-style: none;
 }
 
+.section-dropdown.open .section-dropdown-menu,
 .version-dropdown.open .version-dropdown-menu {
   display: block !important;
 }
 
+.section-dropdown-item,
 .version-dropdown-item {
   display: block;
   padding: 8px 16px;
@@ -1570,29 +1636,76 @@ svg.section-card-icon {
   transition: color 0.15s;
 }
 
+.section-dropdown-item:hover,
 .version-dropdown-item:hover {
   color: var(--theme-link);
   background: #f9fafb;
 }
 
+/* ── Section-selector icons (optional per section) ─────────────────────
+   A section may set `icon` in params.sections.<key>; utils/render-icon.html
+   resolves it and the two selector components emit it. Both rules are scoped to
+   the icon classes, so a selector whose sections set no icon keeps `display:
+   block` above and is unaffected — no consumer currently sets one, and the
+   no-icon markup is byte-identical to before this existed.
+
+   The flex switch lives on the ITEM rather than the icon because the label has
+   to sit on the icon's baseline; `display: block` with an inline svg drops the
+   text below it. `:has()` is not needed — the label is wrapped in
+   .section-dropdown-label only when an icon is present, so that class is itself
+   the signal. */
+.section-dropdown-item:has(.section-dropdown-icon) {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.section-dropdown-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.section-dropdown-item-active .section-dropdown-icon {
+  opacity: 1;
+}
+
+/* Material Icons ligature fallback: utils/render-icon.html emits an <i>, which
+   needs a font size rather than a box size. */
+i.section-dropdown-icon {
+  font-size: 1.15rem;
+  width: auto;
+  height: auto;
+}
+
+.section-dropdown-label {
+  min-width: 0;
+}
+
 /* ── Version dropdown dark mode ──────────────────────────────────────── */
+.dark .section-dropdown-btn,
 .dark .version-dropdown-btn {
   color: #d1d5db;
 }
 
+.dark .section-dropdown-btn:hover,
 .dark .version-dropdown-btn:hover {
   color: var(--theme-link);
 }
 
+.dark .section-dropdown-menu,
 .dark .version-dropdown-menu {
   background: #1a1a1a;
   border-color: #333;
 }
 
+.dark .section-dropdown-item,
 .dark .version-dropdown-item {
   color: #d1d5db;
 }
 
+.dark .section-dropdown-item:hover,
 .dark .version-dropdown-item:hover {
   color: var(--theme-link);
   background: #262626;
@@ -1619,12 +1732,6 @@ svg.section-card-icon {
 
 .dark .version-dropdown-header {
   color: #9ca3af;
-}
-
-.version-dropdown-hidden {
-  padding: 2px 16px;
-  font-size: 0;
-  line-height: 0;
 }
 
 /* Search: "Other versions" collapsible section */
@@ -2047,52 +2154,57 @@ details[open].hextra-search-other-versions > summary::before {
   /* 1rem horizontal padding matches the nav wrapper (.sidebar-nav-wrapper), so
      the VERSION block here lines up on the same left edge as the CONTENTS block
      and page tree below. Header children carry no horizontal padding of their
-     own (labels/rows set it to 0) so the inset comes from here alone. */
+     own (labels/rows set it to 0) so the inset comes from here alone.
+     No border-bottom: the header used to end in a divider line, but the drawer
+     now separates the header from the page tree with an always-present
+     CONTENTS heading instead (sidebar.html), so the axes are delimited by
+     their labels alone. */
   padding: 0 1rem;
-  border-bottom: 1px solid #e5e7eb;
 }
-.dark .sidebar-mobile-header {
-  border-bottom-color: #374151;
-}
+/* The section chips themselves carry NO rules of their own: they are twin
+   selectors on the version chip rules below (.sidebar-mobile-version-link and
+   friends), so the two rows in the drawer header read as the same kind of
+   control — same outlined pill, same brand-tint active state. This block used
+   to fork the styling (full-width centered chips with a blue-tint active),
+   which made the section row look like a different widget from the version row
+   directly beneath it. Only the row container and the optional icon rules stay
+   here, because the version side has no equivalent. */
 .sidebar-mobile-section-row {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.375rem;
   padding: 0.75rem 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
-.sidebar-mobile-section-link {
-  flex: 1;
-  text-align: center;
-  padding: 0.5rem;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: rgb(75, 85, 99);
-  text-decoration: none;
+.sidebar-mobile-section-row::-webkit-scrollbar {
+  display: none;
 }
-.sidebar-mobile-section-link:hover {
-  background: rgb(243, 244, 246);
+/* Optional per-section icon in the mobile chips, mirroring the navbar selector.
+   Scoped to the icon class, so icon-less chips are untouched. */
+.sidebar-mobile-section-link:has(.sidebar-mobile-section-icon) {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
 }
-.dark .sidebar-mobile-section-link {
-  color: rgb(156, 163, 175);
+.sidebar-mobile-section-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex-shrink: 0;
 }
-.dark .sidebar-mobile-section-link:hover {
-  background: rgb(31, 41, 55);
-}
-.sidebar-mobile-section-active {
-  background: rgb(219, 234, 254);
-  color: rgb(30, 64, 175);
-}
-.dark .sidebar-mobile-section-active {
-  background: rgba(96, 165, 250, 0.1);
-  color: rgb(96, 165, 250);
+i.sidebar-mobile-section-icon {
+  font-size: 1.05rem;
+  width: auto;
+  height: auto;
 }
 /* Tab-navigation chips in the mobile drawer (issue solo-io/docs#3164). The
    desktop tab band is hidden below the sidebar breakpoint, so tabs render here,
    at the top of the nav wrapper under a "Section" heading, directly above the
    page tree they scope. Chips scroll horizontally (see .sidebar-mobile-scroller)
    rather than wrapping. The separator below the tabs is intentionally light:
-   the heading + tabs + tree read as one group, so this is a hairline, not the
-   hard border that divides them from the version/section context above. */
+   the heading + tabs + tree read as one group, so this is a hairline within
+   that group, not a divider between the drawer's axes — those are delimited by
+   their headings alone. */
 .sidebar-mobile-tab-row {
   display: flex;
   flex-wrap: nowrap;
@@ -2176,12 +2288,11 @@ details[open].hextra-search-other-versions > summary::before {
   padding-top: 0;
 }
 /* Match the gap above the CONTENTS heading to the gap above VERSION. VERSION
-   sits in the header, which has no vertical padding, so its gap below the
-   divider is exactly the label's own 0.75rem top padding. On mobile, drop the
-   nav wrapper's top padding when it carries the CONTENTS label so that label's
-   0.75rem is likewise the only gap — the two headings then sit identically
-   below their dividers. Non-tabbed pages have no label, so the wrapper keeps
-   its padding for the tree. */
+   sits in the header, which has no vertical padding, so its gap is exactly the
+   label's own 0.75rem top padding. On mobile, drop the nav wrapper's top
+   padding when it carries the CONTENTS label so that label's 0.75rem is
+   likewise the only gap — the two headings then sit identically below the
+   content above them. */
 @media (max-width: 1279px) {
   .sidebar-nav-wrapper:has(.sidebar-mobile-row-label) {
     padding-top: 0;
@@ -2206,7 +2317,8 @@ details[open].hextra-search-other-versions > summary::before {
   display: none;
 }
 /* Only the version scroller (in the header) needs bottom breathing room before
-   the header divider; the tab scroller carries its own margin + hairline. */
+   the CONTENTS heading below; the tab scroller carries its own margin +
+   hairline. */
 .sidebar-mobile-header .sidebar-mobile-scroller {
   margin-bottom: 0.75rem;
 }
@@ -2284,13 +2396,16 @@ details[open].hextra-search-other-versions > summary::before {
 .dark .sidebar-mobile-version-group {
   color: rgb(156, 163, 175);
 }
-.sidebar-mobile-version-link {
+.sidebar-mobile-version-link,
+.sidebar-mobile-section-link {
   /* flex:0 0 auto + nowrap: keep each chip at its natural width so the row
      SCROLLS when it overflows, instead of the default flex-shrink squishing
      chips until their labels wrap ("v2 (current)" onto two lines). Every chip
      is outlined so the row reads as a set of selectable options; the active one
      is filled with the brand tint + a solid border + bold, so active vs.
-     inactive is unmistakable (not just a faint grey box among plain text). */
+     inactive is unmistakable (not just a faint grey box among plain text).
+     The section chips are twin selectors on every rule in this block so the
+     drawer's two axes look like the same control — restyle them together. */
   flex: 0 0 auto;
   white-space: nowrap;
   padding: 0.3125rem 0.625rem;
@@ -2302,27 +2417,34 @@ details[open].hextra-search-other-versions > summary::before {
   color: rgb(75, 85, 99);
   text-decoration: none;
 }
-.sidebar-mobile-version-link:hover {
+.sidebar-mobile-version-link:hover,
+.sidebar-mobile-section-link:hover {
   border-color: #d1d5db;
   background: #f9fafb;
 }
-.dark .sidebar-mobile-version-link {
+.dark .sidebar-mobile-version-link,
+.dark .sidebar-mobile-section-link {
   border-color: rgb(55, 65, 81);
   background: transparent;
   color: rgb(156, 163, 175);
 }
-.dark .sidebar-mobile-version-link:hover {
+.dark .sidebar-mobile-version-link:hover,
+.dark .sidebar-mobile-section-link:hover {
   background: rgb(31, 41, 55);
 }
 .sidebar-mobile-version-active,
-.sidebar-mobile-version-active:hover {
+.sidebar-mobile-version-active:hover,
+.sidebar-mobile-section-active,
+.sidebar-mobile-section-active:hover {
   background: var(--theme-primary-tint);
   border-color: var(--theme-primary);
   color: rgb(17, 24, 39);
   font-weight: 600;
 }
 .dark .sidebar-mobile-version-active,
-.dark .sidebar-mobile-version-active:hover {
+.dark .sidebar-mobile-version-active:hover,
+.dark .sidebar-mobile-section-active,
+.dark .sidebar-mobile-section-active:hover {
   background: var(--theme-primary-tint);
   border-color: var(--theme-primary);
   color: #fff;
@@ -2650,3 +2772,26 @@ a[class*="word-break:break-word"] {
   max-width: 80vw;
   padding: 0.25rem 0.25rem 0.5rem;
 }
+
+/* Section dropdown — the menu listing a product's parallel doc sets
+   (agentgateway: Kubernetes / Standalone). It sits beside the version dropdown
+   in the navbar and must look identical, so every rule above carries a
+   .section-dropdown twin selector rather than a forked copy that would drift.
+   The -divider and -header rules are deliberately NOT shared: those are for the
+   related-product groups inside the version menu, which the section menu has no
+   equivalent of.
+
+   NO TYPOGRAPHIC RULE OF ITS OWN, deliberately. This block used to give
+   .section-dropdown-item-active a font-weight of 600, and that was the one place
+   the two controls diverged — the version menu marks its current entry not at
+   all. It also emphasised the current section twice over once the
+   button started naming it (params.sectionDropdown.showCurrentSection), so the
+   open menu read "Kubernetes" in bold directly under a button already reading
+   "Kubernetes". Removed rather than matched on the version side, because the
+   button is where the reader looks for the answer.
+
+   The `section-dropdown-item-active` CLASS is still emitted and still asserted
+   (tests/section-selector.spec.ts, section-nested-versions, section-versionless),
+   and still drives one thing: an icon'd entry goes to full opacity at
+   `.section-dropdown-item-active .section-dropdown-icon` above. Do not delete the
+   class along with its weight. */

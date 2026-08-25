@@ -1,0 +1,40 @@
+{{- /*
+  sidebar-section-row.html — the mobile drawer's section chip row, the drawer
+  counterpart of the navbar's section dropdown
+  (_partials/components/section-dropdown.html). This row is headed by a generic
+  "Section" label rather than by the product name, so it is unaffected by
+  `[params.sectionDropdown] title`, which renames only the navbar button. Both come from
+  utils/resolve-sections.html so they offer the same sections, with the same
+  labels and the same destinations — tests/static.spec.ts asserts the chips and
+  the dropdown land on identical hrefs.
+
+  That resolver replaced ~45 lines inlined in sidebar.html which (a) built hrefs
+  as a literal `/docs/<section>/<version>/`, so this row was gated on
+  $isOSSShape and the docs hub never showed it at all, and (b) remapped the
+  target version by reading `$cfg.versions` — site.Params.sections.<key>.versions,
+  removed in v0.2.2 — so the remap had silently no-opped since that migration and
+  every chip reused the current version verbatim, pointing at pages that need not
+  exist in the target section.
+
+  Extracted from sidebar.html when version-less sites gained sections: the
+  version-less branch at the bottom of that file needs this row too, and it sits
+  outside the `if $isVersionedDocs` where the original was inlined.
+
+  Input: the resolved section slice from utils/resolve-sections.html (passed as
+  `.`). Renders NOTHING below two sections, so the check cannot be forgotten at
+  a call site.
+*/ -}}
+{{- $sections := . -}}
+{{- if gt (len $sections) 1 -}}
+  <span class="sidebar-mobile-row-label">{{ (T "section") | default "Section" }}</span>
+  <div class="sidebar-mobile-section-row">
+    {{- range $sections -}}
+      <a href="{{ .href }}"
+         class="sidebar-mobile-section-link{{ if .isCurrent }} sidebar-mobile-section-active{{ end }}"
+         {{ if .isExternal }}rel="noopener"{{ end }}>
+        {{ with .icon }}{{ partial "utils/render-icon.html" (dict "icon" . "class" "sidebar-mobile-section-icon") }}{{ end }}
+        {{ .label }}
+      </a>
+    {{- end -}}
+  </div>
+{{- end -}}
