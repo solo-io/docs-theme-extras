@@ -409,8 +409,12 @@
                appear only when a tab (e.g. "Changelog") sits off-screen.
                Mobile-only: desktop uses the tab band. */ -}}
         <div class="sidebar-nav-wrapper">
+          {{- /* The CONTENTS heading is unconditional (mobile-only): it is what
+                 separates the page tree from the version/section header above,
+                 which no longer draws a divider line. Tabbed pages slot their
+                 tab chips between this heading and the tree. */ -}}
+          <span class="sidebar-mobile-only sidebar-mobile-row-label">{{ (T "contents") | default "Contents" }}</span>
           {{- if and $tabsEnabled $docTabsList -}}
-            <span class="sidebar-mobile-only sidebar-mobile-row-label">{{ (T "contents") | default "Contents" }}</span>
             <div class="sidebar-mobile-only sidebar-mobile-scroller sidebar-mobile-tab-scroller">
               <button type="button" class="sidebar-mobile-scroll-arrow sidebar-mobile-scroll-prev" aria-label="Scroll sections left" hidden>&lsaquo;</button>
               <div class="sidebar-mobile-tab-row" data-scroll-track>
@@ -562,6 +566,13 @@
           </div>
         {{- end -}}
         <div class="sidebar-nav-wrapper">
+          {{- /* CONTENTS heading only when a section header renders above it —
+                 it replaces the divider that used to separate the two. A
+                 single-doc-set unversioned site has no header, so it keeps its
+                 unlabelled tree and stays byte-identical to before. */ -}}
+          {{- if gt (len $sections) 1 -}}
+            <span class="sidebar-mobile-only sidebar-mobile-row-label">{{ (T "contents") | default "Contents" }}</span>
+          {{- end -}}
           <nav class="sidebar-nav">
             {{- template "render-sidebar-tree" (dict "page" $navRoot "current" $context "versionPrefix" "" "depth" 0) -}}
           </nav>
