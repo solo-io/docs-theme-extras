@@ -9,6 +9,8 @@ import {
   cardDescriptions,
   mdHasGfmTable,
   mdHasMermaidFence,
+  htmlHasLnTable,
+  mdLnTableGutterRows,
 } from "./helpers/copy-md";
 import { target } from "./helpers/target";
 
@@ -16,7 +18,8 @@ import { target } from "./helpers/target";
 // `markdown` output format + the "Copy as Markdown" button). Catches the class
 // of bug where transform.HTMLToMarkdown silently degrades a construct: tables
 // flattened to pipe-less text (github-table schema tables), mermaid diagrams
-// stripped of their ```mermaid fence, cards collapsed to bare title text.
+// stripped of their ```mermaid fence, cards collapsed to bare title text, and
+// linenos=table code blocks turned into a two-column markdown table.
 //
 // Two layers:
 //   1. Unit tests on the detector helpers (deterministic synthetic input).
@@ -107,6 +110,46 @@ test.describe("copy-md fidelity helpers", () => {
     ).toEqual([]);
   });
 
+  // Regression guard for the linenos=table strip in copy-markdown.html /
+  // page-to-markdown.html. Both matched inter-tag whitespace with `\s*`, which
+  // is wrong for any code block that reached .Content through
+  // utils/flatten-rendered — reuse.html and callout.html pass bypassPre:false,
+  // so every newline in the block is the `&#10;` ENTITY, not whitespace. The
+  // un-stripped <table> then fell through to the html-table-to-gfm pass and the
+  // code block shipped as a two-column markdown table.
+  //
+  // Live symptom: 12 agentgateway pages exported to the Japanese translation
+  // pipeline with their JSON/YAML examples replaced by
+  // `| ``` 1 2 3 … ``` | ```json { … ``` |`.
+  test("htmlHasLnTable sees the entity-flattened form, not just the plain one", () => {
+    const plain = `<table class="lntable"><tr><td class="lntd">\n<pre class="chroma"><code><span class="lnt">1</span></code></pre></td></tr></table>`;
+    expect(htmlHasLnTable(plain)).toBe(true);
+    expect(htmlHasLnTable(plain.replace(/\n/g, "&#10;"))).toBe(true);
+    expect(htmlHasLnTable(`<!--${plain}-->`)).toBe(false);
+    expect(htmlHasLnTable("<table><tr><th>A</th></tr></table>")).toBe(false);
+  });
+
+  test("mdLnTableGutterRows matches a digits-only first cell and nothing else", () => {
+    const bad = '| ``` 1 2 3 ``` | ```json { "a": 1 } ``` |\n| --- | --- |';
+    expect(mdLnTableGutterRows(bad)).toHaveLength(1);
+    // A real data table whose first cell is a code span is NOT the gutter.
+    expect(
+      mdLnTableGutterRows("| `--token-env` | Reads the token |"),
+    ).toEqual([]);
+    // Nor is a fenced block that merely starts a line.
+    expect(mdLnTableGutterRows("```json\n{ }\n```")).toEqual([]);
+  });
+
+  test("lntable-mangled defect fires only when the gutter survived as a cell", () => {
+    const html = `<table class="lntable"><tr><td class="lntd">&#10;<pre tabindex="0" class="chroma"><code><span class="hl"><span class="lnt">1</span></span></code></pre></td> <td class="lntd">&#10;<pre tabindex="0" class="chroma"><code class="language-json">{}</code></pre></td></tr></table>`;
+    const mangled = '| ``` 1 2 3 ``` | ```json {} ``` |\n| --- | --- |';
+    expect(findCopyMdDefects(html, mangled).map((d) => d.kind)).toContain(
+      "lntable-mangled",
+    );
+    // Stripped correctly — the block is a fence, so no defect.
+    expect(findCopyMdDefects(html, "```json\n{}\n```")).toEqual([]);
+  });
+
   test("clean page produces no defects", () => {
     const html = "<p>Just prose.</p>";
     expect(findCopyMdDefects(html, "Just prose.")).toEqual([]);
@@ -147,7 +190,7 @@ function mdHtmlPairs(root: string): { md: string; html: string }[] {
 }
 
 test.describe("copy-md fidelity: built markdown vs rendered HTML", () => {
-  test("every page's markdown preserves its tables, mermaid, and cards", () => {
+  test("every page's markdown preserves its tables, mermaid, cards, and code blocks", () => {
     const scanRoot = target.builtScanRoot;
     const pairs = mdHtmlPairs(scanRoot);
     test.skip(

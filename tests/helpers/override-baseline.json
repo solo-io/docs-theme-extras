@@ -25,7 +25,8 @@
   },
   "kgateway-oss": {
    "samePath": [
-    "layouts/_partials/navbar.html"
+    "layouts/_partials/navbar.html",
+    "layouts/404.html"
    ],
    "duplicatedSelectors": []
   },

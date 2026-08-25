@@ -11,6 +11,11 @@
 //                       ```mermaid fence (so it won't render when re-used).
 //   - card-collapsed    HTML has a card description but the markdown dropped it
 //                       (cards must NOT be collapsed to bare title text).
+//   - lntable-mangled   HTML has a Chroma linenos=table code block and the
+//                       markdown emitted its line-number gutter as a real GFM
+//                       table cell — i.e. copy-markdown.html's lntable strip did
+//                       not match, so the whole code block became a two-column
+//                       table row instead of a fence.
 //
 // Signal-first, like markdown-leaks: each check only fires when the HTML proves
 // the construct existed, so a positive is almost always a real degradation.
@@ -18,7 +23,8 @@
 export type CopyMdDefectKind =
   | "mangled-table"
   | "mermaid-fence-lost"
-  | "card-collapsed";
+  | "card-collapsed"
+  | "lntable-mangled";
 
 export type CopyMdDefect = {
   kind: CopyMdDefectKind;
@@ -102,6 +108,29 @@ export function mdContains(md: string, text: string): boolean {
   return norm(md).includes(norm(text));
 }
 
+// Chroma renders `linenos=table` (and `linenos=true`, which is the same thing)
+// as a two-cell <table class="lntable">: the line-number gutter in cell one,
+// the code in cell two. copy-markdown.html strips that table down to the code
+// <pre> BEFORE the generic html-table-to-gfm pass, because otherwise the gutter
+// becomes a real markdown table cell and the code block stops being a code
+// block. The wreckage is unmistakable — a table row whose first cell is a code
+// span holding nothing but digits:
+//
+//   | ``` 1 2 3 4 5 ``` | ```json { "id": "chatcmpl-…" … ``` |
+//   | --- | --- |
+//
+// Requiring the first cell to be digits-only keeps this from firing on a
+// legitimate data table that happens to have code spans in it.
+const LNTABLE_GUTTER_ROW = /^[ \t]*\|[ \t]*```[\s\d]+```[ \t]*\|/gm;
+
+export function htmlHasLnTable(html: string): boolean {
+  return /<table\b[^>]*class="[^"]*\blntable\b/.test(stripHtmlComments(html));
+}
+
+export function mdLnTableGutterRows(md: string): string[] {
+  return md.match(LNTABLE_GUTTER_ROW) ?? [];
+}
+
 // ── Cross-reference ─────────────────────────────────────────────────────
 
 export function findCopyMdDefects(html: string, md: string): CopyMdDefect[] {
@@ -118,6 +147,17 @@ export function findCopyMdDefects(html: string, md: string): CopyMdDefect[] {
       kind: "mermaid-fence-lost",
       detail: "page renders a mermaid diagram but its markdown has no ```mermaid fence",
     });
+  }
+  if (htmlHasLnTable(html)) {
+    const rows = mdLnTableGutterRows(md);
+    if (rows.length) {
+      defects.push({
+        kind: "lntable-mangled",
+        detail:
+          `${rows.length} linenos=table code block(s) became a GFM table row ` +
+          `instead of a fence, e.g. ${rows[0].trim().slice(0, 80)}`,
+      });
+    }
   }
   for (const desc of cardDescriptions(html)) {
     if (!mdContains(md, desc)) {

@@ -59,13 +59,24 @@ server-enterprise: clear-cache
 # silently adds files to the tree, which breaks byte-diffing one build against
 # another; it is the technique used to prove a theme change altered nothing, so
 # a stale nested copy shows up as phantom "only in" entries.
+# The 404 copy mirrors PRODUCTION, it is not a test convenience. Hugo publishes
+# 404.html under the baseURL path ("public-<brand>/test/404.html"), but every
+# static host looks for it at the SERVED ROOT — which is why solo-io/docs already
+# runs `cp public/<product>/404.html public/404.html` in both
+# .github/workflows/firebase-hosting-merge.yml and oss-rebuild-in-ent.yml.
+# Reproducing that here is what lets tests/not-found.spec.ts request a path that
+# genuinely does not exist and be served the theme's 404 with a real 404 status,
+# exactly as Firebase does. Without it the harness's `npx serve` answers with its
+# own built-in 404 page and the spec tests nothing.
 build-oss:
 	$(HUGO) --config hugo-oss.toml --gc 2> .build-oss.log
 	rm -rf public-oss/images && cp -r fixture/static/images public-oss/images
+	cp public-oss/test/404.html public-oss/404.html
 
 build-enterprise:
 	$(HUGO) --config hugo-enterprise.toml --gc 2> .build-enterprise.log
 	rm -rf public-enterprise/images && cp -r fixture/static/images public-enterprise/images
+	cp public-enterprise/test/404.html public-enterprise/404.html
 
 # VERSION-LESS fixture (hugo-flat.toml): parallel doc sets registered under
 # params.sections with NO params.versions — the shape kagent ships. It is a
