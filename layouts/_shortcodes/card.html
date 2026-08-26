@@ -1,29 +1,42 @@
 {{- /*
   Shortcode: card
-  Renders a styled card link with an optional icon or image, title, and
-  subtitle. Emits the same .section-card markup the parent-section
-  auto-card grid uses, so manual {{< card >}} blocks look identical to
-  auto-generated child cards.
+  Summary: Renders a styled card link with an optional icon or image, title and subtitle
+  Group: ui-components
+  CallForm: both
+  Overrides: card
 
   Parameters:
-    - link:     (optional) A direct URL for the card link (used as-is).
-    - path:     (optional) A section-relative path resolved to the current
-                docs section (e.g., "/tutorials/basic/").
-    - title:    The card title (aliased as "header").
-    - subtitle: (optional) Short description below the title (aliased as
-                "description"); supports Markdown.
-    - icon:     (optional) Name of an icon to render via utils/icon.html.
-    - image:    (optional) Image URL to display at the top of the card.
-    - alt:      (optional) Alt text for the image; defaults to the title.
+    - title | string | yes | — | The card title.
+    - header | string | no | — | Alias for title.
+    - subtitle | string | no | — | Short description below the title. Supports Markdown.
+    - description | string | no | — | Alias for subtitle.
+    - link | url | no | — | A direct URL for the card link, used as-is.
+    - path | path | no | — | A section-relative path resolved to the current docs section, e.g. /tutorials/basic/.
+    - icon | string | no | — | Name of an icon to render via utils/icon.html.
+    - image | url | no | — | Image URL to display at the top of the card.
+    - alt | string | no | the title | Alt text for the image.
 
-  Title and subtitle are emitted as <span class="…-title|-desc"> with
-  display: block via CSS — NOT <p> — so the card stays valid HTML when
-  it's wrapped by markdownify (e.g., from a percent-form {{%% %%}}
-  shortcode). A nested <p> inside the outer <p> Goldmark adds would
-  trigger the browser's auto-close-the-outer-<p> behavior, closing the
-  <a> too early and orphaning the description.
+  Example: {{< card title="Shortcodes" subtitle="Every shortcode, grouped by what it does." path="/shortcodes/" icon="solo" >}}
 
-  Example: {{< card title="Get started" subtitle="Learn the basics" path="/getting-started/" icon="rocket" >}}
+  Notes:
+    Emits the same `.section-card` markup the parent-section auto-card grid
+    uses, so a hand-written card looks identical to an auto-generated child
+    card.
+
+    Give either `link` or `path`, not both. `link` is used verbatim; `path` is
+    resolved against the current docs section.
+
+    `icon` is passed to Hextra's `utils/icon.html` UNGUARDED, so a name that is
+    not a key in `data/icons.yaml` calls `errorf` and aborts the build rather
+    than degrading to a missing icon. `utils/render-icon.html` guards the same
+    call and notes this file as the exception. The example above uses `solo`
+    because that is the only key this module ships.
+
+    Title and subtitle are emitted as `<span>` with `display: block` from CSS,
+    deliberately not as `<p>`. A percent-form call wraps the output in
+    markdownify, and a nested `<p>` inside the `<p>` Goldmark adds triggers the
+    browser's auto-close-the-outer-paragraph behavior, which closes the `<a>`
+    early and orphans the description.
 */ -}}
 {{- $link := .Get "link" -}}
 {{- /* If the link argument contains a nested shortcode call (passed via

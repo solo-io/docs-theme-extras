@@ -1,5 +1,30 @@
-{{- /* Translation export mode: preserve the {{< reuse-image-dark ... >}} source
-       form via a placeholder (see reuse-image.html). Gated on hugo.Environment. */ -}}
+{{- /*
+  Shortcode: reuse-image-dark
+  Summary: Renders an image in dark mode only, hidden entirely in light mode
+  Group: reuse-versioning
+  CallForm: both
+  Overrides: none
+
+  Parameters:
+    - srcDark | path | yes | — | Path to the dark-mode image under assets/.
+    - alt | string | no | — | Alt text.
+    - caption | string | no | — | Caption rendered below the image.
+    - width | string | no | — | CSS width for the figure.
+
+  Example: code-only
+
+  Notes:
+    The mirror of `reuse-image-light`: wraps a single image in `.toggle-light`,
+    which CSS shows in dark mode and hides in light mode. Note the parameter is
+    `srcDark`, not `src`, matching the name it takes on a paired `reuse-image`
+    call.
+
+    Prefer passing `srcDark` to `reuse-image` over pairing a lone `reuse-image`
+    with a sibling `reuse-image-dark` for the same figure. The legacy pattern
+    stacks both images, because a lone `reuse-image` renders in both modes.
+
+    The example is marked `code-only`: this needs a real asset tree.
+*/ -}}
 {{- if eq hugo.Environment "translation" -}}
   {{- $attrs := slice -}}
   {{- with .Get "srcDark" }}{{ $attrs = $attrs | append (printf "srcDark=%q" .) }}{{ end -}}

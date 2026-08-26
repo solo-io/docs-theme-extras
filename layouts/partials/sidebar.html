@@ -682,7 +682,18 @@
                are styled in docs-theme-extras.css. The Open Source variant is
                currently unused by any content but kept for parity with the
                page-header badges. */ -}}
-        {{- $navLabel := .LinkTitle | default .File.LogicalName -}}
+        {{- /* NOT `.LinkTitle | default .File.LogicalName`.
+               `default` evaluates BOTH arguments eagerly, so the fallback runs
+               even when .LinkTitle is set — and .File is nil on any page Hugo
+               generated rather than read from disk, which is every section
+               index for a content directory with no _index.md. The result was
+               a hard build failure ("File is nil; wrap it in if or with") that
+               named single.html rather than this line, on a site whose only
+               fault was a missing _index.md.
+               No fixture caught it because every fixture content directory has
+               an _index.md, so no fixture page has ever had a nil .File. */ -}}
+        {{- $navLabel := .LinkTitle -}}
+        {{- if and (not $navLabel) .File -}}{{- $navLabel = .File.LogicalName -}}{{- end -}}
         {{- $icon := .Params.icon | default "" -}}
 
         <li class="hx:relative"{{ if $hasChildren }} data-sidebar-item data-expanded="{{ $childIsExpanded }}"{{ end }}>

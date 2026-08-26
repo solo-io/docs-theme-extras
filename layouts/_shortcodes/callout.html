@@ -1,29 +1,55 @@
-{{- /* Callout admonition. Uses the Material Icons font and derives the icon from
-       type/context (Hextra's stock callout instead does an SVG lookup via .icon).
+{{- /*
+  Shortcode: callout
+  Summary: Renders an admonition box whose icon is derived from its type
+  Group: ui-components
+  CallForm: both
+  Overrides: callout
 
-       Single source for both callout and alert: a consumer's alert shortcode can
-       just call this one (e.g. solo-io/docs maps alert's "context" onto "type"
-       and renders {{< callout >}} via RenderString), so the two stay identical.
+  Parameters:
+    - type | string | no | — | Admonition type. Drives the icon and colour.
+    - context | string | no | — | Alias for type, accepted for compatibility with the alert shortcode.
+    - text | string | no | — | Body text, for a self-closing call. Use the inner content instead in block form.
+    - icon | string | no | — | Read only in translation-export builds; the icon is otherwise derived from type.
 
-       Accepts a body from either the inner content (block form) or a
-       self-closing text="…" attribute.
+  Example:
+    {{< callout type="warning" >}}
+    Rotating the signing key invalidates every existing session.
+    {{< /callout >}}
 
-       Two modes:
-         - hugo.Environment "translation": emit the callout shortcode itself as
-           open/close placeholders (restored verbatim by copy-markdown.html AFTER
-           transform.HTMLToMarkdown) with the body flowing through between them,
-           so the translation-export snapshot keeps the shortcode while the prose
-           stays translatable. The store is re-read between the open and close
-           registrations so a placeholder a nested shortcode registers while the
-           body renders keeps its order. No-op for normal/preview/prod builds.
-         - otherwise: render the solo-alert div on ONE logical line (body newlines
-           → &#10;) so a callout nested in a list item doesn't trip Goldmark's
-           content-continuation column rule and break the list.
+  Notes:
+    Uses the Material Icons font and derives the icon from `type`, where
+    Hextra's stock callout instead does an SVG lookup via its own `icon`
+    parameter.
 
-       a11y: role="note" marks the box as ancillary content (the correct ARIA
-       role for a static admonition — NOT role="alert", which is an assertive
-       live region meant for dynamically-injected messages). The icon is
-       aria-hidden; it's decorative and the body text carries the meaning. */ -}}
+    This is the single implementation behind both `callout` and `alert`. A
+    consumer's alert shortcode can call this one — solo-io/docs maps alert's
+    `context` onto `type` and renders through `RenderString` — so the two stay
+    identical rather than drifting.
+
+    The body comes from either the inner content in block form or a
+    self-closing `text="..."` attribute.
+
+    ### Two rendering modes
+
+    In a `translation` environment, the callout emits itself as open and close
+    placeholders, restored verbatim by `copy-markdown.html` after
+    `transform.HTMLToMarkdown`, with the body flowing between them. That keeps
+    the shortcode in the translation-export snapshot while leaving the prose
+    translatable. The store is re-read between the open and close registrations
+    so a placeholder registered by a nested shortcode keeps its order. This is a
+    no-op for normal, preview and production builds.
+
+    Otherwise it renders the `solo-alert` div on ONE logical line, encoding body
+    newlines as `&#10;`, so a callout nested in a list item does not trip
+    Goldmark's content-continuation column rule and break the list.
+
+    ### Accessibility
+
+    `role="note"` marks the box as ancillary content. That is the correct ARIA
+    role for a static admonition, and deliberately not `role="alert"`, which is
+    an assertive live region meant for dynamically injected messages. The icon
+    is `aria-hidden`: it is decorative, and the body text carries the meaning.
+*/ -}}
 {{- $type := .Get "type" | default (.Get "context") -}}
 {{- $body := .Get "text" | default .Inner -}}
 {{- /* Optional explicit icon override. When set, it wins over the

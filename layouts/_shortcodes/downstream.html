@@ -1,1 +1,25 @@
+{{- /*
+  Shortcode: downstream
+  Summary: Drops its body in the upstream build and keeps it downstream
+  Group: gating
+  CallForm: both
+  Overrides: none
+
+  Parameters: none
+
+  Example:
+    {{< downstream >}}
+    This paragraph appears in the enterprise docs and nowhere else.
+    {{< /downstream >}}
+
+  Notes:
+    The mirror of `upstream`; see that file for the full description of the
+    split. This module ships the upstream behavior, so this shortcode discards
+    its body here and a downstream repo shadows the file to emit it instead.
+
+    `.Inner` is assigned to a throwaway variable rather than simply left
+    unreferenced. Touching it forces Hugo to parse the body, so a malformed
+    shortcode call inside a downstream block still fails the upstream build
+    instead of being silently skipped until someone builds downstream.
+*/ -}}
 {{- $_ := .Inner -}}

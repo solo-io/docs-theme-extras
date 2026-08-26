@@ -1,26 +1,45 @@
-{{- /* link is an alias for link-hextra — same relationship as alert/callout,
-       but implemented as a shared partial call rather than alert's
-       "build a shortcode string and RenderString it" trick (see
-       utils/resolve-link.html for why: link-hextra's output is a bare URL
-       string, not markdown, so there is nothing RenderString needs to
-       reprocess, and going through it anyway broke version inference in
-       deeply-nested contexts). link-hextra is the canonical, version/
-       product-aware implementation; this exists only so existing `link`
-       call sites keep working without a repo-wide sweep.
+{{- /*
+  Shortcode: link
+  Summary: Alias for link-hextra, kept so existing call sites keep working
+  Group: links
+  CallForm: both
+  Overrides: none
 
-       Forwarding matters beyond naming: link's OLD implementation resolved
-       `path` against `.Page.FirstSection.RelPermalink`, which has no notion
-       of version or product. That happened to produce correct URLs on the
-       docs hub, where a product's own Hugo build treats the version as the
-       true top-level section (baseURL already carries the product). It does
-       NOT hold on a standalone OSS site (kgateway.dev, agentgateway.dev),
-       where one Hugo build serves multiple doc flavors under real path
-       segments like `/docs/envoy/2.1.x/...` — the version is several
-       segments deep, not the first one. It also had no equivalent of
-       link-hextra's product-aware `reference/api` / `reference/cel`
-       cross-flavor routing, so a `link` call inside content pulled across
-       products via `rebase` had no way to land on the right page —
-       `rebase`/`reuse` only ever injected the `version`/`product` args into
-       `link-hextra` calls, never into `link` calls (see reuse.html,
-       rebase.html — both now inject into either name). */ -}}
+  Parameters:
+    - path | path | yes | — | Docs-relative path to resolve into a URL.
+    - version | string | no | the page's version | Version to resolve against, injected by rebase and reuse.
+    - product | string | no | site currentProduct | Product to resolve against, injected by rebase and reuse.
+
+  Example: code-only
+
+  Notes:
+    Forwards to `utils/resolve-link.html`, the canonical version- and
+    product-aware implementation shared with `link-hextra`. All three parameters
+    are read there rather than in this file; they are documented here because a
+    reader writing the call should not have to know that.
+
+    Prefer `link-hextra` in new content. This name exists so existing call sites
+    keep working without a repo-wide sweep.
+
+    Implemented as a shared partial call rather than the alert-to-callout trick
+    of building a shortcode string and running it through `RenderString`. The
+    output is a bare URL string, not Markdown, so there is nothing for
+    `RenderString` to reprocess, and routing through it anyway broke version
+    inference in deeply nested contexts.
+
+    ### Why forwarding matters beyond the name
+
+    The old implementation resolved `path` against
+    `.Page.FirstSection.RelPermalink`, which has no notion of version or
+    product. That happens to produce correct URLs on the docs hub, where a
+    product's own Hugo build treats the version as the true top-level section.
+    It does NOT hold on a standalone OSS site, where one build serves several
+    doc flavors under real path segments such as `/docs/envoy/2.1.x/`, and the
+    version is several segments deep. The old code also had no equivalent of the
+    product-aware cross-flavor routing, so a `link` call inside content pulled
+    across products by `rebase` had no way to land on the right page.
+
+    The example is marked `code-only`: resolution needs a version and product
+    context this site does not have.
+*/ -}}
 {{- partial "utils/resolve-link.html" . -}}

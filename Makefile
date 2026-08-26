@@ -8,8 +8,8 @@ CONFIG  ?=
 
 .PHONY: install \
         clear-cache \
-        server-oss server-enterprise \
-        build-oss build-enterprise build-flat \
+        server-oss server-enterprise server-docs \
+        build-oss build-enterprise build-flat build-docs \
         build-section-title build-section-current \
         test-oss test-enterprise test-all \
         test clean help
@@ -40,6 +40,17 @@ server-enterprise: clear-cache
 	@echo "→ open http://localhost:1313/  (brand=enterprise; uses hugo-enterprise-local.toml)"
 	@echo "  if it still looks like the previous brand: hard-reload browser (Cmd+Shift+R)"
 	$(HUGO) server -D --ignoreCache --config hugo-enterprise-local.toml --gc 2> .build-enterprise-local.log
+
+# The module's own docs site. Unlike the two above there is no separate
+# *-local.toml: hugo-docs.toml's baseURL is absolute
+# (https://solo-io.github.io/docs-theme-extras/), and `hugo server` swaps the
+# host for localhost while KEEPING the path, so the site mounts under the
+# subpath and previews the same shape Pages publishes. That is the point — the
+# subpath is the part most likely to break, so previewing without it would
+# defeat the purpose. It also means the URL is not plain localhost:1313.
+server-docs: clear-cache
+	@echo "→ open http://localhost:1313/docs-theme-extras/  (note the subpath)"
+	$(HUGO) server -D --ignoreCache --config hugo-docs.toml --gc 2> .build-docs-local.log
 
 # ── Static brand builds ──────────────────────────────────────────────────
 # Production-shaped baseURL ("/test") so paths match what consumer repos
@@ -92,6 +103,21 @@ build-flat:
 	$(HUGO) --config hugo-flat.toml --gc 2> .build-flat.log
 	$(HUGO) --config hugo-flat-root.toml --gc 2> .build-flat-root.log
 
+# The module's own docs site → public-docs/, uploaded by pages.yml.
+#
+# No post-build fixups. The brand builds have to copy fixture/static/images and
+# hoist 404.html because their baseURL ("/test") buries the whole site one level
+# down inside publishDir; this build's baseURL path IS the Pages subpath, so
+# content already lands at the root of public-docs/ where deploy-pages expects
+# it.
+#
+# --minify matches what a real docs host serves. It is also the one flag here
+# with a known hazard: minification strips attribute quotes, so any spec later
+# pointed at public-docs/ must be quote-agnostic. Nothing reads this output
+# today.
+build-docs:
+	$(HUGO) --config hugo-docs.toml --gc --minify -d public-docs 2> .build-docs.log
+
 # SECTION SELECTOR WITH A CONFIGURED BUTTON TITLE, on a VERSIONED site — the
 # docs-hub agentgateway shape. An overlay on hugo-oss.toml (comma-joined, later
 # file wins) rather than a fixture of its own, so it inherits that build's
@@ -138,11 +164,13 @@ test:
 clean:
 	rm -rf public-oss public-enterprise public-oss-local public-enterprise-local \
 	       public-flat public-flat-root public-section-title public-section-current \
+	       public-docs \
 	       resources test-results playwright-report \
 	       .build-oss.log .build-enterprise.log \
 	       .build-flat.log .build-flat-root.log \
 	       .build-section-title.log .build-section-current.log \
-	       .build-oss-local.log .build-enterprise-local.log
+	       .build-oss-local.log .build-enterprise-local.log \
+	       .build-docs.log .build-docs-local.log
 
 help:
 	@echo "Targets:"
@@ -151,12 +179,14 @@ help:
 	@echo ""
 	@echo "  server-oss           - hugo dev server, brand=oss, baseURL=/ (auto-clears cache)"
 	@echo "  server-enterprise    - hugo dev server, brand=enterprise, baseURL=/ (auto-clears cache)"
+	@echo "  server-docs          - hugo dev server, the module's own docs site (subpath baseURL)"
 	@echo ""
 	@echo "  build-oss            - static build, brand=oss        → public-oss/"
 	@echo "  build-enterprise     - static build, brand=enterprise → public-enterprise/"
 	@echo "  build-flat           - static builds, VERSION-LESS sections   → public-flat/ + public-flat-root/"
 	@echo "  build-section-title  - static build, configured selector title → public-section-title/"
 	@echo "  build-section-current - static build, selector names current section → public-section-current/"
+	@echo "  build-docs           - static build, the module's own docs site → public-docs/"
 	@echo ""
 	@echo "  test-oss             - build-oss + run harness against the OSS fixture"
 	@echo "  test-enterprise      - build-enterprise + run harness against the enterprise fixture"

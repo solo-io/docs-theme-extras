@@ -1,0 +1,74 @@
+<!--
+  docs-theme-extras navbar mark, light mode.
+
+  Derived from Hextra's own favicon/logo (imfing/hextra, static/favicon.svg),
+  which is a hexagonal frame with a rotated hexagonal void. The first path here
+  is that mark UNCHANGED, ink colour and all, because this module is an overlay
+  on Hextra rather than a replacement, and a mark that disowned the source would
+  be claiming otherwise.
+
+  The second path is the whole addition: the void's own hexagon, scaled to 46%
+  about the void's centre and filled with the OSS brand accent
+  (hsl(212,100%,45%), the theme-primary custom property in
+  assets/css/brand-oss.css). One layer, placed inside Hextra's frame. That is
+  literally what the module is.
+
+  NOTE for anyone editing these comments: a double hyphen is illegal inside an
+  XML comment, so writing the custom property with its two leading hyphens makes
+  the whole file unparseable and the browser renders a broken-image icon with no
+  console error worth reading. Spell the property name without them.
+
+  Pairs with logo-extras-dark.svg, which is the same geometry in the dark-mode
+  ink and accent. Hextra renders the navbar logo as an <img>, so the SVG is an
+  independent document: currentColor does NOT reach it and neither does the
+  page's theme, which is why the two variants exist and why every colour here
+  is hardcoded rather than a CSS variable.
+
+  Explicit width/height alongside the viewBox is deliberate. A viewBox-only SVG
+  has no intrinsic size, and a max-height on such an image collapses it to 0x0 —
+  the trap documented in the logo section of the repo's authoring docs.
+
+  The viewBox is 20 20 140 140 rather than Hextra's 0 0 180 180. Hextra's canvas
+  is sized for a favicon and carries ~13% dead margin on every side; at a 28px
+  navbar height that margin costs about 8 of the 28 pixels, so the mark rendered
+  visibly smaller than the title text beside it. Cropping to the shape's own
+  bounds keeps the box square, so navbar.logo.width can stay equal to height.
+
+  docs/logo-preview.html renders both variants at 128/48/28px on light and dark
+  backgrounds. Open it before and after any change; 28px is the size that
+  matters and the only one where a bad call is obvious. It sits outside
+  docs/static/ on purpose — Hugo publishes dotfiles from static/, so a preview
+  harness parked there ships to the live site.
+-->
+<svg
+   viewBox="20 20 140 140"
+   width="140"
+   height="140"
+   role="img"
+   aria-label="docs-theme-extras"
+   xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Hextra's frame, unchanged. -->
+  <path
+     fill="#1E1E1E"
+     fill-rule="evenodd"
+     clip-rule="evenodd"
+     d="m 105.50024,22.224647 c -9.59169,-5.537563 -21.40871,-5.537563 -31.000093,0 L 39.054693,42.689119 C 29.463353,48.226675 23.55484,58.460531 23.55484,69.535642 v 40.928918 c 0,11.07542 5.908513,21.3092 15.499853,26.84652 l 35.445453,20.46446 c 9.591313,5.53732 21.408404,5.53732 31.000094,0 l 35.44507,-20.46446 c 9.59131,-5.53732 15.49985,-15.7711 15.49985,-26.84652 V 69.535642 c 0,-11.075111 -5.90854,-21.308967 -15.49985,-26.846523 z M 34.112797,85.737639 c -1.384445,2.397827 -1.384445,5.352099 0,7.749927 l 24.781554,42.922974 c 1.38437,2.39783 3.942853,3.87496 6.711592,3.87496 h 49.563107 c 2.76905,0 5.3273,-1.47713 6.71144,-3.87496 l 24.78194,-42.922974 c 1.38414,-2.397828 1.38414,-5.3521 0,-7.749927 L 121.88049,42.814746 c -1.38414,-2.397828 -3.94239,-3.874964 -6.71144,-3.874964 H 65.605944 c -2.768739,0 -5.327223,1.477059 -6.711592,3.874964 z"
+     style="stroke-width:0.774993" />
+
+  <!-- The extras layer. Same hexagon as the void, at 72%, about (90.39, 89.61) —
+       the void's measured centre, not the canvas centre, which sits ~0.4 units
+       off and would show as a lopsided gap at navbar size.
+
+       72% is a legibility floor, not a taste call. The first draft used 46%,
+       which looks fine at 128px and collapses at 28px: frame, gap and accent
+       reduce to a ring around a dot, losing the hexagon entirely at the exact
+       size the navbar ships. Anything much below 70% has the same problem.
+       Check docs/logo-preview.html at 28px before changing it. -->
+  <g transform="translate(90.39,89.61) scale(0.72) translate(-90.39,-89.61)">
+    <path
+       fill="#006BE6"
+       d="M 34.112797,85.737639 c -1.384445,2.397827 -1.384445,5.352099 0,7.749927 l 24.781554,42.922974 c 1.38437,2.39783 3.942853,3.87496 6.711592,3.87496 h 49.563107 c 2.76905,0 5.3273,-1.47713 6.71144,-3.87496 l 24.78194,-42.922974 c 1.38414,-2.397828 1.38414,-5.3521 0,-7.749927 L 121.88049,42.814746 c -1.38414,-2.397828 -3.94239,-3.874964 -6.71144,-3.874964 H 65.605944 c -2.768739,0 -5.327223,1.477059 -6.711592,3.874964 z"
+       style="stroke-width:0.774993" />
+  </g>
+</svg>

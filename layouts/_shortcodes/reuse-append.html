@@ -1,61 +1,57 @@
 {{- /*
   Shortcode: reuse-append
-  Reads a base markdown snippet from the assets tree, appends the inner content
-  to it, and renders the combined result through the page's markdown renderer.
+  Summary: Concatenates a shared snippet with the inner content and renders them as one block
+  Group: reuse-versioning
+  CallForm: both
+  Overrides: none
 
   Parameters:
-    - 0 (positional, required): path to the base file in the assets tree.
-    - 1 (positional, optional): version, passed down from a parent shortcode.
+    - 0 | path | yes | — | Path to the base file in the assets tree.
+    - 1 | string | no | the page's version | Version to resolve against, passed down by a calling shortcode.
 
-  ASSET RESOLUTION HANDLES BOTH TREE SHAPES, and it has to. An OSS site's assets
-  tree is FLAT (`agw-docs/snippets/x.md`), while the docs hub ASSEMBLES its tree
-  per version at `assets/<product>/<version>/…`. So the versioned path is tried
-  first and the bare path second:
+  Example: code-only
 
-    1. `<currentProduct>/<resolvedVersion>/<asset>` — the hub's assembled shape.
-       Skipped entirely when either value is empty, which is the case on every
-       flat site.
-    2. `<asset>` — the bare path, correct for a flat tree and for a hub product
-       that is not assembled.
+  Notes:
+    ### What it is for
 
-  Only if BOTH miss is it an error. A single bare `resources.Get` — which is what
-  this file did when it was first adopted from agentgateway-oss-website — resolves
-  fine on the OSS site and misses on every assembled hub page, so the `errorf`
-  below fired on content that was previously building. The hub had been carrying
-  its own adapted copy of this shortcode for exactly this reason; folding the
-  resolution in here is what lets that copy be deleted.
+    A snippet that is a Markdown TABLE cannot be extended by calling `reuse` and
+    then writing more rows after it. `reuse` renders the snippet on its own, so
+    the table is already closed as HTML by the time the extra rows are parsed,
+    and they render as a stray paragraph of pipes. Concatenating the two as
+    SOURCE and rendering once keeps them a single Markdown block. The same
+    applies to any construct whose continuation depends on the preceding lines:
+    lists, definition blocks, a fenced block split across the boundary.
 
-  The version comes from `utils/version-root.html`, the module's canonical
-  version detector — NOT from a private permalink scan in this file. See the long
-  note at the resolution step below for why that distinction is load-bearing here
-  rather than merely tidy: the URL carries `linkVersion`, the assembled asset
-  path is named after `version`, and on two hub products those differ.
+    ### It is NOT a variant of reuse
 
-  Example:
-    {{< reuse-append "snippets/provider-base-configuration.md" >}}
-    | Extra row | Value |
-    {{< /reuse-append >}}
+    Despite the name, this does not apply the version- and product-aware
+    shortcode rewrites that `reuse` does. It is a plain resource lookup plus
+    concatenation. A base snippet containing a `version` shortcode,
+    `keepVersion` blocks, or `link-hextra` calls that rely on rebase-injected
+    params will behave differently here than under `reuse`. Keep base snippets
+    used with this shortcode free of version-dependent markup, or use `reuse`
+    and restructure so appending is not needed.
 
-  WHAT IT IS FOR. A snippet that is a markdown TABLE cannot be extended by
-  calling `reuse` and then writing more rows after it: `reuse` renders the
-  snippet on its own, so the table is already closed as `<table>` HTML by the
-  time the extra rows are parsed, and they render as a stray paragraph of
-  pipes instead of joining the table. Concatenating the two as SOURCE and
-  rendering once keeps them a single markdown block. The same reasoning applies
-  to any construct whose continuation depends on the preceding lines — lists,
-  definition blocks, a fenced code block split across the boundary.
+    ### Asset resolution
 
-  IT IS NOT A VARIANT OF `reuse`. Despite the name, this shortcode does NOT
-  apply the version- and product-aware shortcode rewrites that `reuse` does; it
-  is a plain `resources.Get` plus concatenation. A base snippet containing
-  a `version` shortcode, `keepVersion` blocks, or `link-hextra` calls that rely on
-  rebase-injected params will therefore behave differently here than under
-  `reuse`. Keep base snippets used with this shortcode free of version-dependent
-  markup, or use `reuse` and restructure the content so appending is not needed.
+    Both tree shapes are handled, and both are needed. An OSS site's assets tree
+    is flat; the docs hub assembles its tree per version at
+    `assets/<product>/<version>/`. So the versioned path is tried first and the
+    bare path second, and only if both miss is it an error. A single bare lookup
+    — what this file did when it was first adopted from
+    agentgateway-oss-website — resolves on the OSS site and misses on every
+    assembled hub page.
 
-  Errors, not warnings, on a missing positional parameter or a missing asset:
-  both mean the call site names a file that is not there, which is a content bug
-  that silently renders nothing if it is allowed to pass.
+    The version comes from `utils/version-root.html`, the module's canonical
+    detector, not from a private permalink scan here. The URL carries
+    `linkVersion` while the assembled asset path is named after `version`, and
+    on two hub products those differ.
+
+    Errors rather than warns on a missing positional parameter or a missing
+    asset. Both mean the call site names a file that is not there, which
+    silently renders nothing if allowed to pass.
+
+    The example is marked `code-only`: this needs a real asset tree.
 */ -}}
 
 {{- $asset := "" -}}

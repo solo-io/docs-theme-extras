@@ -1,0 +1,30 @@
+<!doctype html>
+<!--
+  Dev harness for the navbar mark. NOT published: docs/ itself is not mounted
+  by hugo-docs.toml (only docs/content and docs/static are), so this file stays
+  out of public-docs/. It lived in docs/static/images/logos/ briefly and Hugo
+  published it — Hugo does not skip dotfiles under static/, and the Pages
+  workflow sets include-hidden-files: true, so a dot prefix hides nothing.
+
+  Open directly in a browser after editing either SVG:
+    open docs/logo-preview.html
+
+  28px is the size that ships in the navbar and the only one where a bad call is
+  obvious; the 128px column is there to check the geometry, not to judge it.
+-->
+<meta charset="utf-8">
+<title>docs-theme-extras logo preview</title>
+<body style="margin:0;font-family:system-ui">
+  <div style="background:#fff;color:#1e1e1e;padding:24px;display:flex;gap:40px;align-items:center">
+    <img src="static/images/logos/logo-extras.svg" width="128" height="128" alt="128px, light">
+    <img src="static/images/logos/logo-extras.svg" width="48" height="48" alt="48px, light">
+    <img src="static/images/logos/logo-extras.svg" width="28" height="28" alt="28px, light">
+    <span style="font-weight:800;font-size:15px">docs-theme-extras</span>
+  </div>
+  <div style="background:#111;color:#fff;padding:24px;display:flex;gap:40px;align-items:center">
+    <img src="static/images/logos/logo-extras-dark.svg" width="128" height="128" alt="128px, dark">
+    <img src="static/images/logos/logo-extras-dark.svg" width="48" height="48" alt="48px, dark">
+    <img src="static/images/logos/logo-extras-dark.svg" width="28" height="28" alt="28px, dark">
+    <span style="font-weight:800;font-size:15px">docs-theme-extras</span>
+  </div>
+</body>

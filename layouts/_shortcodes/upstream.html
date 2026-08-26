@@ -1,1 +1,31 @@
+{{- /*
+  Shortcode: upstream
+  Summary: Keeps its body in the upstream build and drops it downstream
+  Group: gating
+  CallForm: both
+  Overrides: none
+
+  Parameters: none
+
+  Example:
+    {{< upstream >}}
+    This paragraph appears in the OSS docs and nowhere else.
+    {{< /upstream >}}
+
+  Notes:
+    One half of the OSS-versus-enterprise build split, paired with
+    `downstream`. This module ships the UPSTREAM behavior, so here `upstream`
+    emits its body and `downstream` discards it. A downstream repo shadows both
+    files to invert that, which is why each is a one-liner: the whole contract
+    is which of the two emits `.Inner`.
+
+    Content inside a `downstream` block is removed from the upstream build
+    entirely, so a link that only appears there is not a broken link upstream —
+    it is absent. Link checkers that flag it are reading the source, not the
+    output.
+
+    Prefer `conditional-text` when the split is finer than upstream/downstream:
+    it takes an explicit condition rather than depending on which repo is
+    building.
+*/ -}}
 {{- .Inner -}}

@@ -1,0 +1,122 @@
+name: Deploy docs site
+
+# Build docs/content/ with hugo-docs.toml and publish it to GitHub Pages at
+# https://solo-io.github.io/docs-theme-extras/.
+#
+# SEPARATE FROM test.yml ON PURPOSE. The site is built by the module it
+# documents, so a theme regression can break the docs that explain the theme.
+# Keeping this out of the required `test-all` context means that failure never
+# blocks a merge or a release; the cost is that a broken build leaves the last
+# good deploy up silently, so check the Actions tab if the site looks stale.
+#
+# push-only, no pull_request trigger: a Pages deployment is a single live
+# environment, so building on PRs would either deploy unreviewed content or
+# build an artifact nobody looks at. Reviewers preview with `make server-docs`.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'layouts/**'
+      - 'assets/**'
+      - 'data/**'
+      - 'hugo-docs.toml'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Pages allows one deployment at a time. cancel-in-progress stays false so a
+# started deployment is allowed to finish rather than leaving the environment
+# half-updated; a superseding push just queues behind it.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  HUGO_VERSION: 0.160.1
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/configure-pages@v6
+
+      # Pinned at v3 for the same reason test.yml is: the maintainer has not
+      # published a Node.js 24-compatible release, and GitHub starts forcing
+      # Node 24 in June 2026. Whatever test.yml migrates to, migrate this with
+      # it — two workflows drifting onto different Hugo installers is how the
+      # site starts building against a version nothing else tests.
+      - name: Set up Hugo
+        uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: ${{ env.HUGO_VERSION }}
+          extended: true
+
+      - name: Set up Go (Hugo modules use go.mod)
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.21'
+
+      - name: Cache Hugo modules
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/hugo_cache
+          key: ${{ runner.os }}-hugo-${{ hashFiles('go.sum', 'go.mod') }}
+          restore-keys: |
+            ${{ runner.os }}-hugo-
+
+      # HUGO=hugo overrides the Makefile's hugo160 default, which is the local
+      # convention; peaceiris/actions-hugo installs the binary as `hugo`.
+      - name: Build the docs site
+        run: HUGO=hugo make build-docs
+
+      # A Hugo build can succeed while emitting warnings that matter here —
+      # notably the module's own warnMissingDescription, which fires per page
+      # and would otherwise scroll past unread. Surface the log every run, not
+      # just on failure.
+      - name: Show build log
+        if: always()
+        run: cat .build-docs.log || true
+
+      # include-hidden-files is NOT optional here, and its default is a silent
+      # no-op. The action tars the directory with `--exclude=.[^/]*` unless this
+      # is true, so docs/static/.nojekyll would be stripped on the way into the
+      # artifact — the file would sit in the repo looking like protection while
+      # never reaching Pages, and nothing would report it.
+      #
+      # Whether .nojekyll is needed at all is a fair question: Jekyll only runs
+      # under build_type "legacy", and this repo uses "workflow". It stays as
+      # cheap insurance against the Pages source being switched back by hand.
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: ./public-docs
+          include-hidden-files: true
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: hugo-build-log-docs
+          path: .build-docs.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

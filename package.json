@@ -11,7 +11,9 @@
     "test:browser-crawl": "playwright test --project=browser-crawl",
     "report": "playwright show-report",
     "scan:overrides": "node scripts/scan-overrides.mjs",
-    "scan:gates": "node scripts/scan-gates.mjs"
+    "scan:gates": "node scripts/scan-gates.mjs",
+    "scan:docs": "node scripts/scan-docs.mjs",
+    "gen:docs": "node scripts/gen-docs.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

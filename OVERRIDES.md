@@ -59,7 +59,7 @@ layouts, which is the opposite of the signal this table is for.
 are OVERRIDE POINTS. A consumer replacing one is using the module correctly; a consumer
 replacing `layouts/docs/single.html` is not. The distinction is the whole reason the slots
 were added — a forked layout silently stops receiving new module features, which cost
-kgateway.dev a visible page subtitle on 856 pages. Full contract in `USAGE.md`.
+kgateway.dev a visible page subtitle on 856 pages. Full contract in [`MAINTAINING.md`](./MAINTAINING.md#extension-slots--override-these-instead-of-forking-a-docs-layout).
 
 For history, the counts before this round of cleanup were: docs 8 shadows / 169 duplicated
 selectors, kgateway-oss 4 / 1, agentgateway-oss 9 / 12, agentregistry 1 / 0, kagent 0 / 13,

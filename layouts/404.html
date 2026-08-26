@@ -212,6 +212,12 @@
     <main id="content">
       <p class="pnf-code">Error 404</p>
       <h1>This page could not be found.</h1>
+      {{- /* The default lede, for a 404 with no version context to add. It is
+             REPLACED by the script when `fromversion` is present, because at
+             that point we can say something far more specific than "does not
+             exist": we know which version the reader asked for, that it is no
+             longer published, and that the topic did not survive into the one
+             they were sent to instead. */ -}}
       <p id="pnf-lede">
         The page you requested does not exist. It may have been moved, renamed, or
         removed from this version of the documentation.
@@ -311,6 +317,36 @@
             boxEl.hidden = false;
           }
 
+          // The version the reader ORIGINALLY asked for, handed forward by the
+          // hosting-level retired-version redirect as `?fromversion=`. Without
+          // it this page cannot know: the 301 rewrote the URL before we ran, so
+          // location.pathname describes where they were SENT, not what they
+          // clicked. This is the difference between "this page does not exist"
+          // and "the 2.1.x docs are gone and this topic did not survive into
+          // the current version" — the second is the true statement, and the
+          // only one a reader can act on.
+          //
+          // Allowlisted against CFG.versions before use. The value arrives in a
+          // URL, so it is reader-controlled; it selects a known string and is
+          // never itself written into the page.
+          var fromParam = new URLSearchParams(location.search).get("fromversion");
+          var from =
+            fromParam && CFG.versions.indexOf(fromParam) !== -1 ? fromParam : null;
+
+          // Strip it either way, so the URL a reader copies off an error page
+          // is the clean one. Mirrors partials/docs/retired-version-notice.html,
+          // which does the same on the SUCCESS path.
+          if (fromParam !== null) {
+            var qp = new URLSearchParams(location.search);
+            qp.delete("fromversion");
+            var qs = qp.toString();
+            history.replaceState(
+              null,
+              "",
+              location.pathname + (qs ? "?" + qs : "") + location.hash
+            );
+          }
+
           var segs = location.pathname.split("/").filter(Boolean);
 
           // Locate the version segment. First match wins: a product segment
@@ -331,6 +367,22 @@
           var current = segs[vIdx];
           var before = segs.slice(0, vIdx);
           var after = segs.slice(vIdx + 1);
+
+          // Say what actually happened. This is the case the whole
+          // `fromversion` round trip exists for: the reader asked for a version
+          // that no longer builds, the redirect moved them to one that does,
+          // and the topic is not there either. Neither half of that is
+          // guessable from the URL they are looking at.
+          if (from && from !== current) {
+            document.getElementById("pnf-lede").textContent =
+              "The documentation for version " +
+              from +
+              " is no longer published, so you were sent to " +
+              current +
+              ". This topic does not exist in " +
+              current +
+              " — it was renamed or removed.";
+          }
 
           function underVersion(version, tail) {
             return toPath(before.concat([version], tail));

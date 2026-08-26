@@ -1,66 +1,46 @@
 {{- /*
   Shortcode: github-yaml
-  Fetches a remote YAML file by URL and renders it as a syntax-highlighted YAML
-  code block, stripping any `yaml-language-server` editor directive.
+  Summary: Fetches a remote YAML file and renders it as a captioned code block
+  Group: external-content
+  CallForm: percent
+  Overrides: none
 
   Parameters:
-    - url: The remote URL of the YAML file to fetch and display.
+    - url | url | yes | — | The remote URL of the YAML file to fetch and display.
 
-  CALL IT WITH THE PERCENT FORM. This shortcode emits a markdown code FENCE, not
-  HTML, so its output has to re-enter the markdown renderer:
+  Example: code-only
 
-      correct:  {{% github-yaml url="https://example.com/config.yaml" %}}
-      WRONG:    {{< github-yaml url="https://example.com/config.yaml" >}}
+  Notes:
+    **Percent form only.** This shortcode emits a Markdown code fence rather
+    than HTML, so its output has to re-enter the Markdown renderer. Hugo
+    inserts angle-bracket shortcode output verbatim without re-parsing it, so
+    the angle form puts literal backticks on the page instead of a code block.
 
-  Hugo inserts angle-bracket shortcode output verbatim without re-parsing it as
-  markdown, so the angle form renders the literal ``` backticks onto the page
-  instead of a code block.
+    Because of that it is also registered in `rebase.html`'s convert-back-to-
+    percent-form list. Rebase's bulk percent-to-angle conversion would
+    otherwise force it into the broken form on every rebased page. If you
+    rename this shortcode, update that list too.
 
-  Because of that, this shortcode is also registered in `rebase.html`'s
-  "convert back to percent form" list. Rebase's bulk %→< conversion would
-  otherwise force it into the broken form on every rebased page. If you rename
-  this shortcode, update that list too.
+    The example is marked `code-only` because a live render would make a
+    network request on every site build.
 
-  WHY THIS AND NOT `github` INSIDE A FENCE. `github` can already inline a YAML
-  file that the caller wraps in a fence, and for a one-off that is the simpler
-  call. This shortcode exists for the three things that wrapping does not give
-  you:
+    ### Why this and not `github` inside a fence
 
-    1. It strips the `# yaml-language-server: $schema=…` first line. That line is
-       an editor hint for the file's authors and is noise in published docs; it
-       also makes the rendered snippet differ from what a reader would paste.
+    `github` can already inline a YAML file that the caller wraps in a fence,
+    and for a one-off that is the simpler call. This shortcode exists for three
+    things wrapping does not give you:
+
+    1. It strips the `yaml-language-server` schema directive from the first
+       line. That line is an editor hint for the file's authors, is noise in
+       published docs, and makes the rendered snippet differ from what a reader
+       would paste.
     2. It sets Hextra's `filename` and `base_url` codeblock attributes from the
        URL, so the block is captioned with the real file name and links back to
-       its directory. See Hextra's `_markup/render-codeblock.html`. (The
-       original derived `base_url` with `path.Dir` and emitted a malformed
-       one-slash URL; see the derivation below.)
-    3. It uses a date-stamped cache key, so a moving ref (`refs/heads/main`)
-       refreshes at least daily instead of being pinned to whenever the
-       getresource cache was last cold. `github` has no cache key, so Hugo's
-       default keying applies.
-
-  NETWORK RESILIENCE, and the two failure branches. `timeout` caps how long a
-  slow or unreachable remote can block the build: these URLs typically redirect
-  to raw.githubusercontent.com, which throttles and stalls CI runners, and
-  without a cap a cold build hangs (~90s per fetch, compounding across every
-  page that embeds one) until the job is killed. `try` is required as of Hugo
-  v0.141, which removed `resource.Err`.
-
-  The two branches are deliberately NOT the same, and match `github.html`
-  exactly — see that file's comment for the full argument:
-
-    - `.Err` set (timeout, DNS, transport error) → WARN and emit a
-      link-checker-visible `<a href>`. A cold CI build can hit this transiently
-      on a URL that is perfectly alive, so it must not fail the build. The
-      fallback is a real anchor outside any `<pre>`, so lychee follows it and
-      reports it (anchors inside code blocks are skipped by default).
-    - `.Value` nil with no `.Err` (the host answered, the resource is absent —
-       a 404, dead or moved URL) → ERROR and fail the build. That is a real
-       reference bug in the docs, not a network blip.
-
-  This file previously WARNed on the dead-URL branch as well, which made the
-  same failure fatal in `github` and non-fatal here. The two were reconciled on
-  `errorf` when this shortcode moved into the module.
+       its directory. See Hextra's `_markup/render-codeblock.html`.
+    3. It uses a date-stamped cache key, so a moving ref such as
+       `refs/heads/main` refreshes at least daily instead of being pinned to
+       whenever the getresource cache was last cold. `github` has no cache key,
+       so Hugo's default keying applies.
 */ -}}
 {{- $url := .Get "url" -}}
 {{- /* Directory of the URL, for the caption's "view source" link.

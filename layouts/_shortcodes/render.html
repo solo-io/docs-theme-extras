@@ -1,3 +1,35 @@
+{{- /*
+  Shortcode: render
+  Summary: Embeds the interactive changelog browser on a page
+  Group: ui-components
+  CallForm: both
+  Overrides: none
+
+  Parameters:
+    - path | path | yes | — | Path to the changelog data, appended to params.productPath.
+    - enterprise | bool | no | false | Pass enterprise="true" to add the "Show Open Source Notes" checkbox.
+
+  Example: code-only
+
+  Notes:
+    Emits a type selector (by release, chronological, or compare versions), an
+    empty container, and the scripts that populate it. The rendering happens
+    entirely client-side.
+
+    `enterprise="true"` adds a checkbox that toggles OSS notes inside an
+    enterprise changelog. It is absent by default, so an OSS changelog gets the
+    selector alone.
+
+    This shortcode is only usable in a consumer that ships the changelog
+    JavaScript at `<productPath>/changelog/`: `Renderers.js`,
+    `changelog_utils.js` and `render_changelog.js`. Those files are NOT part of
+    this module. It also pulls showdown and jQuery from public CDNs at page
+    load, so it is the one shortcode here that depends on third-party hosts at
+    runtime rather than at build time.
+
+    The example is marked `code-only` for that reason: with none of those assets
+    present, a live render would produce an empty box and three failed requests.
+*/ -}}
 <div style="display:flex;">
 <select name="type" id="solodocs-select-type">
     <option value="minorrelease">By Release</option>

@@ -28,7 +28,19 @@ hugo160 --config hugo.toml   # bare baseline
 
 Check that the build log contains no new unallowlisted Hugo warnings.
 
-If you added or removed a shortcode since the last release, verify that `everything` fixture has been updated to call it. The `everything` page should exercise every current shortcode.
+**If you added, removed or changed a shortcode since the last release**, two
+things have to be true, and `make test-all` only proves one of them for you:
+
+- The `everything` fixture calls it. The `everything` page should exercise every
+  current shortcode, and nothing checks that automatically — this is the manual
+  half.
+- Its source comment header is conformant and current. `docs-coverage.spec.ts`
+  runs inside `test-all` and fails if a header is missing a field, omits a
+  parameter the template reads, or no longer matches the generated page. That is
+  the automatic half, so a green `test-all` means the docs are already right.
+
+The contract for the header is in
+[MAINTAINING.md](./MAINTAINING.md#the-shortcode-header-contract).
 
 ## 2. Consumer integration check (local replace)
 
@@ -116,13 +128,15 @@ these mobile-specific behaviors:
 ## 4. Re-diff shadows on Hextra bumps
 
 If this release bumps the Hextra pin (`go.mod`), walk every file
-listed in the [shadows tables in USAGE.md](./USAGE.md#maintaining-the-shadows)
+listed in the [shadows tables in MAINTAINING.md](./MAINTAINING.md#maintaining-the-shadows)
 and confirm our local additions
 are still present and well-positioned in the new upstream context.
 Don't skip this — a silently-dropped insertion is the most common
 hextra-upgrade regression and the hardest to debug after the fact.
 
-## 5. Update CHANGELOG
+## 5. Update CHANGELOG and docs
+
+### CHANGELOG
 
 Add an entry to [CHANGELOG.md](./CHANGELOG.md) under a new version
 heading. Categorize changes as Added / Changed / Fixed / Removed.
@@ -131,6 +145,32 @@ Patch/minor/major rules in CHANGELOG.md's preamble.
 If the release requires consumer-side migration (renamed shortcode,
 changed shortcode args, removed param), call it out explicitly with
 before/after examples — that's what consumer-repo PR authors will read.
+
+### Docs
+
+The shortcode reference and the `themeExtras` parameter reference are
+GENERATED from the source files, and the generated tree is committed. Regenerate
+it and confirm the site still builds:
+
+```sh
+npm run gen:docs            # rewrite docs/content from the sources
+npm run gen:docs -- --check # must exit 0
+make build-docs             # must be green
+```
+
+`--check` is also enforced by `docs-coverage.spec.ts` inside `make test-all`, so
+a clean step 1 means this is already done. Run it anyway if you have touched
+`layouts/` since — regenerating is cheap and a stale committed tree publishes a
+wrong parameter table.
+
+Do NOT hand-edit anything under `docs/content/authoring/shortcodes/` or
+`docs/content/configuration/params.md`. Edit the source comment header, or
+`PARAM_DOCS` in `tests/helpers/gen-docs.ts`, and regenerate.
+
+The docs site itself deploys from `main` on its own workflow
+(`.github/workflows/pages.yml`), NOT from the tag, so it needs no action here.
+It also means the published site describes `main` and can be ahead of the tag
+you are cutting.
 
 ## 6. Tag and push
 
@@ -148,8 +188,13 @@ For each consumer, in a separate PR:
 
 ```sh
 hugo mod get github.com/solo-io/docs-theme-extras@vX.Y.Z
-hugo mod tidy
 ```
+
+> [!WARNING]
+> Do **not** run `hugo mod tidy` to move a pin. It deletes the `require` block
+> outright rather than rewriting it, so the bump silently reverts to whatever
+> the module graph resolves on its own. `hugo mod get` with an explicit version
+> is the only safe form.
 
 The PR diff should show only `go.mod` / `go.sum` changes (unless the
 release requires consumer content migration, in which case the PR

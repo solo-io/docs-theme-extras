@@ -1,3 +1,36 @@
+{{- /*
+  Shortcode: checklist
+  Summary: Renders its body as a checklist whose ticks persist in the browser
+  Group: ui-components
+  CallForm: both
+  Overrides: none
+
+  Parameters: none
+
+  Example:
+    {{< checklist >}}
+    - [ ] Create the gateway
+    - [ ] Apply the route
+    - [ ] Verify traffic reaches the backend
+    {{< /checklist >}}
+
+  Notes:
+    Each non-empty line of the body becomes one item. A leading `- [ ]` or `- `
+    is stripped, so the body can be written as ordinary Markdown task-list or
+    bullet syntax and still render as a checklist rather than as a list.
+
+    Item text is run through `markdownify`, so inline formatting and links work.
+
+    Ticks are stored in `localStorage`, keyed on the page path plus the
+    checklist's index on that page plus the item's index. Two consequences worth
+    knowing: reordering or inserting items shifts every later item's key, so
+    existing readers see their ticks move; and the state is per-browser, so it
+    is a convenience for one reader working through a guide, not a record of
+    anything.
+
+    The supporting script is emitted once per page, guarded by a page-scoped
+    flag, so a page with several checklists does not repeat it.
+*/ -}}
 {{- $content := .Inner -}}
 {{- $items := split $content "\n" -}}
 {{- $idx := .Page.Scratch.Get "checklist-count" | default 0 -}}

@@ -231,6 +231,73 @@ against 0.3.3, and it is a pin problem, not a regression in this change.
 
 ---
 
+## [0.3.4] — 2026-08-26
+
+### Add — tell a reader the version they asked for is gone (`layouts/partials/docs/retired-version-notice.html`, `layouts/docs/{single,list}.html`, `layouts/404.html`, `assets/css/docs-theme-extras.css`, `tests/retired-version-notice.spec.ts`)
+
+**Why.** A retired version is caught by a path-preserving 301 in the consumer's hosting
+config, which is the right mechanism — one hop, no interstitial, SEO signal preserved. But it
+is SILENT. The reader clicks a link to 2.1.x, the address bar says something else, and
+nothing on the page accounts for the difference.
+
+That was tolerable when only the version segment changed. It stopped being tolerable when
+agentgateway moved its version trees under a section segment: a reader is now relocated on
+two axes at once, and <https://docs.solo.io/agentgateway/2.1.x/install/ui/setup/> lands on
+`/agentgateway/kubernetes/latest/install/ui/setup/`, a URL sharing almost nothing with the
+one they clicked.
+
+The worse case is the one with no destination at all. Before this change, a reader following
+a stale 2.1.x link to a topic that has since been removed saw the plain "This page could not
+be found", one suggestion for a nearby section, and no indication that 2.1.x was ever
+involved — the redirect had rewritten the URL before the 404 ran, so the page genuinely could
+not know. Verify on the current build: any `/agentgateway/kubernetes/latest/<removed-topic>/`
+renders a lede that says only "does not exist".
+
+**How the context survives the redirect.** It cannot be recovered client-side —
+`document.referrer` is empty on a 301 from a bookmark and wrong when the link came from a
+search engine — so the hosting rule hands it forward explicitly:
+
+```json
+"source":      "/agentgateway/2.1.x/:path*",
+"destination": "/agentgateway/kubernetes/latest/:path*?fromversion=2.1.x"
+```
+
+Firebase merges that with any query string the reader already had
+(`?fromversion=2.1.x&foo=bar`), so the parameter is additive. Two places consume it: the new
+partial on a successful landing ("you were moved, and why"), and `404.html` when the topic
+did not survive either ("and it is gone"). Both then strip it with `history.replaceState`, so
+the URL a reader copies is the canonical one and a crawler does not see two URLs for one
+page.
+
+**The value is allowlisted, not echoed.** `fromversion` arrives in a URL and is
+reader-controlled. It is matched against the site's configured `params.versions` and used to
+SELECT a known string; it is never itself written into the page. An unrecognized value
+renders nothing at all, and the cleanup still runs so junk does not linger in the address
+bar.
+
+**Rendered next to `version-banner.html`** in `docs/single.html` and `docs/list.html`, not in
+the `docs/chrome-top.html` slot — both OSS consumers override that slot and would silently
+lose it. Styled amber rather than the version banner's blue, deliberately: the two never
+appear together, but they share a slot, and a reader trained to skim the blue informational
+banner would skim this too. This one reports something that happened to them without their
+asking.
+
+**Consumers need a hosting change to see any of it.** The partial is inert until a
+retired-version redirect appends `?fromversion=`. Shipping this module version alone changes
+nothing.
+
+**Verified.** `tests/retired-version-notice.spec.ts` (new, `browser` project, registered in
+`playwright.config.ts` — a spec absent from `testMatch` silently never runs): 12 cases
+covering both consumers of the parameter, the no-marker default, query-parameter merging, the
+allowlist rejecting a crafted value, a self-referential marker, dismissal, and that the
+existing 404 ranking is undisturbed. Firebase's query-append behavior was confirmed against
+the hosting emulator, including the merge with a pre-existing query string. Full suite on
+both brands: 2111 passed, 17 skipped. Two failures are pre-existing and unrelated — an
+npm-out-of-sync WARN from an uncommitted `package.json` edit, and two new same-path shadows
+in the docs hub (`reuse-append.html`, `version-banner.html`) that need their own triage.
+
+---
+
 ## [0.3.3] — 2026-08-26
 
 ### Add — `github-yaml` and `reuse-append` adopted from agentgateway-oss-website (`layouts/_shortcodes/github-yaml.html`, `layouts/_shortcodes/reuse-append.html`, `layouts/_shortcodes/rebase.html`, `fixture/assets/conrefs/test/{everything,append-base-table}.md`, `tests/github-yaml-shortcode.spec.ts`)

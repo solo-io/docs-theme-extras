@@ -24,8 +24,20 @@
     <img class="{{ $lightClass }}" src="{{ $logoPath | relURL }}" alt="{{ .Site.Title }}" height="{{ $logoHeight }}" width="{{ $logoWidth }}" />
     <img class="{{ $darkClass }}" src="{{ $logoDarkPath | relURL }}" alt="{{ .Site.Title }}" height="{{ $logoHeight }}" width="{{ $logoWidth }}" />
   {{- end -}}
+  {{- /* `hx:md:inline-block`, NOT `hx:md:inline`.
+         Hextra ships a PRECOMPILED stylesheet, so the only `hx:` utilities that
+         exist are the ones Hextra's own layouts use. It uses inline-block and
+         inline-flex; it never uses bare `hx:md:inline`. This span carried that
+         invented class, which matched no rule, so `hx:hidden` won at every
+         breakpoint and the title was invisible on every site that turned it on
+         — silently, because a class that resolves to nothing produces no
+         warning and no visual clue beyond an absent title.
+         Safe swap: the parent is `hx:flex`, so this span is a flex item and its
+         `display` is blockified either way. Only the hidden/shown half matters.
+         hugo-flat.toml and hugo-flat-root.toml both set displayTitle = true and
+         were affected; no spec covered the navbar title. */ -}}
   {{- if (.Site.Params.navbar.displayTitle | default true) -}}
-    <span class="hx:mr-2 hx:font-extrabold hx:select-none hx:hidden hx:md:inline">{{- .Site.Title -}}</span>
+    <span class="hx:mr-2 hx:font-extrabold hx:select-none hx:hidden hx:md:inline-block">{{- .Site.Title -}}</span>
   {{- end -}}
   {{- /* Mobile only: product logo from sidebar.logo if configured */ -}}
   {{- with .Site.Params.sidebar.logo -}}

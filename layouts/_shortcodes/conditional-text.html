@@ -1,19 +1,43 @@
-{{- /* conditional-text — include or exclude .Inner based on the page's build
-       condition (resolved via utils/page-context for both multi-product-hub
-       and single-site URL conventions).
+{{- /*
+  Shortcode: conditional-text
+  Summary: Includes or excludes its body based on the page's build condition
+  Group: gating
+  CallForm: both
+  Overrides: none
 
-       This file used to be 211 lines: six shape heuristics choosing between
-       four emit strategies, because Hugo does not expose whether a shortcode
-       was called in percent or angle form and the template was guessing. It is
-       now condition resolution plus one emit site.
+  Parameters:
+    - include-if | string | no | — | Render the body only when the page's condition matches.
+    - exclude-if | string | no | — | Render the body only when the page's condition does NOT match.
 
-       Every one of those strategies existed to undo damage caused by the
-       others — the trailing-step and table-row paths raw-emitted to escape
-       RenderString, the $isFullTable path rendered to escape raw emit, and the
-       fenced-block path raw-emitted to escape a double render. Emitting
-       `.Inner` untouched removes the reason all four existed. See
-       utils/gate-emit.html for the verification behind that, and
-       utils/gate-decide.html for the shared condition evaluator. */ -}}
+  Example:
+    {{% conditional-text include-if="kubernetes" %}}
+    This paragraph appears only in the Kubernetes flavor of the docs.
+    {{% /conditional-text %}}
+
+  Notes:
+    Give exactly one of `include-if` or `exclude-if`.
+
+    Both parameters are read inside `utils/gate-decide.html`, which this
+    shortcode hands its context to as a dict value. They are documented here
+    anyway, because a reader writing the call should not have to know which
+    partial resolves the value.
+
+    The build condition is resolved through `utils/page-context.html`, so this
+    works under both the multi-product-hub and single-site URL conventions.
+    Prefer this over `upstream` and `downstream` whenever the split is finer
+    than which repo is building.
+
+    ### Why this file is short
+
+    It used to be 211 lines: six shape heuristics choosing between four emit
+    strategies, because Hugo does not expose whether a shortcode was called in
+    percent or angle form and the template was guessing. Every one of those
+    strategies existed to undo damage caused by another — the trailing-step and
+    table-row paths raw-emitted to escape RenderString, the full-table path
+    rendered to escape raw emit, and the fenced-block path raw-emitted to escape
+    a double render. Emitting `.Inner` untouched removed the reason all four
+    existed. See `utils/gate-emit.html` for the verification behind that.
+*/ -}}
 
 {{- $ctx := partial "utils/page-context.html" . -}}
 {{- $condition := $ctx.condition -}}

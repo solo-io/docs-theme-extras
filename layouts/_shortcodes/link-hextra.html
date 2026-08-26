@@ -1,5 +1,38 @@
-{{- /* Canonical implementation lives in utils/resolve-link.html, shared with
-       the `link` alias (see link.html). See that partial for the design
-       notes on why this is a plain partial call rather than the
-       alert→callout "build a shortcode string and RenderString it" pattern. */ -}}
+{{- /*
+  Shortcode: link-hextra
+  Summary: Resolves a docs-relative path into a version- and product-aware URL
+  Group: links
+  CallForm: both
+  Overrides: none
+
+  Parameters:
+    - path | path | yes | — | Docs-relative path to resolve into a URL.
+    - version | string | no | the page's version | Version to resolve against, injected by rebase and reuse.
+    - product | string | no | site currentProduct | Product to resolve against, injected by rebase and reuse.
+
+  Example: code-only
+
+  Notes:
+    The canonical link resolver, and the one to use in new content. `link` is an
+    alias for it.
+
+    Emits a bare URL string rather than an anchor, so it is written inside an
+    ordinary Markdown link:
+
+        [the gateway guide]({{< link-hextra path="/guides/gateway/" >}})
+
+    All three parameters are read in `utils/resolve-link.html`, which this
+    four-line file hands its context to. They are documented here because a
+    reader writing the call should not have to know which partial resolves them
+    — and because a documentation check that only looked at this file would find
+    no parameters at all and pass while documenting nothing.
+
+    `version` and `product` are injected by the `rebase` and `reuse` pipelines
+    so a link inside content pulled from another version or product resolves
+    against the tree it came from. Writing them by hand in content is almost
+    always a mistake.
+
+    The example is marked `code-only`: resolution needs a version and product
+    context this site does not have.
+*/ -}}
 {{- partial "utils/resolve-link.html" . -}}
