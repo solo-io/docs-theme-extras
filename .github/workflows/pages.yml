@@ -25,10 +25,16 @@ name: Deploy docs site
 # The PR run also uploads the built site as an artifact, so a reviewer can
 # download and open it. `make server-docs` is still the faster local loop.
 
+
+# The two path lists below are duplicated on purpose. A YAML anchor would be the
+# obvious way to share them and it parses fine locally, but GitHub Actions does
+# not officially support anchors in workflow files — so the failure would be a
+# workflow that does not parse, or one whose pull_request trigger silently has
+# no path filter and fires on every PR. Keep the two lists in sync by hand.
 on:
   push:
     branches: [main]
-    paths: &docs-paths
+    paths:
       - 'docs/**'
       - 'layouts/**'
       - 'assets/**'
@@ -39,7 +45,15 @@ on:
       - '.github/workflows/pages.yml'
   pull_request:
     branches: [main]
-    paths: *docs-paths
+    paths:
+      - 'docs/**'
+      - 'layouts/**'
+      - 'assets/**'
+      - 'data/**'
+      - 'hugo-docs.toml'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
