@@ -22,6 +22,105 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
+## [0.3.3] — 2026-08-26
+
+### Add — `github-yaml` and `reuse-append` adopted from agentgateway-oss-website (`layouts/_shortcodes/github-yaml.html`, `layouts/_shortcodes/reuse-append.html`, `layouts/_shortcodes/rebase.html`, `fixture/assets/conrefs/test/{everything,append-base-table}.md`, `tests/github-yaml-shortcode.spec.ts`)
+
+**Why.** Both were site-local shortcodes doing generic docs work, so no other consumer could
+use them and nothing tested them. `github-yaml` backs **22** pages on agentgateway.dev and
+`reuse-append` backs 2; between them they had zero test coverage, and moving them surfaced
+three defects (below) that had been shipping to production.
+
+**`github-yaml`** fetches a remote YAML file and emits it as a fenced code block, so the
+caller does not write the fence. `github` can already inline YAML that the caller wraps in a
+fence, and for a one-off that is still simpler; this shortcode earns its place on three
+things wrapping cannot do — it strips the `# yaml-language-server: $schema=…` editor
+directive (noise in published docs, and it makes the snippet differ from what a reader would
+paste), it captions the block with the file name and links `base_url` to the source
+directory, and it uses a date-stamped cache key so a moving ref like `refs/heads/main`
+refreshes at least daily instead of being pinned to whenever the getresource cache was last
+cold.
+
+It is **percent-form only** — it returns a markdown fence, so the angle form puts literal
+backticks on the page.
+
+**`reuse-append`** concatenates a base snippet and its inner content as markdown *source*
+and renders once. That is not the same as calling `reuse` and then writing more rows: `reuse`
+renders the snippet on its own, so a table is already closed as `<table>` HTML before the
+extra rows are parsed, and they land as a stray paragraph of pipes. Despite the name it is
+**not** a variant of `reuse` — it applies none of `reuse`'s version- and product-aware
+rewrites — which is now stated in the file and in USAGE.md, because the name invites the
+opposite assumption.
+
+**Where to see it.**
+`github-yaml`: <https://agentgateway.dev/docs/standalone/latest/mcp/connect/stdio/> — step 2
+renders `config.yaml` as a captioned code block whose first line is `mcp:`, not
+`# yaml-language-server:`.
+`reuse-append`: <https://agentgateway.dev/docs/standalone/latest/llm/providers/azure/> — each
+provider table carries the shared base rows plus the page's own appended rows, in **one**
+table.
+
+**Verified.** Both brands built clean with no new Hugo warnings. 21 new tests across
+`everything` and `rebased` at v1/v2/main, including the shape every real call site actually
+uses — the shortcode indented inside an ordered-list step, where a block element emitted at
+the wrong indent would sever the list and renumber the steps after it.
+`gate-containment.json` re-snapshotted twice: both diffs purely additive (7 new markers, no
+existing marker moved). The two `reuse-append` row markers resolve to
+`…table > tbody > tr > td` and the three list-step markers to `…ol > li > p`, on all six page
+variants — the "appended rows stayed in the table" and "the list was not severed" invariants
+asserted structurally rather than by counting. Full suite, both brands: **2121 passed**,
+17 skipped, 0 failed.
+
+The two files still exist in agentgateway-oss-website and now shadow this module's copies —
+that consumer pins `v0.2.1`, so deleting them before the pin moves would break 22 pages. Both
+are recorded in `override-baseline.json` and OVERRIDES.md with an explicit deletion deadline
+of the next pin bump, not a KEEP verdict.
+
+### Fix — `github-yaml` emitted a malformed source link on every code block it rendered (`layouts/_shortcodes/github-yaml.html`)
+
+**Why.** `base_url` was derived with `path.Dir`. That is a *filesystem* path function: it
+normalizes repeated separators, so `path.Dir "https://host/a/b.yaml"` returns `https:/host/a`
+with a single slash after the scheme. Every code-block caption this shortcode rendered
+therefore linked to a malformed URL. Live before the fix, on
+<https://agentgateway.dev/docs/standalone/latest/mcp/connect/stdio/>:
+
+```
+href=https:/agentgateway.dev/examples/mcp-basic/config.yaml
+```
+
+Browsers mostly recover, because the WHATWG URL parser tolerates extra-or-missing slashes on
+a special scheme — which is why this shipped unnoticed. A strict link checker is under no such
+obligation. Trimming the last segment with a regex instead leaves `://` exactly as written.
+
+Worth recording separately: the defect was **invisible to a `grep 'href="https:/'`** because
+production builds with `--minify`, which strips attribute quotes. It only appeared once the
+quotes came out of the pattern. The new spec's assertion is quote-agnostic for that reason.
+
+**Verified.** View-source on the production page above shows the one-slash href; the fixture
+build now emits
+`href="https://raw.githubusercontent.com/agentgateway/agentgateway/<sha>/examples/mcp-basic/config.yaml"`,
+asserted in both directions (no `https:/` with one slash, and a well-formed URL present).
+
+### Fix — a fence-emitting shortcode leaked literal backticks through `rebase` (`layouts/_shortcodes/rebase.html`)
+
+**Why.** Stage 3 of the rebase pipeline converts *every* percent-form shortcode to angle form
+so `RenderString` processes it, then converts a short list back — `tab`, `steps`, `include` —
+because those return raw markdown that has to re-enter the outer markdown pass. `github-yaml`
+belongs in that list and was not in it, so on rebased pages the ``` backticks were substituted
+after Goldmark had run and rendered as literal text in prose.
+
+This was caught by the existing `static.spec.ts` ("no leaked '```lang' fences in prose") and
+`markdown-leaks.spec.ts` the moment the shortcode was added to the fixture — the failure mode
+is invisible on a normal page and appears only under rebase, so without the rebased fixture
+page it would have shipped. The general rule is now written into `rebase.html`: a shortcode in
+this module that emits raw markdown rather than HTML must be restored to percent form there,
+and must say so in its own doc comment.
+
+**Verified.** Three new assertions on `v1/rebased`, `v2/rebased` and `main/rebased` check both
+that no ``` survives and that a `language-yaml` code block is present. Both brands green.
+
+---
+
 ## [0.3.2] — 2026-08-25
 
 ### Fix — every link and card on a translated page pointed into the English tree (`layouts/_partials/utils/resolve-link.html`, `utils/version-root.html`, `utils/page-context.html`, `tests/link-hextra-lang-prefix.spec.ts`)

@@ -57,6 +57,22 @@ export const SHORTCODE_MARKERS = [
   "MARKER_GITHUB_TABLE",
   "MARKER_GITHUB_YAML",
   "MARKER_GITHUB_TEXT",
+  // The `github-yaml` shortcode, as distinct from MARKER_GITHUB_YAML above,
+  // which is `github` hand-wrapped in a yaml fence.
+  "MARKER_GITHUB_YAML_SHORTCODE",
+  // The same shortcode indented inside an ordered-list item, which is the shape
+  // every real call site uses. All three steps must stay in ONE <ol>; the
+  // containment snapshot is what pins that.
+  "MARKER_GHYAML_STEP_1",
+  "MARKER_GHYAML_STEP_2",
+  "MARKER_GHYAML_STEP_3",
+  // `reuse-append`. The two row markers are the point of the shortcode: both
+  // have to land in cells of the SAME table, which is what the containment
+  // snapshot pins. If appending ever falls back out of the table, the extra
+  // row's ancestor chain becomes a `<p>` instead of a `<td>`.
+  "MARKER_REUSE_APPEND",
+  "MARKER_APPEND_BASE_ROW",
+  "MARKER_APPEND_EXTRA_ROW",
   "MARKER_TABLE_ROW1A",
   "MARKER_CHECKLIST_1",
   "MARKER_CHECKLIST_2",

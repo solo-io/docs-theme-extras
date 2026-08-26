@@ -379,6 +379,38 @@ MARKER_GITHUB_TABLE. The extracted "Functions" section appears below:
 
 {{% github-table url="https://raw.githubusercontent.com/agentgateway/agentgateway/refs/heads/main/schema/cel-functions.md" section="Functions" %}}
 
+## GitHub YAML
+
+The `github-yaml` shortcode fetches a remote YAML file and emits it as a fenced code block, so the caller does not write the fence. It differs from `github` inside a fence in three ways: it strips the `# yaml-language-server:` editor directive, it captions the block with the file name and links `base_url` back to the directory, and it uses a date-stamped cache key.
+
+It emits a markdown fence, so it must be called with the PERCENT form. The URL is pinned to a commit SHA — the file at that SHA begins with a `yaml-language-server` directive, which is what makes the strip assertion meaningful.
+
+MARKER_GITHUB_YAML_SHORTCODE. The fetched YAML appears below:
+
+{{% github-yaml url="https://raw.githubusercontent.com/agentgateway/agentgateway/a69d8060d5d16510dcb12be7126215b9b7e9e7f8/examples/mcp-basic/config.yaml" %}}
+
+### Inside a numbered list step
+
+This is the shape every real call site uses — the shortcode is indented inside an ordered-list item, not at top level. A block-level element emitted at the wrong indent terminates the list, so the step numbering after it is the assertion that matters.
+
+1. MARKER_GHYAML_STEP_1. First step, before the embed.
+
+1. MARKER_GHYAML_STEP_2. Second step, which contains the embed:
+
+   {{% github-yaml url="https://raw.githubusercontent.com/agentgateway/agentgateway/a69d8060d5d16510dcb12be7126215b9b7e9e7f8/examples/mcp-basic/config.yaml" %}}
+
+1. MARKER_GHYAML_STEP_3. Third step, after the embed. If the embed broke the list, this renders as `1.` again or falls out of the `<ol>` entirely.
+
+## Reuse append
+
+The `reuse-append` shortcode concatenates a base snippet and the inner content as markdown SOURCE, then renders once — so extra table rows join the base table instead of falling out of it as a stray paragraph of pipes. The base snippet is `conrefs/test/append-base-table.md`, a two-column table with one data row.
+
+MARKER_REUSE_APPEND. The combined table appears below:
+
+{{< reuse-append "conrefs/test/append-base-table.md" >}}
+| MARKER_APPEND_EXTRA_ROW | extra-value |
+{{< /reuse-append >}}
+
 ## Images
 
 ### Icon
