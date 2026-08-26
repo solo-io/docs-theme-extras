@@ -1,0 +1,52 @@
+{{- /*
+  Shortcode: reuse-append
+  Reads a base markdown snippet from the assets tree, appends the inner content
+  to it, and renders the combined result through the page's markdown renderer.
+
+  Parameters:
+    - 0 (positional, required): path to the base file in the assets tree.
+
+  Example:
+    {{< reuse-append "snippets/provider-base-configuration.md" >}}
+    | Extra row | Value |
+    {{< /reuse-append >}}
+
+  WHAT IT IS FOR. A snippet that is a markdown TABLE cannot be extended by
+  calling `reuse` and then writing more rows after it: `reuse` renders the
+  snippet on its own, so the table is already closed as `<table>` HTML by the
+  time the extra rows are parsed, and they render as a stray paragraph of
+  pipes instead of joining the table. Concatenating the two as SOURCE and
+  rendering once keeps them a single markdown block. The same reasoning applies
+  to any construct whose continuation depends on the preceding lines — lists,
+  definition blocks, a fenced code block split across the boundary.
+
+  IT IS NOT A VARIANT OF `reuse`. Despite the name, this shortcode does NOT
+  apply the version- and product-aware shortcode rewrites that `reuse` does; it
+  is a plain `resources.Get` plus concatenation. A base snippet containing
+  a `version` shortcode, `keepVersion` blocks, or `link-hextra` calls that rely on
+  rebase-injected params will therefore behave differently here than under
+  `reuse`. Keep base snippets used with this shortcode free of version-dependent
+  markup, or use `reuse` and restructure the content so appending is not needed.
+
+  Errors, not warnings, on a missing positional parameter or a missing asset:
+  both mean the call site names a file that is not there, which is a content bug
+  that silently renders nothing if it is allowed to pass.
+*/ -}}
+
+{{- $asset := "" -}}
+{{- with (.Get 0) -}}
+  {{- $asset = . -}}
+{{- else -}}
+  {{- errorf "The %q shortcode requires one positional parameter: path in /assets. See %s" .Name .Position -}}
+{{- end -}}
+
+{{- $res := resources.Get $asset -}}
+{{- if not $res -}}
+  {{- errorf "The %q shortcode could not find %q. See %s" .Name $asset .Position -}}
+{{- end -}}
+
+{{- $base := trim $res.Content " \n\r\t" -}}
+{{- $extra := trim .Inner " \n\r\t" -}}
+{{- $combined := printf "%s\n%s\n" $base $extra -}}
+
+{{- $combined | .Page.RenderString -}}

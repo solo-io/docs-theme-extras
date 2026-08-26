@@ -145,6 +145,20 @@ first segment that matches a known version wins.
      shortcode for this reason. */}}
 {{ $clean = replaceRE `\{\{<\s*(include\s[^>]*)>}}` "{{% $1%}}" $clean }}
 
+{{/* Convert `github-yaml` back to percent-bracket, for exactly the same reason
+     as `include` above: it returns a markdown CODE FENCE, not HTML, so in
+     angle-bracket form the ``` backticks are substituted after Goldmark has run
+     and appear as literal text in prose. Caught by tests/static.spec.ts
+     ("no leaked '```lang' fences in prose") and markdown-leaks.spec.ts on the
+     rebased fixture pages when this shortcode was added to the module.
+
+     GENERAL RULE for anyone adding a shortcode to this module: if it emits raw
+     MARKDOWN rather than HTML, it must be listed here, and its own doc comment
+     must say it is percent-form-only. Stage 3's bulk %→< pass is unconditional,
+     so a fence-emitting shortcode that is not restored here works fine on a
+     normal page and silently breaks only under rebase. */}}
+{{ $clean = replaceRE `\{\{<\s*(github-yaml\s[^>]*)>}}` "{{% $1%}}" $clean }}
+
 {{/* ─── Stage 3b: SOURCE FILTERS ────────────────────────────────────── */}}
 
 {{/* Strip upstream blocks: content that should only appear in the OSS

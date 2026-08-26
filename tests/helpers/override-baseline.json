@@ -33,7 +33,9 @@
   "agentgateway-oss-website": {
    "samePath": [
     "layouts/_partials/navbar.html",
-    "layouts/partials/announcement.html"
+    "layouts/partials/announcement.html",
+    "layouts/_shortcodes/github-yaml.html",
+    "layouts/_shortcodes/reuse-append.html"
    ],
    "duplicatedSelectors": []
   },

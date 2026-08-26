@@ -48,7 +48,7 @@ layouts, which is the opposite of the signal this table is for.
 |---|---|---|---|---|---|
 | docs | 2 | 0 | 0 | 0 | 1 |
 | kgateway-oss | 2 | 2 | 0 | 0 | 1 |
-| agentgateway-oss-website | 2 | 5 | 0 | 0 | 2 |
+| agentgateway-oss-website | 4 | 5 | 0 | 0 | 2 |
 | agentregistry-oss-website | 0 | 0 | 0 | 0 | 0 |
 | kagent-oss-website | 0 | 0 | 0 | 0 | 0 |
 | ambientmesh.io | 0 | 0 | 2 | 2 | 0 |
@@ -215,7 +215,14 @@ diffs are `llms.txt` timestamps plus the same slashes. 154 content + 1,155 stati
 
 ### agentgateway-oss-website
 
-Three unsanctioned same-path shadows plus five sanctioned slot overrides (nine unsanctioned
+Two of the four same-path shadows below are **transitional, and count UPWARD for a good
+reason**: `github-yaml.html` and `reuse-append.html` were adopted INTO the module from this
+consumer, so the shadow appeared because the module grew, not because agw drifted. The
+ratchet cannot tell those two cases apart, which is why both rows carry an explicit deletion
+deadline (the next pin bump) rather than a KEEP verdict. If they are still here after agw
+moves off `v0.2.1`, that is drift and they should be deleted.
+
+Two unsanctioned same-path shadows plus five sanctioned slot overrides (nine unsanctioned
 before the image pair, the two forks and the two docs layouts below were resolved). Three
 arrived on 2026-08-06 in the
 commit "Moved shortcodes to `_shortcodes`": those files already existed under the old
@@ -256,6 +263,8 @@ carries a measured verdict instead of a byte count.
 | `layouts/partials/docs/width-class.html` | **SLOT OVERRIDE — sanctioned.** `utils/page-width` plus the `agw-docs-topgap` hook class |
 | `layouts/partials/docs/content-class.html` | **SLOT OVERRIDE — sanctioned.** `hx:pt-2` rather than the default `hx:pt-6` |
 | `layouts/partials/docs/after-title.html` | **SLOT OVERRIDE — sanctioned.** `test-status-badge.html`. Inert today: that partial currently emits nothing on any page |
+| `layouts/_shortcodes/github-yaml.html` | **TRANSITIONAL — delete on the next pin bump.** Not drift in the usual direction: the module's copy was taken FROM this file, so agw shadowed the module the moment the module gained it. agw pins `v0.2.1`, which has no `github-yaml`, so deleting the fork before the pin moves breaks 22 pages. Delete it in the same PR that bumps the pin, then remove this row and the baseline entry. The module's copy is not byte-identical — it fixes a `path.Dir`-derived `base_url` that emitted `https:/host/…` with one slash, and its dead-URL branch now `errorf`s instead of warning |
+| `layouts/_shortcodes/reuse-append.html` | **TRANSITIONAL — delete on the next pin bump.** Same situation and same deadline as `github-yaml` above. 2 call sites, both in `llm/providers/azure.md`. The module's copy is behaviourally identical; only the doc comment grew |
 | ~~`layouts/_shortcodes/openapi.html`~~ | **DELETED 2026-08-17 — it was emitting invalid HTML.** Affects **7** pages, not the 2 recorded here before. Measured by deleting the fork and diffing the whole build: exactly those 7 pages change out of 2,237, nothing else. The fork emits a complete standalone document *inside* the docs page template, so every one of those pages shipped with **2 `<!doctype>`, 2 `<html>` and 2 `<body>` tags**; extras' version emits a fragment and the page has 1 of each. Browser-checked side by side on `/docs/kubernetes/latest/llm/guardrails/webhook/openapi-spec/`: both render Swagger UI with 2 operations and the same live title ("GuardRail Webhook API 0.1.0 OAS 3.1"), and both carry the same 2 pre-existing `invalid_request` page errors, so nothing regressed. Extras' version is also a strict superset on network resilience (`try` 6 vs 2, `timeout` 5 vs 4, `warnf` 5 vs 3, `GetRemote` 4 vs 1, plus a client-side unpkg fallback) and adds `src=` for a local spec. `make framework-test` after deletion: 2455 passed, 0 failed (4 flaky, all `console-errors` on unrelated pages) |
 
 **Resolved (v0.2.0-beta.3):** `layouts/docs/single.html` and `layouts/docs/list.html`
