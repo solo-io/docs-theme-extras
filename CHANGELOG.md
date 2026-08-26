@@ -22,6 +22,125 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
+## [Unreleased]
+
+Intended as a **patch** (0.3.4): a shortcode-internal resolution fix, no new params and no
+content edits in consumers.
+
+### Fix — `reuse-append` as shipped in 0.3.3 cannot resolve an asset on a consumer with an assembled assets tree (`layouts/_shortcodes/reuse-append.html`)
+
+**Why.** 0.3.3 adopted this shortcode from agentgateway-oss-website as a straight copy, and
+the copy does exactly one lookup:
+
+```
+{{- $res := resources.Get $asset -}}
+{{- if not $res -}}{{- errorf "…could not find %q…" $asset -}}{{- end -}}
+```
+
+That is correct for a **flat** assets tree, which is what the OSS site has — its call sites
+pass `agw-docs/snippets/provider-azure-base-configuration.md` and the file is at exactly that
+path. The docs hub **assembles** its assets per version instead: for the agentgateway product,
+`hugo-mounts-agentgateway.toml` maps that same source dir to
+`assets/agentgateway/latest/agw-docs/…`. The bare path therefore misses on every assembled
+page, and the `errorf` fails the build.
+
+**This was a regression, and 0.3.3 hid it.** The docs hub had been carrying its own *adapted*
+copy of the shortcode for precisely this reason — its header comment named the difference
+("Upstream resolves the bare asset path, because in that repo the assets tree is not
+versioned. Here the tree is assembled per version"). While that copy exists it shadows the
+module, so 0.3.3 looked fine; delete it, as its own comment instructs once the theme carries
+the shortcode, and the build errors. That is the sequence a consumer hits.
+
+I compared the two files by line count (73 hub vs 52 module) and took the difference for extra
+comment. It was not. **Line count is not evidence that a consumer's copy is a stale
+duplicate** — the same lesson OVERRIDES.md already records for agentgateway-oss-website's
+`navbar.html` and `announcement.html`, and it applied here too.
+
+**The fix** tries the assembled path first and the bare path second, and errors only if both
+miss:
+
+1. `<currentProduct>/<resolvedVersion>/<asset>` — skipped entirely when either value is
+   empty, which is the case on every flat site, so those sites reach step 2 unchanged.
+2. `<asset>` — the bare path, correct for a flat tree and for a hub product that is not
+   assembled.
+
+Positional parameter 1 is now accepted so a parent shortcode can pass the version down.
+`rebase.html` injects version and product into `reuse` at stage 4 but **not** into
+`reuse-append` (its stage-4 regex requires `reuse` followed by a quote, so `reuse-append`
+correctly does not match), which is why this shortcode has to resolve the version itself. The
+`errorf` message now reports the assembled path it tried, so the next occurrence diagnoses
+itself.
+
+### Fix — the same lookup was ALSO wrong on gloo-mesh, because `version` and `linkVersion` are not the same field (`layouts/_shortcodes/reuse-append.html`)
+
+**Why.** The first draft of the fix above resolved the version with a private permalink scan
+that matched each URL segment against a `[[params.versions]]` entry's **`version`**. That is
+the wrong field to match on, and it fails on any product where the two diverge:
+
+| product | `version` | `linkVersion` (what is in the URL) |
+|---|---|---|
+| gloo-mesh-enterprise, gloo-mesh-gateway | `2.14.x` | `main` |
+| gloo-mesh-enterprise, gloo-mesh-gateway | `2.13.x` | `latest` |
+
+On `/gloo-mesh-enterprise/main/…` the segment is `main`, no entry has `version = "main"`, so
+nothing matched, the assembled lookup was skipped, the bare path missed, and the `errorf`
+fired — the identical failure this entry set out to fix, just on a different product. It
+happened to work on agentgateway only because every one of that product's entries sets
+`version` and `linkVersion` to the same string.
+
+The distinction matters because the two fields feed different things: the URL carries
+`linkVersion`, while the docs hub's `scripts/assemble-assets.py` names the mount target after
+`version` (`target_base = f"assets/{product}/{version}"`). So the correct sequence is **match
+on `linkVersion`, then read `version` off the matched entry.**
+
+**The fix** deletes the private scan and calls `utils/version-root.html`, the module's
+canonical version detector, taking `versionEntry.version` from it (falling back to
+`currentVersion` for a version matched by shape rather than by a config entry). That partial
+already matches on `linkVersion` via `utils/match-version-entry.html`, and it already returns
+the matched entry precisely so a caller does not re-walk the list.
+
+This also resolves the TODO the first draft left behind. A private scan here would have been
+the thirteenth independent "what version is this page" implementation in this module, and the
+duplicated ones have a track record: `resolve-link.html` was moved onto `version-root.html`
+for this reason and `version-noindex.html` shipped two production bugs from its own copy. The
+consolidation is not merely tidiness — the canonical detector also knows URL shapes a naive
+scan does not, including a hub product carrying **both** a section segment and a language
+prefix (`/<product>/<lang>/<section>/<version>/…`), which is the agentgateway shape.
+
+**Where to see it.**
+<https://docs.solo.io/agentgateway/standalone/latest/llm/providers/azure/> — the provider
+tables combine shared base rows with per-page appended rows. Verify by checking each table is
+a single `<table>` with no stray paragraph of `|` pipes; the pre-fix module copy renders no
+page at all, because the build stops.
+
+**Verified in the configuration 0.3.3 was tagged without** — a docs-hub `agentgateway` build
+with the hub's own `layouts/_shortcodes/reuse-append.html` **deleted**, so the module's copy
+was the one resolving, and a filesystem `replace` pointing the hub at the local checkout. That
+is the only setup that exercises the assembled path; the module's own fixture has a flat assets
+tree and structurally cannot.
+
+- Build: **exit 0, zero `ERROR` lines, 1470 pages.** Against the pre-fix module copy this build
+  does not complete at all.
+- `/agentgateway/standalone/latest/llm/providers/azure/` (3 call sites): **8** tables, **0**
+  stray `<p>|` pipe rows, **14** rows carried in from the base snippet — so the appended rows
+  joined the base table rather than falling out of it.
+- Product-wide: **no page** contains shortcode-error output. Four pages match a naive
+  `could not find` grep; all four are prose ("The proxy could not find a GitHub access
+  token…"), checked individually.
+- Module fixture, both brands: 21 shortcode assertions pass, and both brands build with zero
+  errors. The OSS path is also unchanged by construction — on a flat site `currentProduct` is
+  empty, so step 1 is skipped and behavior is identical to 0.3.3.
+
+Afterwards the hub was restored to its tagged state (`git checkout go.mod go.sum`, hub copy
+put back), because it still pins `v0.3.3` and would otherwise break.
+
+**Sequencing note for whoever tags this.** The hub's vendored copy must not be deleted until a
+tag carrying this fix is released AND the hub's pin is bumped to it. While the hub pins
+`v0.3.3`, deleting its copy reintroduces the build failure — that is the failure reported
+against 0.3.3, and it is a pin problem, not a regression in this change.
+
+---
+
 ## [0.3.3] — 2026-08-26
 
 ### Add — `github-yaml` and `reuse-append` adopted from agentgateway-oss-website (`layouts/_shortcodes/github-yaml.html`, `layouts/_shortcodes/reuse-append.html`, `layouts/_shortcodes/rebase.html`, `fixture/assets/conrefs/test/{everything,append-base-table}.md`, `tests/github-yaml-shortcode.spec.ts`)
