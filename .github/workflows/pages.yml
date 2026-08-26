@@ -9,14 +9,26 @@ name: Deploy docs site
 # blocks a merge or a release; the cost is that a broken build leaves the last
 # good deploy up silently, so check the Actions tab if the site looks stale.
 #
-# push-only, no pull_request trigger: a Pages deployment is a single live
-# environment, so building on PRs would either deploy unreviewed content or
-# build an artifact nobody looks at. Reviewers preview with `make server-docs`.
+# BUILDS on pull requests, DEPLOYS only on main.
+#
+# Pages is a single live environment, so deploying from a PR is not an option.
+# Building from one very much is, and it is the more valuable half: because the
+# site is built by the module it documents, a layouts/ change can break the docs
+# that explain the theme, and the whole point is to learn that before merging
+# rather than from a red run on main afterwards.
+#
+# The build job is NOT in the `Tests success` ruleset (that requires `test-all`
+# only), so a broken docs build shows as a failed check without blocking the
+# merge. That preserves the original intent — a Pages failure never holds up a
+# release — while still putting the failure in front of a reviewer.
+#
+# The PR run also uploads the built site as an artifact, so a reviewer can
+# download and open it. `make server-docs` is still the faster local loop.
 
 on:
   push:
     branches: [main]
-    paths:
+    paths: &docs-paths
       - 'docs/**'
       - 'layouts/**'
       - 'assets/**'
@@ -25,6 +37,9 @@ on:
       - 'go.mod'
       - 'go.sum'
       - '.github/workflows/pages.yml'
+  pull_request:
+    branches: [main]
+    paths: *docs-paths
   workflow_dispatch:
 
 permissions:
@@ -32,12 +47,16 @@ permissions:
   pages: write
   id-token: write
 
-# Pages allows one deployment at a time. cancel-in-progress stays false so a
-# started deployment is allowed to finish rather than leaving the environment
-# half-updated; a superseding push just queues behind it.
+# Keyed on the ref so a PR build never queues behind a main deployment. Every
+# push to main shares one group, which is what serializes deployments.
+#
+# cancel-in-progress only on PRs, matching test.yml: a started deployment must
+# finish rather than leaving the environment half-updated, so a superseding
+# merge queues behind it, while a superseding push to a PR branch cancels its
+# own older run instead of stacking a second one.
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: pages-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   HUGO_VERSION: 0.160.1
@@ -49,7 +68,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Deploy path only. Nothing in the build consumes its outputs — the
+      # baseURL is hardcoded in hugo-docs.toml, deliberately, so the build is
+      # identical whoever runs it. Skipping it on PRs also removes a failure
+      # mode: it needs `pages: write`, which a pull_request event from a fork
+      # does not get.
       - uses: actions/configure-pages@v6
+        if: github.event_name != 'pull_request'
 
       # Pinned at v3 for the same reason test.yml is: the maintainer has not
       # published a Node.js 24-compatible release, and GitHub starts forcing
@@ -113,6 +138,11 @@ jobs:
 
   deploy:
     needs: build
+    # main only. The github-pages environment's deployment branch policy also
+    # allows main alone, so a PR reaching here would fail on the policy rather
+    # than deploy something unreviewed — but failing a job to enforce that is a
+    # confusing way to express it. Say it here instead.
+    if: github.event_name != 'pull_request'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
