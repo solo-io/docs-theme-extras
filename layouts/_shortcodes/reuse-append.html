@@ -5,6 +5,33 @@
 
   Parameters:
     - 0 (positional, required): path to the base file in the assets tree.
+    - 1 (positional, optional): version, passed down from a parent shortcode.
+
+  ASSET RESOLUTION HANDLES BOTH TREE SHAPES, and it has to. An OSS site's assets
+  tree is FLAT (`agw-docs/snippets/x.md`), while the docs hub ASSEMBLES its tree
+  per version at `assets/<product>/<version>/…`. So the versioned path is tried
+  first and the bare path second:
+
+    1. `<currentProduct>/<resolvedVersion>/<asset>` — the hub's assembled shape.
+       Skipped entirely when either value is empty, which is the case on every
+       flat site.
+    2. `<asset>` — the bare path, correct for a flat tree and for a hub product
+       that is not assembled.
+
+  Only if BOTH miss is it an error. A single bare `resources.Get` — which is what
+  this file did when it was first adopted from agentgateway-oss-website — resolves
+  fine on the OSS site and misses on every assembled hub page, so the `errorf`
+  below fired on content that was previously building. The hub had been carrying
+  its own adapted copy of this shortcode for exactly this reason; folding the
+  resolution in here is what lets that copy be deleted.
+
+  The version is resolved the way `reuse.html` does when no parent passes one:
+  scan the page's permalink for a segment matching a `[[params.versions]]` entry.
+  TODO: that is a thirteenth independent URL parser in this module, and the
+  duplicated ones have historically drifted (see `utils/version-root.html`, which
+  `resolve-link.html` was moved onto for this reason). Consolidating this onto
+  `version-root.html` needs a docs-hub build to verify against the assembled
+  assets tree, so it is deliberately left alone here rather than changed blind.
 
   Example:
     {{< reuse-append "snippets/provider-base-configuration.md" >}}
@@ -40,9 +67,34 @@
   {{- errorf "The %q shortcode requires one positional parameter: path in /assets. See %s" .Name .Position -}}
 {{- end -}}
 
-{{- $res := resources.Get $asset -}}
+{{- $asset = strings.TrimPrefix "/" $asset -}}
+
+{{- /* A parent shortcode may pass the version down as positional 1. */ -}}
+{{- $parentVersion := "" -}}
+{{- if ge (len .Params) 2 -}}{{- $parentVersion = .Get 1 -}}{{- end -}}
+
+{{- $resolvedVersion := $parentVersion -}}
+{{- if not $resolvedVersion -}}
+  {{- range $urlPart := split .Page.RelPermalink "/" -}}
+    {{- if not $resolvedVersion -}}
+      {{- range $.Site.Params.versions -}}
+        {{- if eq .version $urlPart -}}{{- $resolvedVersion = .version -}}{{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* Assembled-tree path first, bare path second. See the header comment. */ -}}
+{{- $res := "" -}}
+{{- $currentProduct := .Site.Params.currentProduct | default "" -}}
+{{- if and $resolvedVersion $currentProduct -}}
+  {{- $res = resources.Get (printf "%s/%s/%s" $currentProduct $resolvedVersion $asset) -}}
+{{- end -}}
 {{- if not $res -}}
-  {{- errorf "The %q shortcode could not find %q. See %s" .Name $asset .Position -}}
+  {{- $res = resources.Get $asset -}}
+{{- end -}}
+{{- if not $res -}}
+  {{- errorf "The %q shortcode could not find %q (tried the assembled path %q/%q/ first). See %s" .Name $asset $currentProduct $resolvedVersion .Position -}}
 {{- end -}}
 
 {{- $base := trim $res.Content " \n\r\t" -}}
