@@ -24,8 +24,98 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ## [Unreleased]
 
-Intended as a **patch** (0.3.4): a shortcode-internal resolution fix, no new params and no
-content edits in consumers.
+Intended as a **minor** (0.4.0): one new optional config key, plus a shortcode-internal
+resolution fix. No breaking changes and no content edits in consumers — a repo that sets
+nothing new renders byte-identically.
+
+### Add — per-section version banners, so one version can ship sections at different maturities (`layouts/partials/version-banner.html`, `USAGE.md`, `hugo-{oss,enterprise}.toml`, `tests/version-section-banner.spec.ts`)
+
+**Why.** The banner is per-VERSION: it reads `banner`/`bannerID` off the `[[params.versions]]`
+entry that `utils/version-root.html` matched. That is the wrong granularity the moment one
+version ships two sections at different maturities, which is agentgateway today — `latest` is
+GA under `/kubernetes/` and in preview under `/standalone/`, and both are necessarily the SAME
+entry, because `utils/resolve-section-versions.html` requires it ("ONE ENTRY PER VERSION …
+Duplicating a linkVersion across entries is a config error").
+
+A version entry may now carry section-scoped overrides:
+
+```toml
+[[params.versions]]
+  linkVersion = "latest"
+  sections    = ["kubernetes", "standalone"]
+  banner      = "This is the latest version…"
+  bannerID    = "version_banner_latest"
+
+  [params.versions.sectionBanners.standalone]
+    banner   = "PREVIEW ONLY …"
+    bannerID = "version_banner_preview"
+```
+
+A section that declares one gets it **instead of** the entry-level banner rather than stacked
+with it — "under development" beside "this is the latest version" reads as a contradiction, and
+the maturity notice is the one that matters. A section with no override falls back to the entry
+banner; an entry with no `sectionBanners` is unaffected.
+
+**Why the override lives on the version entry and not under `[params.sections.<x>]`.** The docs
+hub prototyped the section-level shape as a local `version-banner.html` override (solo-io/docs
+PR #3531), and it works, but it is the wrong long-term home for two reasons.
+
+*It is the wrong axis.* Section maturity is a property of (section, version), not of the
+section: `standalone` is in preview at `latest` and will be GA at the next numbered version.
+Measured in the hub's config today, `latest` is the ONLY agentgateway version tagged with both
+sections — every other version is `["kubernetes"]` — so the two shapes are indistinguishable
+right now and diverge at GA, when a section-level banner would keep claiming "under
+development" on the GA'd tree. It also expires in the wrong place: on the version entry the
+temporary override sits in the block someone is already editing when `latest` rolls to a
+number, whereas under `[params.sections.standalone]` it lives where release work never looks.
+
+*It splits one fact across two tables.* Section-level puts banner config in both
+`params.versions[].banner` and `params.sections.<x>.banner`, with an implicit precedence
+between them. That is the exact shape `resolve-section-versions.html` documents removing in
+0.2.2 — "a second, hand-maintained representation of the same fact. Nothing kept the two in
+step" — which was the shared cause of the flexsearch empty-set bug, the
+`link`/`link-hextra` dropped-version-segment bug, and `version-noindex` being wholly inert on
+agentgateway.dev.
+
+**What NOT to do, recorded because it fails by misrouting rather than by erroring.** Do not
+split one version into two entries to get two banners. It builds clean, and then the enterprise
+branch of `version-root.html` — which, unlike the OSS branch, matches against the UNFILTERED
+`site.Params.versions` — hands every page in BOTH sections whichever entry is listed first. On
+the docs hub that put the standalone preview banner on **327** Kubernetes pages.
+
+Two implementation notes worth keeping. Section detection reuses
+`utils/section-segment.html` rather than re-deriving a second answer off `RelPermalink`, which
+is the mistake this file's own header calls out for version detection. And the dynamic lookup
+is `index $overrides (lower $seg.segment)`: Hugo lowercases config keys on load, dot access
+resolves case-insensitively through `maps.Params`, but `index` is a plain map lookup and is
+case-SENSITIVE — so `index $overrides "sectionBanners"` would silently miss.
+
+The i18n context is now the version entry merged with a `section` key, so one shared
+translation key can interpolate `.version`, `.productName` and `.section` instead of needing
+one key per section.
+
+**Where to see it.** Not yet live — the hub carries the section-level prototype. On the fixture:
+`/test/nested/v1/page/` renders the override, `/test/v1/everything/` the entry-level banner, and
+`/test/nested/v2/page/` none (v2 sets neither).
+
+**Verified.** Both brands build with zero errors; full suite **2125 passed**, 17 skipped, 0
+failed. Four new assertions cover replace-not-stack, fallback when a section declares no
+override, absence on a version that configures neither, and a walk of **every** built v1 page
+outside `/nested/` to prove the override does not leak sideways.
+
+The spec was checked for discrimination, not just for passing: reverted against the pre-feature
+partial, the replace-not-stack test **fails** and the other three pass — which is correct, since
+those three guard existing behavior against the new code. `gate-containment.json`
+re-snapshotted, purely additive, and it corroborates the design independently: the two
+`nested/v1` pages carry only `MARKER_BANNER_SECTION` and every other v1 page only
+`MARKER_BANNER_ENTRY`, all at `main > div.version-banner` (outside `.content`).
+
+**Follow-up for the docs hub, not done here.** Once this is tagged and the hub's pin bumped,
+delete the hub's local `layouts/partials/version-banner.html` and move its two keys from
+`[params.sections.standalone]` onto the `latest` version entry as `sectionBanners.standalone`.
+The override file already says to ("DELETE THIS FILE once docs-theme-extras supports a
+section-scoped banner"). Its three config files each carry the same two keys, so all three need
+the move.
 
 ### Fix — `reuse-append` as shipped in 0.3.3 cannot resolve an asset on a consumer with an assembled assets tree (`layouts/_shortcodes/reuse-append.html`)
 

@@ -16,18 +16,117 @@
        The whole version entry is passed to i18n as the template context, so a
        translation string can interpolate its fields — e.g. a single shared key
        `"… the {{ .version }} version of {{ .productName }} …"` serves every
-       older version instead of one hardcoded string per version. */ -}}
+       older version instead of one hardcoded string per version.
+
+       ── PER-SECTION OVERRIDE ────────────────────────────────────────────────
+
+       A version entry may also carry section-scoped banners, for a product
+       whose sections sit at different maturities WITHIN one version:
+
+         [[params.versions]]
+           linkVersion = "latest"
+           sections    = ["kubernetes", "standalone"]
+           banner      = "This is the latest version…"
+           bannerID    = "version_banner_latest"
+
+           [params.versions.sectionBanners.standalone]
+             banner   = "PREVIEW ONLY …"
+             bannerID = "version_banner_preview"
+
+       A page in a section that declares one gets it INSTEAD OF the entry-level
+       banner, not stacked with it: "under development" next to "this is the
+       latest version" reads as a contradiction, and the maturity notice is the
+       one that matters. A section with no override falls back to the
+       entry-level banner, and an entry with no `sectionBanners` behaves exactly
+       as before — so this is a no-op for every consumer that does not set it.
+
+       WHY THE OVERRIDE LIVES ON THE VERSION ENTRY, and not under
+       `[params.sections.<x>]`. Two reasons.
+
+       1. It is the right axis. Section maturity is a property of (section,
+          version), not of the section: agentgateway's `standalone` is in
+          preview at `latest` and will be GA at the next numbered version. A
+          section-level banner cannot say that, and would keep claiming
+          "under development" on the GA'd tree.
+
+       2. One place to look. Putting it on the section splits banner config
+          across `params.versions[].banner` and `params.sections.<x>.banner` —
+          two unrelated tables with an implicit precedence between them. That
+          is the shape utils/resolve-section-versions.html documents removing
+          in 0.2.2 ("a second, hand-maintained representation of the same fact.
+          Nothing kept the two in step"), which was the shared cause of the
+          flexsearch empty-set bug, the dropped-version-segment bug, and
+          version-noindex being wholly inert on agentgateway.dev.
+
+       WHAT NOT TO DO INSTEAD: do not split one version into two entries to get
+       two banners. It builds clean and then misroutes, because the enterprise
+       branch of version-root.html matches against the UNFILTERED
+       site.Params.versions, so both sections receive whichever duplicate
+       `linkVersion` is listed first. Measured on the docs hub: that put a
+       standalone preview banner on 327 Kubernetes pages. One entry per version
+       is a documented invariant, not an incidental one.
+
+       DYNAMIC KEY LOOKUP USES `index` WITH A LOWERCASED SEGMENT. Hugo
+       lowercases config param keys on load, so a TOML key written
+       `sectionBanners` is stored lowercase; dot access (`.sectionBanners`)
+       resolves case-insensitively through maps.Params, but `index` does a
+       plain map lookup and is case-SENSITIVE. Hence `index … (lower …)`. */ -}}
 {{- $root := partial "utils/version-root.html" . -}}
 {{- $bannerText := "" -}}
-{{- with $root.versionEntry -}}
-  {{- if .banner -}}
-    {{- $bannerText = .banner -}}
-    {{- if .bannerID -}}
-      {{- $translated := i18n .bannerID . -}}
-      {{- if $translated -}}{{- $bannerText = $translated -}}{{- end -}}
+{{- $bannerID := "" -}}
+{{- $entry := $root.versionEntry -}}
+
+{{- /* 1. Entry-level banner: the default for every section in this version. */ -}}
+{{- if $entry -}}
+  {{- with $entry.banner -}}
+    {{- $bannerText = . -}}
+  {{- end -}}
+  {{- with $entry.bannerID -}}
+    {{- $bannerID = . -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* 2. Section override on the SAME entry. utils/section-segment.html is the
+       module's own "which registered section is this page in" answer — reuse it
+       rather than re-deriving a second one off RelPermalink, which is the exact
+       mistake this file's header calls out for version detection. It is a
+       return-partial returning a DICT (segment, index): assign it, then read
+       .segment. Never `with` a return-partial. */ -}}
+{{- if $entry -}}
+  {{- $seg := partial "utils/section-segment.html" . -}}
+  {{- if $seg.segment -}}
+    {{- $overrides := $entry.sectionBanners -}}
+    {{- if $overrides -}}
+      {{- $o := index $overrides (lower $seg.segment) -}}
+      {{- if $o -}}
+        {{- /* Only a non-empty `banner` triggers the override. An override
+               block that sets only `bannerID` is a config mistake — it would
+               silently keep the entry-level text under a different translation
+               key — so it is ignored rather than half-applied. */ -}}
+        {{- with $o.banner -}}
+          {{- $bannerText = . -}}
+          {{- $bannerID = $o.bannerID | default "" -}}
+        {{- end -}}
+      {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
+
+{{- /* i18n context: the version entry, plus the resolved section, so ONE
+       translation key can serve every section ("… the {{ .section }} docs for
+       {{ .productName }} …") instead of one key per section. Merged here rather
+       than inside the branches above so both the entry-level and the override
+       path get the same context shape. */ -}}
+{{- if and $bannerText $bannerID -}}
+  {{- $ctx := $entry -}}
+  {{- $seg := partial "utils/section-segment.html" . -}}
+  {{- if $entry -}}
+    {{- $ctx = merge $entry (dict "section" $seg.segment) -}}
+  {{- end -}}
+  {{- $translated := i18n $bannerID $ctx -}}
+  {{- if $translated -}}{{- $bannerText = $translated -}}{{- end -}}
+{{- end -}}
+
 {{- with $bannerText }}
 <div class="version-banner">
   {{ . | markdownify }}
