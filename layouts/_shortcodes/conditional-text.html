@@ -13,13 +13,57 @@
        fenced-block path raw-emitted to escape a double render. Emitting
        `.Inner` untouched removes the reason all four existed. See
        utils/gate-emit.html for the verification behind that, and
-       utils/gate-decide.html for the shared condition evaluator. */ -}}
+       utils/gate-decide.html for the shared condition evaluator.
+
+       TWO TOKENS, NOT ONE — the build condition AND the section segment.
+
+       `page-context` resolves ONE condition, and in "siteParams" mode (the
+       multi-product hub, solo-io/docs) that condition is the site-wide
+       `Site.Params.buildCondition`: a PRODUCT id — `agentgateway`, `envoy`,
+       `gme`, `gmg`, `gg`. It cannot vary within a build.
+
+       A product that ships parallel documentation sections (see
+       utils/section-segment.html) needs a SECOND axis. agentgateway enterprise
+       has `kubernetes` and `standalone` sections; with only the product token,
+       every `include-if="kubernetes"` / `include-if="standalone"` gate in
+       content shared with the OSS site was dropped on BOTH sections — not
+       gated, dropped. Measured on the solo-io/docs agentgateway build before
+       this change: `llm/providers/realtime/` rendered "For more information
+       about LLM metrics and observability, see ." — both branches gone,
+       leaving a dangling sentence, and the same for the whole
+       `assets/agw-docs/pages/` set listed in that repo's audit.
+
+       `gate-decide` already takes a SLICE of tokens — `version.html` passes the
+       canonical version and the stable linkVersion so `include-if="main"`
+       survives a release bump. This reuses that contract rather than adding a
+       parallel one: a gate fires if EITHER the product condition or the section
+       segment is named.
+
+       WHY THE SEGMENT IS ADDITIVE ONLY, never a token on its own. The outer
+       `ne $condition ""` guard is deliberately kept, so a page with no build
+       condition still emits nothing even when a section segment resolves. That
+       keeps the change strictly additive: no page that previously emitted
+       nothing starts emitting because of a segment alone. (It matters for
+       version-less OSS sites such as kagent, where `page-context` in "url" mode
+       returns "" for any page outside `/docs/` while `section-segment`'s
+       positional rule can still match.)
+
+       In "url" mode (the OSS single-site convention) the condition IS the
+       section, so the segment is a duplicate and is skipped — those builds are
+       byte-identical. So are hub products with no `[params.sections]`
+       registered, where the segment is always "". */ -}}
 
 {{- $ctx := partial "utils/page-context.html" . -}}
 {{- $condition := $ctx.condition -}}
 
 {{- if ne $condition "" -}}
-  {{- if partial "utils/gate-decide.html" (dict "sc" . "tokens" (slice $condition)) -}}
+  {{- $tokens := slice $condition -}}
+  {{- with (partial "utils/section-segment.html" .Page).segment -}}
+    {{- if not (in $tokens .) -}}
+      {{- $tokens = $tokens | append . -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if partial "utils/gate-decide.html" (dict "sc" . "tokens" $tokens) -}}
     {{- partial "utils/gate-emit.html" (dict "sc" . "inner" .Inner) -}}
   {{- end -}}
 {{- end -}}

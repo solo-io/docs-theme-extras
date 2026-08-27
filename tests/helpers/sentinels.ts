@@ -208,4 +208,14 @@ export const CONDITIONAL_MARKERS = {
   // stayed intact (it must render as its own <li>, not leak as raw "3." text).
   fenceBlockCode: "COND_FENCEBLOCK_CODE",
   fenceBlockAfter: "COND_FENCEBLOCK_AFTER",
+  // Section-segment gating. conditional-text resolves TWO tokens — the
+  // site-wide buildCondition ("test" in the fixture) AND the page's section
+  // segment — so a product with parallel doc sections can gate on the
+  // section it is being read in. These live on a pair of pages inside and
+  // outside a section-nested version tree; see conditional-section.spec.ts.
+  secSection: "COND_SEC_SECTION",
+  secProduct: "COND_SEC_PRODUCT",
+  secOtherSection: "COND_SEC_OTHER_SECTION",
+  secExcludeSection: "COND_SEC_EXCLUDE_SECTION",
+  secListWithProduct: "COND_SEC_LIST_WITH_PRODUCT",
 } as const;

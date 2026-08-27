@@ -22,6 +22,57 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
+## [0.3.4] — 2026-08-27
+
+### Fix — `conditional-text` gates on the section segment as well as the build condition (`layouts/_shortcodes/conditional-text.html`, `fixture/content/en/test/{nested/v2,v2}/cond-section.md`, `tests/conditional-section.spec.ts`, `tests/auto-cards.spec.ts`, `tests/helpers/{sentinels.ts,gate-containment.json}`, `playwright.config.ts`, `USAGE.md`)
+
+**Why.** `utils/page-context` resolves ONE condition, and in `siteParams` mode (the
+multi-product hub) that condition is `site.Params.buildCondition` — a **product** id
+(`agentgateway`, `envoy`, `gme`) that cannot vary within a build. A product that ships
+parallel documentation sections had no second axis, so every gate naming a section was
+dropped on **every** section rather than gated on one. Not hidden — *deleted*.
+
+This was live on solo-io/docs' agentgateway build, which added `kubernetes` and
+`standalone` sections while its `buildCondition` stayed `agentgateway`. Measured before
+the fix: **50 pages** lost content, and three rendered a dangling sentence where both
+branches vanished —
+<https://docs.solo.io/agentgateway/kubernetes/latest/llm/providers/realtime/> ended
+"For more information about LLM metrics and observability, see ." The `standalone`
+section lost its whole variant set, including the standalone config examples on
+`configuration/policies/conditional-policies/`.
+
+**What changed.** The shortcode now passes the page's section segment alongside the build
+condition, reusing `utils/gate-decide.html`'s existing slice-of-tokens contract — the same
+one `version.html` uses for version + linkVersion. A gate fires when its list names either.
+
+The section token is **additive**, and the `ne $condition ""` guard is kept deliberately, so
+no page that previously emitted nothing starts emitting because a segment resolved alone
+(this matters for version-less `url`-mode sites such as kagent, where `page-context` returns
+"" outside `/docs/` while `section-segment`'s positional rule can still match).
+
+**Verify.** On <https://docs.solo.io/agentgateway/standalone/latest/mcp/spec-compatibility/>
+and its `kubernetes/latest` twin, the "Session handling (`statefulMode`)" / "Session routing
+(`sessionRouting`)" paragraphs differ per section; before the fix neither appeared.
+
+**Verified by.** Full before/after builds of three solo-io/docs products at v0.3.3 vs this
+change. agentgateway: 50 `index.html` pages changed, every diff an addition of previously
+dropped content, no page lost content and none disappeared; all 62 newly rendered links
+extracted and resolved against the built tree. kgateway (the one hub product that *inherits*
+a `sections` key, from the imported `kgateway.dev` module): zero page changes — the only
+diffs were `llms.txt` "Generated on" timestamps. gateway: byte-identical. Fixture suite 1735
+passing in both `hugo-oss.toml` and `hugo-enterprise.toml` modes, up 11 from baseline; the
+new spec fails on 2 assertions without the shortcode change.
+
+**Known follow-up for consumers, not a regression in this theme.** Where a token is
+overloaded across the two axes — `kubernetes` naming a section *and* used elsewhere to mean
+"the OSS build" — both meanings become true at once on an enterprise Kubernetes page and both
+branches render. Four files in `agentgateway/website` do this (`operations/uninstall.md`,
+`security/backend-authn-{cross-app-access,jwt-sign,oauth}.md`, plus `snippets/debug-gateway.md`,
+which solo-io/docs already overrides downstream). See the new `conditional-text` contract in
+USAGE.md for the pattern that avoids it.
+
+---
+
 ## [0.3.3] — 2026-08-26
 
 ### Add — `github-yaml` and `reuse-append` adopted from agentgateway-oss-website (`layouts/_shortcodes/github-yaml.html`, `layouts/_shortcodes/reuse-append.html`, `layouts/_shortcodes/rebase.html`, `fixture/assets/conrefs/test/{everything,append-base-table}.md`, `tests/github-yaml-shortcode.spec.ts`)

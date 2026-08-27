@@ -105,6 +105,15 @@ const V2_ONLY_TOPICS = [
     title: "Nested (name collision)",
     descriptionContains: "share a name with a registered section",
   },
+  // cond-section is the NO-SECTION control for tests/conditional-section.spec.ts:
+  // the same conditional-text gates as /test/nested/v2/cond-section/, but on a
+  // page whose version tree hangs directly off the product. Ordinary child
+  // topic of the v2 tree, so it gets an ordinary section card.
+  {
+    slug: "cond-section",
+    title: "Section gating (no section)",
+    descriptionContains: "outside any section tree",
+  },
 ];
 
 // removed-feature is a v1-ONLY page: it is the fixture's only page with no
