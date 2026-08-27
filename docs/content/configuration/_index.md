@@ -2,7 +2,7 @@
 title: Configuration
 description: >-
   The config a consumer site sets to control how this module behaves.
-weight: 30
+weight: 20
 ---
 
 Everything a consumer sets in its own `hugo.toml` to control how

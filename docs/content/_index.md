@@ -4,6 +4,17 @@ linkTitle: Docs
 description: >-
   A Hugo theme module that overlays Hextra with the shortcodes, partials, and
   CSS shared across Solo's documentation sites.
+# `type: docs` twice, and both are load-bearing.
+#
+# `cascade` sets it on DESCENDANTS but NOT on the page carrying it, so with the
+# cascade alone the home page fell back to Hextra's landing layout and rendered
+# with no left nav — on the one page every reader arrives at first. The explicit
+# key below puts the home page on the docs layout too.
+#
+# Hextra's own site does the opposite deliberately: its root is a marketing
+# landing page and its docs live under /docs/. This site is docs all the way
+# down, so there is no landing page to protect.
+type: docs
 cascade:
   type: docs
 ---

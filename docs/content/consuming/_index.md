@@ -2,7 +2,7 @@
 title: Consuming the module
 description: >-
   Pin the module, declare a brand, add a test config, and wire CI.
-weight: 20
+weight: 10
 ---
 
 ## 1. Pin the version in your hugo config

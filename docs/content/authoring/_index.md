@@ -3,7 +3,7 @@ title: Authoring
 description: >-
   The shortcodes and render behavior this module adds on top of, or changes
   from, stock Hugo and Hextra.
-weight: 10
+weight: 30
 ---
 
 This section covers what changes for a content author when a site imports

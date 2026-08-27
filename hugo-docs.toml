@@ -120,6 +120,26 @@ pathName = "/docs-theme-extras"
   title = "docs-theme-extras"
   toc = true
 
+# Show the left nav on the home page.
+#
+# sidebar.html hides it on the "docs index" by default, and treats
+# `.IsHome` as one spelling of that. The default is right for a VERSIONED site,
+# where the root is a pick-your-version splash sitting above the trees with no
+# single tree to show — agentgateway's root chooser once rendered 870 links in a
+# 324KB aside before that guard existed.
+#
+# This site is the other shape: flat, unversioned, and its home page IS the docs
+# entry, so hiding the nav there removes it from the one page every reader
+# arrives at first. Same reason agentregistry sets it.
+#
+# Needed TOGETHER with `type: docs` on docs/content/_index.md. That front-matter
+# key is what puts the home page on the docs layout at all; this flag is what
+# stops that layout suppressing the nav once it gets there. Either alone leaves
+# the home page without a left nav, which is why the first fix looked like it
+# had done nothing.
+[params.sidebar]
+  showOnLanding = true
+
 [params.navbar]
   width = "wide"
 
