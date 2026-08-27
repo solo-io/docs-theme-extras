@@ -15,8 +15,8 @@ matching somewhere it does not apply, which is the bug
 never spelled out in this page's prose — the spec greps the rendered HTML, so a
 literal mention would be a guaranteed false positive.)
 
-{{< conditional-text include-if="nested" >}}COND_SEC_SECTION{{< /conditional-text >}}
+{{% conditional-text include-if="nested" %}}COND_SEC_SECTION{{% /conditional-text %}}
 
-{{< conditional-text include-if="test" >}}COND_SEC_PRODUCT{{< /conditional-text >}}
+{{% conditional-text include-if="test" %}}COND_SEC_PRODUCT{{% /conditional-text %}}
 
-{{< conditional-text exclude-if="nested" >}}COND_SEC_EXCLUDE_SECTION{{< /conditional-text >}}
+{{% conditional-text exclude-if="nested" %}}COND_SEC_EXCLUDE_SECTION{{% /conditional-text %}}

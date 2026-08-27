@@ -339,9 +339,9 @@
     "MARKER_VERSION_TRAILING_STEP": "div.hextra-max-page-width > article > main > div.content > ol > li > p"
   },
   "nested/v2/cond-section": {
-    "COND_SEC_LIST_WITH_PRODUCT": "div.hextra-max-page-width > article > main > div.content",
-    "COND_SEC_PRODUCT": "div.hextra-max-page-width > article > main > div.content",
-    "COND_SEC_SECTION": "div.hextra-max-page-width > article > main > div.content"
+    "COND_SEC_LIST_WITH_PRODUCT": "div.hextra-max-page-width > article > main > div.content > p",
+    "COND_SEC_PRODUCT": "div.hextra-max-page-width > article > main > div.content > p",
+    "COND_SEC_SECTION": "div.hextra-max-page-width > article > main > div.content > p"
   },
   "v1/everything": {
     "COND_BULLET_1": "div.hextra-max-page-width > article > main > div.content > ul > li",
@@ -722,8 +722,8 @@
     "MARKER_HTMLLIST_MEM": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td > ul > li"
   },
   "v2/cond-section": {
-    "COND_SEC_EXCLUDE_SECTION": "div.hextra-max-page-width > article > main > div.content",
-    "COND_SEC_PRODUCT": "div.hextra-max-page-width > article > main > div.content"
+    "COND_SEC_EXCLUDE_SECTION": "div.hextra-max-page-width > article > main > div.content > p",
+    "COND_SEC_PRODUCT": "div.hextra-max-page-width > article > main > div.content > p"
   },
   "v2/everything": {
     "COND_BULLET_1": "div.hextra-max-page-width > article > main > div.content > ul > li",
