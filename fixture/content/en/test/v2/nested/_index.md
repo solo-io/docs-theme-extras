@@ -25,3 +25,24 @@ a completely empty left nav.
 
 A section sits ABOVE version trees, never below one, so detection is now
 constrained by position. Asserted by `tests/section-nested-versions.spec.ts`.
+
+## Gating
+
+`collision.md` in this directory covers the same positional rule for
+`conditional-text`, but through condition (a): the segment after `nested` is
+`collision`, not a version. This page covers the OTHER half, condition (b).
+`nested` is the LAST segment here, which is the shape of a section landing page
+— and the only thing that stops it being read as one is that a version (`v2`)
+precedes it. Drop that half of the rule and this page starts answering to
+`include-if="nested"`.
+
+The first gate below must be dropped and the second must render. See
+`tests/conditional-section.spec.ts`.
+
+Naming the section — dropped, because a version precedes `nested` here:
+
+{{% conditional-text include-if="nested" %}}COND_SEC_COLLINDEX_SECTION{{% /conditional-text %}}
+
+Naming the build condition — renders, so the assertion above is not vacuous:
+
+{{% conditional-text include-if="test" %}}COND_SEC_COLLINDEX_PRODUCT{{% /conditional-text %}}

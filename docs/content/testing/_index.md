@@ -110,6 +110,49 @@ scans (`content` project) always walk every page regardless.
 For the consumer's own build the static project already crawls
 everything, so the default cap is the right choice.
 
+### 2b. `[[gateAxes]]` enables gate-axis-collision.spec
+
+```toml
+[[gateAxes]]
+name      = "oss site"
+condition = "kubernetes"     # url mode: the condition IS the section
+sections  = []
+
+[[gateAxes]]
+name      = "docs-hub / agentgateway"
+condition = "agentgateway"   # siteParams mode: a product id
+sections  = ["kubernetes", "standalone"]
+```
+
+`conditional-text` gates on two axes — the build condition and the page's
+section segment — through one token namespace, so a token that names a section
+on one axis and a product on the other is true twice and both sides of an
+intended either/or render. Each entry describes one build **the same source
+tree ships through**; the lint reports a gate pair only when some
+(condition, section) combination fires both, through different axes.
+
+List the downstream build as well as your own, because that is the point of the
+check: your build renders correctly and the breakage appears only in the other
+one.
+
+**Two ways to get `sections` wrong**, both of which produce noise rather than
+silence, so they show up the first time you run it:
+
+- **A `url`-mode build takes `sections = []`.** There the condition IS the
+  section, so the sections are enumerated by having one entry per section. Give
+  such an entry a section list as well and you ask the lint about states that
+  cannot exist — condition `kubernetes` with section `standalone` — and every
+  legitimate section pair reports.
+- **List only sections that resolve for that build**, not every key registered
+  or inherited. A hub that inherits section keys from an imported module but
+  serves those pages at `/<product>/<version>/` resolves none of them, because
+  `utils/section-segment.html`'s positional rule refuses them; the effective
+  list is `[]`.
+
+With no `[[gateAxes]]` the spec **skips** rather than passes — with no
+combinations there is nothing to evaluate against, and a green run would be a
+false all-clear. Needs `scanRoots` too, since it reads source, not built HTML.
+
 ### 3. `buildLog` enables hugo-warnings.spec
 
 ```toml

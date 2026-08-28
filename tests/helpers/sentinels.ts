@@ -208,4 +208,44 @@ export const CONDITIONAL_MARKERS = {
   // stayed intact (it must render as its own <li>, not leak as raw "3." text).
   fenceBlockCode: "COND_FENCEBLOCK_CODE",
   fenceBlockAfter: "COND_FENCEBLOCK_AFTER",
+  // Section-segment gating. conditional-text resolves TWO tokens — the
+  // site-wide buildCondition ("test" in the fixture) AND the page's section
+  // segment — so a product with parallel doc sections can gate on the
+  // section it is being read in. These live on a pair of pages inside and
+  // outside a section-nested version tree; see conditional-section.spec.ts.
+  secSection: "COND_SEC_SECTION",
+  secProduct: "COND_SEC_PRODUCT",
+  secOtherSection: "COND_SEC_OTHER_SECTION",
+  secExcludeSection: "COND_SEC_EXCLUDE_SECTION",
+  secExcludeOther: "COND_SEC_EXCLUDE_OTHER",
+  secListWithProduct: "COND_SEC_LIST_WITH_PRODUCT",
+  // The positional rule, on the GATING side. A registered section name sitting
+  // at a CONTENT position must not satisfy a gate that names it. Two shapes,
+  // one per half of utils/section-segment.html's rule:
+  //   collision  /test/v2/nested/collision/ — the next segment is not a version
+  //   collindex  /test/v2/nested/           — last segment, but a version precedes
+  // A page whose URL contains no registered name at all cannot test either.
+  secCollisionSection: "COND_SEC_COLLISION_SECTION",
+  secCollisionProduct: "COND_SEC_COLLISION_PRODUCT",
+  secCollIndexSection: "COND_SEC_COLLINDEX_SECTION",
+  secCollIndexProduct: "COND_SEC_COLLINDEX_PRODUCT",
+  // Section landing page, /test/nested/. Gates fire here in siteParams mode and
+  // do NOT in url mode; see the divergence note in conditional-text.html.
+  secLandingSection: "COND_SEC_LANDING_SECTION",
+  secLandingProduct: "COND_SEC_LANDING_PRODUCT",
+  secLandingOther: "COND_SEC_LANDING_OTHER",
+} as const;
+
+// Version-less `url`-mode gating, on the public-flat/ + public-flat-root/
+// builds. Kept separate from CONDITIONAL_MARKERS because those builds are read
+// by tests/section-versionless.spec.ts rather than by the harness target.
+export const FLAT_CONDITIONAL_MARKERS = {
+  // /docs/alpha/ — section segment resolves, build condition does not. The
+  // `condition != ""` guard in conditional-text.html is the only thing keeping
+  // this from rendering.
+  flatGuard: "COND_SEC_FLAT_GUARD",
+  // /docs/alpha/first/ — the non-vacuous control: here the condition IS the
+  // section, so the gate fires.
+  flatSection: "COND_SEC_FLAT_SECTION",
+  flatOther: "COND_SEC_FLAT_OTHER",
 } as const;

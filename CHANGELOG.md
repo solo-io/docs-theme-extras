@@ -22,11 +22,7 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
-## [Unreleased]
-
-Intended as a **minor** (0.4.0): one new optional config key, plus a shortcode-internal
-resolution fix. No breaking changes and no content edits in consumers — a repo that sets
-nothing new renders byte-identically.
+## [0.3.5] — 2026-08-28
 
 ### Add — per-section version banners, so one version can ship sections at different maturities (`layouts/partials/version-banner.html`, `USAGE.md`, `hugo-{oss,enterprise}.toml`, `tests/version-section-banner.spec.ts`)
 
@@ -116,122 +112,6 @@ delete the hub's local `layouts/partials/version-banner.html` and move its two k
 The override file already says to ("DELETE THIS FILE once docs-theme-extras supports a
 section-scoped banner"). Its three config files each carry the same two keys, so all three need
 the move.
-
-### Fix — `reuse-append` as shipped in 0.3.3 cannot resolve an asset on a consumer with an assembled assets tree (`layouts/_shortcodes/reuse-append.html`)
-
-**Why.** 0.3.3 adopted this shortcode from agentgateway-oss-website as a straight copy, and
-the copy does exactly one lookup:
-
-```
-{{- $res := resources.Get $asset -}}
-{{- if not $res -}}{{- errorf "…could not find %q…" $asset -}}{{- end -}}
-```
-
-That is correct for a **flat** assets tree, which is what the OSS site has — its call sites
-pass `agw-docs/snippets/provider-azure-base-configuration.md` and the file is at exactly that
-path. The docs hub **assembles** its assets per version instead: for the agentgateway product,
-`hugo-mounts-agentgateway.toml` maps that same source dir to
-`assets/agentgateway/latest/agw-docs/…`. The bare path therefore misses on every assembled
-page, and the `errorf` fails the build.
-
-**This was a regression, and 0.3.3 hid it.** The docs hub had been carrying its own *adapted*
-copy of the shortcode for precisely this reason — its header comment named the difference
-("Upstream resolves the bare asset path, because in that repo the assets tree is not
-versioned. Here the tree is assembled per version"). While that copy exists it shadows the
-module, so 0.3.3 looked fine; delete it, as its own comment instructs once the theme carries
-the shortcode, and the build errors. That is the sequence a consumer hits.
-
-I compared the two files by line count (73 hub vs 52 module) and took the difference for extra
-comment. It was not. **Line count is not evidence that a consumer's copy is a stale
-duplicate** — the same lesson OVERRIDES.md already records for agentgateway-oss-website's
-`navbar.html` and `announcement.html`, and it applied here too.
-
-**The fix** tries the assembled path first and the bare path second, and errors only if both
-miss:
-
-1. `<currentProduct>/<resolvedVersion>/<asset>` — skipped entirely when either value is
-   empty, which is the case on every flat site, so those sites reach step 2 unchanged.
-2. `<asset>` — the bare path, correct for a flat tree and for a hub product that is not
-   assembled.
-
-Positional parameter 1 is now accepted so a parent shortcode can pass the version down.
-`rebase.html` injects version and product into `reuse` at stage 4 but **not** into
-`reuse-append` (its stage-4 regex requires `reuse` followed by a quote, so `reuse-append`
-correctly does not match), which is why this shortcode has to resolve the version itself. The
-`errorf` message now reports the assembled path it tried, so the next occurrence diagnoses
-itself.
-
-### Fix — the same lookup was ALSO wrong on gloo-mesh, because `version` and `linkVersion` are not the same field (`layouts/_shortcodes/reuse-append.html`)
-
-**Why.** The first draft of the fix above resolved the version with a private permalink scan
-that matched each URL segment against a `[[params.versions]]` entry's **`version`**. That is
-the wrong field to match on, and it fails on any product where the two diverge:
-
-| product | `version` | `linkVersion` (what is in the URL) |
-|---|---|---|
-| gloo-mesh-enterprise, gloo-mesh-gateway | `2.14.x` | `main` |
-| gloo-mesh-enterprise, gloo-mesh-gateway | `2.13.x` | `latest` |
-
-On `/gloo-mesh-enterprise/main/…` the segment is `main`, no entry has `version = "main"`, so
-nothing matched, the assembled lookup was skipped, the bare path missed, and the `errorf`
-fired — the identical failure this entry set out to fix, just on a different product. It
-happened to work on agentgateway only because every one of that product's entries sets
-`version` and `linkVersion` to the same string.
-
-The distinction matters because the two fields feed different things: the URL carries
-`linkVersion`, while the docs hub's `scripts/assemble-assets.py` names the mount target after
-`version` (`target_base = f"assets/{product}/{version}"`). So the correct sequence is **match
-on `linkVersion`, then read `version` off the matched entry.**
-
-**The fix** deletes the private scan and calls `utils/version-root.html`, the module's
-canonical version detector, taking `versionEntry.version` from it (falling back to
-`currentVersion` for a version matched by shape rather than by a config entry). That partial
-already matches on `linkVersion` via `utils/match-version-entry.html`, and it already returns
-the matched entry precisely so a caller does not re-walk the list.
-
-This also resolves the TODO the first draft left behind. A private scan here would have been
-the thirteenth independent "what version is this page" implementation in this module, and the
-duplicated ones have a track record: `resolve-link.html` was moved onto `version-root.html`
-for this reason and `version-noindex.html` shipped two production bugs from its own copy. The
-consolidation is not merely tidiness — the canonical detector also knows URL shapes a naive
-scan does not, including a hub product carrying **both** a section segment and a language
-prefix (`/<product>/<lang>/<section>/<version>/…`), which is the agentgateway shape.
-
-**Where to see it.**
-<https://docs.solo.io/agentgateway/standalone/latest/llm/providers/azure/> — the provider
-tables combine shared base rows with per-page appended rows. Verify by checking each table is
-a single `<table>` with no stray paragraph of `|` pipes; the pre-fix module copy renders no
-page at all, because the build stops.
-
-**Verified in the configuration 0.3.3 was tagged without** — a docs-hub `agentgateway` build
-with the hub's own `layouts/_shortcodes/reuse-append.html` **deleted**, so the module's copy
-was the one resolving, and a filesystem `replace` pointing the hub at the local checkout. That
-is the only setup that exercises the assembled path; the module's own fixture has a flat assets
-tree and structurally cannot.
-
-- Build: **exit 0, zero `ERROR` lines, 1470 pages.** Against the pre-fix module copy this build
-  does not complete at all.
-- `/agentgateway/standalone/latest/llm/providers/azure/` (3 call sites): **8** tables, **0**
-  stray `<p>|` pipe rows, **14** rows carried in from the base snippet — so the appended rows
-  joined the base table rather than falling out of it.
-- Product-wide: **no page** contains shortcode-error output. Four pages match a naive
-  `could not find` grep; all four are prose ("The proxy could not find a GitHub access
-  token…"), checked individually.
-- Module fixture, both brands: 21 shortcode assertions pass, and both brands build with zero
-  errors. The OSS path is also unchanged by construction — on a flat site `currentProduct` is
-  empty, so step 1 is skipped and behavior is identical to 0.3.3.
-
-Afterwards the hub was restored to its tagged state (`git checkout go.mod go.sum`, hub copy
-put back), because it still pins `v0.3.3` and would otherwise break.
-
-**Sequencing note for whoever tags this.** The hub's vendored copy must not be deleted until a
-tag carrying this fix is released AND the hub's pin is bumped to it. While the hub pins
-`v0.3.3`, deleting its copy reintroduces the build failure — that is the failure reported
-against 0.3.3, and it is a pin problem, not a regression in this change.
-
----
-
-## [0.3.4] — 2026-08-26
 
 ### Add — tell a reader the version they asked for is gone (`layouts/partials/docs/retired-version-notice.html`, `layouts/docs/{single,list}.html`, `layouts/404.html`, `assets/css/docs-theme-extras.css`, `tests/retired-version-notice.spec.ts`)
 
@@ -349,6 +229,118 @@ hand, and **4,074** in-PDF jumps against the chunked pipeline's 1,386. Not
 mounted (`module.mounts` covers only layouts/assets/data), so a consumer curls it
 pinned to its own `go.mod` version, exactly as `render-pdf.mjs` is fetched.
 
+### Fix — `reuse-append` as shipped in 0.3.3 cannot resolve an asset on a consumer with an assembled assets tree (`layouts/_shortcodes/reuse-append.html`)
+
+**Why.** 0.3.3 adopted this shortcode from agentgateway-oss-website as a straight copy, and
+the copy does exactly one lookup:
+
+```
+{{- $res := resources.Get $asset -}}
+{{- if not $res -}}{{- errorf "…could not find %q…" $asset -}}{{- end -}}
+```
+
+That is correct for a **flat** assets tree, which is what the OSS site has — its call sites
+pass `agw-docs/snippets/provider-azure-base-configuration.md` and the file is at exactly that
+path. The docs hub **assembles** its assets per version instead: for the agentgateway product,
+`hugo-mounts-agentgateway.toml` maps that same source dir to
+`assets/agentgateway/latest/agw-docs/…`. The bare path therefore misses on every assembled
+page, and the `errorf` fails the build.
+
+**This was a regression, and 0.3.3 hid it.** The docs hub had been carrying its own *adapted*
+copy of the shortcode for precisely this reason — its header comment named the difference
+("Upstream resolves the bare asset path, because in that repo the assets tree is not
+versioned. Here the tree is assembled per version"). While that copy exists it shadows the
+module, so 0.3.3 looked fine; delete it, as its own comment instructs once the theme carries
+the shortcode, and the build errors. That is the sequence a consumer hits.
+
+I compared the two files by line count (73 hub vs 52 module) and took the difference for extra
+comment. It was not. **Line count is not evidence that a consumer's copy is a stale
+duplicate** — the same lesson OVERRIDES.md already records for agentgateway-oss-website's
+`navbar.html` and `announcement.html`, and it applied here too.
+
+**The fix** tries the assembled path first and the bare path second, and errors only if both
+miss:
+
+1. `<currentProduct>/<resolvedVersion>/<asset>` — skipped entirely when either value is
+   empty, which is the case on every flat site, so those sites reach step 2 unchanged.
+2. `<asset>` — the bare path, correct for a flat tree and for a hub product that is not
+   assembled.
+
+Positional parameter 1 is now accepted so a parent shortcode can pass the version down.
+`rebase.html` injects version and product into `reuse` at stage 4 but **not** into
+`reuse-append` (its stage-4 regex requires `reuse` followed by a quote, so `reuse-append`
+correctly does not match), which is why this shortcode has to resolve the version itself. The
+`errorf` message now reports the assembled path it tried, so the next occurrence diagnoses
+itself.
+
+### Fix — the same lookup was ALSO wrong on gloo-mesh, because `version` and `linkVersion` are not the same field (`layouts/_shortcodes/reuse-append.html`)
+
+**Why.** The first draft of the fix above resolved the version with a private permalink scan
+that matched each URL segment against a `[[params.versions]]` entry's **`version`**. That is
+the wrong field to match on, and it fails on any product where the two diverge:
+
+| product | `version` | `linkVersion` (what is in the URL) |
+|---|---|---|
+| gloo-mesh-enterprise, gloo-mesh-gateway | `2.14.x` | `main` |
+| gloo-mesh-enterprise, gloo-mesh-gateway | `2.13.x` | `latest` |
+
+On `/gloo-mesh-enterprise/main/…` the segment is `main`, no entry has `version = "main"`, so
+nothing matched, the assembled lookup was skipped, the bare path missed, and the `errorf`
+fired — the identical failure this entry set out to fix, just on a different product. It
+happened to work on agentgateway only because every one of that product's entries sets
+`version` and `linkVersion` to the same string.
+
+The distinction matters because the two fields feed different things: the URL carries
+`linkVersion`, while the docs hub's `scripts/assemble-assets.py` names the mount target after
+`version` (`target_base = f"assets/{product}/{version}"`). So the correct sequence is **match
+on `linkVersion`, then read `version` off the matched entry.**
+
+**The fix** deletes the private scan and calls `utils/version-root.html`, the module's
+canonical version detector, taking `versionEntry.version` from it (falling back to
+`currentVersion` for a version matched by shape rather than by a config entry). That partial
+already matches on `linkVersion` via `utils/match-version-entry.html`, and it already returns
+the matched entry precisely so a caller does not re-walk the list.
+
+This also resolves the TODO the first draft left behind. A private scan here would have been
+the thirteenth independent "what version is this page" implementation in this module, and the
+duplicated ones have a track record: `resolve-link.html` was moved onto `version-root.html`
+for this reason and `version-noindex.html` shipped two production bugs from its own copy. The
+consolidation is not merely tidiness — the canonical detector also knows URL shapes a naive
+scan does not, including a hub product carrying **both** a section segment and a language
+prefix (`/<product>/<lang>/<section>/<version>/…`), which is the agentgateway shape.
+
+**Where to see it.**
+<https://docs.solo.io/agentgateway/standalone/latest/llm/providers/azure/> — the provider
+tables combine shared base rows with per-page appended rows. Verify by checking each table is
+a single `<table>` with no stray paragraph of `|` pipes; the pre-fix module copy renders no
+page at all, because the build stops.
+
+**Verified in the configuration 0.3.3 was tagged without** — a docs-hub `agentgateway` build
+with the hub's own `layouts/_shortcodes/reuse-append.html` **deleted**, so the module's copy
+was the one resolving, and a filesystem `replace` pointing the hub at the local checkout. That
+is the only setup that exercises the assembled path; the module's own fixture has a flat assets
+tree and structurally cannot.
+
+- Build: **exit 0, zero `ERROR` lines, 1470 pages.** Against the pre-fix module copy this build
+  does not complete at all.
+- `/agentgateway/standalone/latest/llm/providers/azure/` (3 call sites): **8** tables, **0**
+  stray `<p>|` pipe rows, **14** rows carried in from the base snippet — so the appended rows
+  joined the base table rather than falling out of it.
+- Product-wide: **no page** contains shortcode-error output. Four pages match a naive
+  `could not find` grep; all four are prose ("The proxy could not find a GitHub access
+  token…"), checked individually.
+- Module fixture, both brands: 21 shortcode assertions pass, and both brands build with zero
+  errors. The OSS path is also unchanged by construction — on a flat site `currentProduct` is
+  empty, so step 1 is skipped and behavior is identical to 0.3.3.
+
+Afterwards the hub was restored to its tagged state (`git checkout go.mod go.sum`, hub copy
+put back), because it still pins `v0.3.3` and would otherwise break.
+
+**Sequencing note for whoever tags this.** The hub's vendored copy must not be deleted until a
+tag carrying this fix is released AND the hub's pin is bumped to it. While the hub pins
+`v0.3.3`, deleting its copy reintroduces the build failure — that is the failure reported
+against 0.3.3, and it is a pin problem, not a regression in this change.
+
 ### Fix — a section card's description sat flush against its title in the PDF (`assets/css/print-book.css`)
 
 **Why.** The gap was `margin: 0.25rem 0 0` on `.section-card-desc`, and `rem`
@@ -367,6 +359,163 @@ format, which no live site publishes yet. Verified by rendering kgateway.dev's
 `security` chunk, whose auto-generated child cards are the densest use of
 `.section-card` in either consumer, and comparing the card blocks before and
 after.
+
+Intended as a **minor** (0.4.0): one new optional config key, plus a shortcode-internal
+resolution fix. No breaking changes and no content edits in consumers — a repo that sets
+nothing new renders byte-identically.
+
+---
+
+## [0.3.4] — 2026-08-28
+
+### Fix — `conditional-text` gates on the section segment as well as the build condition (`layouts/_shortcodes/conditional-text.html`, `layouts/_partials/utils/page-context.html`, `fixture/content/en/test/{nested/_index.md,nested/v2/cond-section.md,v2/cond-section.md,v2/nested/_index.md,v2/nested/collision.md}`, `fixture/content-flat/en/alpha/{_index.md,first.md}`, `tests/{conditional-section,section-versionless,auto-cards}.spec.ts`, `tests/helpers/{sentinels.ts,gate-containment.json}`, `playwright.config.ts`, `USAGE.md`)
+
+**Why.** `utils/page-context` resolves ONE condition, and in `siteParams` mode (the
+multi-product hub) that condition is `site.Params.buildCondition` — a **product** id
+(`agentgateway`, `envoy`, `gme`) that cannot vary within a build. A product that ships
+parallel documentation sections had no second axis, so every gate naming a section was
+dropped on **every** section rather than gated on one. Not hidden — *deleted*.
+
+This was live on solo-io/docs' agentgateway build, which added `kubernetes` and
+`standalone` sections while its `buildCondition` stayed `agentgateway`. Measured before
+the fix: **50 pages** lost content, and three rendered a dangling sentence where both
+branches vanished —
+<https://docs.solo.io/agentgateway/kubernetes/latest/llm/providers/realtime/> ended
+"For more information about LLM metrics and observability, see ." The `standalone`
+section lost its whole variant set, including the standalone config examples on
+`configuration/policies/conditional-policies/`.
+
+**What changed.** The shortcode now passes the page's section segment alongside the build
+condition, reusing `utils/gate-decide.html`'s existing slice-of-tokens contract — the same
+one `version.html` uses for version + linkVersion. A gate fires when its list names either.
+
+The segment comes from `utils/page-context`, which now returns it as `sectionSegment`,
+rather than from a second `utils/section-segment` call in the shortcode. `page-context`
+already ran that partial to place the version segment and was discarding the answer, so
+every gate on every page was paying for the same scan twice. Output is byte-identical: a
+full fixture rebuild differs only in the `llms.txt` "Generated on" timestamp.
+
+The section token is **additive**, and the `ne $condition ""` guard is kept deliberately, so
+no page that previously emitted nothing starts emitting because a segment resolved alone
+(this matters for version-less `url`-mode sites such as kagent, where `page-context` returns
+"" outside `/docs/` while `section-segment`'s positional rule can still match).
+
+**Verify.** On <https://docs.solo.io/agentgateway/standalone/latest/mcp/spec-compatibility/>
+and its `kubernetes/latest` twin, the "Session handling (`statefulMode`)" / "Session routing
+(`sessionRouting`)" paragraphs differ per section; before the fix neither appeared.
+
+**Section landing pages diverge between the two modes, deliberately.** A landing page is
+`/<product>/<section>/`, with no version below it. `section-segment` matches it, so the hub
+gates on the section there. An OSS build of the same reused content does not: `url` mode
+assigns a condition only when the path carries both a section and a version, so
+`/docs/<section>/` resolves `""` and the guard drops every gate on it, exactly as before.
+Closing that would mean changing `version` and `prefix` for a URL shape `url` mode has always
+read as version-first, on every OSS site at once — not something to pair with a gating fix.
+Both halves are pinned by tests, and the contract in USAGE.md says to keep gates off section
+landing pages.
+
+**Verified by.** Full before/after builds of three solo-io/docs products at v0.3.3 vs this
+change. agentgateway: 50 `index.html` pages changed, every diff an addition of previously
+dropped content, no page lost content and none disappeared; all 62 newly rendered links
+extracted and resolved against the built tree. kgateway (the one hub product that *inherits*
+a `sections` key, from the imported `kgateway.dev` module): zero page changes — the only
+diffs were `llms.txt` "Generated on" timestamps. gateway: byte-identical.
+
+Fixture suite 2143 passing in both `hugo-oss.toml` and `hugo-enterprise.toml` modes; the one
+`override-parity` "consumer shadow inventory" failure also fails on unmodified `main` and is
+unrelated. Each new assertion was checked against a deliberately broken build rather than
+only against a passing one:
+
+- Replacing `section-segment`'s positional `$accept` with `true` (match-anywhere) makes
+  `/test/v2/nested/collision/` and `/test/v2/nested/` both render their section marker. Those
+  two pages are the only ones in the fixture that can tell the two implementations apart — a
+  page whose URL contains no registered section name proves nothing, because the gate could
+  not fire there under any implementation.
+- Replacing the `ne $condition ""` guard with `true` makes `/docs/alpha/` render its marker in
+  both version-less builds (`public-flat/`, `public-flat-root/`). That is the kagent shape,
+  and it is the only place in the repo where the segment resolves while the condition is
+  empty, so it is the only place the guard is reachable at all.
+- The containment snapshot gained four page entries and one marker, all in
+  `div.content > p`. No existing marker moved.
+
+**Known follow-up for consumers, not a regression in this theme.** Where a token is
+overloaded across the two axes — `kubernetes` naming a section *and* used elsewhere to mean
+"the OSS build" — both meanings become true at once on an enterprise Kubernetes page and both
+branches render. Four files in `agentgateway/website` do this (`operations/uninstall.md`,
+`security/backend-authn-{cross-app-access,jwt-sign,oauth}.md`, plus `snippets/debug-gateway.md`,
+which solo-io/docs already overrides downstream). See the new `conditional-text` contract in
+USAGE.md for the pattern that avoids it.
+
+### Test harness — `gate-axis-collision` lint: a `conditional-text` either/or pair that renders both branches (`tests/gate-axis-collision.spec.ts`, `tests/helpers/{gate-axis.ts,gate-scan.ts,config.ts,target.ts}`, `fixture/.docs-test-{oss,enterprise}.toml`, `playwright.config.ts`, `README.md`, `USAGE.md`)
+
+**Why.** The Fix above gives `conditional-text` a second gating axis, and the two
+axes share ONE token namespace. A token that names a section on one axis and a
+product on the other is true twice over, so both sides of an intended either/or
+render. Five files in `agentgateway/website` are written that way — for example
+`assets/agw-docs/pages/security/backend-authn-oauth.md`, which pairs
+`include-if="kubernetes"` with `include-if="agentgateway"` to mean "OSS gets the
+relative API link, the hub gets the absolute one". On the hub, `kubernetes` is a
+registered SECTION and `agentgateway` is the buildCondition, so on an enterprise
+Kubernetes page both are true and both links render, with the relative one 404ing.
+
+Documenting the hazard in USAGE.md was the first answer. That is not enough: the
+damage never appears in the build the author is looking at. The OSS site renders
+correctly, and only the hub's copy of the same shared content breaks.
+
+**What it does.** Reports an adjacent pair of `include-if` gates when some
+configured (buildCondition, section) combination fires both **through different
+axes** — one gate matching the section, the other the build condition. That
+framing is what makes it exact rather than heuristic. "Flag any gate naming a
+section" flags every legitimate section gate; "flag a section name that is also a
+build condition" flags all of `url` mode, where the two axes are deliberately one
+value. The ambiguity is semantic; the consequence is decidable.
+
+Keying on the AXIS rather than on "both gates fire" is the difference between a
+usable lint and a noisy one, and it was measured, not reasoned. A file can hold a
+chain of adjacent gates that is a sequence of blocks rather than an either/or:
+solo-io/docs' `security/extauth-about.md` runs six back to back — `gme,gmg`, then
+`gme`, then `gmg`, then `gme,gmg` — alternating shared prose with product-specific
+prose, several of which fire together on any build, by design. Those overlap on
+ONE axis, since every token is a product id and a superset list legitimately
+covers a subset one. Reporting "both fire" flagged four such blocks across two
+files; keying on the axis drops all four and keeps all five real instances.
+
+A legitimate section pair (`kubernetes` beside `standalone`) never reports, since
+no page is in two sections at once. An `include-if`/`exclude-if` pair never
+reports, since exactly one side of it fires. A gate that WRAPS another gate never
+reports: `Gate.end` comes from the first closer, which for a nested same-name gate
+is the inner one, so an outer gate's end lands inside its own body — the pair test
+requires equal nesting depth, which also cost four false positives before it
+landed.
+
+Opt-in through a new `[[gateAxes]]` block naming the builds a source tree ships
+through — see README.md. With none configured the spec SKIPS rather than passes:
+with no combinations there is nothing to evaluate against, and green would be a
+false all-clear.
+
+**Verify.** After the Fix above ships, an unfixed pair renders twice. On
+<https://docs.solo.io/agentgateway/kubernetes/latest/security/backend-authn-oauth/>
+that is two consecutive "API docs" links where there should be one. Today neither
+renders, because the gates are dropped — which is the bug the Fix addresses.
+
+**Verified by.** Run against every consumer repo, with each product's real build
+combinations. `agentgateway/website`'s `assets/agw-docs`: five files, exactly the
+five a hand audit had already listed (`operations/uninstall.md`,
+`security/backend-authn-{cross-app-access,jwt-sign,oauth}.md`,
+`snippets/debug-gateway.md`) — no more and no fewer, and zero once those five are
+corrected. Zero on all of: that repo's `content/`, solo-io/docs `assets/` (far
+larger, 504 `exclude-if` gates) and `content/en`, kgateway.dev, kagent,
+agentregistry, ambientmesh.io.
+
+The adjacency threshold was measured, not guessed. Requiring the two gates to be
+flush found only 4 of the 5, missing the block-level form where markdown demands a
+blank line between the branches; allowing one blank line finds all 5 and still
+reports zero on the other three corpora; allowing two changes nothing on any of
+them, so the boundary is not delicate. 13 helper unit tests pin the shape,
+including the escaped display form (`{{</* … */>}}`), which USAGE.md itself uses to
+document the anti-pattern and which must not be flagged. A violation planted in the
+fixture corpus is caught and reported with the file, line, breaking combination and
+the rewrite that fixes it.
 
 ---
 

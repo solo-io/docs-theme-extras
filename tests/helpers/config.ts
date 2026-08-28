@@ -62,6 +62,14 @@ export type Checks = {
   // as literal text. content/ only — reuse/rebase normalize assets/ before
   // render. See helpers/gate-form.ts.
   gateForm: boolean;
+  // Source scan for `conditional-text` either/or pairs where both branches
+  // render. The two gating axes — build condition and section segment — share
+  // one token namespace, so a token naming a section on one axis and a product
+  // on the other is true twice over and both sides of an intended either/or
+  // fire. Needs [[gateAxes]] to describe the (condition, sections)
+  // combinations the corpus is built under; with none configured the check
+  // has nothing to evaluate against and skips. See helpers/gate-axis.ts.
+  gateAxisCollision: boolean;
   cascadeType: boolean;
   // Browser-level crawl: open every built page in Chromium and fail on
   // uncaught JS exceptions, console.error calls, or HTTP 4xx on JS/CSS assets.
@@ -117,6 +125,20 @@ export type Crawl = {
   maxFiles: number;
 };
 
+// One build the SAME source corpus is rendered under, for gateAxisCollision.
+// A consumer whose content is built once lists one entry; shared content that
+// also ships through the docs hub lists the hub's product build too, because
+// that is where the two axes come apart and a pair can double-fire.
+export type GateAxis = {
+  // Label used in the failure message, e.g. "docs hub / agentgateway".
+  name: string;
+  // site.Params.buildCondition for that build. In `url` mode the condition IS
+  // the section, so list one entry per section with `sections = []`.
+  condition: string;
+  // Keys registered under [params.sections] for that build, or [] for none.
+  sections: string[];
+};
+
 export type Brand = "oss" | "enterprise" | "";
 
 export type Config = {
@@ -135,6 +157,9 @@ export type Config = {
   scanRoots: string[];
   pages: Page[];
   versioning: Versioning | null;
+  // Builds the source corpus is rendered under, for gateAxisCollision. Empty
+  // when unconfigured, which makes that check skip rather than pass.
+  gateAxes: GateAxis[];
   checks: Checks;
   allowlists: Allowlists;
   crawl: Crawl;
@@ -154,6 +179,7 @@ const DEFAULT_CHECKS: Checks = {
   tabSyntax: true,
   includeForm: true,
   gateForm: true,
+  gateAxisCollision: true,
   cascadeType: true,
   consoleErrors: true,
   missingImages: true,
@@ -280,7 +306,9 @@ function validate(
     const versionFromPath = stringField(v, "versionFromPath", "[versioning]");
     const versionsRaw = v.versions;
     if (!Array.isArray(versionsRaw)) {
-      throw new Error(`[versioning].versions must be an array in ${configPath}`);
+      throw new Error(
+        `[versioning].versions must be an array in ${configPath}`,
+      );
     }
     const versions = versionsRaw.map((s, i) => {
       if (typeof s !== "string") {
@@ -303,6 +331,53 @@ function validate(
     );
   }
 
+  const gateAxes: GateAxis[] = [];
+  if (data.gateAxes !== undefined) {
+    if (!Array.isArray(data.gateAxes)) {
+      throw new Error(
+        `[[gateAxes]] must be an array of tables in ${configPath}`,
+      );
+    }
+    for (const [i, raw] of data.gateAxes.entries()) {
+      if (typeof raw !== "object" || raw === null) {
+        throw new Error(`[[gateAxes]][${i}] must be a table in ${configPath}`);
+      }
+      const e = raw as Record<string, unknown>;
+      const name = stringField(e, "name", `[[gateAxes]][${i}]`);
+      // The condition may legitimately be "" only if sections are listed —
+      // that is `url` mode, where the section IS the condition. A wholly empty
+      // entry can never fire anything and is a config mistake, not a build.
+      const condition = typeof e.condition === "string" ? e.condition : "";
+      const sections: string[] = [];
+      if (e.sections !== undefined) {
+        if (!Array.isArray(e.sections)) {
+          throw new Error(
+            `[[gateAxes]][${i}].sections must be an array in ${configPath}`,
+          );
+        }
+        for (const [j, s] of e.sections.entries()) {
+          if (typeof s !== "string") {
+            throw new Error(
+              `[[gateAxes]][${i}].sections[${j}] must be a string in ${configPath}`,
+            );
+          }
+          sections.push(s);
+        }
+      }
+      if (!name) {
+        throw new Error(`[[gateAxes]][${i}].name is required in ${configPath}`);
+      }
+      if (!condition) {
+        throw new Error(
+          `[[gateAxes]][${i}].condition is required in ${configPath}. In url ` +
+            `mode the condition IS the section, so add one entry per section ` +
+            `with condition = "<section>" and sections = [].`,
+        );
+      }
+      gateAxes.push({ name, condition, sections });
+    }
+  }
+
   const checks = mergeChecks(data.checks, configPath);
   const allowlists = mergeAllowlists(data.allowlists, configPath);
   const crawl = mergeCrawl(data.crawl, configPath);
@@ -318,6 +393,7 @@ function validate(
     scanRoots,
     pages,
     versioning,
+    gateAxes,
     checks,
     allowlists,
     crawl,
