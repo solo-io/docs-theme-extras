@@ -1,19 +1,28 @@
 {{- /*
   Shortcode: gloss
-  Renders an inline glossary term with a hover/focus tooltip showing the
-  definition and an optional "Learn more" link. Looks up the term in the
-  consumer's `data/glossary.yaml`.
+  Summary: Renders an inline glossary term with a tooltip carrying its definition
+  Group: ui-components
+  CallForm: both
+  Overrides: none
 
   Parameters:
-    - 0 (positional): The glossary key (e.g. "MCP").
-    - (inner content): Optional display text overriding the key.
-
-  Tooltip positioning + behavior is driven by extras' glossary.js
-  (position:fixed so tooltips escape overflow:auto ancestors like
-  .table-wrapper). Styling lives in extras' glossary.css. Both are loaded
-  automatically by themeExtras/head-end.html.
+    - 0 | string | yes | — | The glossary key to look up, for example MCP.
 
   Example: {{< gloss "MCP" >}}custom display text{{< /gloss >}}
+
+  Notes:
+    Looks the key up in the consumer's `data/glossary.yaml`. The tooltip shows
+    the definition and an optional "Learn more" link.
+
+    The inner content is optional. When present it becomes the display text,
+    overriding the key itself — useful when the prose needs "the Model Context
+    Protocol" but the glossary key is `MCP`.
+
+    Tooltip positioning and behavior come from this module's `glossary.js`,
+    which uses `position: fixed` so a tooltip escapes an `overflow: auto`
+    ancestor such as `.table-wrapper`. Styling lives in `glossary.css`. Both are
+    loaded by `themeExtras/head-end.html`, so a consumer that wires the module
+    bootstrap gets them with no extra configuration.
 */ -}}
 {{- $key := .Get 0 -}}
 {{- $entry := index site.Data.glossary $key -}}

@@ -1,76 +1,123 @@
-{{- /* conditional-text — include or exclude .Inner based on the page's build
-       condition (resolved via utils/page-context for both multi-product-hub
-       and single-site URL conventions).
+{{- /*
+  Shortcode: conditional-text
+  Summary: Includes or excludes its body based on the page's build condition
+  Group: gating
+  CallForm: both
+  Overrides: none
 
-       This file used to be 211 lines: six shape heuristics choosing between
-       four emit strategies, because Hugo does not expose whether a shortcode
-       was called in percent or angle form and the template was guessing. It is
-       now condition resolution plus one emit site.
+  Parameters:
+    - include-if | string | no | — | Render the body only when the page's condition matches.
+    - exclude-if | string | no | — | Render the body only when the page's condition does NOT match.
 
-       Every one of those strategies existed to undo damage caused by the
-       others — the trailing-step and table-row paths raw-emitted to escape
-       RenderString, the $isFullTable path rendered to escape raw emit, and the
-       fenced-block path raw-emitted to escape a double render. Emitting
-       `.Inner` untouched removes the reason all four existed. See
-       utils/gate-emit.html for the verification behind that, and
-       utils/gate-decide.html for the shared condition evaluator.
+  Example:
+    {{% conditional-text include-if="kubernetes" %}}
+    This paragraph appears only in the Kubernetes flavor of the docs.
+    {{% /conditional-text %}}
 
-       TWO TOKENS, NOT ONE — the build condition AND the section segment.
+  Notes:
+    Give exactly one of `include-if` or `exclude-if`. Setting both is an error.
 
-       `page-context` resolves ONE condition, and in "siteParams" mode (the
-       multi-product hub, solo-io/docs) that condition is the site-wide
-       `Site.Params.buildCondition`: a PRODUCT id — `agentgateway`, `envoy`,
-       `gme`, `gmg`, `gg`. It cannot vary within a build.
+    ### Two tokens, not one
 
-       A product that ships parallel documentation sections (see
-       utils/section-segment.html) needs a SECOND axis. agentgateway enterprise
-       has `kubernetes` and `standalone` sections; with only the product token,
-       every `include-if="kubernetes"` / `include-if="standalone"` gate in
-       content shared with the OSS site was dropped on BOTH sections — not
-       gated, dropped. Measured on the solo-io/docs agentgateway build before
-       this change: `llm/providers/realtime/` rendered "For more information
-       about LLM metrics and observability, see ." — both branches gone,
-       leaving a dangling sentence, and the same for the whole
-       `assets/agw-docs/pages/` set listed in that repo's audit.
+    A gate fires when its list names **either** of two things:
 
-       `gate-decide` already takes a SLICE of tokens — `version.html` passes the
-       canonical version and the stable linkVersion so `include-if="main"`
-       survives a release bump. This reuses that contract rather than adding a
-       parallel one: a gate fires if EITHER the product condition or the section
-       segment is named.
+    | Token | Where it comes from | Varies within a build? |
+    |---|---|---|
+    | build condition | `site.Params.buildCondition` in `siteParams` mode; the section segment in `url` mode, falling back to `site.Params.buildCondition` when the site registers no sections | No — one value per site |
+    | section segment | the page's own section under `[params.sections]` | Yes — per page |
+
+    The second token is what lets a product with parallel documentation
+    sections gate on the section a page is read in. Without it,
+    `buildCondition` is the only axis, and in a multi-product hub that is a
+    **product** id (`agentgateway`, `envoy`, `gme`) that cannot vary within a
+    build — so every section-named gate in the content is dropped on *every*
+    section rather than gated on one.
+
+    Both parameters are read inside `utils/gate-decide.html`, which this
+    shortcode hands its context to as a dict value; the condition itself comes
+    from `utils/page-context.html`, so this works under both the
+    multi-product-hub and single-site URL conventions. Prefer this over
+    `upstream` and `downstream` whenever the split is finer than which repo is
+    building.
+
+    ### A site with one doc set must set `params.buildCondition`
+
+    With no `[params.sections]` registered, `url` mode has nothing in the path
+    to derive a condition from, so it reads `params.buildCondition` instead.
+    Without one, every gate on the site is dropped in **both** directions —
+    `exclude-if` included, which means content vanishes rather than shows — and
+    the build warns, naming the file and line. Use the same token the docs hub
+    uses for that product, so one gate means one thing in both builds.
+
+    ### Do not overload a token across the two axes
+
+    If `kubernetes` names a section *and* is used elsewhere to mean "the OSS
+    build", then on an enterprise Kubernetes page both meanings are true at
+    once and **both branches render**. Pick names that cannot collide, or gate
+    the product axis on the product token alone — one `exclude-if` plus one
+    `include-if`, rather than two `include-if`s.
+
+    This is caught mechanically by `tests/gate-axis-collision.spec.ts`, given a
+    `[[gateAxes]]` block describing the builds your content ships through. It
+    is worth configuring precisely because the damage never appears in your own
+    build: the OSS site renders correctly and only the hub's copy of the same
+    shared content breaks.
+
+    ### Section landing pages differ between the two modes
+
+    A landing page is `/<product>/<section>/`, with no version below it. On the
+    hub the build condition is the product and is non-empty there, so a
+    section-named gate fires. On an OSS site `url` mode assigns a condition only
+    when the path carries both a section and a version, so `/docs/<section>/`
+    resolves an empty condition and every gate on it is dropped. Keep gates off
+    section landing pages, or accept that the OSS copy shows neither branch.
+
+    ### Why this file is short
+
+    It used to be 211 lines: six shape heuristics choosing between four emit
+    strategies, because Hugo does not expose whether a shortcode was called in
+    percent or angle form and the template was guessing. Every one of those
+    strategies existed to undo damage caused by another — the trailing-step and
+    table-row paths raw-emitted to escape RenderString, the full-table path
+    rendered to escape raw emit, and the fenced-block path raw-emitted to escape
+    a double render. Emitting `.Inner` untouched removed the reason all four
+    existed. See `utils/gate-emit.html` for the verification behind that.
+*/ -}}
+
+{{- /* IMPLEMENTATION NOTES — not part of the header contract above, and not
+       published to the docs site. The measured detail behind the two-token
+       behavior, kept for whoever changes this next.
+
+       THE INCIDENT. agentgateway enterprise ships `kubernetes` and `standalone`
+       sections while its hub buildCondition stays `agentgateway`. With only the
+       product token, every `include-if="kubernetes"` / `include-if="standalone"`
+       gate in content shared with the OSS site was dropped on BOTH sections —
+       not gated, DROPPED. Measured on that build before the fix: 50 pages lost
+       content, and `llm/providers/realtime/` rendered "For more information
+       about LLM metrics and observability, see ." — both branches gone, leaving
+       a dangling sentence.
+
+       WHY gate-decide RATHER THAN A PARALLEL PATH. `gate-decide` already takes a
+       SLICE of tokens: `version.html` passes the canonical version and the
+       stable linkVersion so `include-if="main"` survives a release bump. The
+       section segment reuses that contract instead of adding a second one.
 
        WHY THE SEGMENT IS ADDITIVE ONLY, never a token on its own. The outer
        `ne $condition ""` guard is deliberately kept, so a page with no build
-       condition still emits nothing even when a section segment resolves. That
-       keeps the change strictly additive: no page that previously emitted
-       nothing starts emitting because of a segment alone. (It matters for
-       version-less OSS sites such as kagent, where `page-context` in "url" mode
-       returns "" for any page outside `/docs/` while `section-segment`'s
-       positional rule can still match.)
+       condition still emits nothing even when a section segment resolves. No
+       page that previously emitted nothing starts emitting because of a segment
+       alone.
 
-       In "url" mode (the OSS single-site convention) the condition IS the
-       section, so the segment repeats it — harmlessly, since `gate-decide` ORs
-       across the slice and a duplicate token cannot change the outcome. Those
-       builds are byte-identical, and so are hub products with no
-       `[params.sections]` registered, where the segment is always "".
+       In "url" mode the condition IS the section, so the segment repeats it —
+       harmlessly, since gate-decide ORs across the slice and a duplicate token
+       cannot change the outcome. Those builds are byte-identical, and so are hub
+       products with no `[params.sections]` registered.
 
-       SECTION LANDING PAGES DIVERGE BETWEEN THE TWO MODES, and that is a
-       deliberate limit of this change rather than an oversight.
-
-       On a section landing page — /<product>/<section>/ with no version below
-       it — `section-segment` matches via its condition (b), so the hub gates
-       correctly. The OSS build of the same reused content does not: `url` mode
-       only assigns a condition when the path has BOTH a section and a version
-       segment (see the `ge (len $parts) 3` test in utils/page-context.html), so
-       a landing page resolves condition "" and the outer guard drops every gate
-       on it, exactly as it did before this change.
-
-       Closing that would mean assigning a condition — and therefore changing
-       `version` and `prefix` — for a URL shape that `url` mode has always
-       treated as version-first, on every OSS site at once. Not worth pairing
-       with a gating fix. Landing pages are card grids in practice, so the
-       exposure is small; if it ever bites, fix it in page-context with its own
-       before/after builds. Both halves are pinned: the hub half by
+       THE LANDING-PAGE DIVERGENCE (summarized for authors above) is a deliberate
+       limit. Closing it would mean assigning a condition — and therefore
+       changing `version` and `prefix` — for a URL shape that `url` mode has
+       always treated as version-first, on every OSS site at once. Not worth
+       pairing with a gating fix. Both halves are pinned: the hub half by
        tests/conditional-section.spec.ts, the `url` half by
        tests/section-versionless.spec.ts. */ -}}
 
@@ -89,4 +136,29 @@
   {{- if partial "utils/gate-decide.html" (dict "sc" . "tokens" $tokens) -}}
     {{- partial "utils/gate-emit.html" (dict "sc" . "inner" .Inner) -}}
   {{- end -}}
+{{- else if not site.Params.sections -}}
+  {{- /* THE INERT CASE, MADE LOUD.
+
+         An empty condition drops the body, and on a site that registers no
+         sections it is empty for EVERY page — so the gate can never fire, in
+         either direction. `exclude-if="anything"` should be a no-op that emits
+         its body; instead it emits nothing, and says nothing about it.
+
+         Warned rather than fixed by emitting, because emitting would be a guess:
+         the theme cannot tell whether the author wanted this shown or hidden.
+         What it can tell is that the gate is unreachable, which is always a
+         mistake worth a build warning — the author either wants the fallback
+         above (set `buildCondition`) or has no gating axis and should delete
+         the gate.
+
+         Scoped to `not site.Params.sections` deliberately. On a site that DOES
+         register sections an empty condition is a legitimate per-page state —
+         a section landing page, or a page outside `/docs/` — and warning there
+         would fire on correct content. Those sites resolve a condition wherever
+         gating is meant to work.
+
+         Consumers fail CI on any non-allowlisted WARN (tests/hugo-warnings.spec.ts),
+         so this surfaces the first time somebody writes a gate that cannot
+         fire, rather than after it ships blank. */ -}}
+  {{- warnf "conditional-text at %s cannot fire: this site registers no [params.sections], so utils/page-context resolves no build condition for any page and BOTH include-if and exclude-if emit nothing. Set `params.buildCondition` to the token the docs hub uses for this product, or remove the gate. See docs-theme-extras USAGE.md, \"conditional-text contract\"." .Position -}}
 {{- end -}}

@@ -1,0 +1,168 @@
+{{- /*
+  retired-version-notice.html — tell a reader that the version they asked for
+  is gone, after a hosting-level redirect has already moved them.
+
+  WHY THIS EXISTS. A retired version is caught by a path-preserving 301 in the
+  consumer's hosting config, which is the right mechanism: one hop, no
+  interstitial, SEO signal preserved. But it is SILENT. The reader clicks a link
+  to 2.1.x, the address bar says something else, and nothing on the page
+  accounts for the difference. That was tolerable when only the version segment
+  changed. It stopped being tolerable when agentgateway moved its version trees
+  under a section segment, because a reader is now relocated on two axes at
+  once — /agentgateway/2.1.x/install/… becomes
+  /agentgateway/kubernetes/latest/install/… — and the destination URL shares
+  almost nothing with the one they clicked.
+
+  HOW THE CONTEXT SURVIVES THE REDIRECT. It cannot be recovered client-side:
+  by the time this page loads, the requested URL IS the destination URL, and
+  the version the reader actually asked for is gone from every source the
+  browser can see (`document.referrer` is empty on a 301 from a bookmark, and
+  wrong when the link came from a search engine). So the hosting rule hands it
+  forward explicitly:
+
+      "source":      "/agentgateway/2.1.x/:path*"
+      "destination": "/agentgateway/kubernetes/latest/:path*?fromversion=2.1.x"
+
+  Firebase merges that with any query string the reader already had
+  (`?fromversion=2.1.x&foo=bar`), so the parameter is additive, not
+  destructive.
+
+  WHY THE URL IS CLEANED UP AFTERWARDS. The parameter has done its job the
+  moment this renders. Leaving it in the address bar means every copied or
+  shared link carries it, and every one is a distinct URL to a crawler for the
+  same page. `history.replaceState` drops it without a navigation, so the URL
+  the reader copies is the canonical one. This runs whether or not the notice
+  renders, so an unrecognized value still gets tidied.
+
+  WHY IT IS NOT DISMISSIBLE-WITH-MEMORY. No localStorage, no cookie. The notice
+  is tied to one arrival from one stale link, not to a site-wide state the
+  reader should be able to mute — and a reader who follows a second stale link
+  a week later needs telling again.
+
+  RENDERED next to `version-banner.html` in docs/single.html and docs/list.html
+  rather than in the `docs/chrome-top.html` slot, because both OSS consumers
+  override that slot and would silently lose this.
+
+  EMITS NOTHING AT ALL on a site with no versions — see the gate below. The
+  sentence is translatable via the `retired_version_notice` i18n key, with the
+  English literal as the fallback.
+*/ -}}
+
+{{- $vr := partial "utils/version-root.html" . -}}
+{{- /* The version this page actually belongs to, for the "you are here now"
+       half of the sentence. Falls back to the configured latest when the page
+       is not in a recognized version tree, which is the case for a product
+       landing page that a bare /<product>/<retired-version> rule points at. */ -}}
+{{- $current := $vr.currentVersion | default "" -}}
+{{- if eq $current "" -}}
+  {{- range site.Params.versions -}}
+    {{- if and (eq $current "") (eq (.linkVersion | default "") "latest") -}}
+      {{- $current = .linkVersion -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* The set of version segments this site considers legitimate. The notice
+       renders ONLY for a value in this list: `fromversion` arrives in a URL,
+       so it is reader-controlled, and echoing an arbitrary string back into
+       the page is how you turn a helpful banner into a content-injection
+       vector. An allowlist makes that impossible by construction — the value
+       is used to SELECT a known string, never to produce one.
+
+       Retired versions are still present in params.versions (hidden from the
+       picker with a blank `dropdown`), which is exactly what makes them
+       matchable here. */ -}}
+{{- $curProd := site.Params.currentProduct | default "" -}}
+{{- $known := slice -}}
+{{- range site.Params.versions -}}
+  {{- if or (eq $curProd "") (eq (.product | default "") $curProd) -}}
+    {{- with .linkVersion -}}{{- $known = $known | append . -}}{{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* TRANSLATION. Resolved through i18n with the English literal as the
+       fallback, the same shape version-banner.html uses for `bannerID` — so a
+       consumer that ships no i18n table (every OSS site) is unaffected, while
+       the docs hub, which publishes content/ja/, can translate it.
+
+       WHY THE PLACEHOLDERS ARE SUBSTITUTED IN JS RATHER THAN BY i18n. Neither
+       value is known at build time. `from` arrives in the query string at read
+       time, and this one partial is rendered once per page for every possible
+       arrival, so the sentence has to leave both holes open until the script
+       runs. `{from}` and `{current}` are therefore literal braces in the
+       string, not Go template actions — an i18n entry writes them the same way:
+
+         [retired_version_notice]
+         other = "リンク先のバージョン {from} は公開を終了しました。このページは {current} のものです。"
+
+       Substituted with textContent, never innerHTML, and `from` is allowlisted
+       against KNOWN before it is used at all. */ -}}
+{{- $text := i18n "retired_version_notice" -}}
+{{- if not $text -}}
+  {{- $text = "You followed a link to version {from}, which is no longer published. This page is from the {current} version." -}}
+{{- end -}}
+
+{{- /* GATE ON THE SITE HAVING VERSIONS AT ALL. Without this the partial emits a
+       hidden div and an inline script onto every docs page of every consumer,
+       including ones where it is structurally incapable of firing: a site with
+       no `params.versions` has an empty allowlist, so the script's own
+       `KNOWN.indexOf(from) === -1` check rejects every possible value.
+
+       That matters for two reasons beyond page weight. It makes this partial
+       behave like its slot-mate — version-banner.html ends in `with $bannerText`
+       and renders nothing when unconfigured — and it keeps the module from
+       adding an inline <script>, and therefore a CSP `unsafe-inline`
+       dependency, to consumers that get nothing back for it. agentregistry.dev
+       and ambientmesh.io are both version-less today.
+
+       Guarded on $known rather than on `site.Params.versions` so a multi-product
+       config whose versions all belong to ANOTHER product also opts out — that
+       list is filtered by currentProduct above. */ -}}
+{{- if $known }}
+<div id="retired-version-notice" hidden role="status">
+  <p>
+    <span id="rvn-text"></span>
+    <button type="button" id="rvn-dismiss" aria-label="Dismiss">&times;</button>
+  </p>
+</div>
+<script>
+  (function () {
+    "use strict";
+    var KNOWN = {{ $known | jsonify | safeJS }};
+    var CURRENT = {{ $current | jsonify | safeJS }};
+    // Sentence template, resolved server-side so it can be translated. The
+    // TRANSLATION comment above the $text assignment explains why the two
+    // placeholders are filled in here rather than by i18n.
+    var TEXT = {{ $text | jsonify | safeJS }};
+
+    var params = new URLSearchParams(window.location.search);
+    var from = params.get("fromversion");
+
+    // Clean the URL first and unconditionally, so a stale or malformed value
+    // does not survive in the address bar just because it failed the allowlist.
+    if (from !== null) {
+      params.delete("fromversion");
+      var q = params.toString();
+      history.replaceState(
+        null,
+        "",
+        window.location.pathname + (q ? "?" + q : "") + window.location.hash
+      );
+    }
+
+    // Allowlist check. Anything else is dropped in silence — a reader who
+    // hand-edits the query string gets no banner, not an error.
+    if (!from || KNOWN.indexOf(from) === -1 || from === CURRENT) return;
+
+    var el = document.getElementById("retired-version-notice");
+    document.getElementById("rvn-text").textContent = TEXT.replace(
+      "{from}",
+      from
+    ).replace("{current}", CURRENT);
+    document.getElementById("rvn-dismiss").addEventListener("click", function () {
+      el.hidden = true;
+    });
+    el.hidden = false;
+  })();
+</script>
+{{- end -}}

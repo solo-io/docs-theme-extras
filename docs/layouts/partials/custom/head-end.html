@@ -1,0 +1,23 @@
+{{- /*
+  Consumer-side head-end for the module's own docs site.
+
+  THIS FILE IS THE MODULE BOOTSTRAP, and without it the site silently loses
+  every stylesheet this module ships.
+
+  Hextra calls `custom/head-end.html`, never `themeExtras/head-end.html`
+  directly, so each consumer has to make that call itself. The module cannot
+  ship `custom/head-end.html` on its own behalf: a consumer's own copy would
+  shadow it on the same path and the bootstrap would vanish without a word.
+
+  That is exactly what happened here. The docs site shipped for a while with no
+  bootstrap at all, and it looked fine — Hextra's base stylesheet renders a
+  plausible page on its own. The tell was the sidebar rendering as an unstyled
+  flat list, because `.sidebar-list` / `.sidebar-link` / `.sidebar-children`
+  live in docs-theme-extras.css and nothing was loading it.
+
+  There is no marker meta here, unlike fixture/layouts/partials/custom/
+  head-end.html. That marker exists so presence.spec.ts can assert the
+  Hextra -> custom -> themeExtras chain end to end against the fixture. This
+  site is not a harness target, so it only needs the bootstrap itself.
+*/ -}}
+{{ partial "themeExtras/head-end.html" . -}}

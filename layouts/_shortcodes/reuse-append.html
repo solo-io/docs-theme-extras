@@ -1,36 +1,57 @@
 {{- /*
   Shortcode: reuse-append
-  Reads a base markdown snippet from the assets tree, appends the inner content
-  to it, and renders the combined result through the page's markdown renderer.
+  Summary: Concatenates a shared snippet with the inner content and renders them as one block
+  Group: reuse-versioning
+  CallForm: both
+  Overrides: none
 
   Parameters:
-    - 0 (positional, required): path to the base file in the assets tree.
+    - 0 | path | yes | — | Path to the base file in the assets tree.
+    - 1 | string | no | the page's version | Version to resolve against, passed down by a calling shortcode.
 
-  Example:
-    {{< reuse-append "snippets/provider-base-configuration.md" >}}
-    | Extra row | Value |
-    {{< /reuse-append >}}
+  Example: code-only
 
-  WHAT IT IS FOR. A snippet that is a markdown TABLE cannot be extended by
-  calling `reuse` and then writing more rows after it: `reuse` renders the
-  snippet on its own, so the table is already closed as `<table>` HTML by the
-  time the extra rows are parsed, and they render as a stray paragraph of
-  pipes instead of joining the table. Concatenating the two as SOURCE and
-  rendering once keeps them a single markdown block. The same reasoning applies
-  to any construct whose continuation depends on the preceding lines — lists,
-  definition blocks, a fenced code block split across the boundary.
+  Notes:
+    ### What it is for
 
-  IT IS NOT A VARIANT OF `reuse`. Despite the name, this shortcode does NOT
-  apply the version- and product-aware shortcode rewrites that `reuse` does; it
-  is a plain `resources.Get` plus concatenation. A base snippet containing
-  a `version` shortcode, `keepVersion` blocks, or `link-hextra` calls that rely on
-  rebase-injected params will therefore behave differently here than under
-  `reuse`. Keep base snippets used with this shortcode free of version-dependent
-  markup, or use `reuse` and restructure the content so appending is not needed.
+    A snippet that is a Markdown TABLE cannot be extended by calling `reuse` and
+    then writing more rows after it. `reuse` renders the snippet on its own, so
+    the table is already closed as HTML by the time the extra rows are parsed,
+    and they render as a stray paragraph of pipes. Concatenating the two as
+    SOURCE and rendering once keeps them a single Markdown block. The same
+    applies to any construct whose continuation depends on the preceding lines:
+    lists, definition blocks, a fenced block split across the boundary.
 
-  Errors, not warnings, on a missing positional parameter or a missing asset:
-  both mean the call site names a file that is not there, which is a content bug
-  that silently renders nothing if it is allowed to pass.
+    ### It is NOT a variant of reuse
+
+    Despite the name, this does not apply the version- and product-aware
+    shortcode rewrites that `reuse` does. It is a plain resource lookup plus
+    concatenation. A base snippet containing a `version` shortcode,
+    `keepVersion` blocks, or `link-hextra` calls that rely on rebase-injected
+    params will behave differently here than under `reuse`. Keep base snippets
+    used with this shortcode free of version-dependent markup, or use `reuse`
+    and restructure so appending is not needed.
+
+    ### Asset resolution
+
+    Both tree shapes are handled, and both are needed. An OSS site's assets tree
+    is flat; the docs hub assembles its tree per version at
+    `assets/<product>/<version>/`. So the versioned path is tried first and the
+    bare path second, and only if both miss is it an error. A single bare lookup
+    — what this file did when it was first adopted from
+    agentgateway-oss-website — resolves on the OSS site and misses on every
+    assembled hub page.
+
+    The version comes from `utils/version-root.html`, the module's canonical
+    detector, not from a private permalink scan here. The URL carries
+    `linkVersion` while the assembled asset path is named after `version`, and
+    on two hub products those differ.
+
+    Errors rather than warns on a missing positional parameter or a missing
+    asset. Both mean the call site names a file that is not there, which
+    silently renders nothing if allowed to pass.
+
+    The example is marked `code-only`: this needs a real asset tree.
 */ -}}
 
 {{- $asset := "" -}}
@@ -40,9 +61,70 @@
   {{- errorf "The %q shortcode requires one positional parameter: path in /assets. See %s" .Name .Position -}}
 {{- end -}}
 
-{{- $res := resources.Get $asset -}}
+{{- $asset = strings.TrimPrefix "/" $asset -}}
+
+{{- /* A parent shortcode may pass the version down as positional 1. */ -}}
+{{- $parentVersion := "" -}}
+{{- if ge (len .Params) 2 -}}{{- $parentVersion = .Get 1 -}}{{- end -}}
+
+{{- /* Resolve the version through the CANONICAL detector rather than scanning the
+       permalink here. Two reasons, and the second one is a correctness bug, not
+       tidiness.
+
+       1. Every private copy of "what version is this page in" in this module has
+          drifted from the others eventually — resolve-link.html was moved onto
+          version-root.html for that reason, and version-noindex.html shipped two
+          production bugs from its own copy. version-root.html also knows URL
+          shapes a naive scan does not: it tries segment positions [2], [3], [4]
+          and [1], which is what makes a hub product with BOTH a section segment
+          and a language prefix (/<product>/<lang>/<section>/<version>/…) resolve
+          at all.
+
+       2. TWO DIFFERENT FIELDS, and this shortcode needs the less obvious one.
+          `linkVersion` is what appears in the URL; `version` is what the docs
+          hub's scripts/assemble-assets.py uses to build the mount target
+          (`target_base = f"assets/{product}/{version}"`). Those are NOT always
+          equal — gloo-mesh-enterprise and gloo-mesh-gateway both ship
+          `version = "2.14.x"` with `linkVersion = "main"`, and
+          `version = "2.13.x"` with `linkVersion = "latest"`.
+
+          So matching the URL segment against `version` (which is what this file
+          did when the assembled-path lookup was first added) finds NOTHING on
+          those products: the segment is "main", no entry has version "main", the
+          lookup is skipped, the bare path misses, and the errorf below fires.
+          The correct sequence is match on `linkVersion`, then read `version` off
+          the matched entry — which is exactly what version-root.html returns as
+          `versionEntry`, for callers that would otherwise re-walk the list.
+
+       Assign the partial's result, then test it — never `{{ with partial … }}`
+       on a return-partial. See the note in version-root.html itself. */ -}}
+{{- $resolvedVersion := $parentVersion -}}
+{{- if not $resolvedVersion -}}
+  {{- $root := partial "utils/version-root.html" .Page -}}
+  {{- if $root.isVersioned -}}
+    {{- $entry := $root.versionEntry -}}
+    {{- if $entry -}}
+      {{- /* Prefer the entry's `version` (the assembled-tree directory name);
+             fall back to the matched URL segment for a version that was matched
+             by shape rather than by a config entry. */ -}}
+      {{- $resolvedVersion = $entry.version | default $root.currentVersion -}}
+    {{- else -}}
+      {{- $resolvedVersion = $root.currentVersion -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* Assembled-tree path first, bare path second. See the header comment. */ -}}
+{{- $res := "" -}}
+{{- $currentProduct := .Site.Params.currentProduct | default "" -}}
+{{- if and $resolvedVersion $currentProduct -}}
+  {{- $res = resources.Get (printf "%s/%s/%s" $currentProduct $resolvedVersion $asset) -}}
+{{- end -}}
 {{- if not $res -}}
-  {{- errorf "The %q shortcode could not find %q. See %s" .Name $asset .Position -}}
+  {{- $res = resources.Get $asset -}}
+{{- end -}}
+{{- if not $res -}}
+  {{- errorf "The %q shortcode could not find %q (tried the assembled path %q/%q/ first). See %s" .Name $asset $currentProduct $resolvedVersion .Position -}}
 {{- end -}}
 
 {{- $base := trim $res.Content " \n\r\t" -}}

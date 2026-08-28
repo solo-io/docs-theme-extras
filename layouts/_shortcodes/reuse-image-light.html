@@ -1,21 +1,34 @@
-{{/* Light-only image variant. Symmetric counterpart to reuse-image-dark.
-     Renders a single image wrapped in <div class="toggle-dark">, which CSS
-     shows in light mode and hides in dark mode (see docs-theme-extras.css
-     `.toggle-dark`/`.dark .toggle-dark`).
-     Use when you have a light-themed asset that should NOT appear in dark
-     mode at all — e.g., a screenshot whose dark-mode counterpart isn't
-     ready yet and the white-card wrapper would look wrong, or a diagram
-     whose colors are reference-specific. For the common "show this image
-     in both modes" case, use the reuse-image shortcode; for dark-only,
-     use reuse-image-dark. */}}
-{{- /* Translation export mode: preserve the {{< reuse-image-light ... >}} source
-       form via a placeholder (see reuse-image.html). Gated on hugo.Environment.
-       Without this, the JA translation snapshot renders the resolved <img> and
-       HTMLToMarkdown bakes its `.RelPermalink` (an absolute `/agentgateway/img/…`
-       path) into the JA markdown; the next build's Hextra render-image hook then
-       `relURL`s that already-prefixed path, doubling it to
-       `/agentgateway/agentgateway/img/…` (a 404). reuse-image / reuse-image-dark
-       already guard this; reuse-image-light was the missing one. */ -}}
+{{- /*
+  Shortcode: reuse-image-light
+  Summary: Renders an image in light mode only, hidden entirely in dark mode
+  Group: reuse-versioning
+  CallForm: both
+  Overrides: none
+
+  Parameters:
+    - src | path | yes | — | Path to the light-mode image under assets/.
+    - alt | string | no | — | Alt text.
+    - caption | string | no | — | Caption rendered below the image.
+    - width | string | no | — | CSS width for the figure.
+
+  Example: code-only
+
+  Notes:
+    Wraps a single image in `.toggle-dark`, which CSS shows in light mode and
+    hides in dark mode.
+
+    Reach for this only when the asset must NOT appear in dark mode: a
+    screenshot whose dark counterpart is not ready and whose white card would
+    look wrong, or a diagram with reference-specific colours. For the common
+    "show this in both modes" case use `reuse-image`; for dark-only use
+    `reuse-image-dark`.
+
+    The symmetric counterpart is `reuse-image-dark`. Both preserve their source
+    form in a `translation` build via a placeholder — without it the snapshot
+    would bake a resolved absolute `.RelPermalink` into the translated page.
+
+    The example is marked `code-only`: this needs a real asset tree.
+*/ -}}
 {{- if eq hugo.Environment "translation" -}}
   {{- $attrs := slice -}}
   {{- with .Get "src" }}{{ $attrs = $attrs | append (printf "src=%q" .) }}{{ end -}}

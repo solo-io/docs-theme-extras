@@ -292,13 +292,22 @@ h6 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.03em; }
   text-decoration: none;
 }
 
+/* The gap between a card's title and its description sits on the TITLE, in em,
+   rather than on the description in rem. Two reasons. `rem` resolves against
+   the root element, which this standalone print document never gives a
+   font-size, so it landed on the browser default 16px and made "0.25rem" 4px
+   — about 3pt at print scale, tight enough that the description reads as
+   jammed against the title it belongs to. `em` resolves against the title's
+   own size instead, so the gap stays proportional if that size is ever
+   changed. Putting it on the title also avoids relying on margin collapsing
+   between the two adjacent <p> siblings. */
 .pdf-chapter .section-card-title {
   font-weight: 600;
-  margin: 0;
+  margin: 0 0 0.4em;
 }
 
 .pdf-chapter .section-card-desc {
-  margin: 0.25rem 0 0;
+  margin: 0;
   color: #666;
 }
 

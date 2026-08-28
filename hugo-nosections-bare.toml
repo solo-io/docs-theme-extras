@@ -1,0 +1,77 @@
+# NO-SECTIONS fixture: the shape agentregistry.dev and ambientmesh.io ship —
+# `url` mode with NO [params.sections] at all, so utils/page-context.html's
+# section branch can never run.
+#
+# Before docs-theme-extras 0.3.5 that made `conditional-text` INERT on such a
+# site: the condition stayed "" for every page and the outer guard dropped both
+# directions, so even `exclude-if="nothing"` — which should emit its body —
+# emitted nothing, silently. This build pins the fallback that fixes it.
+#
+# THE PAIR. This config sets NOTHING — no sections, no buildCondition — so gates
+# stay inert and the shortcode must WARN rather than fail silently. Its twin
+# hugo-nosections.toml sets `buildCondition` and gates resolve. Neither half is
+# meaningful alone: one proves the fallback works, the other proves the unfixed
+# state is loud.
+#
+# Built by `make build-nosections`; asserted by tests/nosections-condition.spec.ts.
+
+baseURL = "/docs"
+languageCode = "en-us"
+title = "No-sections fixture"
+linkTitle = "Flat"
+contentDir = "fixture/content-flat/en"
+publishDir = "public-nosections-bare"
+enableInlineShortcodes = true
+
+[module]
+  [[module.imports]]
+    path = "github.com/imfing/hextra"
+    disable = false
+
+  [[module.mounts]]
+    source = "fixture/content-flat/en"
+    target = "content"
+  [[module.mounts]]
+    source = "layouts"
+    target = "layouts"
+  [[module.mounts]]
+    source = "assets"
+    target = "assets"
+  [[module.mounts]]
+    source = "fixture/assets"
+    target = "assets"
+  [[module.mounts]]
+    source = "fixture/static"
+    target = "static"
+  [[module.mounts]]
+    source = "data"
+    target = "data"
+
+[markup]
+  [markup.goldmark.renderer]
+    unsafe = true
+  [markup.highlight]
+    noClasses = false
+
+[params]
+  # NO buildCondition, deliberately. Gates must stay inert AND must warn.
+
+  # NO [[params.versions]]. That absence is the whole point of this fixture, and
+  # it is what every version-less code path keys off (`not site.Params.versions`).
+  # Adding even one entry here silently moves this build onto the versioned paths
+  # and the spec's assertions stop meaning anything.
+
+  product = "Flat product"
+
+  # NO [params.sections], deliberately — that absence is what this fixture is
+  # for. It puts utils/page-context.html's `url` branch in the state where its
+  # section test can never match, which is where the build-condition fallback
+  # (or, without one, the inert-gate warning) is the only thing that decides
+  # whether `conditional-text` works at all. Adding a section here moves this
+  # build onto the covered paths and the spec stops meaning anything.
+  [params.themeExtras]
+    brand = "oss"
+
+  [params.navbar]
+    displayTitle = true
+    displayLogo = false

@@ -1,16 +1,37 @@
-{{- /* DEPRECATED — REMOVE IN A FUTURE RELEASE.
-     This is a lotus-legacy compatibility stub. It is equivalent to a fenced
-     code block ( ```lang {hl_lines=[...]} ), which is what consumers should
-     use instead. Beyond being redundant, `prism` emits already-rendered
-     <pre> HTML, so a `prism` block inside a reused list item breaks list
-     continuation (the "<p> inside <pre>" / fragmented-code-block failure that
-     a native fenced block does not have). No consumer still references it
-     (solo-io/docs migrated all usages to fenced blocks); once that is true of
-     every consumer, delete this file. See the CHANGELOG "Code blocks" entry.
+{{- /*
+  Shortcode: prism
+  Summary: Deprecated compatibility stub for the lotus prism shortcode; use a fenced code block
+  Group: deprecated
+  CallForm: both
+  Overrides: none
 
-     Stub for the prism shortcode from docs-theme-lotus.
-     Maps to Hugo's built-in Chroma highlighting.
-     Supports: lang (positional or named), line (highlight lines). */ -}}
+  Parameters:
+    - lang | string | no | — | Language for syntax highlighting.
+    - line | string | no | — | Lines to highlight.
+    - 0 | string | no | — | Positional alias for lang.
+
+  Example: code-only
+
+  Notes:
+    **Deprecated. Do not use in new content, and remove it from old content.**
+    This is a docs-theme-lotus compatibility stub that maps onto Hugo's built-in
+    Chroma highlighting. It will be deleted once no consumer references it;
+    solo-io/docs has already migrated every usage.
+
+    Use a fenced code block instead, which does the same thing:
+
+        ```yaml {hl_lines=[2,3]}
+        ...
+        ```
+
+    Beyond being redundant it is actively worse: `prism` emits already-rendered
+    `<pre>` HTML, so a `prism` block inside a reused list item breaks list
+    continuation — the fragmented-code-block failure that a native fenced block
+    does not have.
+
+    The example is marked `code-only` so this page does not read as an
+    invitation to copy the call.
+*/ -}}
 {{- $lang := .Get "lang" | default (.Get 0) | default "" -}}
 {{- $line := .Get "line" | default "" -}}
 {{- $options := "" -}}

@@ -1,14 +1,6 @@
 # Hugo build output
 public/
-public-oss/
-public-enterprise/
-public-oss-local/
-public-enterprise-local/
-public-flat/
-public-flat-root/
-public-section-title/
-public-section-current/
-public-local/
+public-*/
 resources/
 .hugo_build.lock
 hugo_stats.json

@@ -1,3 +1,31 @@
+{{- /*
+  Shortcode: readfile
+  Summary: Inlines a file from the filesystem into the page
+  Group: external-content
+  CallForm: both
+  Overrides: none
+
+  Parameters:
+    - file | path | yes | — | Path to the file to read, relative to the project root.
+    - markdown | bool | no | false | Pass markdown="true" to render the file as Markdown instead of raw HTML.
+    - type | string | no | — | Set to SECURITY_SCAN to make the include skippable. See Notes.
+
+  Example: code-only
+
+  Notes:
+    With `markdown="true"` the file goes through `markdownify`; otherwise it is
+    emitted with `safeHTML`. Either way the content is trusted and unescaped, so
+    do not point this at anything a reader can write to.
+
+    `type="SECURITY_SCAN"` is a build-time opt-out, not a content type. When the
+    consumer sets `params.noSecurityScan`, a call carrying that type emits a
+    short "skip reading security scan" placeholder instead of the file. That
+    lets a repo build its docs without the generated scan reports present, which
+    is otherwise a hard `readFile` failure. Any other `type` value is ignored.
+
+    The example is marked `code-only` because the shortcode needs a real file at
+    a real path, which the docs site does not have.
+*/ -}}
 {{$file := .Get "file"}}
 
 {{- if and (eq (.Get "type") "SECURITY_SCAN") .Site.Params.noSecurityScan -}}

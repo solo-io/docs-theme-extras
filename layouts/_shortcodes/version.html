@@ -1,12 +1,42 @@
-{{- /* version — render the body only on the versions the author named.
+{{- /*
+  Shortcode: version
+  Summary: Renders its body only on the versions the author names
+  Group: gating
+  CallForm: both
+  Overrides: none
 
-       CONDITION RESOLUTION is unchanged and is the bulk of this file: derive
-       the current version from the URL, match it against [[params.versions]],
-       and handle the keepVersion landing zone. What changed is the END: there
-       is now ONE emit site, `utils/gate-emit.html`, which emits `.Inner`
-       untouched. See that partial for why the four shape-guessing strategies
-       and utils/inner-shape.html are gone. Condition evaluation moved to
-       utils/gate-decide.html, shared with conditional-text. */ -}}
+  Parameters:
+    - version | string | no | — | Version string to import, for a self-closing call.
+    - include-if | string | no | — | Render the body only on versions matching this token.
+    - exclude-if | string | no | — | Render the body on every version EXCEPT those matching.
+
+  Example:
+    {{% version include-if="v2" %}}
+    This paragraph appears only on v2 pages.
+    {{% /version %}}
+
+  Notes:
+    `include-if` and `exclude-if` are read inside `utils/gate-decide.html`, the
+    condition evaluator shared with `conditional-text`. They are documented here
+    because a reader writing the call should not need to know that.
+
+    The bulk of the template is condition resolution: derive the current version
+    from the URL, match it against `params.versions`, and handle the
+    `keepVersion` landing zone. There is one emit site,
+    `utils/gate-emit.html`, which emits `.Inner` untouched.
+
+    ### Interaction with rebase
+
+    The rebase pipeline remaps OSS version tokens to their enterprise
+    equivalents through each `params.versions` entry's `ossVersion`. A
+    `keepVersion` block opts out of that remap. Getting the two confused is a
+    known source of bugs: an enterprise token that collides with another entry's
+    `ossVersion` is the shape that once broke kgateway's github-branch page.
+
+    A `version` block inside a numbered list must wrap the WHOLE list item,
+    including its `1.` marker. Wrapping only part of the item detaches the
+    remainder from the list.
+*/ -}}
 
 {{- $versions := .Site.Params.versions -}}
 {{- $condition := "" -}}

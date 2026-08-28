@@ -1,32 +1,39 @@
 {{- /*
   Shortcode: version-cards
-  Renders a .section-cards grid mirroring the navbar version dropdown.
-  Designed for a section landing page; each card links to
-  <currentPagePath>/<linkVersion>/.
-
-  Resolves versions through utils/resolve-section-versions.html — the single
-  place that knows which entries in site.Params.versions apply to a section
-  (each entry names its sections; an untagged entry applies to all). This used
-  to read site.Params.sections.<section>.versions itself, with a fallback to
-  the top-level list, which meant the priority rule lived here AND in the
-  sidebar AND in the navbar AND in version-root.html, and they drifted.
-
-  Each version item is expected to expose `dropdown` (label) and
-  `linkVersion` (URL slug). Items whose `dropdown` is empty/whitespace
-  are skipped, matching navbar.html's visibility rule.
+  Summary: Renders a card grid mirroring the navbar version dropdown
+  Group: reuse-versioning
+  CallForm: both
+  Overrides: none
 
   Parameters:
-    - section: (optional) Key under site.Params.sections. Defaults to
-               the last segment of the current page's URL — e.g. on
-               /docs/kubernetes/ the section is "kubernetes".
-    - desc:    (optional) Description rendered under each card title.
-               Supports Markdown.
+    - section | string | no | last URL segment | Key under params.sections whose versions to list.
+    - desc | string | no | — | Description rendered under each card title. Supports Markdown.
 
-  Sets .Page.Store "hasManualCards" so the auto-section-cards partial
-  in docs/list.html does not also emit child-section cards.
+  Example: code-only
 
-  Example:
-    {{< version-cards desc="Use product X in a Kubernetes environment." >}}
+  Notes:
+    Designed for a section landing page. Each card links to
+    `<currentPagePath>/<linkVersion>/`.
+
+    `section` defaults to the last segment of the current page's URL, so on
+    `/docs/kubernetes/` the section is `kubernetes`.
+
+    Versions resolve through `utils/resolve-section-versions.html`, the single
+    place that knows which entries in `params.versions` apply to a section: each
+    entry names its sections, and an untagged entry applies to all. This file
+    used to read `params.sections.<section>.versions` itself with a fallback to
+    the top-level list, which meant the priority rule lived here AND in the
+    sidebar AND in the navbar AND in version-root.html — and they drifted.
+
+    Each version entry needs `dropdown` for the label and `linkVersion` for the
+    URL slug. An entry whose `dropdown` is empty or whitespace is skipped,
+    matching the navbar's visibility rule.
+
+    Sets `hasManualCards` on the page store so the auto-section-cards partial in
+    `docs/list.html` does not also emit child-section cards underneath.
+
+    The example is marked `code-only`: this site registers no sections or
+    versions, so a live render would produce an empty grid.
 */ -}}
 {{- $section := .Get "section" -}}
 {{- if not $section -}}

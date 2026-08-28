@@ -1,0 +1,248 @@
+# The module's own documentation site, published to GitHub Pages at
+# https://solo-io.github.io/docs-theme-extras/ by .github/workflows/pages.yml.
+#
+# This is the one config in the repo that is NOT a test fixture. The other
+# seven build `fixture/` to give the harness something to assert against; this
+# one builds `docs/content/`, which is prose meant for a human.
+#
+# THE SITE IS BUILT BY THE MODULE IT DOCUMENTS. layouts/ and assets/ are mounted
+# from the working tree, not pulled from a tagged release, so every shortcode
+# example on the site is the real shortcode rendering. Two consequences:
+#
+#   1. The published site always documents `main`, never the latest tag. It can
+#      therefore describe a shortcode no released version ships. The home page
+#      says so.
+#   2. A theme regression can break the docs that explain the theme. That is why
+#      pages.yml is separate from test.yml — a broken site never blocks a
+#      release, it just leaves the last good deploy up.
+#
+# Build with `make build-docs`; preview with `make server-docs`.
+
+baseURL = "https://solo-io.github.io/docs-theme-extras/"
+languageCode = "en-us"
+title = "docs-theme-extras"
+linkTitle = "docs-theme-extras"
+contentDir = "docs/content"
+publishDir = "public-docs"
+enableInlineShortcodes = true
+
+[module]
+  [[module.imports]]
+    path = "github.com/imfing/hextra"
+    disable = false
+
+  # No self-import. This repo IS docs-theme-extras, so layouts/ and assets/ at
+  # the root are the module's own; mounting them is what makes the site build
+  # from the working tree. Importing the module by its go.mod path instead
+  # would document whatever version go.sum happens to pin.
+  [[module.mounts]]
+    source = "docs/content"
+    target = "content"
+  [[module.mounts]]
+    source = "layouts"
+    target = "layouts"
+  # The consumer half of the module-bootstrap contract. Hextra calls
+  # custom/head-end.html and never themeExtras/head-end.html directly, so this
+  # site has to supply its own custom/head-end.html the way every real consumer
+  # does. Without this mount the module's OWN stylesheets never load and the
+  # site renders on Hextra's base CSS alone, which looks plausible enough to
+  # miss. See docs/layouts/partials/custom/head-end.html.
+  [[module.mounts]]
+    source = "docs/layouts"
+    target = "layouts"
+  [[module.mounts]]
+    source = "assets"
+    target = "assets"
+  [[module.mounts]]
+    source = "docs/static"
+    target = "static"
+  # Theme-shipped icons (the `solo` entry in data/icons.yaml), so
+  # utils/render-icon.html resolves the same names here as in a consumer.
+  [[module.mounts]]
+    source = "data"
+    target = "data"
+
+# writeStats emits hugo_stats.json, which Hextra's Tailwind pass reads to decide
+# which utilities to keep. Without it the stylesheet is purged down to whatever
+# Tailwind can see statically and most of the page loses its styling.
+#
+# The cachebusters only affect incremental rebuilds under `hugo server`; a
+# one-shot `make build-docs` does not need them. They are here so `make
+# server-docs` behaves like the fixture servers do, and they are copied from
+# hugo-oss.toml. Keep the two in sync by hand — nothing checks it.
+[build]
+  writeStats = true
+  [[build.cachebusters]]
+    source = "assets/watching/hugo_stats\\.json"
+    target = "styles\\.css"
+  [[build.cachebusters]]
+    source = "(postcss|tailwind)\\.config\\.js"
+    target = "css"
+  [[build.cachebusters]]
+    source = "assets/.*\\.(js|ts|jsx|tsx)"
+    target = "js"
+  [[build.cachebusters]]
+    source = "assets/.*\\.(.*)$"
+    target = "$1"
+
+[params]
+
+# REQUIRED for a project Pages site, and silent when wrong.
+#
+# _partials/head.html and the favicon partial use params.pathName as the href
+# prefix whenever baseURL carries a scheme, and this one does. Leave it unset
+# and every such href becomes /<file>, which resolves against
+# solo-io.github.io rather than the project subpath and 404s. Leading slash, no
+# trailing slash — the same shape as hugo-oss.toml's `pathName = "/test/docs"`.
+pathName = "/docs-theme-extras"
+
+# Deliberately NO [[params.versions]] and NO [params.sections].
+#
+# The module is not versioned per-section and the site has one doc set, so
+# registering either would be inventing an axis that does not exist. What that
+# buys, in the module's own code paths:
+#
+#   utils/section-segment.html   returns segment="" on every page, so each
+#                                caller's path math reduces to the flat case.
+#   utils/version-noindex.html   stays inert, so the whole site indexes.
+#   utils/prod-host.html         resolves the host from the full baseURL via
+#                                its rule 2, so themeExtras.prodHost needs no
+#                                explicit value here.
+#
+# It also means this build exercises a code path no fixture does: a versionless
+# site with no registered sections AT ALL. hugo-flat.toml is versionless but
+# still registers four sections.
+
+[params.themeExtras]
+  brand = "oss"
+
+[params.docs]
+  title = "docs-theme-extras"
+  toc = true
+
+# Show the left nav on the home page.
+#
+# sidebar.html hides it on the "docs index" by default, and treats
+# `.IsHome` as one spelling of that. The default is right for a VERSIONED site,
+# where the root is a pick-your-version splash sitting above the trees with no
+# single tree to show — agentgateway's root chooser once rendered 870 links in a
+# 324KB aside before that guard existed.
+#
+# This site is the other shape: flat, unversioned, and its home page IS the docs
+# entry, so hiding the nav there removes it from the one page every reader
+# arrives at first. Same reason agentregistry sets it.
+#
+# Needed TOGETHER with `type: docs` on docs/content/_index.md. That front-matter
+# key is what puts the home page on the docs layout at all; this flag is what
+# stops that layout suppressing the nav once it gets there. Either alone leaves
+# the home page without a left nav, which is why the first fix looked like it
+# had done nothing.
+[params.sidebar]
+  showOnLanding = true
+
+[params.navbar]
+  width = "wide"
+
+  # Mark AND title, both on. There is no wordmark SVG on purpose.
+  #
+  # navbar-title.html renders the logo as an <img>, so an SVG-embedded wordmark
+  # would be an independent document: it could not use the site's font stack, it
+  # could not pick up the theme's ink colour, and it would need hand-tuned
+  # width/height to avoid stretching. Letting the theme render .Site.Title in the
+  # `hx:font-extrabold` span next to the mark gets correct typography and correct
+  # dark mode for free, and leaves the SVG doing only the part an SVG is good at.
+  #
+  # It also covers the breakpoint the wordmark route would have missed: that
+  # title span is `hx:hidden hx:md:inline`, so below md the mark is the ONLY
+  # brand element in the navbar. A mark-first lockup degrades correctly there.
+  displayTitle = true
+  displayLogo = true
+
+  # Square viewBox (180x180), so width must equal height or the hexagon skews.
+  # 28 sits the mark slightly above cap height next to the title text.
+  [params.navbar.logo]
+    path = "images/logos/logo-extras.svg"
+    dark = "images/logos/logo-extras-dark.svg"
+    width = 28
+    height = 28
+
+# params.sidebar.logo and params.footer.logo stay unset, following the OSS
+# arrangement. navbar-title.html branches on sidebar.logo: setting it would make
+# the navbar mark desktop-only and hand mobile to the sidebar asset instead.
+# Leaving it unset means the one navbar mark serves every breakpoint, including
+# the mobile drawer, which is the whole reason a single square mark was the
+# right shape to draw.
+
+[params.page]
+  width = "wide"
+
+[params.theme]
+  default = "system"
+  displayToggle = true
+
+[params.search]
+  enable = true
+  type = "flexsearch"
+
+  [params.search.flexsearch]
+    index = "content"
+
+# Off for now. The repo is public so an edit link would resolve, but the site's
+# pages are a mix of hand-written prose and generated reference, and pointing a
+# reader at a generated file to edit is worse than pointing them nowhere.
+[params.editURL]
+  enable = false
+
+# Dogfooding: the module's own feedback widget, filing against this repo.
+[params.feedback]
+  enable = true
+  issueRepo = "solo-io/docs-theme-extras"
+
+[params.footer]
+  copyright = "Solo.io copyright 2026"
+  displayPoweredBy = false
+
+[[menu.main]]
+  name = "Search"
+  weight = 1
+  [menu.main.params]
+    type = "search"
+
+[[menu.main]]
+  name = "GitHub"
+  weight = 2
+  url = "https://github.com/solo-io/docs-theme-extras"
+  [menu.main.params]
+    icon = "github"
+
+[[menu.main]]
+  name = "Theme"
+  weight = 3
+  [menu.main.params]
+    type = "theme-toggle"
+    label = false
+
+[markup]
+
+[markup.tableOfContents]
+  endLevel = 6
+  startLevel = 1
+
+# unsafe = true is not optional here. Most of this module's shortcodes emit raw
+# HTML, and the site's whole point is rendering them live.
+[markup.goldmark.renderer]
+  unsafe = true
+
+[markup.goldmark.parser]
+  attribute = true
+
+[markup.goldmark.extensions.extras.superscript]
+  enable = true
+
+[markup.highlight]
+  noClasses = false
+
+[sitemap]
+  changeFreq = ''
+  filename = 'sitemap.xml'
+  priority = -1

@@ -1,26 +1,37 @@
 {{- /*
-    Shortcode: redirect
-    Emits a client-side redirect to another URL: a <script> that sets
-    window.location, a <noscript> meta-refresh fallback, and a visible
-    "Redirecting to …" link for users (and crawlers) who don't follow
-    either. Use it on a stub page that has moved, to bounce readers to the
-    canonical location.
+  Shortcode: redirect
+  Summary: Emits a client-side redirect from a stub page to its canonical location
+  Group: links
+  CallForm: both
+  Overrides: none
 
-    Parameters:
-      - 0 / url:  A URL to redirect to (used as-is).
-      - path:     A section-relative path resolved to the current docs
-                  section (e.g. "/tutorials/basic/"). Resolution goes through
-                  utils/page-context.html, the same prefix card.html and the
-                  link shortcodes use, so it works for every section layout
-                  the partial knows about (kubernetes, standalone, envoy,
-                  agentgateway, …) without hardcoding a regex here. Falls back
-                  to FirstSection.RelPermalink for pages outside the
-                  /docs/<section>/<version>/ shape.
+  Parameters:
+    - url | url | no | — | A URL to redirect to, used as-is.
+    - path | path | no | — | A section-relative path resolved to the current docs section, e.g. /tutorials/basic/.
+    - 0 | url | no | — | Positional alias for url.
 
-    Examples:
-      {{< redirect "/some/url" >}}
-      {{< redirect url="/some/url" >}}
-      {{< redirect path="/tutorials/basic/" >}}
+  Example: code-only
+
+  Notes:
+    Give exactly one of `url`, `path`, or the positional argument.
+
+    The example is `code-only` for a reason specific to this shortcode: it emits
+    a `window.location` assignment that fires on page load. A live example would
+    navigate the reader off the reference page the instant they opened it. This
+    is the only shortcode in the module whose rendered output acts on the page
+    that contains it.
+
+    Emits three things, so the redirect survives readers who do not run the
+    first one: a `<script>` that sets `window.location`, a `<noscript>`
+    meta-refresh fallback, and a visible "Redirecting to ..." link for anyone
+    (or any crawler) that follows neither.
+
+    `path` resolves through `utils/page-context.html`, the same prefix
+    `card.html` and the link shortcodes use, so it works for every section
+    layout that partial knows about (kubernetes, standalone, envoy,
+    agentgateway and so on) without hardcoding a regex here. Pages outside the
+    `/docs/<section>/<version>/` shape fall back to
+    `.FirstSection.RelPermalink`.
 */ -}}
 {{- $url := .Get 0 | default (.Get "url") | default "" -}}
 {{- $path := .Get "path" -}}

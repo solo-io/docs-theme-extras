@@ -1,23 +1,40 @@
 {{- /*
   Shortcode: github
-  Fetches a remote file by URL and inlines its contents.
-
-  Behavior depends on the URL's file extension:
-    - `.md` URLs are rendered through the page's markdown renderer, so
-      headings, tables, and links inside the fetched file render correctly.
-    - All other URLs (yaml, json, text, etc.) are passed through as-is via
-      safeHTML. Callers typically wrap these in a code fence so they render
-      as a code block.
+  Summary: Fetches a remote file by URL and inlines its contents
+  Group: external-content
+  CallForm: both
+  Overrides: none
 
   Parameters:
-    - url: The remote URL of the file to fetch and display.
+    - url | url | yes | — | The remote URL of the file to fetch and display.
 
-  Network resilience: `timeout` caps a slow/unreachable remote so a cold CI
-  build (no getresource cache) fails fast instead of hanging, and `try`
-  (required since Hugo v0.141 removed `resource.Err`) turns a transient fetch
-  error/timeout into a WARN + link-checker-visible fallback rather than a build
-  hang/crash. A dead/404 URL (a nil resource with no error) is treated as a real
-  reference bug instead and fails the build with an `errorf`.
+  Example: code-only
+
+  Notes:
+    Behavior depends on the URL's file extension. A `.md` URL is rendered
+    through the page's Markdown renderer, so headings, tables and links inside
+    the fetched file render correctly. Anything else — YAML, JSON, plain text —
+    is passed through with `safeHTML`, and callers typically wrap the call in a
+    code fence so it renders as a code block.
+
+    For a YAML file specifically, prefer `github-yaml`: it writes the fence for
+    you, strips the editor schema directive, captions the block and uses a
+    date-stamped cache key.
+
+    ### Network behavior
+
+    `timeout` caps a slow or unreachable remote so a cold CI build with no
+    getresource cache fails fast instead of hanging, and `try` (required since
+    Hugo v0.141 removed `resource.Err`) turns a transient fetch error into a
+    warning plus a link-checker-visible fallback rather than a crash.
+
+    A dead or 404 URL is different: it produces a nil resource with no error,
+    which is treated as a real reference bug and fails the build with `errorf`.
+    The distinction is deliberate — a flaky network should not break a build,
+    and a wrong URL should.
+
+    The example is marked `code-only`: a live render would hit the network on
+    every site build.
 */ -}}
 {{- $url := .Get "url" -}}
 {{- $attempt := try (resources.GetRemote $url (dict "timeout" "15s")) -}}

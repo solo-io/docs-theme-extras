@@ -342,11 +342,20 @@
     "COND_SEC_LANDING_PRODUCT": "div.hextra-max-page-width > article > main > div.content > p",
     "COND_SEC_LANDING_SECTION": "div.hextra-max-page-width > article > main > div.content > p"
   },
+  "nested/v1": {
+    "MARKER_BANNER_SECTION": "div.hextra-max-page-width > article > main > div.version-banner"
+  },
+  "nested/v1/page": {
+    "MARKER_BANNER_SECTION": "div.hextra-max-page-width > article > main > div.version-banner"
+  },
   "nested/v2/cond-section": {
     "COND_SEC_EXCLUDE_OTHER": "div.hextra-max-page-width > article > main > div.content > p",
     "COND_SEC_LIST_WITH_PRODUCT": "div.hextra-max-page-width > article > main > div.content > p",
     "COND_SEC_PRODUCT": "div.hextra-max-page-width > article > main > div.content > p",
     "COND_SEC_SECTION": "div.hextra-max-page-width > article > main > div.content > p"
+  },
+  "v1/enterprise-kgateway-traffic-policy": {
+    "MARKER_BANNER_ENTRY": "div.hextra-max-page-width > article > main > div.version-banner"
   },
   "v1/everything": {
     "COND_BULLET_1": "div.hextra-max-page-width > article > main > div.content > ul > li",
@@ -389,6 +398,7 @@
     "MARKER_APPEND_BASE_ROW": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_APPEND_EXTRA_ROW": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_BADGE": "div.hextra-max-page-width > article > main > div.content > div.hextra-badge > div",
+    "MARKER_BANNER_ENTRY": "div.hextra-max-page-width > article > main > div.version-banner",
     "MARKER_BRNOTE_CELL_BODY": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_BRNOTE_CELL_DESC": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_BRNOTE_CELL_KEY": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td > code",
@@ -505,6 +515,12 @@
     "MARKER_VERSION_SEQ_V1": "div.hextra-max-page-width > article > main > div.content > p",
     "MARKER_VERSION_WRAPAROUND_": "div.hextra-max-page-width > article > main > div.content > p > code"
   },
+  "v1": {
+    "MARKER_BANNER_ENTRY": "div.hextra-max-page-width > article > main > div.version-banner"
+  },
+  "v1/not-in-version": {
+    "MARKER_BANNER_ENTRY": "div.hextra-max-page-width > article > main > div.version-banner"
+  },
   "v1/rebased": {
     "COND_BULLET_1": "div.hextra-max-page-width > article > main > div.content > ul > li",
     "COND_BULLET_2": "div.hextra-max-page-width > article > main > div.content > ul > li",
@@ -546,6 +562,7 @@
     "MARKER_APPEND_BASE_ROW": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_APPEND_EXTRA_ROW": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_BADGE": "div.hextra-max-page-width > article > main > div.content > div.hextra-badge > div",
+    "MARKER_BANNER_ENTRY": "div.hextra-max-page-width > article > main > div.version-banner",
     "MARKER_BRNOTE_CELL_BODY": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_BRNOTE_CELL_DESC": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_BRNOTE_CELL_KEY": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td > code",
@@ -664,25 +681,34 @@
   },
   "v1/reference/api/api": {
     "MARKER_APIREF_AGW": "div.hextra-max-page-width > article > main > div.content > p",
-    "MARKER_APIREF_PAGE_AGW": "div.hextra-max-page-width > article > main > div.content > p"
+    "MARKER_APIREF_PAGE_AGW": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_BANNER_ENTRY": "div.hextra-max-page-width > article > main > div.version-banner"
   },
   "v1/reference/api": {
     "MARKER_APIREF_OSS": "div.hextra-max-page-width > article > main > div.content > p",
-    "MARKER_APIREF_PAGE_SINGLE": "div.hextra-max-page-width > article > main > div.content > p"
+    "MARKER_APIREF_PAGE_SINGLE": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_BANNER_ENTRY": "div.hextra-max-page-width > article > main > div.version-banner"
   },
   "v1/reference/api/kgateway": {
     "MARKER_APIREF_ENT": "div.hextra-max-page-width > article > main > div.content > p",
     "MARKER_APIREF_NODOUBLE": "div.hextra-max-page-width > article > main > div.content > p",
-    "MARKER_APIREF_PAGE_KGATEWAY": "div.hextra-max-page-width > article > main > div.content > p"
+    "MARKER_APIREF_PAGE_KGATEWAY": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_BANNER_ENTRY": "div.hextra-max-page-width > article > main > div.version-banner"
   },
   "v1/reference": {
-    "MARKER_APIREF_": "div.hextra-max-page-width > article > main > div.content > p > code"
+    "MARKER_APIREF_": "div.hextra-max-page-width > article > main > div.content > p > code",
+    "MARKER_BANNER_ENTRY": "div.hextra-max-page-width > article > main > div.version-banner"
+  },
+  "v1/removed-feature": {
+    "MARKER_BANNER_ENTRY": "div.hextra-max-page-width > article > main > div.version-banner"
   },
   "v1/trailing-step": {
+    "MARKER_BANNER_ENTRY": "div.hextra-max-page-width > article > main > div.version-banner",
     "MARKER_VERSION_TRAILING_PRE_FENCE": "div.hextra-max-page-width > article > main > div.content > ol > li > div.hextra-code-block > div > div.highlight > pre > code > span.line > span.cl > span.c1",
     "MARKER_VERSION_TRAILING_STEP": "div.hextra-max-page-width > article > main > div.content > ol > li > p"
   },
   "v1/version-remap": {
+    "MARKER_BANNER_ENTRY": "div.hextra-max-page-width > article > main > div.version-banner",
     "MARKER_REMAP_ALWAYS_DESC": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_REMAP_ALWAYS_KEY": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td > code",
     "MARKER_REMAP_COLLIDE_PLAIN": "div.hextra-max-page-width > article > main > div.content > p",
@@ -1174,6 +1200,33 @@
     "MARKER_LISTCONT_STEP1": "div.hextra-max-page-width > article > main > div.content > ol > li > p",
     "MARKER_LISTCONT_STEP3": "div.hextra-max-page-width > article > main > div.content > ol > li > p",
     "MARKER_LISTCONT_TAIL": "div.hextra-max-page-width > article > main > div.content > ol > li > p"
+  },
+  "v2/source-filters-rebase-reuse": {
+    "MARKER_SF_ALWAYS": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_SF_ANGLE_DOWN": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_SF_ANGLE_LEAD": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_SF_DOWNSTREAM_ONLY": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_SF_INLINE_DOWN": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_SF_INLINE_LEAD": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_SF_TAIL": "div.hextra-max-page-width > article > main > div.content > p"
+  },
+  "v2/source-filters-rebase": {
+    "MARKER_SF_ALWAYS": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_SF_ANGLE_DOWN": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_SF_ANGLE_LEAD": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_SF_DOWNSTREAM_ONLY": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_SF_INLINE_DOWN": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_SF_INLINE_LEAD": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_SF_TAIL": "div.hextra-max-page-width > article > main > div.content > p"
+  },
+  "v2/source-filters-reuse": {
+    "MARKER_SF_ALWAYS": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_SF_ANGLE_LEAD": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_SF_ANGLE_UP": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_SF_INLINE_LEAD": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_SF_INLINE_UP": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_SF_TAIL": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_SF_UPSTREAM_ONLY": "div.hextra-max-page-width > article > main > div.content > p"
   },
   "v2/trailing-step": {
     "MARKER_VERSION_INNER_STEP": "div.hextra-max-page-width > article > main > div.content > ol > li > p",

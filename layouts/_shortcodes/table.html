@@ -1,35 +1,49 @@
 {{- /*
   Shortcode: table
-  Wraps a markdown table so the author can pick how its columns size,
-  overriding the theme's default column-count heuristic (which caps cell
-  width only on 3+ column reference tables). Use it when the default doesn't
-  suit a specific table.
+  Summary: Wraps a markdown table so the author picks how its columns size
+  Group: ui-components
+  CallForm: both
+  Overrides: none
 
-  Usage (the markdown table must start at column 0 — .InnerDeindent strips
-  a uniform leading indent, but ragged indentation still breaks the table):
+  Parameters:
+    - mode | string | no | wrap | One of wrap, nowrap, or equal. See Notes.
+    - 0    | string | no | wrap | Positional alias for mode.
 
+  Example:
     {{% table mode="nowrap" %}}
     | Command | Description |
     | ------- | ----------- |
     | `kubectl get pods -n agentgateway -o wide` | Lists pods. |
     {{% /table %}}
 
-  Parameters:
-    - mode (or positional 0): one of
-        wrap    (default) Fill the body width; wrap content as needed; never
-                scroll horizontally. Best for prose/description tables and
-                small 2-column tables that should span the page.
-        nowrap  Size each column to its content; never wrap; scroll
-                horizontally when the table is wider than the body. Best for
-                code snippets and command tables where wrapping hurts reading.
-        equal   Equal-width columns (table-layout:fixed); wrap content. Best
-                when you want uniform columns regardless of content length.
+  Notes:
+    This is the REFERENCE IMPLEMENTATION of the header contract in
+    MAINTAINING.md. If the two disagree, the document is right and this file
+    needs updating.
 
-  Renders the inner markdown through .Page.RenderString so both call forms
-  (percent and angle-bracket) produce identical HTML — the rebase pipeline
-  rewrites percent-form shortcodes to angle-bracket form, so relying on
-  percent-form splice-back semantics would break on rebased pages (same
-  reasoning as github-table.html).
+    The three modes:
+
+    - `wrap` (default) fills the body width and wraps content as needed, never
+      scrolling horizontally. Best for prose and description tables, and for
+      small two-column tables that should span the page.
+    - `nowrap` sizes each column to its content and never wraps, scrolling
+      horizontally when the table is wider than the body. Best for code
+      snippets and command tables, where wrapping hurts reading.
+    - `equal` gives equal-width columns via `table-layout: fixed`, and wraps
+      content. Best when columns should be uniform regardless of content.
+
+    Without this shortcode the theme applies a column-count heuristic that caps
+    cell width only on reference tables of three or more columns. Reach for
+    `table` when that default does not suit a specific table.
+
+    The markdown table must start at column 0. `.InnerDeindent` strips a
+    uniform leading indent, but ragged indentation still breaks the table.
+
+    The inner markdown goes through `.Page.RenderString` so both call forms
+    produce identical HTML. That is not cosmetic: the rebase pipeline rewrites
+    percent-form shortcodes to angle-bracket form, so anything relying on
+    percent-form splice-back semantics breaks on a rebased page. Same reasoning
+    as github-table.html.
 */ -}}
 {{- $modes := slice "wrap" "nowrap" "equal" -}}
 {{- $mode := .Get "mode" | default (.Get 0) | default "wrap" -}}

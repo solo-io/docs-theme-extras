@@ -250,6 +250,20 @@ pageContextMode = "siteParams"
   url = "https://must-not-render.invalid/dead-url-field/"
   product = "test"
   productName = "Docs framework test fixture"
+  # Entry-level banner, plus a SECTION-SCOPED override below. v1 is tagged
+  # sections = ["demo", "nested"], and `nested` is the only fixture section that
+  # nests its version trees (/test/nested/v1/…), so it is the only one whose
+  # pages carry a section segment for the override to key off.
+  #
+  # Together these cover all three paths in version-banner.html:
+  #   /test/nested/v1/…  -> the override text  (section declares one)
+  #   /test/v1/…         -> this entry text    (no section segment in the URL)
+  #   /test/nested/v2/…  -> no banner at all   (v2 sets neither)
+  # Asserted by tests/version-section-banner.spec.ts.
+  banner = "MARKER_BANNER_ENTRY. This is the v1 entry-level banner."
+
+  [params.versions.sectionBanners.nested]
+    banner = "MARKER_BANNER_SECTION. This is the nested-section override banner."
 
 [[params.versions]]
   version = "main"

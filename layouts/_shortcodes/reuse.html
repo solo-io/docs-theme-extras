@@ -1,4 +1,42 @@
-{{- /* Initialize */ -}}
+{{- /*
+  Shortcode: reuse
+  Summary: Inlines a shared Markdown file from assets, resolving a version-specific copy first
+  Group: reuse-versioning
+  CallForm: both
+  Overrides: none
+
+  Parameters:
+    - 0 | path | yes | — | Path to a file under assets/, relative to that directory.
+    - 1 | string | no | the page's version | Version to resolve against, passed down by a calling shortcode.
+    - 2 | string | no | site currentProduct | Product to resolve against, passed down by a calling shortcode.
+
+  Example: code-only
+
+  Notes:
+    The reuse mechanism for shared prose. One source file, included wherever it
+    is needed, so a correction lands everywhere at once.
+
+    ### Path resolution
+
+    For an assembled product the versioned path `<product>/<version>/<asset>` is
+    tried first, falling back to the bare path. That fallback is what lets a
+    product with versions but no per-version asset tree, such as gloo-mesh, use
+    the same call. In a repo with neither `currentProduct` nor
+    `params.versions`, the path is used exactly as given.
+
+    When no version is passed in, it is derived by walking the page's URL
+    segments and matching each against `params.versions`.
+
+    ### The second and third parameters
+
+    Both exist for the `rebase` pipeline rather than for authors. Rebase injects
+    the resolved version and product so a page rendered from another version's
+    tree resolves its includes against THAT version, not the page it landed on.
+    Writing them by hand in content is almost always a mistake.
+
+    The example is marked `code-only`: this shortcode cannot render without a
+    real asset tree and a version context.
+*/ -}}
 {{- $asset := "" -}}
 {{- $parentVersion := "" -}}
 {{- $parentProduct := "" -}}
@@ -61,6 +99,41 @@
 
 {{- /* Inject parent version into nested link/reuse shortcodes */ -}}
 {{- if $parentVersion -}}
+  {{- /* SOURCE FILTERS — the reuse-path twin of rebase.html's Stage 3b.
+
+         `upstream` and `downstream` are one-line templates with no condition in
+         them: `upstream` always emits `.Inner`, `downstream` always discards it.
+         That is the DIRECT-render answer, and the flip to the downstream answer
+         is done by filtering the source text before either template runs.
+
+         rebase.html did that filtering and this file did not, which made the
+         pair unusable for any content that reaches downstream through a reuse —
+         and that is not a corner. The docs hub does not rebase
+         `assets/agw-docs/pages/*` at all: it rebases a one-line
+         `content/docs/<section>/<ver>/…` stub whose entire body is a single
+         `reuse` call, so rebase's Stage 3b only ever saw the stub and every
+         `upstream` block in the tree below it rendered on BOTH sides, silently.
+         Measured before this change on a local hub build: a `{{%% upstream %%}}`
+         FluxCD section in agentgateway's `operations/uninstall.md` rendered in
+         full at `/agentgateway/kubernetes/latest/operations/uninstall/`.
+
+         `$parentVersion` is the "this content is being pulled downstream"
+         signal, the same one every other transform in this block already uses.
+         It is set only from the positional params that rebase's Stage 4 injects
+         (and that this file re-injects into nested reuse calls at line ~110), so
+         a native OSS render leaves it empty, skips this block, and the templates
+         give the direct-render answer unchanged.
+
+         BOTH CALL FORMS ARE MATCHED, unlike rebase.html's angle-only patterns.
+         rebase bulk-converts percent to angle in its Stage 3 before filtering;
+         reuse does not convert, and percent is the form authors must use here
+         anyway (these templates emit `.Inner` untouched, so angle form leaks a
+         block body as literal text after Goldmark). Same reasoning as the
+         two-pass version remap below, which matches `\{\{[<%%]` for exactly this
+         reason. */ -}}
+  {{- $content = replaceRE `(?s)\{\{[<%]\s*upstream\s*[>%]}}.*?\{\{[<%]\s*/upstream\s*[>%]}}` "" $content -}}
+  {{- $content = replaceRE `(?s)\{\{[<%]\s*downstream\s*[>%]}}(.*?)\{\{[<%]\s*/downstream\s*[>%]}}` "$1" $content -}}
+
   {{- /* Add version to link shortcodes. `link` gets the same treatment as
          link-hextra (which it now forwards to) — otherwise a `link` call in
          reused content would render with no version/product context and fall

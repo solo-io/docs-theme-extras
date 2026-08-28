@@ -1,19 +1,29 @@
 {{- /*
   Shortcode: details
-  Renders a collapsible details/summary block. Default state is *closed*
-  — explicitly inverts Hextra's upstream default-open behavior because
-  collapsed-by-default is the conservative UX for docs (a details block
-  is "click to reveal extra info," not "always visible").
+  Summary: Renders a collapsible details and summary block, closed by default
+  Group: ui-components
+  CallForm: both
+  Overrides: details
 
   Parameters:
-    - title: The clickable summary heading (markdown supported).
-    - open: Pass `open="true"` to render the block expanded on page load.
+    - title | string | yes | — | The clickable summary heading. Supports Markdown.
+    - open | bool | no | false | Pass open="true" to render the block expanded on page load.
 
-  Hextra's upstream uses the inverted `closed="true"` parameter to close.
-  We don't read that param: existing module-consumer content uses
-  `open="true"` to open, and Hextra's `closed="true"` becomes a no-op
-  here (which renders correctly anyway, since the default is already
-  closed).
+  Example:
+    {{< details title="Show the full output" >}}
+    The body appears only after the reader clicks the summary.
+    {{< /details >}}
+
+  Notes:
+    The default state is **closed**, which deliberately inverts Hextra's
+    default-open behavior. Collapsed-by-default is the conservative choice for
+    docs: a details block means "click to reveal extra info", not "always
+    visible".
+
+    Hextra's upstream takes the inverted `closed="true"` to close. This
+    shortcode does not read that param. Existing consumer content uses
+    `open="true"` to open, and a stray `closed="true"` becomes a no-op that
+    still renders correctly, since closed is already the default.
 */ -}}
 {{- $title := .Get "title" | default "" -}}
 {{- $open := eq (.Get "open") "true" -}}
