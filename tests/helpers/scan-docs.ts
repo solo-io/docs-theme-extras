@@ -88,9 +88,13 @@ export function readsIn(src: string) {
   /* `isset $sc.Params "include-if"` is a param read that never touches .Get.
      gate-decide.html tests presence that way before fetching the value, and
      for a shortcode that only ever passes the param through, the isset is the
-     only occurrence — so skipping this form loses the key entirely. */
+     only occurrence — so skipping this form loses the key entirely.
+
+     One pattern is enough. It is unanchored, so it already matches inside the
+     isset form (`isset $sc.Params "x"` contains `$sc.Params "x"`); the separate
+     isset regex that used to follow this line was a strict subset of it and
+     added nothing. */
   for (const m of src.matchAll(/[A-Za-z0-9_$.]*\.Params\s+"([^"]+)"/g)) named.add(m[1]);
-  for (const m of src.matchAll(/isset\s+[A-Za-z0-9_$.]*\.Params\s+"([^"]+)"/g)) named.add(m[1]);
 
   return { named: [...named].sort(), positional: [...positional].sort(), dynamic };
 }
@@ -103,7 +107,6 @@ function balanced(src: string, open: number): string {
     else if (src[i] === ")" && --depth === 0) return src.slice(open + 1, i);
   }
   return "";
-  return { named: [...named].sort(), positional: [...positional].sort(), dynamic };
 }
 
 /** Partials this template hands its own context to, in either of the two forms
@@ -258,7 +261,18 @@ function walkFiles(base: string, exts: string[]): string[] {
 }
 
 /** Every `themeExtras.<key>` read under layouts/ and assets/, with the files
-    that read it, cross-referenced against whether USAGE.md names it. */
+    that read it, cross-referenced against whether the docs site describes it.
+
+    CROSS-REFERENCES THE DOCS SITE, NOT USAGE.md. This used to grep USAGE.md,
+    which was correct until that file was reduced to a redirect stub and the
+    configuration reference moved to docs/content/configuration/params.md. Left
+    pointed at the stub the column had zero signal: measured against all 8 keys
+    it produced 7 false "UNDOCUMENTED" and 1 false "documented" — `logo` matched
+    the word "Logo" in a stub table row advertising a different page entirely.
+
+    A key counts as described when the generated page gives it a real
+    description rather than the `**Undocumented.**` placeholder, which is the
+    same condition tests/docs-coverage.spec.ts asserts on. */
 export function scanConfigParams() {
   const files = [
     ...walkFiles(path.join(ROOT, "layouts"), [".html", ".md", ".txt"]),
@@ -273,14 +287,16 @@ export function scanConfigParams() {
       hits.get(k)!.add(path.relative(ROOT, f));
     }
   }
-  const usagePath = path.join(ROOT, "USAGE.md");
-  const usage = fs.existsSync(usagePath) ? fs.readFileSync(usagePath, "utf8") : "";
+  const pagePath = path.join(ROOT, "docs/content/configuration/params.md");
+  const page = fs.existsSync(pagePath) ? fs.readFileSync(pagePath, "utf8") : "";
   return [...hits.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, set]) => ({
       key,
       readIn: [...set].sort(),
-      documentedInUsage: mentions(usage, key),
+      documented:
+        page.includes(`## \`themeExtras.${key}\``) &&
+        !page.includes(`## \`themeExtras.${key}\`\n\n**Undocumented.**`),
     }));
 }
 
@@ -416,7 +432,7 @@ export function formatReport(r: ReturnType<typeof scan>): string {
   out.push("─".repeat(74));
   for (const p of r.configParams) {
     out.push(
-      `  ${pad(p.key, 26)}${p.documentedInUsage ? "in USAGE" : "UNDOCUMENTED"}` +
+      `  ${pad(p.key, 26)}${pad(p.documented ? "described" : "UNDESCRIBED", 14)}` +
         `   ${p.readIn.join(", ")}`,
     );
   }

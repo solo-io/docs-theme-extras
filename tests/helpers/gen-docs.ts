@@ -658,6 +658,61 @@ export function generate(): {
   return { files, parsed, skipped };
 }
 
+/**
+ * Pages under OUT_SHORTCODES that no longer have a source shortcode.
+ *
+ * ONLY a page whose `layouts/_shortcodes/<name>.html` is GONE counts. A page is
+ * NOT orphaned merely because it is absent from `files` — a shortcode whose
+ * header fails to parse is `skipped`, so it contributes no page, and treating
+ * that as an orphan meant a ONE-CHARACTER TYPO in a header deleted that
+ * shortcode's entire documentation page.
+ *
+ * Measured, not hypothesised: renaming `Summary:` to `Summry:` in table.html
+ * made `npm run gen:docs` report `removed: 1 (orphaned)` and unlink
+ * `docs/content/authoring/shortcodes/table.md`, while rewriting 21 other pages
+ * because the index and every subsequent weight shifted. The word "orphaned"
+ * reads as deliberate cleanup, so the deletion was easy to wave through in a
+ * 22-file diff — and the actual cause, a typo, was named nowhere in it.
+ *
+ * Keying on the source file separates the two cases: a genuinely deleted or
+ * renamed shortcode still gets its page removed, and a broken header now leaves
+ * the page untouched while `formatSkipped` and the docs-coverage spec report the
+ * header itself.
+ */
+/**
+ * The decision, as a pure function so it can be tested without a filesystem
+ * and without a spec that deletes real documentation to prove a point.
+ *
+ * @param pageFile      basename under OUT_SHORTCODES, e.g. "table.md"
+ * @param generatedRels the rel paths generate() produced this run
+ * @param sourceExists  does layouts/_shortcodes/<basename> exist?
+ */
+export function isOrphanPage(
+  pageFile: string,
+  generatedRels: Set<string>,
+  sourceExists: (htmlBasename: string) => boolean,
+): boolean {
+  if (pageFile === "_index.md") return false;
+  if (generatedRels.has(`${OUT_SHORTCODES}/${pageFile}`)) return false;
+  // The source still exists → stale-but-owned (a broken header), not orphaned.
+  return !sourceExists(pageFile.replace(/\.md$/, ".html"));
+}
+
+function orphanedPages(files: Map<string, string>): string[] {
+  const outDir = path.join(ROOT, OUT_SHORTCODES);
+  if (!fs.existsSync(outDir)) return [];
+  const rels = new Set(files.keys());
+  return fs
+    .readdirSync(outDir)
+    .filter((x) => x.endsWith(".md"))
+    .filter((f) =>
+      isOrphanPage(f, rels, (html) =>
+        fs.existsSync(path.join(ROOT, SHORTCODE_DIR, html)),
+      ),
+    )
+    .map((f) => `${OUT_SHORTCODES}/${f}`);
+}
+
 /** Paths whose on-disk content differs from what generate() would write. */
 export function check(): { changed: string[]; skipped: ParseResult[] } {
   const { files, skipped } = generate();
@@ -668,13 +723,7 @@ export function check(): { changed: string[]; skipped: ParseResult[] } {
   }
   // A page left behind by a shortcode that was deleted or renamed is a stale
   // file the reader can still reach, so removal counts as a diff too.
-  const outDir = path.join(ROOT, OUT_SHORTCODES);
-  if (fs.existsSync(outDir)) {
-    for (const f of fs.readdirSync(outDir).filter((x) => x.endsWith(".md"))) {
-      const rel = `${OUT_SHORTCODES}/${f}`;
-      if (!files.has(rel)) changed.push(`${rel} (orphaned — delete)`);
-    }
-  }
+  for (const rel of orphanedPages(files)) changed.push(`${rel} (orphaned — delete)`);
   return { changed: changed.sort(), skipped };
 }
 
@@ -689,16 +738,11 @@ export function write(): { written: string[]; removed: string[]; skipped: ParseR
       written.push(rel);
     }
   }
+  // Deletes ONLY pages whose source shortcode is gone — see orphanedPages.
   const removed: string[] = [];
-  const outDir = path.join(ROOT, OUT_SHORTCODES);
-  if (fs.existsSync(outDir)) {
-    for (const f of fs.readdirSync(outDir).filter((x) => x.endsWith(".md"))) {
-      const rel = `${OUT_SHORTCODES}/${f}`;
-      if (!files.has(rel)) {
-        fs.unlinkSync(path.join(ROOT, rel));
-        removed.push(rel);
-      }
-    }
+  for (const rel of orphanedPages(files)) {
+    fs.unlinkSync(path.join(ROOT, rel));
+    removed.push(rel);
   }
   return { written, removed, skipped };
 }

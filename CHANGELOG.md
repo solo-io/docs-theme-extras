@@ -68,7 +68,7 @@ the maturity notice is the one that matters. A section with no override falls ba
 banner; an entry with no `sectionBanners` is unaffected.
 
 **Why the override lives on the version entry and not under `[params.sections.<x>]`.** The docs
-hub prototyped the section-level shape as a local `version-banner.html` override (solo-io/docs
+hub prototyped the section-level shape as a local `version-banner.html` override (docs
 PR #3531), and it works, but it is the wrong long-term home for two reasons.
 
 *It is the wrong axis.* Section maturity is a property of (section, version), not of the
@@ -379,25 +379,172 @@ was the one resolving, and a filesystem `replace` pointing the hub at the local 
 is the only setup that exercises the assembled path; the module's own fixture has a flat assets
 tree and structurally cannot.
 
-- Build: **exit 0, zero `ERROR` lines, 1470 pages.** Against the pre-fix module copy this build
-  does not complete at all.
-- `/agentgateway/standalone/latest/llm/providers/azure/` (3 call sites): **8** tables, **0**
-  stray `<p>|` pipe rows, **14** rows carried in from the base snippet — so the appended rows
-  joined the base table rather than falling out of it.
-- Product-wide: **no page** contains shortcode-error output. Four pages match a naive
-  `could not find` grep; all four are prose ("The proxy could not find a GitHub access
-  token…"), checked individually.
+Re-measured 2026-08-28 against the branch as it now stands, because the first pass recorded
+counts that content growth had already moved. The numbers below are the current ones.
+
+- **Negative control, run first so the rest means something.** Hub copy deleted, pin left at
+  the published `v0.3.4`: the build **aborts** with
+  `The "reuse-append" shortcode could not find "agw-docs/snippets/provider-azure-base-configuration.md"`,
+  then `reuse-append.html:48 <$res.Content>: nil pointer`. That is the failure a consumer hits
+  the moment it deletes its vendored copy while pinned to 0.3.3/0.3.4.
+- **Positive, changing only `go.mod`:** build **exit 0**. Hugo reports 2759 EN and 829 JA
+  pages; `public/agentgateway/` holds 2777 `index.html` files across both languages.
+- `/agentgateway/standalone/latest/llm/providers/azure/` (**6** call sites): **8** tables, **0**
+  stray `<p>|` pipe rows. Checked by parsing the DOM rather than grepping: **6** tables carry
+  the base snippet's 5 rows AND the appended row inside a single `<table>` (7 `<tr>` each,
+  header included) — one per call site, so every one joined rather than falling out.
+- Product-wide: **no page** contains shortcode-error output — **zero** matches for
+  `nil pointer evaluating`. 22 pages match a naive `could not find` grep and all 22 are prose,
+  two distinct sentences about a GitHub access token. (The first pass recorded four; the
+  sentence spread as content and JA translations grew. The grep is a smoke test, not the
+  assertion — `nil pointer` is.)
+- Confirmed the build actually resolved the LOCAL checkout and not a cached `v0.3.4`: the hub
+  output contains `retired-version-notice` and the `not_found_*` string table, neither of which
+  exists in `v0.3.4`.
 - Module fixture, both brands: 21 shortcode assertions pass, and both brands build with zero
   errors. The OSS path is also unchanged by construction — on a flat site `currentProduct` is
   empty, so step 1 is skipped and behavior is identical to 0.3.3.
 
-Afterwards the hub was restored to its tagged state (`git checkout go.mod go.sum`, hub copy
-put back), because it still pins `v0.3.3` and would otherwise break.
+Afterwards the hub was restored to its tagged state (`git checkout go.mod go.sum` — the
+filesystem `replace` also hoists a transitive Hextra `require`, so reverting the file is not
+enough — hub copy put back, generated mounts file and live symlink removed, and `public/`
+rebuilt against the pinned module so no artifact built from an unreleased module was left
+behind).
 
 **Sequencing note for whoever tags this.** The hub's vendored copy must not be deleted until a
-tag carrying this fix is released AND the hub's pin is bumped to it. While the hub pins
-`v0.3.3`, deleting its copy reintroduces the build failure — that is the failure reported
-against 0.3.3, and it is a pin problem, not a regression in this change.
+tag carrying this fix is released AND the hub's pin is bumped to it. The hub pins `v0.3.4`
+today; deleting its copy at that pin reintroduces the build failure, exactly as the negative
+control above demonstrates. That is a pin problem, not a regression in this change.
+
+### Fix — a content directory with no `_index.md` took the whole build down (`layouts/partials/sidebar.html`, `tests/file-nil-guard.spec.ts`)
+
+**Why.** `sidebar.html` labelled each nav item with
+`.LinkTitle | default .File.LogicalName`. `default` evaluates **both** of its
+arguments eagerly, so the `.File.LogicalName` fallback is dereferenced even when
+`.LinkTitle` is set — and `.File` is nil on any page Hugo GENERATED rather than
+read from disk. Reproduced directly:
+
+```
+ERROR ... File is nil; wrap it in if or with: {{ with .File }}{{ .LogicalName }}{{ end }}
+```
+
+Not a degraded sidebar: a hard build failure, on a site whose only fault was a
+missing `_index.md`. Hugo attributes it to the calling layout (`single.html`)
+rather than to the line, which is what made the original incident expensive to
+find.
+
+**The fix** replaces the one-liner with an explicit guard, so the fallback is
+reached only when it is both needed and safe:
+
+```
+{{- $navLabel := .LinkTitle -}}
+{{- if and (not $navLabel) .File -}}{{- $navLabel = .File.LogicalName -}}{{- end -}}
+```
+
+**Verified, and the coverage decision is deliberate.** The hazard was confirmed
+against Hugo 0.160 with a minimal site: a first-level content directory with no
+`_index.md` yields a generated section page whose `.File` is nil, and the
+`default` form aborts the build.
+
+A fixture aimed at this line would **not** exercise it, and that was measured
+rather than assumed. Only FIRST-level directories auto-generate a section page —
+a nested one does not become a section at all, so its children keep a non-nil
+`.File` — and those first-level generated sections are rendered by
+`sidebar.html`'s section-list path, which already uses `$page.Title` and is
+nil-safe. Registering such a section in `hugo-flat.toml` put it in the sidebar
+and the pre-fix build still passed. Per `tests/HAZARDS.md`, a fixture that cannot
+fail is worse than none, so the guard is pinned by a **source lint**
+(`tests/file-nil-guard.spec.ts`, `static` project, registered in
+`playwright.config.ts`) asserting no template hands a `.File.` expression to
+`default`. Reverted against the pre-fix line, it fails; restored, it passes.
+
+**No production page** — the fix prevents a build from completing at all, so
+there is nothing to view. Reproduce by deleting any first-level `_index.md` in a
+consumer and building against the pre-fix module.
+
+### Fix — the navbar site title was invisible on every consumer that enabled it (`layouts/partials/navbar-title.html`, `tests/navbar-title-utility.spec.ts`)
+
+**Why.** The title span carried `hx:md:inline`. Hextra ships a **precompiled**
+stylesheet, so the only `hx:` utilities that exist are the ones Hextra's own
+layouts use — this module cannot mint new ones by writing them into a class
+attribute, because Tailwind is never run over our templates. Hextra uses
+`inline-block` and `inline-flex`; it never uses bare `inline`. The class
+therefore matched **no rule**, the adjacent `hx:hidden` won at every breakpoint,
+and the title did not render.
+
+It failed silently in both directions: an unresolved class produces no build
+warning, no console error, and no visual clue beyond an absent title — and
+`navbar.displayTitle` **defaults to true**, so a consumer that never touched the
+setting still lost its title. `hugo-flat.toml` and `hugo-flat-root.toml` both
+enable it and were affected.
+
+**The fix** is `hx:md:inline-block`, which Hextra does emit. Safe swap: the
+parent is `hx:flex`, so the span is a flex item and its `display` is blockified
+either way — only the hidden/shown half was ever doing work.
+
+**Verified** against the compiled stylesheet rather than by eye:
+`.hx\:md\:inline-block` has exactly one rule; bare `.hx\:md\:inline` has none.
+`tests/navbar-title-utility.spec.ts` (new, `static` project, registered in
+`playwright.config.ts`) asserts every `hx:` class on that span resolves to a real
+rule, plus a non-vacuity test pinning the premise that bare `hx:md:inline` does
+not exist — so if Hextra ever adds it, the premise fails loudly instead of the
+main assertion passing for the wrong reason. Reverted to `hx:md:inline`, the spec
+fails.
+
+**The general rule, since this trap recurs:** an `hx:` utility that Hextra does
+not already use cannot be conjured. Add the rule to
+`assets/css/docs-theme-extras.css` instead.
+
+### Fix — a typo in a shortcode header made `gen:docs` DELETE that shortcode's page (`tests/helpers/gen-docs.ts`, `tests/docs-coverage.spec.ts`)
+
+**Why.** `write()` removed any page under `docs/content/authoring/shortcodes/`
+that `generate()` had not produced. A shortcode whose header fails to parse is
+`skipped`, so it produces no page — which meant a **one-character typo deleted
+that shortcode's entire documentation page.**
+
+Measured, not theorised. Renaming `Summary:` to `Summry:` in `table.html`:
+
+```
+  written : 21
+  removed : 1 (orphaned)
+```
+
+`docs/content/authoring/shortcodes/table.md` was unlinked. The word "orphaned"
+reads as deliberate cleanup, and it arrived inside a 22-file diff — the index and
+every subsequent page weight shift when the parsed set changes — so the real
+cause was named nowhere in it.
+
+**The fix** keys the decision on the SOURCE file rather than on absence from the
+generated set. A page is orphaned only when `layouts/_shortcodes/<name>.html` is
+genuinely gone; a shortcode that still exists but whose header broke keeps its
+page, and the non-conformant header is reported instead. Both directions are
+verified: the typo now leaves `table.md` untouched and reports
+`non-conformant headers (1)`, while a page with no source shortcode is still
+removed.
+
+**Verified** by four assertions on a newly extracted pure function
+(`isOrphanPage`) rather than by a spec that deletes real documentation to prove
+deletion works.
+
+### Fix — the config-parameter report cross-referenced a file this release gutted (`tests/helpers/scan-docs.ts`)
+
+**Why.** `scanConfigParams()` marked each `themeExtras.*` key documented or not
+by grepping **USAGE.md** — correct until this same release reduced that file to a
+redirect stub and moved the configuration reference to
+`docs/content/configuration/params.md`.
+
+Left pointed at the stub, the column had **zero signal**. All 8 keys are
+described on the docs site; the report called 7 of them `UNDOCUMENTED`, and the
+one it called documented — `logo` — was a false positive matching the word "Logo"
+in a stub table row advertising an unrelated page.
+
+**The fix** cross-references the generated page and treats a key as described
+only when it has real prose rather than the `**Undocumented.**` placeholder,
+which is the condition `tests/docs-coverage.spec.ts` already asserts on. The
+column now reads `described` for all 8. Also removed unreachable copy-paste
+debris after the `return` in `balanced()` (three out-of-scope identifiers that
+would fail any typecheck) and a redundant `isset` regex that was a strict subset
+of the pattern above it.
 
 ### Fix — a section card's description sat flush against its title in the PDF (`assets/css/print-book.css`)
 
@@ -524,7 +671,7 @@ green. Suite 2198 passing in both brand modes. Observable on the published theme
 
 ### Release-wide verification
 
-**2198 passed, 17 skipped, 0 failed** in both brand modes (`make test-oss`,
+**2202 passed, 17 skipped, 0 failed** in both brand modes (`make test-oss`,
 `make test-enterprise`), and both brands build with zero `ERROR` lines. The docs site builds
 clean too (`make build-docs`, 0 errors).
 
@@ -548,7 +695,7 @@ multi-product hub) that condition is `site.Params.buildCondition` — a **produc
 parallel documentation sections had no second axis, so every gate naming a section was
 dropped on **every** section rather than gated on one. Not hidden — *deleted*.
 
-This was live on solo-io/docs' agentgateway build, which added `kubernetes` and
+This was live on docs' hub agentgateway build, which added `kubernetes` and
 `standalone` sections while its `buildCondition` stayed `agentgateway`. Measured before
 the fix: **50 pages** lost content, and three rendered a dangling sentence where both
 branches vanished —
@@ -586,7 +733,7 @@ read as version-first, on every OSS site at once — not something to pair with 
 Both halves are pinned by tests, and the contract in USAGE.md says to keep gates off section
 landing pages.
 
-**Verified by.** Full before/after builds of three solo-io/docs products at v0.3.3 vs this
+**Verified by.** Full before/after builds of three docs products at v0.3.3 vs this
 change. agentgateway: 50 `index.html` pages changed, every diff an addition of previously
 dropped content, no page lost content and none disappeared; all 62 newly rendered links
 extracted and resolved against the built tree. kgateway (the one hub product that *inherits*
@@ -615,7 +762,7 @@ overloaded across the two axes — `kubernetes` naming a section *and* used else
 "the OSS build" — both meanings become true at once on an enterprise Kubernetes page and both
 branches render. Four files in `agentgateway/website` do this (`operations/uninstall.md`,
 `security/backend-authn-{cross-app-access,jwt-sign,oauth}.md`, plus `snippets/debug-gateway.md`,
-which solo-io/docs already overrides downstream). See the new `conditional-text` contract in
+which docs already overrides downstream). See the new `conditional-text` contract in
 USAGE.md for the pattern that avoids it.
 
 ### Test harness — `gate-axis-collision` lint: a `conditional-text` either/or pair that renders both branches (`tests/gate-axis-collision.spec.ts`, `tests/helpers/{gate-axis.ts,gate-scan.ts,config.ts,target.ts}`, `fixture/.docs-test-{oss,enterprise}.toml`, `playwright.config.ts`, `README.md`, `USAGE.md`)
@@ -645,7 +792,7 @@ value. The ambiguity is semantic; the consequence is decidable.
 Keying on the AXIS rather than on "both gates fire" is the difference between a
 usable lint and a noisy one, and it was measured, not reasoned. A file can hold a
 chain of adjacent gates that is a sequence of blocks rather than an either/or:
-solo-io/docs' `security/extauth-about.md` runs six back to back — `gme,gmg`, then
+docs' `security/extauth-about.md` runs six back to back — `gme,gmg`, then
 `gme`, then `gmg`, then `gme,gmg` — alternating shared prose with product-specific
 prose, several of which fire together on any build, by design. Those overlap on
 ONE axis, since every token is a product id and a superset list legitimately
@@ -675,7 +822,7 @@ combinations. `agentgateway/website`'s `assets/agw-docs`: five files, exactly th
 five a hand audit had already listed (`operations/uninstall.md`,
 `security/backend-authn-{cross-app-access,jwt-sign,oauth}.md`,
 `snippets/debug-gateway.md`) — no more and no fewer, and zero once those five are
-corrected. Zero on all of: that repo's `content/`, solo-io/docs `assets/` (far
+corrected. Zero on all of: that repo's `content/`, docs `assets/` (far
 larger, 504 `exclude-if` gates) and `content/en`, kgateway.dev, kagent,
 agentregistry, ambientmesh.io.
 
@@ -817,7 +964,7 @@ entirely, so there the segment had no route back at all. This governs `{{< link 
 positions were 2 (`/<product>/<version>/`), 3 (`/<product>/<lang>/<version>/` *or*
 `/<product>/<section>/<version>/`) and 1 (local dev). A product that uses **both** a language
 and a section puts the version at 4, and nothing tried it. agentgateway is the first such
-product — its versions moved under `kubernetes/` in solo-io/docs#3505 — and every Japanese
+product — its versions moved under `kubernetes/` docs — and every Japanese
 page of it failed inference: **831** `could not infer a version` warnings in one build, each
 falling back to a version-less English URL. Now 0. Position 4 is appended after 3 and before
 the local-dev 1, so the existing shapes keep matching first.
@@ -906,7 +1053,7 @@ segment away.
 
 The reported case: <https://docs.solo.io/agentgateway/2.1.x/install/ui/setup/> returns a bare
 404, while <https://docs.solo.io/agentgateway/latest/install/ui/setup/> is a live page. The
-agentgateway 2.1.x and 2.2.x trees are archived as `.zip` in solo-io/docs, so every URL under
+agentgateway 2.1.x and 2.2.x trees are archived as `.zip` in docs, so every URL under
 them 404s, and `params.versions` still lists them.
 
 `layouts/404.html` now reads the requested path at runtime, finds the version segment, and
@@ -920,7 +1067,7 @@ guess is wrong. Every candidate is verified to resolve before it is offered, so 
 cannot answer one broken link with another.
 
 **This is the second layer, not the first.** A retired version should be caught by a
-path-preserving 301 in the consumer's hosting config (`firebase.json` in solo-io/docs), which
+path-preserving 301 in the consumer's hosting config (`firebase.json` in docs), which
 is cheaper, costs no round trip, and keeps the SEO signal on the destination. This template
 handles only what a blanket redirect cannot: the topic that does not exist at the same path
 in the destination version. Shipping it is not a reason to skip the redirect rules.
@@ -934,7 +1081,7 @@ class, which is set by a script `baseof.html` loads.
 
 **Consumers must publish it at the served root.** Hugo writes `404.html` under the baseURL
 path (`public/<product>/404.html`), but hosts look for it at the root of the published
-directory. solo-io/docs already does this (`cp public/<product>/404.html public/404.html` in
+directory. docs already does this (`cp public/<product>/404.html public/404.html` in
 `firebase-hosting-merge.yml` and `oss-rebuild-in-ent.yml`), so it needs no change; a consumer
 that does not is serving its host's default 404 regardless of this template.
 
@@ -1054,7 +1201,7 @@ No new fixture was needed: `fixture/assets/conrefs/test/everything.md` already c
 `linenos=true` blocks and reaches the page through `{{< reuse >}}`, so `/test/v2/everything/`
 reproduced the defect (2 mangled rows, caught by the new scan before the fix) while
 `/test/v2/rebased/` covered the unflattened path. Also verified end-to-end against
-solo-io/docs via a temporary `replace` directive: exporting agentgateway on the pinned
+docs via a temporary `replace` directive: exporting agentgateway on the pinned
 v0.2.0 versus this branch changes **exactly 12 of 327 files** — precisely the 12 known-bad
 pages, with the other 315 byte-identical — and mangled rows go 12 → 0. On
 `llm/guardrails/regex.md` the fence count goes 80 → 82, **matching its source's 82**, which
@@ -1084,7 +1231,7 @@ prefix does this site put in front of it" — so only the version *inference* is
 `not $ver`; the `$versionRoot` derivation runs on every call.
 
 **Verified.** Full suite green on both brands (2055 passed, 17 skipped, 0 failed). Also built
-solo-io/docs `PRODUCT=agentgateway` through the repo's existing local `replace` and ran lychee
+docs `PRODUCT=agentgateway` through the repo's existing local `replace` and ran lychee
 over all 2059 built pages: 320,546 links checked, errors 35 — every one of them an ordinary
 missing target (`observability/otel-stack/`, `security/authorization/`,
 `llm/multiple-inference-pools/`, `traffic-management/load-balancing/`), with zero remaining
@@ -1416,7 +1563,7 @@ Takes effect when a consumer bumps its extras pin.
     the section from URL *position* and the sidebar resolves through the
     `/docs/<section>/<version>/` shape — only the switcher depends on the registry, so losing it
     looks like nothing.
-  - `solo-io/docs` does not define `params.sections` for `kgateway` or `gateway`. It **inherits**
+  - `docs` does not define `params.sections` for `kgateway` or `gateway`. It **inherits**
     `sections.envoy` from `github.com/kgateway-dev/kgateway.dev`, which both products import for
     conrefs, snippets, pages, images and the glossary — Hugo deep-merges an imported module's params
     along with its content. The hub serves that content flat at `/<product>/<version>/`, so there is
@@ -1518,7 +1665,7 @@ Takes effect when a consumer bumps its extras pin.
   layer via a temporary local `replace` — 240 pages, no section warnings, selector and chips
   render with both doc sets, the kagent sidebar carries zero `/docs/kmcp/` links, both landings
   keep their nav, and `/docs/tags/` and the docs index render none. Regression: **32,531 built
-  files byte-identical** across all eight `solo-io/docs` products (including multilingual
+  files byte-identical** across all eight `docs` products (including multilingual
   `agentgateway` and the products that *inherit* `sections.envoy` from an imported module),
   `agentgateway.dev`, `kgateway.dev`, and the two other version-less consumers `agentregistry.dev`
   and `ambientmesh.io`. Both fixture brands pass with the two flat builds in place.
@@ -1564,7 +1711,7 @@ Takes effect when a consumer bumps its extras pin.
   indistinguishable and a resolution-order bug passes silently. Resolution order and the
   `site.Data.icons` guard are additionally pinned at source level, since covering them behaviorally
   would need a fixture shipping a deliberate same-name duplicate. Four probes, all confirmed failing.
-  Regression: **32,868 built files byte-identical** across all eight `solo-io/docs` products,
+  Regression: **32,868 built files byte-identical** across all eight `docs` products,
   `agentgateway.dev`, `kgateway.dev`, `agentregistry.dev` and `ambientmesh.io`. Both fixture brands
   pass.
 
@@ -1652,7 +1799,7 @@ per-section versions list again, so the two-list shape cannot creep back.
   `version-root.html` built `lookupPath = "/<key>/<version>/"`, `site.GetPage` resolved a tree
   unrelated to the page (or nothing at all), and the left nav came out wrong or **completely empty** —
   with no error and no warning, so it reads as a content problem rather than a template one.
-- **The real instance, and why it matters for this release.** `solo-io/docs` imports
+- **The real instance, and why it matters for this release.** `docs` imports
   `github.com/kgateway-dev/kgateway.dev` for CONTENT — conrefs, snippets, pages, images, glossary —
   and therefore inherits its `sections.envoy` key, because Hugo deep-merges an imported module's
   params along with its content. The hub also ships
@@ -1800,7 +1947,7 @@ the fix. Both forms were built against the fixture to confirm.
 - **Why.** The new section resolver warned once per registered section that resolved to neither a
   landing page nor an `externalURL`. That is the right guard, raised at the wrong granularity: it
   fired four times per build across three hub products for two situations that are not config
-  errors, and because `solo-io/docs`'s `hugoWarnings` allowlist is deliberately near-empty, each one
+  errors, and because `docs`'s `hugoWarnings` allowlist is deliberately near-empty, each one
   failed `framework-test-content` outright.
 - **The two false positives, both real.**
   - *A translated tree that has not been restructured.* `params.sections` is site-wide but content
@@ -2024,7 +2171,7 @@ reports **34**. `(index hugo.Sites 0)` identifies the default-language site, the
 
 - **Why.** Two of its assertions name specific fixture entries (`v4` / `v4-link`) rather than a
   property that holds for any config, but the spec's only guard was "no built search bundle". A
-  consumer that *has* a bundle therefore ran them. `solo-io/docs` keeps a hand-maintained partial
+  consumer that *has* a bundle therefore ran them. `docs` keeps a hand-maintained partial
   copy of this fixture's config in `hugo-preview-test.toml` (and `hugo-test.toml`,
   `hugo-local-test.toml`), and the `v4` entry added in this release was never mirrored into it — so
   `framework-test-static` failed on a difference between two fixture configs rather than on any
@@ -2033,7 +2180,7 @@ reports **34**. `(index hugo.Sites 0)` identifies the default-language site, the
   sibling fixture-specific spec already uses. The generic half of the keying assertion — that the
   raw `version` must not leak into the set, which is the bug that actually shipped — still runs on
   every target, so consumer coverage is not weakened.
-- **Verified.** The `static` project against `solo-io/docs` goes from 2 failed / 4990 passed to
+- **Verified.** The `static` project against `docs` goes from 2 failed / 4990 passed to
   4991 passed, and the fixture run still exercises all five assertions on both brands.
 
 ### Fix — the mobile drawer's section chips are the version chips' twins (`assets/css/docs-theme-extras.css`)
@@ -2153,7 +2300,7 @@ present.
   returns the SECTION, not the version, once a product nests version trees under a section segment,
   so it emitted hrefs such as `/agentgateway/kubernetes/observability/` with the version missing —
   178 of them, every one a 404. It had worked before the restructure only because the version *was*
-  the first section. Fixed in `solo-io/docs`; this is the theme-side guard that was absent.
+  the first section. Fixed in `docs`; this is the theme-side guard that was absent.
 - **What changed.** `fixture/content/en/test/v2/card-path.md` plus `tests/card-path.spec.ts` (10
   assertions): a leading-slash path, a slashless path (must not fuse into `/test/v2rebased/`), a
   nested path, and a path with a fragment (must keep the fragment and gain no trailing slash). Each

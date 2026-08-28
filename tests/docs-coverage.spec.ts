@@ -1,6 +1,11 @@
 import { test, expect } from "@playwright/test";
 import { scan as scanDocs } from "./helpers/scan-docs";
-import { check as genCheck, generate, formatSkipped } from "./helpers/gen-docs";
+import {
+  check as genCheck,
+  generate,
+  formatSkipped,
+  isOrphanPage,
+} from "./helpers/gen-docs";
 import { target } from "./helpers/target";
 
 // Guard for a failure mode this repo had for its entire life until the docs
@@ -123,6 +128,46 @@ test.describe("docs coverage", () => {
       "themeExtras key(s) read by a template with no description. Add one to " +
         "PARAM_DOCS in tests/helpers/gen-docs.ts.",
     ).toEqual([]);
+  });
+
+  // ── 3b. A broken header must not DELETE the page it failed to generate ─────
+  //
+  // `write()` removes pages under docs/content/authoring/shortcodes/ that
+  // generate() did not produce. A shortcode whose header stops parsing is
+  // `skipped`, so it produces no page — and the first version of that cleanup
+  // therefore deleted the documentation for any shortcode with a typo in its
+  // header. Measured: renaming `Summary:` to `Summry:` in table.html made
+  // `npm run gen:docs` unlink table.md and report it as "removed: 1
+  // (orphaned)", which reads as intentional cleanup, inside a 22-file diff that
+  // named the real cause nowhere.
+  //
+  // Pure-function tests on purpose: the alternative is a spec that deletes real
+  // documentation to prove deletion works.
+  test("a page is orphaned only when its SOURCE shortcode is gone", () => {
+    const generated = new Set(["docs/content/authoring/shortcodes/table.md"]);
+    const exists = (html: string) => html === "table.html" || html === "card.html";
+
+    // Generated this run → keep.
+    expect(isOrphanPage("table.md", generated, exists)).toBe(false);
+
+    // THE REGRESSION: not generated (header broke) but the source is still
+    // there → keep. If this ever returns true again, a typo silently deletes a
+    // documentation page.
+    expect(
+      isOrphanPage("card.md", generated, exists),
+      "a shortcode whose header failed to parse must KEEP its page — deleting " +
+        "it turns a typo into data loss and blames 'orphaned' for it",
+    ).toBe(false);
+
+    // Genuinely deleted or renamed shortcode → remove. The cleanup must still
+    // work, or stale pages accumulate and stay reachable.
+    expect(
+      isOrphanPage("removed-shortcode.md", generated, exists),
+      "a page whose source shortcode no longer exists must still be cleaned up",
+    ).toBe(true);
+
+    // The index is written by generate() itself and is never a shortcode page.
+    expect(isOrphanPage("_index.md", generated, exists)).toBe(false);
   });
 
   // ── 4. The committed generated tree matches its sources ────────────────────
