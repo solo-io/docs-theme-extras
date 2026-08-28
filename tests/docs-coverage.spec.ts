@@ -115,7 +115,6 @@ test.describe("docs coverage", () => {
 
     const page = generate().files.get("docs/content/configuration/params.md") ?? "";
     const undescribed = configParams
-      .filter(() => true)
       .map((p) => p.key)
       .filter((k) => page.includes(`## \`themeExtras.${k}\`\n\n**Undocumented.**`));
 

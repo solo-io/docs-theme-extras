@@ -99,6 +99,44 @@
       "productName" (site.Params.product | default site.Title | default "the documentation")
 -}}
 
+{{- /* TRANSLATION. Every reader-facing string on this page resolves through
+       i18n with the English literal as its fallback, the same shape
+       version-banner.html uses for `bannerID`. A consumer that ships no i18n
+       table — which is every OSS site — gets the literals and is unaffected;
+       the docs hub, which publishes content/ja/, can translate the page.
+
+       Verified that a MISSING key is silent: Hugo returns "" and logs no
+       warning for it, so this does not add a WARN to consumers that fail CI on
+       unallowlisted warnings. (Checked against the fixture build before this
+       was extended past the first string.)
+
+       Keys are prefixed `not_found_` in the i18n table; the short names below
+       are local. PLACEHOLDERS IN BRACES — `{from}`, `{current}`, `{latest}`,
+       `{productName}` — are literal braces, not template actions: three of the
+       four are only known once the script runs, so the substitution happens in
+       JS. A translation writes them the same way. */ -}}
+{{- $strings := dict
+      "title"                "Page not found"
+      "code"                 "Error 404"
+      "heading"              "This page could not be found."
+      "lede"                 "The page you requested does not exist. It may have been moved, renamed, or removed from this version of the documentation."
+      "status"               "Looking for this page in other versions…"
+      "try_instead"          "Try instead"
+      "home"                 "Go to the {productName} documentation"
+      "noscript"             "If you followed a link to an older version of the documentation, that version may no longer be published. Try the same page under /{latest}/."
+      "lede_retired"         "The documentation for version {from} is no longer published, so you were sent to {current}. This topic does not exist in {current} — it was renamed or removed."
+      "note_latest"          "This page is not in {current}, but it exists in the latest version."
+      "note_ancestor_current" "The closest section still in {current}."
+      "note_ancestor_latest"  "The closest section in the latest version."
+      "note_home_current"     "The documentation home for this version."
+      "note_home_latest"      "The latest version of the documentation."
+-}}
+{{- $t := dict -}}
+{{- range $k, $v := $strings -}}
+  {{- $tr := i18n (printf "not_found_%s" $k) -}}
+  {{- $t = merge $t (dict $k (or $tr $v)) -}}
+{{- end -}}
+
 <!doctype html>
 <html lang="{{ site.Language.Lang | default "en" }}" dir="{{ partial "utils/hugo-compat/language-direction.html" site.Language | default "ltr" }}">
   <head>
@@ -107,7 +145,7 @@
     {{- /* A 404 must never be indexed, and must never be treated as a
            canonical destination for the URL that produced it. */ -}}
     <meta name="robots" content="noindex, nofollow" />
-    <title>Page not found</title>
+    <title>{{ $t.title }}</title>
     <style>
       :root {
         color-scheme: light dark;
@@ -210,28 +248,25 @@
   </head>
   <body>
     <main id="content">
-      <p class="pnf-code">Error 404</p>
-      <h1>This page could not be found.</h1>
+      <p class="pnf-code">{{ $t.code }}</p>
+      <h1>{{ $t.heading }}</h1>
       {{- /* The default lede, for a 404 with no version context to add. It is
              REPLACED by the script when `fromversion` is present, because at
              that point we can say something far more specific than "does not
              exist": we know which version the reader asked for, that it is no
              longer published, and that the topic did not survive into the one
              they were sent to instead. */ -}}
-      <p id="pnf-lede">
-        The page you requested does not exist. It may have been moved, renamed, or
-        removed from this version of the documentation.
-      </p>
+      <p id="pnf-lede">{{ $t.lede }}</p>
 
-      <p id="pnf-status" hidden>Looking for this page in other versions&hellip;</p>
+      <p id="pnf-status" hidden>{{ $t.status }}</p>
 
       <section id="pnf-suggestions" hidden aria-live="polite">
-        <h2>Try instead</h2>
+        <h2>{{ $t.try_instead }}</h2>
         <ul id="pnf-suggestion-list"></ul>
       </section>
 
       <p>
-        <a id="pnf-home" href="{{ $cfg.home }}">Go to the {{ $cfg.productName }} documentation</a>
+        <a id="pnf-home" href="{{ $cfg.home }}">{{ replace $t.home "{productName}" $cfg.productName }}</a>
       </p>
 
       <script>
@@ -239,6 +274,20 @@
           "use strict";
 
           var CFG = {{ $cfg | jsonify | safeJS }};
+
+          // Translated sentence templates. `{from}` and `{current}` are filled
+          // in below; see the TRANSLATION comment above the $strings dict.
+          var T = {{ $t | jsonify | safeJS }};
+
+          // Fill the brace placeholders. Every value substituted here is either
+          // a version segment already allowlisted against CFG.versions or one of
+          // this site's own configured strings, and every result is assigned
+          // through textContent — never innerHTML.
+          function fill(tmpl, vals) {
+            return Object.keys(vals).reduce(function (s, k) {
+              return s.split("{" + k + "}").join(vals[k]);
+            }, tmpl);
+          }
 
           // Same version-segment shape as utils/version-root.html. Kept
           // deliberately identical so a path this theme considers versioned
@@ -275,16 +324,43 @@
           // larger than its headers. `redirect: "follow"` is the default and
           // is what we want — a candidate that 301s to a live page (the
           // hosting-layer retired-version rules) is still a good answer.
+          // Per-probe deadline. Without one, a stalled origin leaves "Looking
+          // for this page in other versions…" on screen forever: the promise
+          // never settles, so the status line is never hidden and the reader is
+          // left watching a spinner that has no end state. Eight probes run
+          // sequentially, so an unbounded hang on the first one costs the whole
+          // feature, not just one candidate.
+          //
+          // AbortController is guarded because this page is deliberately
+          // dependency-free and runs wherever it is served from; where it is
+          // missing the fetch simply runs unbounded, which is the old behavior.
+          var PROBE_TIMEOUT_MS = 3000;
+
           function exists(url) {
-            return fetch(url, { method: "HEAD", redirect: "follow" })
+            var ctrl =
+              typeof AbortController !== "undefined" ? new AbortController() : null;
+            var timer = ctrl
+              ? setTimeout(function () {
+                  ctrl.abort();
+                }, PROBE_TIMEOUT_MS)
+              : null;
+
+            var opts = { method: "HEAD", redirect: "follow" };
+            if (ctrl) opts.signal = ctrl.signal;
+
+            return fetch(url, opts)
               .then(function (r) {
                 return r.ok ? url : null;
               })
               .catch(function () {
-                // Offline, blocked, or served over file:// — treat as "cannot
-                // tell" rather than "does not exist", so the page degrades to
-                // the plain 404 it would otherwise have been.
+                // Offline, blocked, timed out, or served over file:// — treat as
+                // "cannot tell" rather than "does not exist", so the page
+                // degrades to the plain 404 it would otherwise have been.
                 return null;
+              })
+              .then(function (result) {
+                if (timer) clearTimeout(timer);
+                return result;
               });
           }
 
@@ -360,29 +436,40 @@
             }
           }
 
-          // No version in the path means there is nothing version-aware to
-          // offer, and the generic 404 already rendered. Leave it alone.
-          if (vIdx === -1 || !CFG.latest) return;
-
-          var current = segs[vIdx];
-          var before = segs.slice(0, vIdx);
-          var after = segs.slice(vIdx + 1);
+          // The version this page belongs to. When the path carries no version
+          // segment at all, fall back to the configured latest — that is the
+          // case for a product landing page a bare /<product>/<retired>/ rule
+          // points at, and partials/docs/retired-version-notice.html already
+          // handles it the same way on the success path. The two files describe
+          // the same event and must not disagree about when they can describe
+          // it.
+          var current = vIdx === -1 ? CFG.latest : segs[vIdx];
 
           // Say what actually happened. This is the case the whole
           // `fromversion` round trip exists for: the reader asked for a version
           // that no longer builds, the redirect moved them to one that does,
           // and the topic is not there either. Neither half of that is
           // guessable from the URL they are looking at.
-          if (from && from !== current) {
-            document.getElementById("pnf-lede").textContent =
-              "The documentation for version " +
-              from +
-              " is no longer published, so you were sent to " +
-              current +
-              ". This topic does not exist in " +
-              current +
-              " — it was renamed or removed.";
+          //
+          // RUNS BEFORE THE EARLY RETURN BELOW, deliberately. The message
+          // depends only on `from` and `current`, not on there being a version
+          // segment to build suggestions from — and a redirect that lands on a
+          // version-less path is exactly when the reader has least context. An
+          // earlier draft returned first, which silently dropped the message on
+          // that path while the success-path partial still showed it.
+          if (from && current && from !== current) {
+            document.getElementById("pnf-lede").textContent = fill(
+              T.lede_retired,
+              { from: from, current: current }
+            );
           }
+
+          // No version in the path means there is nothing version-aware to
+          // SUGGEST, and the generic 404 already rendered. Leave it alone.
+          if (vIdx === -1 || !CFG.latest) return;
+
+          var before = segs.slice(0, vIdx);
+          var after = segs.slice(vIdx + 1);
 
           function underVersion(version, tail) {
             return toPath(before.concat([version], tail));
@@ -401,10 +488,7 @@
           if (current !== CFG.latest && after.length) {
             candidates.push({
               url: underVersion(CFG.latest, after),
-              note:
-                "This page is not in " +
-                current +
-                ", but it exists in the latest version.",
+              note: fill(T.note_latest, { current: current }),
             });
           }
 
@@ -416,7 +500,7 @@
           for (var a = after.length - 1; a > 0; a--) {
             candidates.push({
               url: underVersion(current, after.slice(0, a)),
-              note: "The closest section still in " + current + ".",
+              note: fill(T.note_ancestor_current, { current: current }),
             });
           }
 
@@ -425,7 +509,7 @@
             for (var b = after.length - 1; b > 0; b--) {
               candidates.push({
                 url: underVersion(CFG.latest, after.slice(0, b)),
-                note: "The closest section in the latest version.",
+                note: T.note_ancestor_latest,
               });
             }
           }
@@ -449,9 +533,7 @@
           candidates.push({
             url: underVersion(CFG.latest, []),
             note:
-              current === CFG.latest
-                ? "The documentation home for this version."
-                : "The latest version of the documentation.",
+              current === CFG.latest ? T.note_home_current : T.note_home_latest,
           });
 
           statusEl.hidden = false;
@@ -464,11 +546,7 @@
       </script>
 
       <noscript>
-        <p>
-          If you followed a link to an older version of the documentation, that
-          version may no longer be published. Try the same page under
-          <code>/{{ $cfg.latest }}/</code>.
-        </p>
+        <p>{{ replace $t.noscript "{latest}" $cfg.latest }}</p>
       </noscript>
     </main>
   </body>

@@ -86,14 +86,22 @@
   {{- end -}}
 {{- end -}}
 
-{{- /* 2. Section override on the SAME entry. utils/section-segment.html is the
+{{- /* The page's section, resolved ONCE and used by both the override lookup
+       below and the i18n context further down. utils/section-segment.html is the
        module's own "which registered section is this page in" answer — reuse it
        rather than re-deriving a second one off RelPermalink, which is the exact
        mistake this file's header calls out for version detection. It is a
        return-partial returning a DICT (segment, index): assign it, then read
-       .segment. Never `with` a return-partial. */ -}}
+       .segment. Never `with` a return-partial.
+
+       Hoisted out of the two blocks that need it because `partial` is not
+       cached — calling it twice ran the whole section-resolution path twice on
+       every page of every consumer, for one answer that cannot change between
+       the two call sites. */ -}}
+{{- $seg := partial "utils/section-segment.html" . -}}
+
+{{- /* 2. Section override on the SAME entry. */ -}}
 {{- if $entry -}}
-  {{- $seg := partial "utils/section-segment.html" . -}}
   {{- if $seg.segment -}}
     {{- $overrides := $entry.sectionBanners -}}
     {{- if $overrides -}}
@@ -119,7 +127,6 @@
        path get the same context shape. */ -}}
 {{- if and $bannerText $bannerID -}}
   {{- $ctx := $entry -}}
-  {{- $seg := partial "utils/section-segment.html" . -}}
   {{- if $entry -}}
     {{- $ctx = merge $entry (dict "section" $seg.segment) -}}
   {{- end -}}

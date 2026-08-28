@@ -24,6 +24,21 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ## [0.3.5] — 2026-08-28
 
+**Scope of this release.** One new optional config key (`params.versions[].sectionBanners`),
+one new partial, and two shortcode-internal resolution fixes. No breaking changes, and no
+content edits required in any consumer.
+
+It is **not** output-neutral, though, and the two exceptions are worth knowing:
+
+- `layouts/404.html` gains the `fromversion` branch, so every consumer's 404 page changes.
+- `layouts/docs/{single,list}.html` render the new retired-version notice. The partial is
+  **gated on the site having a `params.versions` list** — a version-less consumer
+  (agentregistry.dev, ambientmesh.io) emits nothing at all and is byte-identical. A versioned
+  consumer gains a hidden `<div>` and a small inline script on every docs page, inert until a
+  hosting rule appends `?fromversion=`.
+
+Everything else renders byte-identically for a repo that sets nothing new.
+
 ### Add — per-section version banners, so one version can ship sections at different maturities (`layouts/partials/version-banner.html`, `USAGE.md`, `hugo-{oss,enterprise}.toml`, `tests/version-section-banner.spec.ts`)
 
 **Why.** The banner is per-VERSION: it reads `banner`/`bannerID` off the `[[params.versions]]`
@@ -166,15 +181,58 @@ asking.
 retired-version redirect appends `?fromversion=`. Shipping this module version alone changes
 nothing.
 
+**It emits nothing at all on a version-less site.** The partial is gated on the
+product-filtered `params.versions` list being non-empty. Without that gate it put a hidden
+`<div>` and an inline `<script>` on every docs page of every consumer, including ones where
+it is structurally incapable of firing — an empty allowlist rejects every possible
+`fromversion` value. Beyond the page weight, that would have added an inline script, and so a
+CSP `unsafe-inline` dependency, to sites that get nothing back for it; agentregistry.dev and
+ambientmesh.io are both version-less today. The gate also makes the partial behave like its
+slot-mate, since `version-banner.html` already renders nothing when unconfigured. Measured on
+the fixture: the versioned build emits the notice, `hugo-flat.toml` emits it on zero of 16
+pages.
+
+**Both string sets are translatable.** The notice sentence resolves through the
+`retired_version_notice` i18n key, and every reader-facing string in `404.html` through a
+`not_found_*` key, each with the English literal as its fallback — the same shape
+`version-banner.html` has used for `bannerID`. Without this, a reader on the docs hub's
+`content/ja/` tree got an English notice sitting beside a Japanese version banner. Because
+`from` and `current` are only known once the script runs, the sentences carry literal
+`{from}` / `{current}` placeholders filled in client-side via `textContent`, never
+`innerHTML`; a translation writes the braces the same way. A missing key was confirmed silent
+— Hugo returns `""` and logs no warning — which matters because consumers fail CI on
+unallowlisted WARNs.
+
+**The 404 probes have a deadline.** Up to eight HEAD probes run sequentially; an unbounded
+`fetch` against a stalled origin left "Looking for this page in other versions…" on screen
+permanently, because the promise never settled and the status line was never hidden. Each
+probe now aborts after 3 s, guarded on `AbortController` being present so the page stays
+dependency-free.
+
+**The 404 no longer drops the message on a version-less path.** The lede rewrite used to sit
+below the `vIdx === -1` early return, so a redirect landing on a product landing page showed
+the generic "does not exist" — while `retired-version-notice.html`, describing the same event
+on the success path, explicitly handles that case by falling back to the configured latest.
+The two files disagreed about when they could speak. The rewrite now runs before the return,
+which only guards the *suggestions*.
+
 **Verified.** `tests/retired-version-notice.spec.ts` (new, `browser` project, registered in
 `playwright.config.ts` — a spec absent from `testMatch` silently never runs): 12 cases
 covering both consumers of the parameter, the no-marker default, query-parameter merging, the
 allowlist rejecting a crafted value, a self-referential marker, dismissal, and that the
 existing 404 ranking is undisturbed. Firebase's query-append behavior was confirmed against
-the hosting emulator, including the merge with a pre-existing query string. Full suite on
-both brands: 2111 passed, 17 skipped. Two failures are pre-existing and unrelated — an
-npm-out-of-sync WARN from an uncommitted `package.json` edit, and two new same-path shadows
-in the docs hub (`reuse-append.html`, `version-banner.html`) that need their own triage.
+the hosting emulator, including the merge with a pre-existing query string.
+
+Two failures were open when this entry was first drafted, and one of them was **this
+change's own doing**, not a pre-existing condition: the npm-out-of-sync WARN came from the
+`package.json` edit in this very branch (the new `scan:docs` / `gen:docs` scripts), and
+calling it unrelated was wrong. It clears once the branch is committed. The other — two new
+same-path shadows in the docs hub (`reuse-append.html`, `version-banner.html`) — is genuinely
+separate and still needs its own triage.
+
+Suite counts for the release as a whole are recorded on the last entry in this section rather
+than per-entry; each entry added tests, so the intermediate numbers only described a tree that
+no longer exists.
 
 ### Add — `scripts/prepare_book.py`, so a docs tree can be rendered as ONE PDF instead of merged chunks (`scripts/prepare_book.py`, `docs/content/configuration/pdf-export.md`)
 
@@ -360,10 +418,6 @@ format, which no live site publishes yet. Verified by rendering kgateway.dev's
 `.section-card` in either consumer, and comparing the card blocks before and
 after.
 
-Intended as a **minor** (0.4.0): one new optional config key, plus a shortcode-internal
-resolution fix. No breaking changes and no content edits in consumers — a repo that sets
-nothing new renders byte-identically.
-
 ### Fix — `conditional-text` was INERT, not merely limited, on a site that registers no sections (`layouts/_partials/utils/page-context.html`, `layouts/_shortcodes/conditional-text.html`, `hugo-nosections.toml`, `hugo-nosections-bare.toml`, `fixture/content-flat/en/beta/first.md`, `tests/nosections-condition.spec.ts`, `Makefile`, `playwright.config.ts`, `README.md`, `USAGE.md`)
 
 **Why.** In `url` mode `utils/page-context` assigns a condition only in the branch
@@ -467,6 +521,20 @@ that the direct and downstream paths disagree; reverting just the two new lines 
 exactly the three path-specific tests and leaves the direct-render and Stage 3b ones
 green. Suite 2198 passing in both brand modes. Observable on the published theme docs:
 [Gating content](https://solo-io.github.io/docs-theme-extras/authoring/gating/).
+
+### Release-wide verification
+
+**2198 passed, 17 skipped, 0 failed** in both brand modes (`make test-oss`,
+`make test-enterprise`), and both brands build with zero `ERROR` lines. The docs site builds
+clean too (`make build-docs`, 0 errors).
+
+One local-only failure is expected and is **not** a regression:
+`override-parity.spec.ts` → "docs: no new same-path file shadows" reports the hub's
+`reuse-append.html` and `version-banner.html`. Both are the temporary vendored copies this
+release exists to replace, and both are deleted once this tag lands and the hub's pin is
+bumped — see the sequencing note on the `reuse-append` entry above. The spec skips entirely
+when no sibling consumer clones are present, so it does not run in CI; it fires only in a
+local checkout that has the hub cloned alongside.
 
 ---
 
