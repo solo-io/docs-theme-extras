@@ -97,6 +97,53 @@ element only the splitter creates, and the download item renders **only** when
 
 ### Fix
 
+- **Nine rendering defects found by reading a finished 6,485-page book.** Each was
+  reproduced in isolation before being fixed, and two turned out not to be what they
+  looked like. Visible on any page of
+  [the Gloo Mesh Enterprise docs](https://docs.solo.io/gloo-mesh-enterprise/latest/)
+  once exported.
+
+  - **Tab groups printed every option stacked, unlabelled.** `utils/unhide-tabs.html`
+    matched `role="tab"`, `role="tablist"` and `hextra-tabs-panel` — **none of which exist**
+    in current Hextra markup — so it was a silent no-op, leaving a dead button bar above two
+    indistinguishable code blocks. Rewritten against `hextra-tab-panel` + `data-tab-name`,
+    which carries the visible name directly and removes the need for the old id→name map.
+    **This also fixes the `markdown` output format and "Copy as Markdown"**, which call the
+    same partial and were emitting both tab bodies unlabelled. Verified: 150 "Option:"
+    labels and zero tab buttons in the built book.
+  - **Comparison tables looked empty.** `fonts-noto-color-emoji` is a CBDT *bitmap* font
+    and WeasyPrint scales its glyphs wrongly, so ✅/❌ printed ~2 mm tall, some outside
+    their own cell. The renderer needs the monochrome outline font instead; ✅/❌ account
+    for 108 of the book's 128 pictographic characters. Consumer action: install Noto Emoji
+    rather than Noto Color Emoji.
+  - **Diagram legends printed as overlapping words.** Not the Excalidraw fonts, despite the
+    `Virgil` warnings — installing Virgil and Cascadia under corrected family names changed
+    nothing, because the text uses `font-family="Helvetica, Segoe UI Emoji"` and those
+    `@font-face` rules are vestigial. WeasyPrint resolves the **space character** through
+    the non-existent second family and gives it a wildly wrong advance, so `Gloo Mesh` set
+    from a single space renders as `Gloo    Mesh`. New `prepare_book.py --fix-svg-fonts DIR`
+    strips the fallback from *built* SVGs only (154 of them), never the sources.
+  - **Long identifiers ran off the right margin in reference tables.** WeasyPrint honours
+    neither `overflow-wrap: break-word` nor `overflow-wrap: anywhere` for an unbroken token
+    in a `table-layout: fixed` cell — both were rendered side by side and both overflowed.
+    Only `word-break: break-all` wraps, now scoped to code inside cells.
+  - **Callout icons printed black and jammed against their titles.** WeasyPrint does not
+    carry the inherited `color` into an inline SVG, so `stroke="currentColor"` resolved to
+    black, and CSS `stroke` is ignored because the presentation attribute wins. An explicit
+    `color: inherit` on the svg is honoured, and stays correct for every alert type
+    including consumer-defined ones. Spacing came from a Tailwind `hx:mr-2` this stylesheet
+    never loads.
+  - **Embedded videos printed as a thin black bar.** An `<iframe>` has no meaning in a PDF.
+    `prepare_book.py` now replaces each with a link to the watch URL.
+  - **The cover carried the company logo, not the product's.** It used `params.navbar.logo`;
+    it now prefers `params.sidebar.logo`, falling back for sites that set none.
+  - **Part-divider pages started halfway down.** `.pdf-divider` carried `padding-top: 10cm`.
+  - **A diagram vanished entirely from the PDF.** One `<path>` in an Excalidraw export
+    carried literal `NaN` coordinates; WeasyPrint raises on it and discards the **whole**
+    image, where a browser skips just the bad path. Fixed in the source asset, and the
+    renderer now fails the build on `ERROR:` rather than shipping a manual with a hole in
+    it.
+
 - **`.pdf-chapter-cont` suppresses the page break on a continuation slice.** `.pdf-chapter`
   sets `break-before: page`, which is right for a real chapter and wrong for the remainder
   of one that the splitter had to cut. Without this the split would be visible in the
