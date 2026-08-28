@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import { target } from "./helpers/target";
+import { FLAT_CONDITIONAL_MARKERS as F } from "./helpers/sentinels";
 
 // SECTIONS ON A VERSION-LESS SITE.
 //
@@ -96,6 +97,17 @@ function page(b: FlatBuild, rel: string): string {
     path.join(buildRoot(b), b.prefix, rel, "index.html"),
     "utf8",
   );
+}
+
+const MD_SCRIPT =
+  /<script[^>]*type=["']text\/markdown["'][^>]*>[\s\S]*?<\/script>/gi;
+
+/** A doc-set page with the copy-as-markdown <script> removed. That script
+ *  embeds the page's raw shortcode source, so the literal marker string of a
+ *  gate that did NOT render is still in the file — a false positive for any
+ *  "must not appear" assertion. Used by the conditional-text gating tests. */
+function visiblePage(b: FlatBuild, rel: string): string {
+  return page(b, rel).replace(MD_SCRIPT, "");
 }
 
 /** A build-root page — the home page and taxonomy pages sit at the build root
@@ -235,6 +247,84 @@ for (const b of BUILDS) {
     });
   });
 
+  // CONDITIONAL-TEXT'S EMPTY-CONDITION GUARD.
+  //
+  // conditional-text gates on two tokens, the build condition and the section
+  // segment, but only inside a `condition != ""` guard. On a versioned site
+  // those two effectively never disagree, so the versioned fixture cannot
+  // exercise the guard at all — it is dead weight there and the spec that
+  // covers section gating, tests/conditional-section.spec.ts, has nothing to
+  // point at.
+  //
+  // A VERSION-LESS SITE IS WHERE THEY DISAGREE, and it is the shape kagent
+  // ships. On /docs/alpha/, utils/section-segment.html resolves `alpha`
+  // through its positional condition (c) — a registered key one segment below
+  // the docs root, which is the only condition that can fire when no version
+  // ever follows a section. utils/page-context.html in `url` mode resolves
+  // NOTHING: it assigns a condition only when the path carries a section AND a
+  // version, and there is no version to carry. Live segment, empty condition.
+  //
+  // Remove the guard and that page starts rendering content it has never
+  // rendered, on every version-less consumer at once. This is the only place
+  // in the repo that would catch it.
+  //
+  // It is also half of a deliberate divergence: the equivalent hub page,
+  // /test/nested/, DOES gate, because its build condition is the product and
+  // is non-empty. See the note in layouts/_shortcodes/conditional-text.html
+  // and the landing-page tests in tests/conditional-section.spec.ts.
+  test.describe(`version-less sections: conditional-text gating (${b.name})`, () => {
+    test.skip(!HAS, skipMsg);
+
+    test("the copy-as-markdown strip is not a no-op — the negatives rest on it", () => {
+      // Same trap as tests/conditional-section.spec.ts: the copy-as-markdown
+      // <script> carries the raw shortcode source, markers and all, including
+      // for gates that did NOT render. If it is present and unstripped, every
+      // "must not appear" assertion below is a guaranteed false positive; if
+      // this build does not emit it at all, stripping is a no-op and the
+      // assertions are honest. Either state is fine — silently flipping
+      // between them is not, so pin which one this build is in.
+      const raw = page(b, "alpha");
+      const stripped = visiblePage(b, "alpha");
+      // `raw.match` rather than `MD_SCRIPT.test`: the regex is global, and
+      // `.test` on a global regex advances lastIndex, so consecutive calls
+      // alternate true/false. String.match ignores lastIndex.
+      expect(
+        raw.match(MD_SCRIPT) ? stripped.length < raw.length : true,
+        `/docs/alpha/ emits a <script type="text/markdown"> that visiblePage() ` +
+          `failed to remove. The negatives below are matching raw shortcode ` +
+          `source rather than rendered output.`,
+      ).toBe(true);
+    });
+
+    test("a section landing page emits nothing — the condition is empty even though the segment resolves", () => {
+      expect(
+        visiblePage(b, "alpha"),
+        `include-if="alpha" rendered at /docs/alpha/ on a version-less site. ` +
+          `page-context resolves no build condition for that URL, so the ` +
+          `outer guard in conditional-text.html must drop the gate. Firing ` +
+          `here means a version-less consumer's landing pages started ` +
+          `rendering content they never rendered before.`,
+      ).not.toContain(F.flatGuard);
+    });
+
+    test("a page one level down DOES gate — the negative above is not vacuous", () => {
+      // Without this, "nothing rendered" would pass just as happily on a build
+      // where conditional-text is broken outright.
+      const html = visiblePage(b, "alpha/first");
+      expect(
+        html,
+        `include-if="alpha" did not render at /docs/alpha/first/. In url mode ` +
+          `the condition IS the section, so this is the ordinary path and it ` +
+          `must work — otherwise the landing-page assertion above proves ` +
+          `nothing.`,
+      ).toContain(F.flatSection);
+      expect(
+        html,
+        `include-if="beta" rendered at /docs/alpha/first/, which is in alpha.`,
+      ).not.toContain(F.flatOther);
+    });
+  });
+
   test.describe(`version-less sections: navbar selector (${b.name})`, () => {
     test.skip(!HAS, skipMsg);
 
@@ -333,9 +423,9 @@ for (const b of BUILDS) {
       ].map((m) => ({ href: m[1], icon: iconKind(m[0]) }));
       // Same set, same branch per entry. The chips and the dropdown are
       // separate components reading one resolver precisely so this holds.
-      expect(
-        Object.fromEntries(chips.map((c) => [c.href, c.icon])),
-      ).toEqual(EXPECTED_ICONS);
+      expect(Object.fromEntries(chips.map((c) => [c.href, c.icon]))).toEqual(
+        EXPECTED_ICONS,
+      );
     });
   });
 
@@ -504,7 +594,9 @@ for (const b of BUILDS) {
         const html = page(b, p);
         for (const tag of html.match(/<svg[^>]*>/g) ?? []) {
           const count = (tag.match(/aria-hidden=/g) ?? []).length;
-          expect(count, `duplicate aria-hidden in ${p}: ${tag}`).toBeLessThan(2);
+          expect(count, `duplicate aria-hidden in ${p}: ${tag}`).toBeLessThan(
+            2,
+          );
         }
       }
     });
@@ -624,11 +716,7 @@ test.describe("version dropdown: an empty section path is verified, not assumed"
   //
   // Same pattern as tests/link-hextra-lts-version.spec.ts, which is source-level
   // for the same reason: no fixture has an LTS tree.
-  const NAVBAR = path.resolve(
-    __dirname,
-    "..",
-    "layouts/_partials/navbar.html",
-  );
+  const NAVBAR = path.resolve(__dirname, "..", "layouts/_partials/navbar.html");
 
   test("the version-landing check is not short-circuited by an empty section path", () => {
     const src = fs.readFileSync(NAVBAR, "utf8");
@@ -638,7 +726,9 @@ test.describe("version dropdown: an empty section path is verified, not assumed"
     expect(
       src,
       "version-landing existence check is being skipped when $sectionPath is empty",
-    ).not.toMatch(/if\s+or\s+\(site\.GetPage\s+\$versionLanding\)\s+\(eq\s+\$sectionPath\s+""\)/);
+    ).not.toMatch(
+      /if\s+or\s+\(site\.GetPage\s+\$versionLanding\)\s+\(eq\s+\$sectionPath\s+""\)/,
+    );
   });
 
   test("an absent root-level tree falls back to a section that has the version", () => {
@@ -648,7 +738,9 @@ test.describe("version dropdown: an empty section path is verified, not assumed"
     // root. Without this the fallback is the product root for every entry, which
     // makes the dropdown a no-op rather than a 404 — quieter, still wrong.
     expect(src).toMatch(/\$inSection\s*=\s*\.key/);
-    expect(src).toMatch(/site\.GetPage\s+\(printf\s+"%s\/%s"\s+\.key\s+\$entry\.linkVersion\)/);
+    expect(src).toMatch(
+      /site\.GetPage\s+\(printf\s+"%s\/%s"\s+\.key\s+\$entry\.linkVersion\)/,
+    );
   });
 });
 
@@ -682,11 +774,7 @@ test.describe("version-less selector: a nav-link peer, not a control", () => {
   // markup on every page that renders a selector, and reaches NO page of a
   // versioned build.
 
-  const CSS = path.resolve(
-    __dirname,
-    "..",
-    "assets/css/docs-theme-extras.css",
-  );
+  const CSS = path.resolve(__dirname, "..", "assets/css/docs-theme-extras.css");
 
   for (const b of BUILDS) {
     test(`every page rendering a selector carries the modifier (${b.name})`, () => {
@@ -728,10 +816,9 @@ test.describe("version-less selector: a nav-link peer, not a control", () => {
     const f = path.join(target.productRoot, "v2", "everything", "index.html");
     test.skip(!fs.existsSync(f), "no versioned fixture page in this build");
     const html = fs.readFileSync(f, "utf8");
-    expect(
-      html,
-      "versioned fixture should still render a selector",
-    ).toContain("section-dropdown-btn");
+    expect(html, "versioned fixture should still render a selector").toContain(
+      "section-dropdown-btn",
+    );
     expect(html).not.toContain("section-dropdown-inline");
   });
 

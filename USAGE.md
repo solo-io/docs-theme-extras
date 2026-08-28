@@ -104,10 +104,67 @@ are grouped by purpose. See each source file for full parameters.
 | `reuse-append` | Concatenates a base snippet from the assets tree with the shortcode's inner content **as markdown source**, then renders once — so appended table rows join the base table instead of falling out of it. Takes the snippet path as the first positional parameter. Note it is **not** a variant of `reuse`: it applies none of `reuse`'s version- and product-aware rewrites, so keep base snippets used with it free of version-dependent markup. |
 | `version` | Emits version-conditional text. Dispatches on the shape of the inner content to stay list-safe and code-fence-safe (see the source comment for the trailing-step, no-markdown, and inline-markdown paths). |
 | `version-cards` | Renders a card grid mirroring the navbar version dropdown, for a section landing page. |
-| `conditional-text` | Includes or excludes its inner content based on the page's build condition (for example `gme` vs `gmg`), resolved through `utils/page-context`. |
+| `conditional-text` | Includes or excludes its inner content based on the page's build condition (for example `gme` vs `gmg`), resolved through `utils/page-context` — **and** on the page's section segment when the product registers one. **See the contract below.** |
 | `upstream` / `downstream` | Content gating for the oss-vs-enterprise build split. `upstream` shows content only in the source build; `downstream` shows it only in the downstream build. |
 | `link` | Alias for `link-hextra` — same pattern as `alert`/`callout`. Kept so existing call sites don't need a repo-wide sweep; write new content with either name. |
 | `link-hextra` | The canonical implementation. Infers the product and version from the current page's permalink when they are not passed in (typical inside a reused snippet). **See the contract below — it is easy to call wrongly and it fails silently.** |
+
+#### `conditional-text` contract
+
+`include-if` / `exclude-if` take a comma-separated list of tokens (entries are
+trimmed). Setting both on one call is an error. The gate fires when the list
+names **either** of two tokens:
+
+| Token | Where it comes from | Varies within a build? |
+|---|---|---|
+| build condition | `site.Params.buildCondition` in `siteParams` mode; the section segment in `url` mode | No — one value per site |
+| section segment | `utils/section-segment.html`, i.e. the page's own section under `[params.sections]` | Yes — per page |
+
+The second token is what lets a product with parallel documentation sections gate
+on the section a page is being read in. Without it, `buildCondition` is the only
+axis, and in a multi-product hub that is a **product** id (`agentgateway`,
+`envoy`, `gme`) that cannot vary within a build — so every section-named gate in
+the content is dropped on *every* section rather than gated on one.
+
+The section token is **additive**: a gate naming the build condition keeps
+firing exactly as before. Builds with no `[params.sections]` registered are
+byte-identical, and so are `url`-mode sites, where the condition already *is*
+the section.
+
+**The one thing to watch: do not overload a token across the two axes.** This
+is caught mechanically — `tests/gate-axis-collision.spec.ts` fails the build on
+it, given a `[[gateAxes]]` block describing the builds your content ships
+through. That check is worth configuring precisely because the damage never
+shows up in your own build: the OSS site renders correctly and only the hub's
+copy of the same shared content breaks.
+
+If `kubernetes` names a section *and* is used elsewhere to mean "the OSS build",
+then on an enterprise Kubernetes page both meanings are true at once and both
+branches render. Pick names that cannot collide, or gate the product axis on the
+product token only:
+
+```markdown
+<!-- WRONG where `kubernetes` is also a section name: both render on the -->
+<!-- enterprise Kubernetes page.                                          -->
+{{</* conditional-text include-if="kubernetes" */>}}[API docs](/reference/api-kubespec/){{</* /conditional-text */>}}
+{{</* conditional-text include-if="agentgateway" */>}}[API docs](https://example.com/api){{</* /conditional-text */>}}
+
+<!-- RIGHT: one gate, on the product axis alone. -->
+{{</* conditional-text exclude-if="agentgateway" */>}}[API docs](/reference/api-kubespec/){{</* /conditional-text */>}}
+{{</* conditional-text include-if="agentgateway" */>}}[API docs](https://example.com/api){{</* /conditional-text */>}}
+```
+
+**Section landing pages gate on the hub and not on the OSS site.** A landing
+page is `/<product>/<section>/`, with no version below it. On the hub the build
+condition is the product and is non-empty there, so a section-named gate fires.
+On an OSS site `url` mode assigns a condition only when the path carries both a
+section and a version, so `/docs/<section>/` resolves an empty condition and
+every gate on that page is dropped, as it always has been. Reused content that
+gates on a section therefore renders on one and not the other. Keep gates off
+section landing pages, or accept that the OSS copy shows neither branch.
+
+Gates must be in **percent form** in content that is reused or rebased; see
+`utils/gate-emit.html` and `tests/gate-form.spec.ts`.
 
 #### `link` / `link-hextra` contract
 

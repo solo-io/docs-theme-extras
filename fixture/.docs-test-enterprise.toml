@@ -27,6 +27,20 @@ scanRoots = [
   "./assets/conrefs/test",
 ]
 
+# Builds this source corpus is rendered under, for the gateAxisCollision lint
+# (tests/gate-axis-collision.spec.ts). The fixture is siteParams mode with
+# buildCondition = "test" and three registered sections, which is the shape
+# where the two gating axes come apart and an either/or pair can double-fire.
+#
+# The fixture corpus itself must stay CLEAN — the detector is proven by the
+# helper unit tests in that spec, which use agentgateway's real shape, and the
+# corpus scan proves the walk runs and finds nothing. A permanent violation
+# here would just be a permanently red test.
+[[gateAxes]]
+name      = "fixture"
+condition = "test"
+sections  = ["demo", "alt", "nested"]
+
 # Explicit page list (mirrors solo-io/docs's TEST_PAGES). Specs that walk
 # the whole tree use crawl.ts; this list gates the per-page sample specs.
 [[pages]]

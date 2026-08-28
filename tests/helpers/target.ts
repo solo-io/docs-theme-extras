@@ -12,6 +12,7 @@ import {
   type Page,
   type Config,
   type Crawl,
+  type GateAxis,
 } from "./config";
 
 class Target {
@@ -70,6 +71,14 @@ class Target {
 
   get scanRoots(): string[] {
     return this.cfg().scanRoots;
+  }
+
+  // Builds the source corpus is rendered under, for the gateAxisCollision
+  // lint. Empty when the consumer has not described them, which makes that
+  // spec skip: with no combinations there is nothing to evaluate a gate pair
+  // against, and reporting "no violations" would be a false all-clear.
+  get gateAxes(): GateAxis[] {
+    return this.cfg().gateAxes;
   }
 
   // Directory containing the CONFIG file, treated as the consumer repo root

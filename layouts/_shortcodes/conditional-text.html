@@ -13,13 +13,80 @@
        fenced-block path raw-emitted to escape a double render. Emitting
        `.Inner` untouched removes the reason all four existed. See
        utils/gate-emit.html for the verification behind that, and
-       utils/gate-decide.html for the shared condition evaluator. */ -}}
+       utils/gate-decide.html for the shared condition evaluator.
+
+       TWO TOKENS, NOT ONE — the build condition AND the section segment.
+
+       `page-context` resolves ONE condition, and in "siteParams" mode (the
+       multi-product hub, solo-io/docs) that condition is the site-wide
+       `Site.Params.buildCondition`: a PRODUCT id — `agentgateway`, `envoy`,
+       `gme`, `gmg`, `gg`. It cannot vary within a build.
+
+       A product that ships parallel documentation sections (see
+       utils/section-segment.html) needs a SECOND axis. agentgateway enterprise
+       has `kubernetes` and `standalone` sections; with only the product token,
+       every `include-if="kubernetes"` / `include-if="standalone"` gate in
+       content shared with the OSS site was dropped on BOTH sections — not
+       gated, dropped. Measured on the solo-io/docs agentgateway build before
+       this change: `llm/providers/realtime/` rendered "For more information
+       about LLM metrics and observability, see ." — both branches gone,
+       leaving a dangling sentence, and the same for the whole
+       `assets/agw-docs/pages/` set listed in that repo's audit.
+
+       `gate-decide` already takes a SLICE of tokens — `version.html` passes the
+       canonical version and the stable linkVersion so `include-if="main"`
+       survives a release bump. This reuses that contract rather than adding a
+       parallel one: a gate fires if EITHER the product condition or the section
+       segment is named.
+
+       WHY THE SEGMENT IS ADDITIVE ONLY, never a token on its own. The outer
+       `ne $condition ""` guard is deliberately kept, so a page with no build
+       condition still emits nothing even when a section segment resolves. That
+       keeps the change strictly additive: no page that previously emitted
+       nothing starts emitting because of a segment alone. (It matters for
+       version-less OSS sites such as kagent, where `page-context` in "url" mode
+       returns "" for any page outside `/docs/` while `section-segment`'s
+       positional rule can still match.)
+
+       In "url" mode (the OSS single-site convention) the condition IS the
+       section, so the segment repeats it — harmlessly, since `gate-decide` ORs
+       across the slice and a duplicate token cannot change the outcome. Those
+       builds are byte-identical, and so are hub products with no
+       `[params.sections]` registered, where the segment is always "".
+
+       SECTION LANDING PAGES DIVERGE BETWEEN THE TWO MODES, and that is a
+       deliberate limit of this change rather than an oversight.
+
+       On a section landing page — /<product>/<section>/ with no version below
+       it — `section-segment` matches via its condition (b), so the hub gates
+       correctly. The OSS build of the same reused content does not: `url` mode
+       only assigns a condition when the path has BOTH a section and a version
+       segment (see the `ge (len $parts) 3` test in utils/page-context.html), so
+       a landing page resolves condition "" and the outer guard drops every gate
+       on it, exactly as it did before this change.
+
+       Closing that would mean assigning a condition — and therefore changing
+       `version` and `prefix` — for a URL shape that `url` mode has always
+       treated as version-first, on every OSS site at once. Not worth pairing
+       with a gating fix. Landing pages are card grids in practice, so the
+       exposure is small; if it ever bites, fix it in page-context with its own
+       before/after builds. Both halves are pinned: the hub half by
+       tests/conditional-section.spec.ts, the `url` half by
+       tests/section-versionless.spec.ts. */ -}}
 
 {{- $ctx := partial "utils/page-context.html" . -}}
 {{- $condition := $ctx.condition -}}
 
 {{- if ne $condition "" -}}
-  {{- if partial "utils/gate-decide.html" (dict "sc" . "tokens" (slice $condition)) -}}
+  {{- $tokens := slice $condition -}}
+  {{- /* From page-context, NOT a second utils/section-segment call: that
+         partial has already run inside page-context to place the version
+         segment, and calling it again here repeated the whole scan on every
+         gate on every page. */ -}}
+  {{- with $ctx.sectionSegment -}}
+    {{- $tokens = $tokens | append . -}}
+  {{- end -}}
+  {{- if partial "utils/gate-decide.html" (dict "sc" . "tokens" $tokens) -}}
     {{- partial "utils/gate-emit.html" (dict "sc" . "inner" .Inner) -}}
   {{- end -}}
 {{- end -}}
