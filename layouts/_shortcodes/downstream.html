@@ -8,14 +8,18 @@
   Parameters: none
 
   Example:
-    {{< downstream >}}
+    {{% downstream %}}
     This paragraph appears in the enterprise docs and nowhere else.
-    {{< /downstream >}}
+    {{% /downstream %}}
 
   Notes:
     The mirror of `upstream`; see that file for the full description of the
-    split. This module ships the upstream behavior, so this shortcode discards
-    its body here and a downstream repo shadows the file to emit it instead.
+    split and the percent-form requirement. This template always discards its
+    body. It becomes visible downstream because the source filters UNWRAP the
+    block textually — removing the tags and keeping the inner content — before
+    this template would ever run. Those filters live in rebase.html (Stage 3b)
+    and reuse.html, covering both the directly-rebased file and one reached
+    through any depth of `reuse`.
 
     `.Inner` is assigned to a throwaway variable rather than simply left
     unreferenced. Touching it forces Hugo to parse the body, so a malformed

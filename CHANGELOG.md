@@ -418,6 +418,56 @@ five warnings naming the file and line. 10 assertions in
 the fallback resolves — a false positive there would break CI for every site that
 adopts it. Suite 2169 passing in both brand modes.
 
+### Fix — `upstream`/`downstream` now work through `reuse`, not only through a direct `rebase` (`layouts/_shortcodes/reuse.html`, `layouts/_shortcodes/{upstream,downstream}.html`, `fixture/assets/conrefs/test/source-filters{,-stub}.md`, `fixture/content/en/test/v2/source-filters-{reuse,rebase,rebase-reuse}.md`, `tests/source-filters-reuse.spec.ts`, `tests/helpers/gate-containment.json`, `playwright.config.ts`, `docs/content/authoring/gating.md`, `docs/content/authoring/shortcodes/{upstream,downstream}.md`)
+
+**Why.** Neither template carries a condition — `upstream` always emits `.Inner`,
+`downstream` always discards it — so the polarity flip is done by filtering the source
+TEXT before either runs. `rebase.html` did that (Stage 3b); `reuse.html` did not. The
+pair was therefore silently inert for most real content, because a downstream repo
+usually does not rebase the content file at all: **the docs hub rebases a one-line
+`content/docs/<section>/<ver>/…` stub whose entire body is a single `reuse` call**, so
+Stage 3b only ever saw the stub and every gate in the tree below it rendered on BOTH
+sides. For agentgateway that is the whole of `assets/agw-docs/pages/` — the gate could
+not be used for any of it, and `conditional-text exclude-if="agentgateway"` was the
+only thing that crossed the boundary.
+
+`reuse.html` now runs the same two filters at the top of its existing
+`if $parentVersion` block — the same "this content is being pulled downstream" signal
+every other transform there already uses, set only from the positional params
+`rebase` injects. A native OSS render leaves it empty and is untouched. The patterns
+match `\{\{[<%]` rather than rebase's angle-only form, because reuse does no
+percent-to-angle conversion of its own and percent is the form authors must use for
+block bodies anyway (these templates emit `.Inner` untouched, so angle form leaks a
+block body as literal text after Goldmark — the examples previously said angle; all 57
+ambientmesh.io call sites are percent).
+
+The doc comments were also wrong in a way that cost real time: they claimed the flip
+came from a downstream repo **shadowing** the two files. No consumer shadows them and
+none needs to. Both comments and the theme-docs gating page now describe the two filter
+sites.
+
+**Verified by.** Measured on the real consumer, before and after. Same local docs-hub
+build of the agentgateway product (extras via a `replace` to a local clone,
+agentgateway content live-mounted from a working tree), with the FluxCD section of
+`assets/agw-docs/pages/operations/uninstall.md` wrapped in `{{% upstream %}}`:
+
+- **Before** — the section rendered **in full** at
+  `/agentgateway/kubernetes/{latest,2.3.x,2026.7.1}/operations/uninstall/`, its
+  `link-hextra` resolved to a hub URL that does not exist.
+- **After** — the section is **absent** on all three, the sibling ArgoCD section is
+  untouched, and no shortcode tag leaks. The OSS build still renders it on `1.0.x`,
+  `latest`, and `main` with its heading, ordered list, and fences intact.
+
+Strictly additive for existing content: a scan of every consumer found **zero**
+`upstream`/`downstream` tags in any `assets/` tree, which is the only tree `reuse`
+reads (ambientmesh.io's 24 files are all under `content/`, reached by neither filter).
+New `tests/source-filters-reuse.spec.ts` (6 assertions, `static` project, added to the
+per-file `testMatch` allowlist) pins all three render paths plus a non-vacuity check
+that the direct and downstream paths disagree; reverting just the two new lines fails
+exactly the three path-specific tests and leaves the direct-render and Stage 3b ones
+green. Suite 2198 passing in both brand modes. Observable on the published theme docs:
+[Gating content](https://solo-io.github.io/docs-theme-extras/authoring/gating/).
+
 ---
 
 ## [0.3.4] — 2026-08-28

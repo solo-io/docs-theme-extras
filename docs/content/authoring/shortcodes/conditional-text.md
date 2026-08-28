@@ -36,17 +36,62 @@ This paragraph appears only in the Kubernetes flavor of the docs.
 
 ## Notes
 
-Give exactly one of `include-if` or `exclude-if`.
+Give exactly one of `include-if` or `exclude-if`. Setting both is an error.
+
+### Two tokens, not one
+
+A gate fires when its list names **either** of two things:
+
+| Token | Where it comes from | Varies within a build? |
+|---|---|---|
+| build condition | `site.Params.buildCondition` in `siteParams` mode; the section segment in `url` mode, falling back to `site.Params.buildCondition` when the site registers no sections | No — one value per site |
+| section segment | the page's own section under `[params.sections]` | Yes — per page |
+
+The second token is what lets a product with parallel documentation
+sections gate on the section a page is read in. Without it,
+`buildCondition` is the only axis, and in a multi-product hub that is a
+**product** id (`agentgateway`, `envoy`, `gme`) that cannot vary within a
+build — so every section-named gate in the content is dropped on *every*
+section rather than gated on one.
 
 Both parameters are read inside `utils/gate-decide.html`, which this
-shortcode hands its context to as a dict value. They are documented here
-anyway, because a reader writing the call should not have to know which
-partial resolves the value.
+shortcode hands its context to as a dict value; the condition itself comes
+from `utils/page-context.html`, so this works under both the
+multi-product-hub and single-site URL conventions. Prefer this over
+`upstream` and `downstream` whenever the split is finer than which repo is
+building.
 
-The build condition is resolved through `utils/page-context.html`, so this
-works under both the multi-product-hub and single-site URL conventions.
-Prefer this over `upstream` and `downstream` whenever the split is finer
-than which repo is building.
+### A site with one doc set must set `params.buildCondition`
+
+With no `[params.sections]` registered, `url` mode has nothing in the path
+to derive a condition from, so it reads `params.buildCondition` instead.
+Without one, every gate on the site is dropped in **both** directions —
+`exclude-if` included, which means content vanishes rather than shows — and
+the build warns, naming the file and line. Use the same token the docs hub
+uses for that product, so one gate means one thing in both builds.
+
+### Do not overload a token across the two axes
+
+If `kubernetes` names a section *and* is used elsewhere to mean "the OSS
+build", then on an enterprise Kubernetes page both meanings are true at
+once and **both branches render**. Pick names that cannot collide, or gate
+the product axis on the product token alone — one `exclude-if` plus one
+`include-if`, rather than two `include-if`s.
+
+This is caught mechanically by `tests/gate-axis-collision.spec.ts`, given a
+`[[gateAxes]]` block describing the builds your content ships through. It
+is worth configuring precisely because the damage never appears in your own
+build: the OSS site renders correctly and only the hub's copy of the same
+shared content breaks.
+
+### Section landing pages differ between the two modes
+
+A landing page is `/<product>/<section>/`, with no version below it. On the
+hub the build condition is the product and is non-empty there, so a
+section-named gate fires. On an OSS site `url` mode assigns a condition only
+when the path carries both a section and a version, so `/docs/<section>/`
+resolves an empty condition and every gate on it is dropped. Keep gates off
+section landing pages, or accept that the OSS copy shows neither branch.
 
 ### Why this file is short
 
