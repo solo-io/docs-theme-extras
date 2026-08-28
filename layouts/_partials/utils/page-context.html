@@ -7,6 +7,30 @@
     condition the buildCondition string (drives `conditional-text`)
     prefix    the URL prefix to prepend to relative paths in cards/links
               (e.g. "/docs/kubernetes/v2", "/test/v2")
+    sectionSegment
+              the page's own section under [params.sections], or "" — the
+              SECOND gating axis, alongside `condition`. See below.
+
+  WHY `sectionSegment` IS SEPARATE FROM `section`. `section` means two different
+  things depending on the mode: the PRODUCT folder in "siteParams", the section
+  in "url". That wart predates this partial's current callers and is not worth
+  unpicking, so the gating axis gets its own key with one meaning in both modes.
+
+  It is returned rather than recomputed by callers because this partial ALREADY
+  resolves it in "siteParams" mode — it needs the section to know where the
+  version segment sits. `conditional-text` used to call utils/section-segment
+  a second time for the same answer, on every gate on every page.
+
+  IN "url" MODE IT IS POPULATED ONLY WHERE `condition` IS. Both come from the
+  same branch below, which requires a section AND a version in the path. So on
+  a section LANDING page (/docs/<section>/, no version) both are "" even though
+  utils/section-segment would match the segment. That is deliberate, not a gap:
+  it is the whole of the OSS half of the landing-page divergence documented in
+  layouts/_shortcodes/conditional-text.html, and keeping it here means the two
+  modes disagree in exactly one place that can be read at a glance. Resolving
+  it properly would mean calling utils/section-segment on every "url"-mode page
+  — every card and every link, not just gates — to change the answer only for
+  pages whose gates are dropped anyway.
 
   Dispatches on Site.Params.pageContextMode:
 
@@ -35,6 +59,7 @@
 {{- $version := "" -}}
 {{- $condition := "" -}}
 {{- $prefix := "" -}}
+{{- $sectionSegment := "" -}}
 
 {{- if eq $mode "siteParams" -}}
   {{- $folder := .Site.Params.folder | default "" -}}
@@ -47,6 +72,7 @@
          version from the full URL instead when a section is present. */ -}}
   {{- $sectionSegInfo := partial "utils/section-segment.html" .Page -}}
   {{- $sectionSeg := $sectionSegInfo.segment -}}
+  {{- $sectionSegment = $sectionSeg -}}
   {{- if $sectionSeg -}}
     {{- $relParts := split (strings.Trim .Page.RelPermalink "/") "/" -}}
     {{- $versionIdx := add $sectionSegInfo.index 1 -}}
@@ -94,6 +120,11 @@
       {{- $section = index $parts 1 -}}
       {{- $version = index $parts 2 -}}
       {{- $condition = $section -}}
+      {{- /* The two gating axes are ONE value in this mode — the condition IS
+             the section. Setting both keys from it keeps `conditional-text`
+             mode-agnostic, and the duplicate token it produces is harmless:
+             utils/gate-decide.html ORs across the slice. */ -}}
+      {{- $sectionSegment = $section -}}
       {{- $prefix = printf "/docs/%s/%s" $section $version -}}
     {{- else -}}
       {{- $version = index $parts 1 -}}
@@ -102,4 +133,4 @@
   {{- end -}}
 {{- end -}}
 
-{{- return dict "section" $section "version" $version "condition" $condition "prefix" $prefix -}}
+{{- return dict "section" $section "version" $version "condition" $condition "prefix" $prefix "sectionSegment" $sectionSegment -}}

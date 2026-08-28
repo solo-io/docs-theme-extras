@@ -22,9 +22,62 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
-## [0.3.4] — 2026-08-27
+## [0.4.0] — 2026-08-28
 
-### Fix — `conditional-text` gates on the section segment as well as the build condition (`layouts/_shortcodes/conditional-text.html`, `fixture/content/en/test/{nested/v2,v2}/cond-section.md`, `tests/conditional-section.spec.ts`, `tests/auto-cards.spec.ts`, `tests/helpers/{sentinels.ts,gate-containment.json}`, `playwright.config.ts`, `USAGE.md`)
+### Add — `gate-axis-collision` lint: a `conditional-text` either/or pair that renders both branches (`tests/gate-axis-collision.spec.ts`, `tests/helpers/{gate-axis.ts,gate-scan.ts,config.ts,target.ts}`, `fixture/.docs-test-{oss,enterprise}.toml`, `playwright.config.ts`, `README.md`, `USAGE.md`)
+
+**Why.** The Fix below gives `conditional-text` a second gating axis, and the two
+axes share ONE token namespace. A token that names a section on one axis and a
+product on the other is true twice over, so both sides of an intended either/or
+render. Five files in `agentgateway/website` are written that way — for example
+`assets/agw-docs/pages/security/backend-authn-oauth.md`, which pairs
+`include-if="kubernetes"` with `include-if="agentgateway"` to mean "OSS gets the
+relative API link, the hub gets the absolute one". On the hub, `kubernetes` is a
+registered SECTION and `agentgateway` is the buildCondition, so on an enterprise
+Kubernetes page both are true and both links render, with the relative one 404ing.
+
+Documenting the hazard in USAGE.md was the first answer. That is not enough: the
+damage never appears in the build the author is looking at. The OSS site renders
+correctly, and only the hub's copy of the same shared content breaks.
+
+**What it does.** Reports an adjacent pair of `include-if` gates when any
+configured (buildCondition, section) combination fires BOTH. That framing is what
+makes it exact rather than heuristic — "flag any gate naming a section" flags
+every legitimate section gate, and "flag a section name that is also a build
+condition" flags all of `url` mode, where the two axes are deliberately one value.
+The ambiguity is semantic; the consequence is decidable. A legitimate section pair
+(`kubernetes` beside `standalone`) never reports, because no page is in two
+sections at once, and an `include-if`/`exclude-if` pair never reports, because
+exactly one side of it fires.
+
+Opt-in through a new `[[gateAxes]]` block naming the builds a source tree ships
+through — see README.md. With none configured the spec SKIPS rather than passes:
+with no combinations there is nothing to evaluate against, and green would be a
+false all-clear.
+
+**Verify.** After the Fix below ships, an unfixed pair renders twice. On
+<https://docs.solo.io/agentgateway/kubernetes/latest/security/backend-authn-oauth/>
+that is two consecutive "API docs" links where there should be one. Today neither
+renders, because the gates are dropped — which is the bug the Fix addresses.
+
+**Verified by.** Run against four real corpora. `agentgateway/website`'s
+`assets/agw-docs`: five files, exactly the five a hand audit had already listed
+(`operations/uninstall.md`, `security/backend-authn-{cross-app-access,jwt-sign,oauth}.md`,
+`snippets/debug-gateway.md`) — no more and no fewer. That repo's `content/`, the
+solo-io/docs `assets/` tree (far larger, 504 `exclude-if` gates) and the hub's
+`content/en`: zero each.
+
+The adjacency threshold was measured, not guessed. Requiring the two gates to be
+flush found only 4 of the 5, missing the block-level form where markdown demands a
+blank line between the branches; allowing one blank line finds all 5 and still
+reports zero on the other three corpora; allowing two changes nothing on any of
+them, so the boundary is not delicate. 13 helper unit tests pin the shape,
+including the escaped display form (`{{</* … */>}}`), which USAGE.md itself uses to
+document the anti-pattern and which must not be flagged. A violation planted in the
+fixture corpus is caught and reported with the file, line, breaking combination and
+the rewrite that fixes it.
+
+### Fix — `conditional-text` gates on the section segment as well as the build condition (`layouts/_shortcodes/conditional-text.html`, `layouts/_partials/utils/page-context.html`, `fixture/content/en/test/{nested/_index.md,nested/v2/cond-section.md,v2/cond-section.md,v2/nested/_index.md,v2/nested/collision.md}`, `fixture/content-flat/en/alpha/{_index.md,first.md}`, `tests/{conditional-section,section-versionless,auto-cards}.spec.ts`, `tests/helpers/{sentinels.ts,gate-containment.json}`, `playwright.config.ts`, `USAGE.md`)
 
 **Why.** `utils/page-context` resolves ONE condition, and in `siteParams` mode (the
 multi-product hub) that condition is `site.Params.buildCondition` — a **product** id
@@ -45,6 +98,12 @@ section lost its whole variant set, including the standalone config examples on
 condition, reusing `utils/gate-decide.html`'s existing slice-of-tokens contract — the same
 one `version.html` uses for version + linkVersion. A gate fires when its list names either.
 
+The segment comes from `utils/page-context`, which now returns it as `sectionSegment`,
+rather than from a second `utils/section-segment` call in the shortcode. `page-context`
+already ran that partial to place the version segment and was discarding the answer, so
+every gate on every page was paying for the same scan twice. Output is byte-identical: a
+full fixture rebuild differs only in the `llms.txt` "Generated on" timestamp.
+
 The section token is **additive**, and the `ne $condition ""` guard is kept deliberately, so
 no page that previously emitted nothing starts emitting because a segment resolved alone
 (this matters for version-less `url`-mode sites such as kagent, where `page-context` returns
@@ -54,14 +113,39 @@ no page that previously emitted nothing starts emitting because a segment resolv
 and its `kubernetes/latest` twin, the "Session handling (`statefulMode`)" / "Session routing
 (`sessionRouting`)" paragraphs differ per section; before the fix neither appeared.
 
+**Section landing pages diverge between the two modes, deliberately.** A landing page is
+`/<product>/<section>/`, with no version below it. `section-segment` matches it, so the hub
+gates on the section there. An OSS build of the same reused content does not: `url` mode
+assigns a condition only when the path carries both a section and a version, so
+`/docs/<section>/` resolves `""` and the guard drops every gate on it, exactly as before.
+Closing that would mean changing `version` and `prefix` for a URL shape `url` mode has always
+read as version-first, on every OSS site at once — not something to pair with a gating fix.
+Both halves are pinned by tests, and the contract in USAGE.md says to keep gates off section
+landing pages.
+
 **Verified by.** Full before/after builds of three solo-io/docs products at v0.3.3 vs this
 change. agentgateway: 50 `index.html` pages changed, every diff an addition of previously
 dropped content, no page lost content and none disappeared; all 62 newly rendered links
 extracted and resolved against the built tree. kgateway (the one hub product that *inherits*
 a `sections` key, from the imported `kgateway.dev` module): zero page changes — the only
-diffs were `llms.txt` "Generated on" timestamps. gateway: byte-identical. Fixture suite 1735
-passing in both `hugo-oss.toml` and `hugo-enterprise.toml` modes, up 11 from baseline; the
-new spec fails on 2 assertions without the shortcode change.
+diffs were `llms.txt` "Generated on" timestamps. gateway: byte-identical.
+
+Fixture suite 2143 passing in both `hugo-oss.toml` and `hugo-enterprise.toml` modes; the one
+`override-parity` "consumer shadow inventory" failure also fails on unmodified `main` and is
+unrelated. Each new assertion was checked against a deliberately broken build rather than
+only against a passing one:
+
+- Replacing `section-segment`'s positional `$accept` with `true` (match-anywhere) makes
+  `/test/v2/nested/collision/` and `/test/v2/nested/` both render their section marker. Those
+  two pages are the only ones in the fixture that can tell the two implementations apart — a
+  page whose URL contains no registered section name proves nothing, because the gate could
+  not fire there under any implementation.
+- Replacing the `ne $condition ""` guard with `true` makes `/docs/alpha/` render its marker in
+  both version-less builds (`public-flat/`, `public-flat-root/`). That is the kagent shape,
+  and it is the only place in the repo where the segment resolves while the condition is
+  empty, so it is the only place the guard is reachable at all.
+- The containment snapshot gained four page entries and one marker, all in
+  `div.content > p`. No existing marker moved.
 
 **Known follow-up for consumers, not a regression in this theme.** Where a token is
 overloaded across the two axes — `kubernetes` naming a section *and* used elsewhere to mean

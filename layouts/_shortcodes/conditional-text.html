@@ -49,19 +49,42 @@
        positional rule can still match.)
 
        In "url" mode (the OSS single-site convention) the condition IS the
-       section, so the segment is a duplicate and is skipped — those builds are
-       byte-identical. So are hub products with no `[params.sections]`
-       registered, where the segment is always "". */ -}}
+       section, so the segment repeats it — harmlessly, since `gate-decide` ORs
+       across the slice and a duplicate token cannot change the outcome. Those
+       builds are byte-identical, and so are hub products with no
+       `[params.sections]` registered, where the segment is always "".
+
+       SECTION LANDING PAGES DIVERGE BETWEEN THE TWO MODES, and that is a
+       deliberate limit of this change rather than an oversight.
+
+       On a section landing page — /<product>/<section>/ with no version below
+       it — `section-segment` matches via its condition (b), so the hub gates
+       correctly. The OSS build of the same reused content does not: `url` mode
+       only assigns a condition when the path has BOTH a section and a version
+       segment (see the `ge (len $parts) 3` test in utils/page-context.html), so
+       a landing page resolves condition "" and the outer guard drops every gate
+       on it, exactly as it did before this change.
+
+       Closing that would mean assigning a condition — and therefore changing
+       `version` and `prefix` — for a URL shape that `url` mode has always
+       treated as version-first, on every OSS site at once. Not worth pairing
+       with a gating fix. Landing pages are card grids in practice, so the
+       exposure is small; if it ever bites, fix it in page-context with its own
+       before/after builds. Both halves are pinned: the hub half by
+       tests/conditional-section.spec.ts, the `url` half by
+       tests/section-versionless.spec.ts. */ -}}
 
 {{- $ctx := partial "utils/page-context.html" . -}}
 {{- $condition := $ctx.condition -}}
 
 {{- if ne $condition "" -}}
   {{- $tokens := slice $condition -}}
-  {{- with (partial "utils/section-segment.html" .Page).segment -}}
-    {{- if not (in $tokens .) -}}
-      {{- $tokens = $tokens | append . -}}
-    {{- end -}}
+  {{- /* From page-context, NOT a second utils/section-segment call: that
+         partial has already run inside page-context to place the version
+         segment, and calling it again here repeated the whole scan on every
+         gate on every page. */ -}}
+  {{- with $ctx.sectionSegment -}}
+    {{- $tokens = $tokens | append . -}}
   {{- end -}}
   {{- if partial "utils/gate-decide.html" (dict "sc" . "tokens" $tokens) -}}
     {{- partial "utils/gate-emit.html" (dict "sc" . "inner" .Inner) -}}

@@ -37,8 +37,15 @@ import path from "node:path";
 export const GATES = ["version", "conditional-text"];
 
 const SKIP_DIRS = new Set([
-  ".git", "node_modules", "public", "public-oss", "public-enterprise",
-  "resources", "_vendor", ".oss-clones", "worktree-checkouts",
+  ".git",
+  "node_modules",
+  "public",
+  "public-oss",
+  "public-enterprise",
+  "resources",
+  "_vendor",
+  ".oss-clones",
+  "worktree-checkouts",
 ]);
 
 // A shortcode tag in either form. The `[^}]|\}(?!\})` body lets a single `}`
@@ -53,7 +60,8 @@ const SKIP_DIRS = new Set([
 // `filetree/folder`, `filetree/file`); without it all three read as one name
 // `filetree`, the self-closing `file` pushes a level that nothing pops, and
 // every gate after the tree reports as nested.
-const TAG = /\{\{\{*([<%])\s*(\/?)\s*([a-zA-Z][\w\-/]*)((?:[^}]|\}(?!\}))*?)\s*([%>])\}\}/gs;
+const TAG =
+  /\{\{\{*([<%])\s*(\/?)\s*([a-zA-Z][\w\-/]*)((?:[^}]|\}(?!\}))*?)\s*([%>])\}\}/gs;
 // The escaped DISPLAY form `{{</* version */>}}`, used on pages that document
 // the shortcodes. Not a real invocation, so it must not be counted.
 const ESCAPED = /\{\{[<%]\/\*.*?\*\/[%>]\}\}/gs;
@@ -67,6 +75,11 @@ function blank(src: string, start: number, end: number): string {
 export type Gate = {
   file: string;
   line: number;
+  /** Which gate shortcode this is — one of GATES. Needed by callers that treat
+   *  the two differently: `version` gates carry versions, `conditional-text`
+   *  gates carry products and sections, and a lint about one axis pair has no
+   *  business reading the other's tokens. */
+  name: string;
   /** "<" or "%" — the invocation form actually used in source. */
   form: string;
   /** Hugo nesting level. 0 means `.Parent` is nil. */
@@ -77,6 +90,16 @@ export type Gate = {
   body: string;
   /** Column the opener starts at, used for the indent-hazard test. */
   column: number;
+  /** Raw argument text of the opener, e.g. `include-if="a, b"`. Read by
+   *  helpers/gate-axis.ts to recover the gate's tokens. */
+  args: string;
+  /** Byte offset of the opener's first `{`. */
+  start: number;
+  /** Byte offset just past the closer's last `}`, or past the opener when no
+   *  closer was found. Together with `start` this is what lets gate-axis.ts
+   *  ask whether two gates are ADJACENT — an either/or pair — rather than
+   *  merely present in the same file. */
+  end: number;
 };
 
 export function scanFile(file: string): Gate[] {
@@ -86,8 +109,17 @@ export function scanFile(file: string): Gate[] {
   } catch {
     return [];
   }
+  return scanSource(raw, file);
+}
+
+/** The scan itself, over source text rather than a path, so a caller that
+ *  already holds the source (or a unit test that has no file at all) does not
+ *  have to round-trip through the filesystem. `file` is only used to label the
+ *  returned gates. */
+export function scanSource(raw: string, file: string): Gate[] {
   let src = raw;
-  for (const m of raw.matchAll(ESCAPED)) src = blank(src, m.index!, m.index! + m[0].length);
+  for (const m of raw.matchAll(ESCAPED))
+    src = blank(src, m.index!, m.index! + m[0].length);
 
   const tags = [...src.matchAll(TAG)].map((m) => ({
     start: m.index!,
@@ -95,6 +127,7 @@ export function scanFile(file: string): Gate[] {
     form: m[1],
     isClose: m[2] === "/",
     name: m[3],
+    args: (m[4] ?? "").trim(),
   }));
   // Only PAIRED shortcodes create a nesting level. A name that never appears in
   // closing form is self-closing and must not push onto the stack.
@@ -105,13 +138,18 @@ export function scanFile(file: string): Gate[] {
   for (const t of tags) {
     if (t.isClose) {
       for (let i = stack.length - 1; i >= 0; i--) {
-        if (stack[i].name === t.name) { stack.length = i; break; }
+        if (stack[i].name === t.name) {
+          stack.length = i;
+          break;
+        }
       }
       continue;
     }
     if (!closed.has(t.name)) continue;
     if (GATES.includes(t.name)) {
-      const closeRe = new RegExp(`\\{\\{\\{*[<%]\\s*/\\s*${t.name}\\s*[%>]\\}\\}`);
+      const closeRe = new RegExp(
+        `\\{\\{\\{*[<%]\\s*/\\s*${t.name}\\s*[%>]\\}\\}`,
+      );
       const rest = src.slice(t.end);
       const mc = rest.match(closeRe);
       const body = mc ? rest.slice(0, mc.index) : "";
@@ -119,12 +157,16 @@ export function scanFile(file: string): Gate[] {
       out.push({
         file,
         line: src.slice(0, t.start).split("\n").length,
+        name: t.name,
         form: t.form,
         depth: stack.length,
         parents: stack.map((s) => s.name).join("/"),
         multiline: body.replace(/^\n+|\n+$/g, "").includes("\n"),
         body,
         column: t.start - before - 1,
+        args: t.args,
+        start: t.start,
+        end: mc ? t.end + mc.index! + mc[0].length : t.end,
       });
     }
     stack.push({ name: t.name, form: t.form });
@@ -138,9 +180,11 @@ export function classify(g: Gate): string {
   const first = g.body.split("\n").find((l) => l.trim()) ?? "";
   if (!g.multiline) return "single-line (safe: Hugo <p> cleanup)";
   if (/^[ \t]{0,3}\|/.test(first)) return "HAZARD multi-row table fragment";
-  if (/^[ \t]{0,3}([*+-][ \t]|[0-9]+\.[ \t])/.test(first)) return "HAZARD list-item fragment";
+  if (/^[ \t]{0,3}([*+-][ \t]|[0-9]+\.[ \t])/.test(first))
+    return "HAZARD list-item fragment";
   if (/^[ \t]+(```|~~~)/.test(first)) return "HAZARD indented fence";
-  if (/^[ \t]{0,3}#{1,6}\s/m.test(g.body)) return "HEADING (TOC loss at depth>=1)";
+  if (/^[ \t]{0,3}#{1,6}\s/m.test(g.body))
+    return "HEADING (TOC loss at depth>=1)";
   if (/^[ \t]{0,3}([*+-]|[0-9]+\.)[ \t]*$/m.test(g.body.replace(/\s+$/, "")))
     return "HAZARD orphan marker";
   return "multi-line block (ok)";

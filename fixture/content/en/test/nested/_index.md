@@ -57,3 +57,30 @@ fallback rather than pretending the case does not arise.
 No `version-cards` on this page, for the same reason: the cards build one href
 per resolved version and would emit `/test/nested/v3/`. `version-cards` is
 covered on `/test/` by `tests/version-cards.spec.ts`.
+
+## Gating on a section landing page
+
+This page is `/test/nested/` — a section with no version below it, which
+`utils/section-segment.html` matches through its condition (b). The fixture is
+`siteParams` mode, so the build condition is the product (`test`) and is
+non-empty here, and `conditional-text` therefore gates on the section name.
+
+That is NOT true of the same URL shape on an OSS site. In `url` mode
+`page-context` only assigns a condition when the path carries both a section and
+a version, so `/docs/nested/` resolves `""` and every gate on it is dropped.
+Reused content that gates on a section renders here and not there. The
+divergence is deliberate — see the comment in
+`layouts/_shortcodes/conditional-text.html` — and the other half is pinned by
+`tests/section-versionless.spec.ts`.
+
+Naming this landing page's own section — renders:
+
+{{% conditional-text include-if="nested" %}}COND_SEC_LANDING_SECTION{{% /conditional-text %}}
+
+Naming the build condition — renders:
+
+{{% conditional-text include-if="test" %}}COND_SEC_LANDING_PRODUCT{{% /conditional-text %}}
+
+Naming a different section — dropped, since a landing page resolves exactly one:
+
+{{% conditional-text include-if="demo" %}}COND_SEC_LANDING_OTHER{{% /conditional-text %}}

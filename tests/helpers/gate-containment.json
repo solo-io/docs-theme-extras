@@ -338,7 +338,12 @@
     "MARKER_VERSION_TRAILING_PRE_FENCE": "div.hextra-max-page-width > article > main > div.content > ol > li > div.hextra-code-block > div > div.highlight > pre > code > span.line > span.cl > span.c1",
     "MARKER_VERSION_TRAILING_STEP": "div.hextra-max-page-width > article > main > div.content > ol > li > p"
   },
+  "nested": {
+    "COND_SEC_LANDING_PRODUCT": "div.hextra-max-page-width > article > main > div.content > p",
+    "COND_SEC_LANDING_SECTION": "div.hextra-max-page-width > article > main > div.content > p"
+  },
   "nested/v2/cond-section": {
+    "COND_SEC_EXCLUDE_OTHER": "div.hextra-max-page-width > article > main > div.content > p",
     "COND_SEC_LIST_WITH_PRODUCT": "div.hextra-max-page-width > article > main > div.content > p",
     "COND_SEC_PRODUCT": "div.hextra-max-page-width > article > main > div.content > p",
     "COND_SEC_SECTION": "div.hextra-max-page-width > article > main > div.content > p"
@@ -917,6 +922,12 @@
   },
   "v2/nav-group/child": {
     "MARKER_NAVGROUP_CHILD": "div.hextra-max-page-width > article > main > div.content > p"
+  },
+  "v2/nested/collision": {
+    "COND_SEC_COLLISION_PRODUCT": "div.hextra-max-page-width > article > main > div.content > p"
+  },
+  "v2/nested": {
+    "COND_SEC_COLLINDEX_PRODUCT": "div.hextra-max-page-width > article > main > div.content > p"
   },
   "v2/ol-split": {
     "MARKER_OLSPLIT_S1_SUB_A": "div.hextra-max-page-width > article > main > div.content > ol > li > ol > li",
