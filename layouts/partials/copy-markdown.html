@@ -8,6 +8,43 @@
 
        Absolute URL host comes from utils/prod-host (explicit
        themeExtras.prodHost > site.BaseURL host > empty). */ -}}
+{{- /* "Download all docs (PDF)" menu item.
+
+       Resolved HERE, at the top, because `.` is unambiguously the Page at this
+       point; further down the file it is buried in markup and easy to get
+       wrong.
+
+       WHETHER TO SHOW IT is decided by the version root's own output formats:
+       a version that publishes a PDF is exactly a version whose `_index.md`
+       carries `outputs: ["html", "book"]`, so the page asks the build rather
+       than a separate flag somebody has to remember to keep in sync. Note the
+       version root is resolved through utils/version-root.html and NOT through
+       `.FirstSection`, which returns the wrong page inside a subtree.
+
+       The one thing this cannot know is whether the PDF has been PUBLISHED
+       yet. The build only knows the book is produced; the nightly job in
+       solo-io/docs is what uploads it. So a version enabled between two runs
+       shows a link that 404s until the next one — dispatch the PDF workflow
+       when enabling a version, rather than waiting for the schedule.
+
+       Renders nothing at all unless the site sets `params.pdfDownload.urlTemplate`,
+       so a consumer that publishes no PDFs is unaffected. */ -}}
+{{- $pdfURL := "" -}}
+{{- $pd := site.Params.pdfDownload | default dict -}}
+{{- with $pd.urlTemplate -}}
+  {{- $tmpl := . -}}
+  {{- $vr := partial "utils/version-root.html" $ -}}
+  {{- with $vr.docsSection -}}
+    {{- if .OutputFormats.Get "book" -}}
+      {{- $product := $pd.product | default site.Params.currentProduct | default site.Params.folder | default "" -}}
+      {{- $dist := $pd.distribution | default "" -}}
+      {{- $u := replace $tmpl "{product}" $product -}}
+      {{- $u = replace $u "{distribution}" $dist -}}
+      {{- $pdfURL = replace $u "{version}" $vr.currentVersion -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
 {{- $html := .Content -}}
 {{- $prodHost := partial "utils/prod-host.html" . -}}
 {{- /* Pull the footnotes block off the end of .Content so it can be re-appended
@@ -344,6 +381,18 @@
         </button>
       </li>
       <li class="copy-md-dropdown-sep" role="separator"></li>
+      {{- with $pdfURL }}
+      {{- /* Sits next to Print because it answers the same need — a portable
+             copy. Labelled "all docs" on purpose: every other item in this
+             menu acts on THIS page, and without the distinction Print sitting
+             directly below invites the reader to expect a one-page file. */ -}}
+      <li role="none">
+        <button role="menuitem" data-action="download-pdf" data-pdf-url="{{ . }}">
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+          Download all docs (PDF)
+        </button>
+      </li>
+      {{- end }}
       <li role="none">
         <button role="menuitem" data-action="print">
           <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>

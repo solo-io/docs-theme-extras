@@ -24,11 +24,12 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ## [0.3.6] — 2026-08-28
 
-**Scope of this release.** Tooling only: one new script (`scripts/merge_book.py`), one new
-flag on `scripts/prepare_book.py`, and one new CSS rule in `print-book.css`. Versioned as a
-patch because no consumer's rendered output changes — neither script is a Hugo import, and
-the new `.pdf-chapter-cont` rule matches an element that only the splitter creates, so a
-normal book build is byte-identical. Only a repo that runs the PDF pipeline is affected.
+**Scope of this release.** PDF pipeline only: one new script (`scripts/merge_book.py`), one
+new flag on `scripts/prepare_book.py`, one new CSS rule in `print-book.css`, and one new
+optional menu item. Versioned as a patch because a consumer that sets nothing new is
+byte-identical — neither script is a Hugo import, the `.pdf-chapter-cont` rule matches an
+element only the splitter creates, and the download item renders **only** when
+`params.pdfDownload.urlTemplate` is set.
 
 ### Add
 
@@ -65,6 +66,34 @@ normal book build is byte-identical. Only a repo that runs the PDF pipeline is a
   render errors. Peak memory fell from >15 GB to **2,134 MB**, and total render time from
   32+ minutes (never finishing) to **5m20s**. The slice boundary inside the CVE chapter is
   visually seamless — same running header, consecutive page numbers, no stray break.
+
+- **A "Download all docs (PDF)" item in the Copy-as-Markdown menu.** A published PDF that
+  nobody can find is not much use, and the menu on every docs page is already the "get this
+  content in another form" control — it sits next to Print, which answers the same need.
+  Discovery aside, the interesting part is how the item decides whether to appear: it asks
+  the version root for its output formats, so a version shows the link exactly when its
+  `_index.md` carries `outputs: ["html", "book"]`. That is the same condition that makes a
+  PDF publishable, so there is no second flag to keep in sync and nothing to drift. The
+  version root is resolved through `utils/version-root.html`, not `.FirstSection`, which
+  returns the wrong page inside a subtree.
+
+  Opt in with `params.pdfDownload.urlTemplate` (placeholders `{product}`, `{distribution}`,
+  `{version}`) plus `params.pdfDownload.distribution`. `distribution` is not decoration:
+  kgateway, agentgateway, agentregistry and kagent are each documented as both enterprise
+  and open source, and their release tags would otherwise collide. Set the params in
+  **every** config a product builds with, or the item silently disappears from preview
+  builds — the same trap as `[outputFormats.book]`.
+
+  The one thing it cannot know is whether the PDF has been *published* yet; the build only
+  knows the book is produced. A version enabled between two nightly runs shows a link that
+  404s until the next one, so dispatch the PDF workflow when enabling a version. A
+  build-time existence check was prototyped and rejected: it needs `[security.http]` widened
+  to permit HEAD in every consumer, and `caches.getresource` defaults to `maxage = -1`, so a
+  cached "missing" answer would never expire.
+
+  **Verified** on a real gloo-mesh-enterprise build: the item renders on the `latest` tree
+  and on a page three levels deep inside it, with the correct release URL, and is absent
+  from `2.12.x` and `main`, neither of which builds a book.
 
 ### Fix
 

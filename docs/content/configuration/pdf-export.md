@@ -429,6 +429,52 @@ throwing `print-book.css` away.
 > promises a number. The structural results (page counts, link counts, duplicate
 > ids, which CSS is honored) are stable and repeatable; the clock is not.
 
+## Linking to the published PDF
+
+Set `params.pdfDownload` and the Copy-as-Markdown menu on every docs page gains a
+**Download all docs (PDF)** item, next to Print:
+
+```toml
+[params.pdfDownload]
+  urlTemplate = "https://github.com/solo-io/docs-pdfs/releases/download/{product}-{distribution}-{version}/{product}-{distribution}-{version}.pdf"
+  distribution = "enterprise"
+```
+
+`{product}` comes from `params.pdfDownload.product`, falling back to
+`params.currentProduct` and then `params.folder`. `{version}` is the version
+segment of the current URL. Without `urlTemplate` the item does not render at
+all, so a site that publishes no PDFs needs no other change.
+
+**The item appears only for a version that builds a book**, because it asks the
+version root for its output formats rather than reading a separate flag:
+
+```go-html-template
+{{ $vr := partial "utils/version-root.html" . }}
+{{ with $vr.docsSection }}{{ if .OutputFormats.Get "book" }}…{{ end }}{{ end }}
+```
+
+That is the same `outputs: ["html", "book"]` opt-in that makes a PDF publishable
+in the first place, so the menu follows the build and there is nothing to keep
+in sync.
+
+> [!WARNING]
+> Set `params.pdfDownload` in **every** config that builds the product, not just
+> the production one. Unlike `[outputFormats.book]`, a missing block does not
+> fail the build — the item just silently disappears from preview and local
+> builds, which is harder to notice.
+
+> [!NOTE]
+> The build knows the book is produced; it cannot know the PDF has been
+> uploaded. A version enabled between two nightly runs shows a link that 404s
+> until the next one, so dispatch the PDF workflow when you enable a version
+> rather than waiting for the schedule.
+
+A build-time existence check was prototyped and rejected. `resources.GetRemote`
+with `method: head` does work, returning nil on a 404 without downloading the
+file, but it requires `[security.http] methods` to be widened to permit HEAD in
+every consumer, and `caches.getresource` defaults to `maxage = -1`, so a cached
+"missing" answer would never expire.
+
 ## Verifying the output
 
 The book document deliberately skips `baseof.html` and all normal docs chrome —
