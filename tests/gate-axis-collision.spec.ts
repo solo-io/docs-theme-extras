@@ -147,6 +147,40 @@ test.describe("gate-axis lint helper", () => {
     expect(findAxisViolations(src, "t.md", HUB)).toEqual([]);
   });
 
+  test("does NOT flag a same-axis chain of blocks", () => {
+    // Real shape from solo-io/docs' security/extauth-about.md: six adjacent
+    // gates alternating shared prose with product-specific prose. Several fire
+    // together on any build and that is the intent. Every token is a product
+    // id, so the overlap is on ONE axis — not the cross-axis overload this lint
+    // is about. Four blocks in that repo reported before `collides` keyed on
+    // the axis rather than on "both fire".
+    const src =
+      `{{% conditional-text include-if="gme,gmg" %}}Shared.{{% /conditional-text %}}\n` +
+      `{{% conditional-text include-if="gme" %}}Mesh only.{{% /conditional-text %}}\n`;
+    const GLOO: AxisCombo[] = [
+      { name: "hub/gme", condition: "gme", sections: [] },
+      { name: "hub/gmg", condition: "gmg", sections: [] },
+    ];
+    expect(findAxisViolations(src, "t.md", GLOO)).toEqual([]);
+  });
+
+  test("does NOT flag a gate that WRAPS another gate", () => {
+    // Real shape from solo-io/docs' conrefs: a broad outer gate containing a
+    // narrower inner one. Tokens overlap and both fire, but that is the point —
+    // the inner gate is nested content, not the second half of an either/or.
+    // Four blocks in that repo reported until the depth test landed.
+    const src =
+      `{{% conditional-text include-if="gme,gmg" %}}\n\n` +
+      `Shared prose.\n\n` +
+      `{{% conditional-text include-if="gme" %}}Mesh-only prose.{{% /conditional-text %}}\n\n` +
+      `{{% /conditional-text %}}\n`;
+    const GLOO: AxisCombo[] = [
+      { name: "hub/gme", condition: "gme", sections: [] },
+      { name: "hub/gmg", condition: "gmg", sections: [] },
+    ];
+    expect(findAxisViolations(src, "t.md", GLOO)).toEqual([]);
+  });
+
   test("does NOT flag version gates", () => {
     const src =
       `{{% version include-if="kubernetes" %}}A{{% /version %}}\n` +

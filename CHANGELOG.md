@@ -40,15 +40,31 @@ Documenting the hazard in USAGE.md was the first answer. That is not enough: the
 damage never appears in the build the author is looking at. The OSS site renders
 correctly, and only the hub's copy of the same shared content breaks.
 
-**What it does.** Reports an adjacent pair of `include-if` gates when any
-configured (buildCondition, section) combination fires BOTH. That framing is what
-makes it exact rather than heuristic — "flag any gate naming a section" flags
-every legitimate section gate, and "flag a section name that is also a build
-condition" flags all of `url` mode, where the two axes are deliberately one value.
-The ambiguity is semantic; the consequence is decidable. A legitimate section pair
-(`kubernetes` beside `standalone`) never reports, because no page is in two
-sections at once, and an `include-if`/`exclude-if` pair never reports, because
-exactly one side of it fires.
+**What it does.** Reports an adjacent pair of `include-if` gates when some
+configured (buildCondition, section) combination fires both **through different
+axes** — one gate matching the section, the other the build condition. That
+framing is what makes it exact rather than heuristic. "Flag any gate naming a
+section" flags every legitimate section gate; "flag a section name that is also a
+build condition" flags all of `url` mode, where the two axes are deliberately one
+value. The ambiguity is semantic; the consequence is decidable.
+
+Keying on the AXIS rather than on "both gates fire" is the difference between a
+usable lint and a noisy one, and it was measured, not reasoned. A file can hold a
+chain of adjacent gates that is a sequence of blocks rather than an either/or:
+solo-io/docs' `security/extauth-about.md` runs six back to back — `gme,gmg`, then
+`gme`, then `gmg`, then `gme,gmg` — alternating shared prose with product-specific
+prose, several of which fire together on any build, by design. Those overlap on
+ONE axis, since every token is a product id and a superset list legitimately
+covers a subset one. Reporting "both fire" flagged four such blocks across two
+files; keying on the axis drops all four and keeps all five real instances.
+
+A legitimate section pair (`kubernetes` beside `standalone`) never reports, since
+no page is in two sections at once. An `include-if`/`exclude-if` pair never
+reports, since exactly one side of it fires. A gate that WRAPS another gate never
+reports: `Gate.end` comes from the first closer, which for a nested same-name gate
+is the inner one, so an outer gate's end lands inside its own body — the pair test
+requires equal nesting depth, which also cost four false positives before it
+landed.
 
 Opt-in through a new `[[gateAxes]]` block naming the builds a source tree ships
 through — see README.md. With none configured the spec SKIPS rather than passes:
@@ -60,12 +76,14 @@ false all-clear.
 that is two consecutive "API docs" links where there should be one. Today neither
 renders, because the gates are dropped — which is the bug the Fix addresses.
 
-**Verified by.** Run against four real corpora. `agentgateway/website`'s
-`assets/agw-docs`: five files, exactly the five a hand audit had already listed
-(`operations/uninstall.md`, `security/backend-authn-{cross-app-access,jwt-sign,oauth}.md`,
-`snippets/debug-gateway.md`) — no more and no fewer. That repo's `content/`, the
-solo-io/docs `assets/` tree (far larger, 504 `exclude-if` gates) and the hub's
-`content/en`: zero each.
+**Verified by.** Run against every consumer repo, with each product's real build
+combinations. `agentgateway/website`'s `assets/agw-docs`: five files, exactly the
+five a hand audit had already listed (`operations/uninstall.md`,
+`security/backend-authn-{cross-app-access,jwt-sign,oauth}.md`,
+`snippets/debug-gateway.md`) — no more and no fewer, and zero once those five are
+corrected. Zero on all of: that repo's `content/`, solo-io/docs `assets/` (far
+larger, 504 `exclude-if` gates) and `content/en`, kgateway.dev, kagent,
+agentregistry, ambientmesh.io.
 
 The adjacency threshold was measured, not guessed. Requiring the two gates to be
 flush found only 4 of the 5, missing the block-level form where markdown demands a

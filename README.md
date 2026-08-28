@@ -420,6 +420,21 @@ your build renders correctly and the breakage appears only in the other one. On
 the agentgateway corpus this finds five files; on the solo-io/docs assets tree
 it finds none.
 
+**Two ways to get `sections` wrong**, both of which produce noise rather than
+silence, so they show up the first time you run it:
+
+- **A `url`-mode build takes `sections = []`.** There the condition IS the
+  section, so the sections are enumerated by having one entry per section. Give
+  such an entry a section list as well and you ask the lint about states that
+  cannot exist — condition `kubernetes` with section `standalone` — and every
+  legitimate section pair reports.
+- **List only sections that resolve for that build**, not every key registered
+  or inherited. solo-io/docs inherits `envoy` and `agentgateway` from the
+  imported `kgateway.dev` module, but its kgateway pages sit at
+  `/kgateway/<version>/`, so `utils/section-segment.html`'s positional rule
+  refuses both and the effective list is `[]`. Listing them anyway reports every
+  product-name snippet in the repo.
+
 With no `[[gateAxes]]` the spec **skips** rather than passes — with no
 combinations there is nothing to evaluate against, and a green run would be a
 false all-clear. Needs `scanRoots` too, since it reads source, not built HTML.

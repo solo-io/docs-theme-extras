@@ -83,13 +83,50 @@ export function includeTokens(args: string): string[] | null {
   return tokens.length ? tokens : null;
 }
 
-/** Does a gate with these tokens fire under this (condition, section)? */
-function fires(tokens: string[], condition: string, section: string): boolean {
+/** Which axis (if either) makes a gate with these tokens fire. */
+function axes(
+  tokens: string[],
+  condition: string,
+  section: string,
+): { viaCondition: boolean; viaSection: boolean } {
   // The template's outer guard: no build condition, no emit, whatever the
   // section resolved to. See layouts/_shortcodes/conditional-text.html.
-  if (condition === "") return false;
+  if (condition === "") return { viaCondition: false, viaSection: false };
+  return {
+    viaCondition: tokens.includes(condition),
+    viaSection: section !== "" && tokens.includes(section),
+  };
+}
+
+/** The collision this lint is about: the two gates fire through DIFFERENT axes,
+ *  one matching the section and the other the build condition.
+ *
+ *  WHY "BOTH FIRE" IS NOT ENOUGH, and this was measured on real content. A file
+ *  can hold a CHAIN of adjacent gates that is a sequence of blocks rather than an
+ *  either/or — solo-io/docs' `security/extauth-about.md` runs six back to back,
+ *  `gme,gmg` then `gme` then `gmg` then `gme,gmg` … , shared prose alternating
+ *  with product-specific prose. Several fire together on any given build, and
+ *  that is the intent. Reporting "both fire" flagged four such blocks.
+ *
+ *  Those overlap on ONE axis: every token there is a product id, and a superset
+ *  list legitimately covers a subset one. The bug this lint exists for is the
+ *  overload ACROSS axes — `kubernetes` naming a section while `agentgateway`
+ *  names the product, so a single page satisfies both readings at once. Keying on
+ *  "different axes" keeps every real instance and drops the same-axis chains.
+ *
+ *  A corollary worth knowing: with no sections configured for a build, nothing on
+ *  that build can ever report. That is correct. This is the section-axis lint. */
+function collides(
+  ta: string[],
+  tb: string[],
+  condition: string,
+  section: string,
+): boolean {
+  const a = axes(ta, condition, section);
+  const b = axes(tb, condition, section);
   return (
-    tokens.includes(condition) || (section !== "" && tokens.includes(section))
+    (a.viaSection && !a.viaCondition && b.viaCondition) ||
+    (b.viaSection && !b.viaCondition && a.viaCondition)
   );
 }
 
@@ -118,6 +155,22 @@ function fires(tokens: string[], condition: string, section: string): boolean {
  *  prefers the reading that catches real bugs. Put a sentence between them if
  *  you hit it. */
 function isAdjacent(src: string, a: Gate, b: Gate): boolean {
+  // SAME NESTING DEPTH, or they are not siblings and cannot be an either/or.
+  //
+  // This is load-bearing, not belt-and-braces. `scanFile` derives `end` from the
+  // FIRST closer after the opener, so for a gate that WRAPS another gate of the
+  // same name that closer is the inner one — the outer gate's `end` lands inside
+  // its own body. Without this test, `{{% conditional-text include-if="gme,gmg" %}}`
+  // wrapping a `{{% conditional-text include-if="gme" %}}` reads as two adjacent
+  // gates with overlapping tokens and reports. Four such blocks in solo-io/docs'
+  // conrefs (`security/extauth-about.md`, `gloo-platform/reference/release-notes-2.10.md`)
+  // were false positives until this landed.
+  //
+  // The same `end` quirk makes adjacency CONSERVATIVE in the other direction: a
+  // gate containing a nested gate reports an early `end`, so the gap to its next
+  // sibling includes real text and the pair is skipped. A missed report, never a
+  // wrong one.
+  if (a.depth !== b.depth) return false;
   if (b.start < a.end) return false;
   const gap = src.slice(a.end, b.start);
   if (gap.trim() !== "") return false;
@@ -140,10 +193,7 @@ function doubleFire(
     // build with no registered sections is therefore just [""], and no pair
     // can double-fire on it unless the two token lists genuinely overlap.
     for (const section of ["", ...combo.sections]) {
-      if (
-        fires(ta, combo.condition, section) &&
-        fires(tb, combo.condition, section)
-      ) {
+      if (collides(ta, tb, combo.condition, section)) {
         return { combo, section };
       }
     }
