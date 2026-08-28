@@ -22,12 +22,13 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
-## [0.4.0] — 2026-08-28
+## [0.3.6] — 2026-08-28
 
-**Scope of this release.** One new script (`scripts/merge_book.py`), one new flag on
-`scripts/prepare_book.py`, and one new CSS rule in `print-book.css`. Nothing renders
-differently for a consumer that does not build a PDF: the new `.pdf-chapter-cont` rule
-matches an element that only the splitter creates, so a normal book build is byte-identical.
+**Scope of this release.** Tooling only: one new script (`scripts/merge_book.py`), one new
+flag on `scripts/prepare_book.py`, and one new CSS rule in `print-book.css`. Versioned as a
+patch because no consumer's rendered output changes — neither script is a Hugo import, and
+the new `.pdf-chapter-cont` rule matches an element that only the splitter creates, so a
+normal book build is byte-identical. Only a repo that runs the PDF pipeline is affected.
 
 ### Add
 
