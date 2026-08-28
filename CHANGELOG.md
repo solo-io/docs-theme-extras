@@ -364,6 +364,60 @@ Intended as a **minor** (0.4.0): one new optional config key, plus a shortcode-i
 resolution fix. No breaking changes and no content edits in consumers — a repo that sets
 nothing new renders byte-identically.
 
+### Fix — `conditional-text` was INERT, not merely limited, on a site that registers no sections (`layouts/_partials/utils/page-context.html`, `layouts/_shortcodes/conditional-text.html`, `hugo-nosections.toml`, `hugo-nosections-bare.toml`, `fixture/content-flat/en/beta/first.md`, `tests/nosections-condition.spec.ts`, `Makefile`, `playwright.config.ts`, `README.md`, `USAGE.md`)
+
+**Why.** In `url` mode `utils/page-context` assigns a condition only in the branch
+that requires BOTH a section and a version in the path. A site that registers no
+`[params.sections]` has an empty `$known`, so that branch never runs, the condition
+stays `""` for every page, and the outer guard in the shortcode drops every gate —
+in **both** directions. `exclude-if="anything"`, which should be a no-op that emits
+its body, emitted nothing and said nothing about it. Confirmed against
+agentregistry.dev before the fix: a probe `include-if` and a probe `exclude-if` both
+rendered empty.
+
+That is the shape agentregistry.dev and ambientmesh.io ship, and the trap is
+asymmetric. The docs hub renders the same conrefs under a real build condition —
+`agentregistry`, or `gm` for ambientmesh content mounted into the istio product — so
+a gate can look correct downstream and be silently blank upstream, or the reverse.
+No content was affected: neither repo uses a gate today. This closes the hole before
+one does.
+
+**What changed.** Two halves, because neither is sufficient alone.
+
+`url` mode now falls back to `site.Params.buildCondition` when the site registers no
+sections, so a single-doc-set site can gate, using the SAME token the hub uses for
+it — one gate, one meaning, both builds. Set site-wide rather than under `/docs/`: a
+product-level build condition is a property of the build, not a URL prefix, and
+ambientmesh.io keeps marketing pages beside its docs tree.
+
+Where that fallback does not apply — no sections AND no `buildCondition` — the
+shortcode now `warnf`s instead of dropping the body in silence, naming the source
+position and the remedy. Consumers fail CI on non-allowlisted WARNs, so it surfaces
+the first time somebody writes a gate that cannot fire. Scoped to
+`not site.Params.sections`: on a site that DOES register sections an empty condition
+is a legitimate per-page state (a section landing page, or a page outside `/docs/`),
+and warning there would fire on correct content.
+
+**Verify.** After a consumer adopts this, a single-doc-set site can set
+`params.buildCondition` and its gates resolve; before, nothing on
+<https://agentregistry.dev/docs/> could gate at all. Until one opts in, output is
+unchanged everywhere.
+
+**Verified by.** Strictly additive, and measured rather than asserted. No url-mode
+consumer sets `buildCondition` today, and the fallback is gated on registering no
+sections, so the three section-registering OSS sites are untouched: full rebuilds of
+agentgateway-oss-website and the docs hub's agentgateway product against released
+v0.3.4 versus this change are **byte-identical, zero pages changed** (like-for-like,
+same Hugo flags). No new WARN appears in any existing fixture or consumer build.
+
+Two new fixture builds pin the pair, since the halves cannot coexist in one config:
+`hugo-nosections.toml` sets `buildCondition` and both gates resolve with no warning;
+`hugo-nosections-bare.toml` sets nothing, both gates stay empty, and the build logs
+five warnings naming the file and line. 10 assertions in
+`tests/nosections-condition.spec.ts`, including that the warning does NOT fire when
+the fallback resolves — a false positive there would break CI for every site that
+adopts it. Suite 2169 passing in both brand modes.
+
 ---
 
 ## [0.3.4] — 2026-08-28

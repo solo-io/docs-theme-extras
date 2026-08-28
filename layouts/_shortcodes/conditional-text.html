@@ -23,7 +23,7 @@
 
     | Token | Where it comes from | Varies within a build? |
     |---|---|---|
-    | build condition | `site.Params.buildCondition` in `siteParams` mode; the section segment in `url` mode | No — one value per site |
+    | build condition | `site.Params.buildCondition` in `siteParams` mode; the section segment in `url` mode, falling back to `site.Params.buildCondition` when the site registers no sections | No — one value per site |
     | section segment | the page's own section under `[params.sections]` | Yes — per page |
 
     The second token is what lets a product with parallel documentation
@@ -39,6 +39,15 @@
     multi-product-hub and single-site URL conventions. Prefer this over
     `upstream` and `downstream` whenever the split is finer than which repo is
     building.
+
+    ### A site with one doc set must set `params.buildCondition`
+
+    With no `[params.sections]` registered, `url` mode has nothing in the path
+    to derive a condition from, so it reads `params.buildCondition` instead.
+    Without one, every gate on the site is dropped in **both** directions —
+    `exclude-if` included, which means content vanishes rather than shows — and
+    the build warns, naming the file and line. Use the same token the docs hub
+    uses for that product, so one gate means one thing in both builds.
 
     ### Do not overload a token across the two axes
 
@@ -127,4 +136,29 @@
   {{- if partial "utils/gate-decide.html" (dict "sc" . "tokens" $tokens) -}}
     {{- partial "utils/gate-emit.html" (dict "sc" . "inner" .Inner) -}}
   {{- end -}}
+{{- else if not site.Params.sections -}}
+  {{- /* THE INERT CASE, MADE LOUD.
+
+         An empty condition drops the body, and on a site that registers no
+         sections it is empty for EVERY page — so the gate can never fire, in
+         either direction. `exclude-if="anything"` should be a no-op that emits
+         its body; instead it emits nothing, and says nothing about it.
+
+         Warned rather than fixed by emitting, because emitting would be a guess:
+         the theme cannot tell whether the author wanted this shown or hidden.
+         What it can tell is that the gate is unreachable, which is always a
+         mistake worth a build warning — the author either wants the fallback
+         above (set `buildCondition`) or has no gating axis and should delete
+         the gate.
+
+         Scoped to `not site.Params.sections` deliberately. On a site that DOES
+         register sections an empty condition is a legitimate per-page state —
+         a section landing page, or a page outside `/docs/` — and warning there
+         would fire on correct content. Those sites resolve a condition wherever
+         gating is meant to work.
+
+         Consumers fail CI on any non-allowlisted WARN (tests/hugo-warnings.spec.ts),
+         so this surfaces the first time somebody writes a gate that cannot
+         fire, rather than after it ships blank. */ -}}
+  {{- warnf "conditional-text at %s cannot fire: this site registers no [params.sections], so utils/page-context resolves no build condition for any page and BOTH include-if and exclude-if emit nothing. Set `params.buildCondition` to the token the docs hub uses for this product, or remove the gate. See docs-theme-extras USAGE.md, \"conditional-text contract\"." .Position -}}
 {{- end -}}

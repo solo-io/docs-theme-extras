@@ -9,7 +9,7 @@ CONFIG  ?=
 .PHONY: install \
         clear-cache \
         server-oss server-enterprise server-docs \
-        build-oss build-enterprise build-flat build-docs \
+        build-oss build-enterprise build-flat build-nosections build-docs \
         build-section-title build-section-current \
         test-oss test-enterprise test-all \
         test clean help
@@ -118,6 +118,16 @@ build-flat:
 build-docs:
 	$(HUGO) --config hugo-docs.toml --gc --minify -d public-docs 2> .build-docs.log
 
+# NO SECTIONS AT ALL — the agentregistry.dev / ambientmesh.io shape, and the one
+# place `conditional-text` used to be inert rather than merely limited. Two
+# builds because the two halves cannot coexist in one config: hugo-nosections
+# sets `buildCondition` so gates resolve through the fallback, hugo-nosections-bare
+# sets nothing so they stay inert and must WARN. Asserted by
+# tests/nosections-condition.spec.ts, which reads both publishDirs directly.
+build-nosections:
+	$(HUGO) --config hugo-nosections.toml --gc 2> .build-nosections.log
+	$(HUGO) --config hugo-nosections-bare.toml --gc 2> .build-nosections-bare.log
+
 # SECTION SELECTOR WITH A CONFIGURED BUTTON TITLE, on a VERSIONED site — the
 # docs-hub agentgateway shape. An overlay on hugo-oss.toml (comma-joined, later
 # file wins) rather than a fixture of its own, so it inherits that build's
@@ -141,10 +151,10 @@ build-section-current:
 # something to read. It is brand-independent (the version-less code paths do not
 # touch the brand layer), so both brand runs assert against the same output —
 # cheap, and it keeps `make test-oss` self-contained.
-test-oss: build-oss build-flat build-section-title build-section-current
+test-oss: build-oss build-flat build-nosections build-section-title build-section-current
 	DOCS_TEST_CONFIG=$(abspath ./fixture/.docs-test-oss.toml) npx playwright test
 
-test-enterprise: build-enterprise build-flat build-section-title build-section-current
+test-enterprise: build-enterprise build-flat build-nosections build-section-title build-section-current
 	DOCS_TEST_CONFIG=$(abspath ./fixture/.docs-test-enterprise.toml) npx playwright test
 
 # Run both brand variants. CI default — surfaces brand-specific regressions
@@ -168,6 +178,7 @@ clean:
 	       resources test-results playwright-report \
 	       .build-oss.log .build-enterprise.log \
 	       .build-flat.log .build-flat-root.log \
+	       .build-nosections.log .build-nosections-bare.log \
 	       .build-section-title.log .build-section-current.log \
 	       .build-oss-local.log .build-enterprise-local.log \
 	       .build-docs.log .build-docs-local.log

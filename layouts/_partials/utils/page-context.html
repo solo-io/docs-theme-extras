@@ -103,6 +103,42 @@
   {{- end -}}
 {{- else -}}
   {{/* url mode */}}
+
+  {{- /* A SITE WITH NO SECTIONS FALLS BACK TO Site.Params.buildCondition.
+
+         Without this, `conditional-text` is not merely limited on such a site —
+         it is INERT. The condition below is assigned only in the branch that
+         requires both a section and a version in the path, and with no sections
+         registered `$known` is empty so that branch never runs. The condition
+         stays "", the outer guard in the shortcode drops every gate, and BOTH
+         directions vanish: `exclude-if="anything"`, which should be a no-op that
+         emits its body, silently emits nothing. Verified against
+         agentregistry.dev before this landed — both a probe `include-if` and a
+         probe `exclude-if` rendered empty.
+
+         Nothing to gate on is the honest answer for a site with one doc set, but
+         silently deleting the body is not, and the trap is asymmetric: the same
+         conref rendered by the docs hub DOES resolve a condition
+         (`agentregistry`, or `gm` for ambientmesh content mounted into istio),
+         so a gate can look correct downstream and be blank upstream.
+
+         Set site-wide rather than inside the `/docs/` branch, because a
+         product-level buildCondition is a property of the BUILD, not of a URL
+         prefix. ambientmesh.io keeps marketing pages beside its docs tree and
+         the hub applies its condition to every page; scoping this to `/docs/`
+         would reintroduce the same upstream/downstream disagreement one level
+         down.
+
+         Strictly additive. It applies only where NO `[params.sections]` are
+         registered, so the three section-registering OSS sites are untouched,
+         and no url-mode consumer sets `buildCondition` today — every existing
+         build is byte-identical until one opts in. A site that opts in should
+         use the SAME token the hub uses for it, so one gate means one thing in
+         both builds. */ -}}
+  {{- if not .Site.Params.sections -}}
+    {{- $condition = .Site.Params.buildCondition | default "" -}}
+  {{- end -}}
+
   {{- $rel := trim .Page.RelPermalink "/" -}}
   {{- $parts := split $rel "/" -}}
   {{- if and (ge (len $parts) 2) (eq (index $parts 0) "docs") -}}
