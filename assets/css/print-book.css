@@ -138,9 +138,13 @@ h6 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.03em; }
    Paged.js sizes page boxes during its own pagination pass, so a
    percentage height set before that can resolve against the wrong
    containing block. */
+/* Part-divider page: centered horizontally, but starting at the top of the
+   text area rather than floating in the middle of the page. The 10cm offset
+   this used to carry pushed the title below the fold of a reader's screen and
+   left the page looking half-empty in print. */
 .pdf-divider {
   text-align: center;
-  padding-top: 10cm;
+  padding-top: 0;
 }
 
 .pdf-divider-description {
@@ -277,6 +281,22 @@ h6 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.03em; }
   color: #7f1d1d;
 }
 
+/* The alert's leading icon is inline <svg stroke="currentColor">, spaced on
+   the live site by a Tailwind `hx:mr-2` this stylesheet never loads. So it
+   printed BLACK against a coloured title, and jammed right up against it.
+   `color: inherit` is doing real work here and is not redundant: WeasyPrint
+   does not carry the inherited `color` into an inline SVG, so `currentColor`
+   resolves to black — but an explicit declaration on the svg element is
+   honoured. Setting `stroke` in CSS does NOT work, because the element's own
+   `stroke="currentColor"` presentation attribute wins; all four combinations
+   were rendered side by side to confirm which one takes effect.
+   Using `inherit` rather than a literal keeps one rule correct for every
+   alert type, including any a consumer defines itself. */
+.pdf-chapter [data-alert-type] svg {
+  color: inherit;
+  margin-right: 0.45em;
+}
+
 /* Auto-generated child cards (partials/auto-section-cards.html), e.g. the
    "## Guides" links under a docs section landing page. Rendered as a plain
    bordered-box list rather than mirroring the live site's card grid — a
@@ -373,6 +393,19 @@ h6 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.03em; }
 .pdf-chapter th {
   background: #f3f4f6;
   font-weight: 600;
+}
+
+/* A long dotted identifier in a reference table — say
+   `JWTPolicySpec.Config.Provider.LocalJWKS.SecretRef` — still ran off the
+   right margin despite the overflow-wrap above. WeasyPrint honours NEITHER
+   `overflow-wrap: break-word` NOR `overflow-wrap: anywhere` for an unbroken
+   token in a `table-layout: fixed` cell; both were rendered side by side and
+   both overflowed. `word-break: break-all` is the only one that wraps.
+   Scoped to code inside cells, so ordinary prose still breaks on spaces
+   rather than mid-word. */
+.pdf-chapter th code,
+.pdf-chapter td code {
+  word-break: break-all;
 }
 
 /* Code blocks and diagrams shouldn't split across a page boundary if they

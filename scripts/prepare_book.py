@@ -242,6 +242,67 @@ def validate(doc):
     return ids, dupes, jumps, dangling
 
 
+def fix_svg_fonts(root):
+    """Drop the "Segoe UI Emoji" fallback from diagram SVGs under `root`.
+
+    Excalidraw exports every text run as font-family="Helvetica, Segoe UI Emoji".
+    That second family does not exist on Linux, and WeasyPrint resolves the
+    SPACE character through the broken fallback, giving it a wildly wrong
+    advance: "Gloo Mesh resources" renders as "Gloo    Mesh    resources", and
+    a diagram legend turns into overlapping words. Helvetica alone resolves to
+    Liberation Sans (Arial metrics) and lays out correctly.
+
+    Rewrites the BUILT copies under public/, never the sources in assets/ —
+    the website wants the fallback, only this renderer is confused by it.
+    """
+    changed = 0
+    for dirpath, _, names in os.walk(root):
+        for name in names:
+            if not name.endswith(".svg"):
+                continue
+            path = os.path.join(dirpath, name)
+            try:
+                with open(path, encoding="utf-8", errors="ignore") as fh:
+                    svg = fh.read()
+            except OSError:
+                continue
+            if "Helvetica, Segoe UI Emoji" not in svg:
+                continue
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(svg.replace("Helvetica, Segoe UI Emoji", "Helvetica"))
+            changed += 1
+    return changed
+
+
+def replace_iframes(doc):
+    """Turn each embedded player into a link.
+
+    An <iframe> has no meaning in a PDF — WeasyPrint draws it as a thin empty
+    box, which reads as a broken image right after a sentence promising a
+    video. A link at least tells the reader what was there and how to reach it.
+    """
+    n = 0
+    for frame in list(doc.iter("iframe")):
+        src = frame.get("src") or ""
+        parent = frame.getparent()
+        if parent is None or not src:
+            continue
+        if src.startswith("//"):
+            src = "https:" + src
+        # A YouTube embed URL is not the page a human can open.
+        watch = src.replace("/embed/", "/watch?v=") if "/embed/" in src else src
+        title = frame.get("title") or "Video"
+        p = etree.Element("p")
+        p.set("class", "pdf-embed-link")
+        p.text = f"{title}: "
+        a = etree.SubElement(p, "a")
+        a.set("href", watch)
+        a.text = watch
+        parent.replace(frame, p)
+        n += 1
+    return n
+
+
 def to_jump_scheme(doc):
     """Rewrite every same-document jump to the JUMP_SCHEME form.
 
@@ -395,6 +456,8 @@ def prepare(src_path, out_path, prod_host):
     id_maps, renamed = uniquify_ids(chapters)
     stats = rewrite_links(doc, chapters, id_maps, prod_host)
 
+    iframes = replace_iframes(doc)
+
     # The `details` shortcode defaults to closed, which is right for a
     # browsable page and wrong for a PDF, where there is no click affordance
     # and a closed block would just hide its content permanently.
@@ -409,7 +472,7 @@ def prepare(src_path, out_path, prod_host):
     with open(out_path, "wb") as fh:
         fh.write(lxml_html.tostring(doc, doctype="<!DOCTYPE html>"))
 
-    return len(chapters), renamed, stats, doc
+    return len(chapters), renamed, stats, iframes, doc
 
 
 def main():
@@ -421,6 +484,16 @@ def main():
         "--strict",
         action="store_true",
         help="exit non-zero if any duplicate id or dangling jump survives",
+    )
+    ap.add_argument(
+        "--fix-svg-fonts",
+        metavar="DIR",
+        help=(
+            "rewrite built SVGs under DIR to drop the non-existent "
+            "\"Segoe UI Emoji\" font fallback, which makes WeasyPrint render "
+            "spaces in diagram text at the wrong width. Point it at the build "
+            "output (e.g. public), never at the sources."
+        ),
     )
     ap.add_argument(
         "--max-part-bytes",
@@ -436,7 +509,10 @@ def main():
     )
     args = ap.parse_args()
 
-    chapters, renamed, stats, doc = prepare(args.source, args.output, args.prod_host)
+    if args.fix_svg_fonts:
+        print(f"SVGs de-fallbacked:       {fix_svg_fonts(args.fix_svg_fonts)}")
+
+    chapters, renamed, stats, iframes, doc = prepare(args.source, args.output, args.prod_host)
     ids, dupes, jumps, dangling = validate(doc)
 
     print(f"chapters:                 {chapters}")
@@ -445,6 +521,7 @@ def main():
     print(f"links within a chapter:   {stats['intra']}")
     print(f"links made absolute:      {stats['external']}")
     print(f"links left alone:         {stats['untouched']}")
+    print(f"iframes made links:       {iframes}")
     print(f"total ids:                {len(ids)}")
     print(f"same-document jumps:      {jumps}")
     print(f"duplicate ids:            {len(dupes)}")

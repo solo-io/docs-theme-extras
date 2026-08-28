@@ -16,34 +16,32 @@
        the result safeHTML again if re-emitting as markup. */ -}}
 {{- $html := . -}}
 
-{{- /* Hugo templates have no "regex match with capture groups" function —
-       findRE only returns whole-match strings — so each group is pulled out
-       by replaceRE-ing the WHOLE matched string down to just its
-       backreference (a standard Hugo idiom). Scoped to `role="tab"` so this
-       can't pick up an unrelated button elsewhere on the page (e.g. a
-       code-block copy button). */ -}}
-{{- $names := newScratch -}}
-{{- range findRE `(?s)<button[^>]*role="tab"[^>]*>.*?</button>` $html 50 -}}
-  {{- $id := . | replaceRE `(?s).*\bid="([^"]*)".*` "$1" -}}
-  {{- $name := . | replaceRE `(?s).*<span>([^<]*)</span>.*` "$1" -}}
-  {{- $names.Set $id $name -}}
-{{- end -}}
+{{- /* CURRENT Hextra tabs markup (v0.12+):
 
-{{- /* One panel at a time (not a single global replaceRE, which can only
-       emit a literal per-match template, not a dictionary lookup): resolve
-       each panel's own aria-labelledby id to the name map above, falling
-       back to the id itself if a button somehow has no matching name. */ -}}
-{{- range findRE `(?s)<div[^>]*class="hextra-tabs-panel[^"]*"[^>]*aria-labelledby="[^"]*"[^>]*>` $html 50 -}}
-  {{- $openTag := . -}}
-  {{- $id := $openTag | replaceRE `(?s).*aria-labelledby="([^"]*)".*` "$1" -}}
-  {{- $name := $names.Get $id | default $id -}}
-  {{- /* Plain `replace`, unlike `replaceRE`, takes its subject FIRST
-         (replace SUBJECT OLD NEW) rather than last — piping $html in here
-         the way replaceRE is piped below would silently put $html in the
-         NEW slot instead, collapsing the whole page down to whatever
-         $openTag alone doesn't match (i.e. $openTag itself, unmodified). */ -}}
-  {{- $html = replace $html $openTag (printf `<div style="display:block"><p><strong>Option: %s</strong></p>` $name) -}}
-{{- end -}}
+         <div class="hextra-tabs ...">
+           <nav ...><button class="hextra-tab-btn ...">meshctl</button>...</nav>
+           <div class="hextra-tab-panels ...">
+             <div class="hextra-tab-panel" data-tab-name="meshctl">...</div>
+
+       Nothing is hidden in the static HTML — the panels are shown and hidden
+       by JS at runtime — so a JS-less context renders EVERY option stacked,
+       under one button bar that no longer switches anything. The reader gets
+       two code blocks with nothing saying which belongs to which option.
+
+       This used to match on role="tab"/role="tablist"/aria-labelledby and a
+       "hextra-tabs-panel" class, none of which exist in this markup, so it
+       silently did nothing at all. The panel now carries its own visible name
+       in data-tab-name, so no id->name map is needed. */ -}}
+
+{{- /* Drop the button bar, anchored to the tabs container so an unrelated
+       <nav> (the book's own .pdf-toc, the sidebar) can never be swallowed.
+       Go's RE2 has no lookahead, so the anchor is the only thing keeping the
+       non-greedy .*?</nav> honest. */ -}}
+{{- $html = $html | replaceRE `(?s)(<div class="hextra-tabs[^"]*"[^>]*>)<nav[^>]*>.*?</nav>` "$1" -}}
+
+{{- /* Label each panel with its own name. One opening <div> is replaced by
+       one opening <div>, so tag balance is preserved. */ -}}
+{{- $html = $html | replaceRE `<div class="hextra-tab-panel"[^>]*data-tab-name="([^"]*)"[^>]*>` `<div style="display:block"><p><strong>Option: $1</strong></p>` -}}
 
 {{- /* Some content hand-numbers a tab's list to continue from the step it's
        nested under via the list's native `start` attribute (e.g. two tabs
@@ -61,6 +59,5 @@
        "<ol", dropping just the ` start="N"` that followed it. */ -}}
 {{- $html = $html | replaceRE `(<p><strong>Option: [^<]*</strong></p><ol) start="\d+"` "$1" -}}
 
-{{- $html = $html | replaceRE `(?s)<div[^>]*role="tablist"[^>]*>.*?</div>` "" -}}
 {{- $html = $html | replaceRE `aria-hidden="true"` "" -}}
 {{- return $html -}}

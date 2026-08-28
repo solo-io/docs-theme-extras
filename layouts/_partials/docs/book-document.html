@@ -78,7 +78,13 @@
   {{- $productVersion := partial "utils/resolve-latest-version.html" . -}}
   {{- $isChunkRoot := .Params.bookChunkRoot | default false -}}
   <section class="pdf-cover">
-    {{- with site.Params.navbar.logo.path }}
+    {{- /* Prefer the SIDEBAR logo: that is the PRODUCT mark (logo-gloo-mesh.svg),
+           while the navbar logo is the company one (solo-light.svg). A cover
+           page naming one product should carry that product's logo, and the
+           company name is already in the running footer on every page. Falls
+           back to the navbar logo for a site that sets no sidebar logo. */ -}}
+    {{- $logo := site.Params.sidebar.logo.path | default site.Params.navbar.logo.path }}
+    {{- with $logo }}
     <img src="{{ . | relURL }}" alt="{{ site.Title }}" class="pdf-cover-logo">
     {{- end }}
     <p class="pdf-cover-subtitle">Documentation</p>
