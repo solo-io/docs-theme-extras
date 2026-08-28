@@ -113,9 +113,10 @@ element only the splitter creates, and the download item renders **only** when
     labels and zero tab buttons in the built book.
   - **Comparison tables looked empty.** `fonts-noto-color-emoji` is a CBDT *bitmap* font
     and WeasyPrint scales its glyphs wrongly, so ✅/❌ printed ~2 mm tall, some outside
-    their own cell. The renderer needs the monochrome outline font instead; ✅/❌ account
-    for 108 of the book's 128 pictographic characters. Consumer action: install Noto Emoji
-    rather than Noto Color Emoji.
+    their own cell. The renderer needs the monochrome outline font instead. ✅ and ❌ alone
+    appear 108 times in this one book, across 20 distinct pictographic characters. Consumer
+    action: install Noto Emoji rather than Noto Color Emoji. Trade-off: 🟡 and 🟢 lose their
+    colour and differ only by shading.
   - **Diagram legends printed as overlapping words.** Not the Excalidraw fonts, despite the
     `Virgil` warnings — installing Virgil and Cascadia under corrected family names changed
     nothing, because the text uses `font-family="Helvetica, Segoe UI Emoji"` and those
