@@ -120,6 +120,15 @@ h6 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.03em; }
   break-before: page;
 }
 
+/* A chapter too large to render in one part is cut across parts by
+   prepare_book.py --max-part-bytes, which marks every slice after the first.
+   Those are continuations of a page the reader is already on, not new
+   chapters, so they must NOT force a page break — without this the split
+   would be visible as a stray blank-ish break mid-page. */
+.pdf-chapter-cont {
+  break-before: auto;
+}
+
 /* "Part divider" treatment for section landings with no body content
    (list.book.html's $isEmpty check) — a centered title (+ description, if
    the page has one) instead of the normal top-aligned heading, so an

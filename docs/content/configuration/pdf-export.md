@@ -57,6 +57,23 @@ outputFormats:
 
 `baseName` is what produces `book.html` next to the section's `index.html`.
 
+> [!WARNING]
+> Define it in **every config that builds the opted-in content**, not just the
+> production one. A repo with `hugo-<product>.toml`, `hugo-preview-<product>.toml`,
+> and `hugo-local-<product>.toml` needs the block in all three. The `outputs`
+> front matter is a property of the page, so it applies to every build, and a
+> config missing the format fails the **entire** build, not just the PDF:
+>
+> ```
+> ERROR error building site: assemble: failed to create page from pageMetaSource
+> /latest: failed to resolve output formats [html book]:
+> OutputFormat with key "book" not found
+> ```
+>
+> This is easy to miss locally, because the config you test with is usually the
+> one you remembered to edit. It surfaces in CI as a broken preview build on a
+> PR that looks like it only touched PDF plumbing.
+
 ## 2. Opt a page in
 
 ```yaml
@@ -342,6 +359,56 @@ jumps.
 
 Its one quality win independent of chunking is repeating table headers across
 page breaks.
+
+### Memory, and why a big book is still split
+
+One document does not mean one render. Peak memory tracks **output pages**, not
+input bytes, at a steady ~1.6 MB per page measured across cuts of the
+gloo-mesh-enterprise book from 347 pages up to 3,481. That book is ~6,500 pages,
+so a single render needs ~11 GB and a 16 GB GitHub runner is torn down
+mid-render. The failure is unhelpful: the runner dies, so the job reports only
+`The runner has received a shutdown signal` and exit 143, with no traceback and
+no partial output.
+
+So `prepare_book.py --max-part-bytes` (default 2 MB) cuts the prepared document
+into parts, the caller renders them one at a time, and `merge_book.py`
+reassembles the result. Input size is only a proxy for pages, and a leaky one:
+
+| Content | Pages per MB | 2 MB part |
+| --- | --- | --- |
+| Ordinary prose | ~250 | ~500 pages, ~0.8 GB |
+| Table-dense reference | ~620 | ~1,240 pages, ~2.0 GB |
+
+The default is set for the table-dense case, since that is what actually
+constrains it.
+
+**Splitting is unconditional, and that is deliberate.** A small book yields one
+part and a merge that is effectively a copy, so its output is unchanged. A
+conditional split would mean two code paths, with the rarely-exercised one
+belonging to the largest, slowest, least-frequently-run build.
+
+Nothing is lost in the split, because WeasyPrint writes internal links as jumps
+to **named** destinations and emits one for every element id, whether or not
+anything links to it. Since the ids are already unique document-wide, the merged
+file has one global namespace. The single gap is that WeasyPrint *drops*
+`<a href="#x">` when `x` is not in the part being rendered, logging
+`No anchor #x for internal URI reference`, so every jump is rewritten to a
+`pdfjump:` URI that survives as an ordinary link annotation and becomes a real
+jump again at merge time.
+
+Two consequences worth knowing:
+
+- **Parts must render sequentially.** Page numbers are baked in during layout,
+  so each part needs the previous part's page count, supplied as
+  `@page :first { counter-reset: page N }`. A bare `@page` resets the counter on
+  *every* page, and `counter-reset` on `html` or `body` is ignored.
+- **A chapter larger than the target is cut between its direct children**, never
+  inside a table or `details`. Continuation slices are marked
+  `pdf-chapter-cont` so they do not start a new page.
+
+On the gloo-mesh-enterprise book this took peak memory from >15 GB to 2,134 MB
+and total render time from 32+ minutes, never finishing, to 5m20s across 10
+parts.
 
 **Pandoc did not produce a PDF from this content at all.** Five configurations
 were tried, and each fix surfaced the next failure: a missing `rsvg-convert`, then

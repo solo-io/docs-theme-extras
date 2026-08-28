@@ -22,6 +22,61 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
+## [0.4.0] — 2026-08-28
+
+**Scope of this release.** One new script (`scripts/merge_book.py`), one new flag on
+`scripts/prepare_book.py`, and one new CSS rule in `print-book.css`. Nothing renders
+differently for a consumer that does not build a PDF: the new `.pdf-chapter-cont` rule
+matches an element that only the splitter creates, so a normal book build is byte-identical.
+
+### Add
+
+- **`prepare_book.py --max-part-bytes` splits a book into renderable parts, and
+  `merge_book.py` puts the rendered PDFs back together.** A single-document render of
+  gloo-mesh-enterprise was killed on a 16 GB GitHub runner with no diagnosis at all — the
+  runner is torn down, so the job reports only `The runner has received a shutdown signal`
+  and exit 143 after 32 minutes. Measuring across cuts of the real book showed why, and
+  showed that the obvious mental model is wrong: **peak memory tracks output PAGES, not
+  input bytes**, at a steady ~1.6 MB per page from 347 pages up to 3,481. The book is
+  ~6,500 pages, so it needs ~11 GB before allocator overhead. Input size is only a proxy
+  for pages and a leaky one — prose yields ~250 pages/MB, while
+  [the CVE scan reference](https://docs.solo.io/gloo-mesh-enterprise/latest/reference/security_updates/)
+  (967 tables, 22,217 rows, and alone a third of the whole book) yields ~620 — so the
+  default 2 MB ceiling is set for the table-dense case.
+
+  Splitting costs nothing in fidelity because WeasyPrint writes internal links as jumps to
+  *named* destinations and emits one per element id, and `prepare_book.py` already made ids
+  unique document-wide, so the merged file has a single global namespace. The one gap is
+  that WeasyPrint **drops** `<a href="#x">` when `x` is absent from the part being rendered
+  (`No anchor #x for internal URI reference`), so every jump is rewritten to a `pdfjump:`
+  URI that survives as a link annotation and is turned back into a real jump at merge time.
+  Rewriting *all* jumps rather than only the crossing ones means the splitter never needs to
+  know which part a target landed in.
+
+  Oversized chapters are cut between their direct children, never inside a table or
+  `details` block. Heading boundaries are deliberately not used: the CVE page has 306 direct
+  children and two headings, so heading-splitting would not divide it at all.
+
+  **Verified** on the real gloo-mesh-enterprise book (16 MB, 458 chapters): 10 parts, all
+  ≤1.9 MB; merged to 6,485 pages with continuous numbering (page index 2946 prints "2947",
+  spanning a part boundary), 2,869 bookmarks with nesting intact across parts, 7,929
+  internal links and **zero** pointing outside the document, zero unresolved jumps, and zero
+  render errors. Peak memory fell from >15 GB to **2,134 MB**, and total render time from
+  32+ minutes (never finishing) to **5m20s**. The slice boundary inside the CVE chapter is
+  visually seamless — same running header, consecutive page numbers, no stray break.
+
+### Fix
+
+- **`.pdf-chapter-cont` suppresses the page break on a continuation slice.** `.pdf-chapter`
+  sets `break-before: page`, which is right for a real chapter and wrong for the remainder
+  of one that the splitter had to cut. Without this the split would be visible in the
+  finished PDF as a break in the middle of a page such as
+  [the CVE scan reference](https://docs.solo.io/gloo-mesh-enterprise/latest/reference/security_updates/).
+  Verified by rendering the two pages either side of a slice boundary and comparing them.
+
+Both take effect for a consumer that bumps its extras pin **and** passes the new flag; the
+`docs` hub's `pdf-export.yml` does both.
+
 ## [0.3.5] — 2026-08-28
 
 **Scope of this release.** One new optional config key (`params.versions[].sectionBanners`),

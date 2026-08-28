@@ -48,15 +48,39 @@ only rewrites HTML, so it stays useful whichever renderer consumes the result.
 """
 
 import argparse
+import copy
+import os
 import sys
 from urllib.parse import unquote, urljoin, urlparse
 
+from lxml import etree
 from lxml import html as lxml_html
 
 # Separator between a chapter id and the id it owns. Two hyphens rather than
 # one, so a rewritten id stays visually distinguishable from a heading whose
 # own slug contains hyphens (nearly all of them do).
 SEP = "--"
+
+# Scheme for a jump that has to survive being written into one part and landing
+# in another. WeasyPrint DROPS `<a href="#x">` when x is not in the document it
+# is rendering ("ERROR: No anchor #x for internal URI reference"), so a split
+# document would silently lose every cross-part link. An unknown scheme is kept
+# as an ordinary link annotation instead, and merge_book.py turns it back into
+# a real jump once every part is in the same file.
+JUMP_SCHEME = "pdfjump:"
+
+# Default ceiling for one part, in bytes of serialized HTML.
+#
+# Peak renderer memory tracks OUTPUT PAGES, not input bytes: measured across
+# gloo-mesh-enterprise it is a steady ~1.6 MB per page from 347 pages up to
+# 3,481. Input bytes are only a proxy for pages, and a leaky one — ordinary
+# prose yields ~250 pages/MB while a table-dense reference page yields ~620,
+# because table rows expand vertically far more than paragraphs do. So the
+# ceiling is set for the table-dense case: 2 MB is ~1,240 pages ~= 2 GB there,
+# and ~500 pages ~= 0.8 GB for prose. Both leave real headroom on a 16 GB
+# runner, which is the point — the whole 15.8 MB document is ~6,800 pages and
+# ~11 GB, and it does not survive.
+DEFAULT_MAX_PART_BYTES = 2_000_000
 
 
 def normalize(path):
@@ -218,6 +242,147 @@ def validate(doc):
     return ids, dupes, jumps, dangling
 
 
+def to_jump_scheme(doc):
+    """Rewrite every same-document jump to the JUMP_SCHEME form.
+
+    Applied to the WHOLE document before splitting, not just to the links that
+    happen to cross a part boundary. Uniform rewriting means the splitter never
+    has to know which part a target landed in, which removes the entire class
+    of off-by-one boundary bugs — and costs nothing, because the intermediate
+    part PDFs are never shipped.
+    """
+    n = 0
+    for a in doc.iter("a"):
+        href = a.get("href") or ""
+        if href.startswith("#"):
+            a.set("href", JUMP_SCHEME + href[1:])
+            n += 1
+    return n
+
+
+def _size(el):
+    return len(lxml_html.tostring(el))
+
+
+def slice_oversized(ch, max_bytes):
+    """Cut one chapter into slices, each at most max_bytes where possible.
+
+    Boundaries fall BETWEEN direct children, so no table, list or `details`
+    block is ever cut in half. Heading boundaries are not used: the element
+    that forces this path in gloo-mesh-enterprise (the CVE scan reference, 5.4
+    MB and a third of the whole book) has 306 direct children and just two
+    headings, so heading-splitting would not divide it at all.
+
+    The first slice keeps the chapter's id; continuations must not, since ids
+    have to stay unique document-wide. Descendant ids are untouched, and those
+    are what links actually target. Each continuation carries a copy of the
+    breadcrumb source element so the running header stays right, and is marked
+    `pdf-chapter-cont` so the stylesheet does not start a fresh page for it.
+    """
+    kids = list(ch)
+    if not kids:
+        return [ch]
+
+    sizes = [_size(k) for k in kids]
+    runs, cur, cur_size = [], [], 0
+    for k, n in zip(kids, sizes):
+        if cur and cur_size + n > max_bytes:
+            runs.append(cur)
+            cur, cur_size = [], 0
+        cur.append(k)
+        cur_size += n
+    if cur:
+        runs.append(cur)
+
+    if len(runs) == 1:
+        return [ch]
+
+    # The breadcrumb source is emitted as the chapter's first child; copy it
+    # into each continuation so @top-left keeps resolving string(pdf-breadcrumb).
+    crumb = None
+    if kids and "pdf-breadcrumb-source" in (kids[0].get("class") or ""):
+        crumb = kids[0]
+
+    slices = []
+    for i, run in enumerate(runs):
+        if i == 0:
+            for k in list(ch):
+                if k not in run:
+                    ch.remove(k)
+            slices.append(ch)
+            continue
+        cont = etree.Element(ch.tag)
+        for key, val in ch.attrib.items():
+            cont.set(key, val)
+        cont.set("class", (ch.get("class") or "") + " pdf-chapter-cont")
+        if "id" in cont.attrib:
+            del cont.attrib["id"]
+        if crumb is not None:
+            cont.append(copy.deepcopy(crumb))
+        for k in run:
+            cont.append(k)  # moves it out of ch
+        slices.append(cont)
+    return slices
+
+
+def split_body(doc, max_bytes):
+    """Group the body's children into parts of at most max_bytes.
+
+    Returns a list of lists of elements, in document order. Elements are still
+    attached to the source tree; write_parts moves them out one part at a time
+    so the whole document is never duplicated in memory.
+    """
+    units, oversized = [], 0
+    for child in list(doc.body):
+        n = _size(child)
+        if n > max_bytes and "pdf-chapter" in (child.get("class") or ""):
+            pieces = slice_oversized(child, max_bytes)
+            if len(pieces) > 1:
+                oversized += 1
+            units.extend(pieces)
+        else:
+            units.append(child)
+
+    parts, cur, cur_size = [], [], 0
+    for u in units:
+        n = _size(u)
+        if cur and cur_size + n > max_bytes:
+            parts.append(cur)
+            cur, cur_size = [], 0
+        cur.append(u)
+        cur_size += n
+    if cur:
+        parts.append(cur)
+    return parts, oversized
+
+
+def write_parts(doc, parts, stem):
+    """Write each part as a standalone document sharing the original <head>."""
+    head = doc.find("head")
+    body_attrib = dict(doc.body.attrib)
+    written = []
+
+    for i, part in enumerate(parts, 1):
+        root = etree.Element("html")
+        for k, v in doc.attrib.items():
+            root.set(k, v)
+        if head is not None:
+            root.append(copy.deepcopy(head))
+        body = etree.SubElement(root, "body")
+        for k, v in body_attrib.items():
+            body.set(k, v)
+        for el in part:
+            body.append(el)  # moves it out of the source tree
+
+        path = f"{stem}.part{i:02d}.html"
+        with open(path, "wb") as fh:
+            fh.write(lxml_html.tostring(root, doctype="<!DOCTYPE html>"))
+        written.append((path, os.path.getsize(path)))
+        root.clear()
+
+    return written
+
+
 def prepare(src_path, out_path, prod_host):
     doc = lxml_html.parse(src_path).getroot()
     chapters = doc.cssselect("section.pdf-chapter[data-source-path]")
@@ -257,6 +422,18 @@ def main():
         action="store_true",
         help="exit non-zero if any duplicate id or dangling jump survives",
     )
+    ap.add_argument(
+        "--max-part-bytes",
+        type=int,
+        default=DEFAULT_MAX_PART_BYTES,
+        metavar="N",
+        help=(
+            "split the prepared document into parts of at most N bytes, written "
+            "next to OUTPUT as <stem>.partNN.html and listed in <stem>.parts.txt. "
+            "0 disables splitting. Rendering one part at a time is what keeps "
+            "peak memory bounded; merge_book.py reassembles the PDFs."
+        ),
+    )
     args = ap.parse_args()
 
     chapters, renamed, stats, doc = prepare(args.source, args.output, args.prod_host)
@@ -284,6 +461,33 @@ def main():
             file=sys.stderr,
         )
         return 1
+
+    # Split AFTER validating: validate() checks "#id" jumps against the ids in
+    # one document, which is exactly the invariant the split relies on and the
+    # last moment it can be checked on a whole document.
+    if args.max_part_bytes > 0:
+        converted = to_jump_scheme(doc)
+        parts, oversized = split_body(doc, args.max_part_bytes)
+        stem = args.output[:-5] if args.output.endswith(".html") else args.output
+        written = write_parts(doc, parts, stem)
+
+        manifest = f"{stem}.parts.txt"
+        with open(manifest, "w") as fh:
+            fh.write("".join(f"{p}\n" for p, _ in written))
+
+        print(f"jumps deferred to merge:  {converted}")
+        print(f"chapters sliced:          {oversized}")
+        print(f"parts written:            {len(written)} -> {manifest}")
+        for p, n in written:
+            print(f"  {os.path.basename(p)}  {n / 1024 / 1024:.1f} MB")
+        big = [(p, n) for p, n in written if n > args.max_part_bytes * 1.5]
+        for p, n in big:
+            print(
+                f"  NOTE: {os.path.basename(p)} is {n / 1024 / 1024:.1f} MB, past the "
+                f"{args.max_part_bytes / 1024 / 1024:.1f} MB target — it holds a single "
+                "child element that cannot be divided further.",
+                file=sys.stderr,
+            )
     return 0
 
 
