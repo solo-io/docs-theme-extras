@@ -153,6 +153,35 @@ is a visible change to the artifact, and a correction: the old label was wrong.
   physically, and with the cover unnumbered the printed number is one lower. Without both,
   every line of the contents page is off by one — silently, and only on paper.
 
+- **The `book` output format is declared by the module, so consumers no longer repeat it in
+  every config (`hugo.toml`, `docs/content/configuration/pdf-export.md`).** This page of the
+  docs asserted, for three releases, that Hugo does **not** merge a module's top-level
+  `outputFormats` and that the block therefore had to live in each consumer config. That claim
+  is false on Hugo 0.160.1, and it was expensive: solo-io/docs carried **25 identical copies** —
+  three configs for each of eight products, plus the all-products preview — and forgetting one
+  did not degrade the PDF, it failed the **entire** build, because the `outputs` front matter
+  that selects the format belongs to the page and so applies to every config that builds that
+  content.
+
+  Verified rather than assumed, since the whole duplication rested on it: the block was added to
+  this module's consumer-facing `hugo.toml`, deleted from one consumer's `hugo-kagent.toml`, and
+  the product built clean with `book.html` rendering at 2.75 MB. Control: deleting it from the
+  module config too reproduces `OutputFormat with key "book" not found`. In hindsight the merge
+  is unsurprising — that same file already exports `[[module.imports]]` (hextra) and
+  `[[module.mounts]]` transitively.
+
+  **Inert for a consumer that publishes no PDF.** Defining an output format renders nothing by
+  itself; a page opts in through `outputs` front matter and no `[outputs]` default includes
+  `book`. A consumer that keeps its own identical block is also unaffected — project config wins
+  over module config, which is the escape hatch for anyone on an older Hugo. The copies in this
+  repo's own `hugo-{oss,enterprise}*.toml` stay, and are not redundant: those builds pass
+  `--config`, which replaces Hugo's default config lookup, so the module `hugo.toml` is never
+  read for them.
+
+  Observable on any enterprise product page, for example
+  [the Istio 1.30.x docs](https://docs.solo.io/istio/1.30.x/), whose `book.html` still builds
+  with no `[outputFormats]` block anywhere in `hugo-istio.toml`.
+
 - **A product with parallel SECTIONS can publish one book per section
   (`layouts/partials/copy-markdown.html`, `layouts/_partials/utils/book-section.html`,
   `layouts/_partials/docs/book-document.html`, `fixture/content/en/test/nested/v2/_index.md`,

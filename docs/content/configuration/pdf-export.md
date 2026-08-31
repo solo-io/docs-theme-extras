@@ -31,14 +31,14 @@ importing the module did not give you a PDF.
 | --- | --- | --- |
 | `docs/list.book.html`, `docs/single.book.html`, `_partials/docs/book-document.html` | **This module** | Ordinary layouts, so `module.mounts` carries them |
 | `assets/css/print-book.css` | **This module** | Ordinary asset, linked by the book document itself |
-| The `outputFormats` block | **Your repo** | Hugo does **not** merge top-level `outputFormats` config from an imported module |
+| The `outputFormats.book` block | **This module** | Hugo merges a module's top-level `outputFormats` into the importing project |
 | `book` in a page's `outputs` front matter | **Your repo** | Per-page opt-in. List the whole set — `outputs` replaces the defaults |
 | `scripts/render-pdf.mjs` | Fetched from this repo | See [Fetching the renderer](#4-fetching-the-renderer) |
 | `playwright`, `pdf-lib` | **Your repo's** `package.json` | Node resolves `node_modules` relative to the invoking project, not to wherever the script was downloaded |
 
-## 1. Define the output format
+## 1. The output format
 
-In your own Hugo config. Three keys is the whole requirement:
+Nothing to do. The module declares it, in its consumer-facing `hugo.toml`:
 
 ```toml
 [outputFormats.book]
@@ -47,23 +47,23 @@ In your own Hugo config. Three keys is the whole requirement:
   isHTML    = true
 ```
 
-```yaml
-# hugo.yaml
-outputFormats:
-  book:
-    mediaType: text/html
-    baseName: book
-    isHTML: true
-```
+Hugo merges a module's top-level `outputFormats` into the importing project, the
+same way it merges the module's `[module]` block, so importing this module is
+enough. `baseName` is what produces `book.html` next to the section's
+`index.html`.
 
-`baseName` is what produces `book.html` next to the section's `index.html`.
+It is inert until a page asks for it: defining an output format renders nothing
+on its own, and no `[outputs]` default includes `book`. A consumer that publishes
+no PDF is unaffected.
 
-> [!WARNING]
-> Define it in **every config that builds the opted-in content**, not just the
-> production one. A repo with `hugo-<product>.toml`, `hugo-preview-<product>.toml`,
-> and `hugo-local-<product>.toml` needs the block in all three. The `outputs`
-> front matter is a property of the page, so it applies to every build, and a
-> config missing the format fails the **entire** build, not just the PDF:
+> [!NOTE]
+> **This page used to say the opposite** — that Hugo does not merge a module's
+> `outputFormats`, so the block had to be repeated in every consumer config. That
+> was wrong, and expensive: solo-io/docs carried 25 identical copies (three
+> configs for each of eight products, plus the all-products preview), and
+> forgetting one did not fail the PDF, it failed the **entire** build, because the
+> `outputs` front matter that selects the format is a property of the page and so
+> applies to every config that builds that content:
 >
 > ```
 > ERROR error building site: assemble: failed to create page from pageMetaSource
@@ -71,9 +71,16 @@ outputFormats:
 > OutputFormat with key "book" not found
 > ```
 >
-> This is easy to miss locally, because the config you test with is usually the
-> one you remembered to edit. It surfaces in CI as a broken preview build on a
-> PR that looks like it only touched PDF plumbing.
+> Verified on Hugo 0.160.1 by deleting the block from one consumer config and
+> building: the site builds and `book.html` renders. Control: deleting it from the
+> module config as well reproduces the error above. If you are on an older Hugo
+> and see that error with no block in your own config, declare it yourself — a
+> project-level block wins over the module's.
+
+Declaring it in your own config is still required in one case: a **project** build
+that passes `--config`, which replaces Hugo's default config lookup so the
+module's `hugo.toml` is not read. That is why this repo's own
+`hugo-{oss,enterprise}*.toml` fixture configs keep a copy.
 
 ## 2. Opt a page in
 
@@ -887,9 +894,10 @@ in sync.
 
 > [!WARNING]
 > Set `params.pdfDownload` in **every** config that builds the product, not just
-> the production one. Unlike `[outputFormats.book]`, a missing block does not
-> fail the build — the item just silently disappears from preview and local
-> builds, which is harder to notice.
+> the production one. This is now the only part of the pipeline with that
+> requirement — the `book` output format moved into the module — and it is the
+> worse of the two to get wrong: a missing block does not fail the build, the item
+> just silently disappears from preview and local builds.
 
 > [!NOTE]
 > The build knows the book is produced; it cannot know the PDF has been
