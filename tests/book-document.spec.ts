@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
-import { TEST_PRODUCT_ROOT } from "./helpers/fixture";
+import { PUBLIC_ROOT, TEST_PRODUCT_ROOT } from "./helpers/fixture";
 import { target } from "./helpers/target";
 
 // Structural guard for the PDF book document: docs/list.book.html,
@@ -73,6 +73,37 @@ test.describe("book document", () => {
     // assertion here is meaningless rather than merely failing.
     expect(fs.existsSync(BOOK), `${BOOK} was not built`).toBe(true);
     expect(book().length).toBeGreaterThan(1000);
+  });
+
+  // THE OTHER HALF of that assertion, and the reason it is not redundant with
+  // it. `outputs` front matter is static — it cannot say "only when a PDF is
+  // being made" — so before `params.buildbook` existed, every ordinary consumer
+  // build rendered every book: on solo-io/docs, 12 files and 92 MB on top of a
+  // 4.3 GB site, ~7% of the build time on the largest product, and 12 crawlable
+  // URLs each holding a complete unstyled duplicate of a manual with no
+  // `noindex`, because a book document skips baseof.html and all the head
+  // chrome. None of it was deployed or read; the PDF workflow builds its own.
+  //
+  // That makes one param the single point of failure for the feature, failing
+  // silently in BOTH directions: always-on and every consumer quietly pays
+  // again, always-off and no PDF can ever be built. public-nobook/ is
+  // build-enterprise with that one key flipped and nothing else — same content,
+  // same version trees, same `outputs` front matter — so a book.html appearing
+  // there can only mean the gate stopped working.
+  test("is NOT built when the site does not ask for one", () => {
+    test.skip(!IS_FIXTURE_TARGET, "reads this repo's public-nobook build");
+    const root = path.resolve(PUBLIC_ROOT, "..", "public-nobook");
+    expect(fs.existsSync(root), `${root} is missing — run \`make build-nobook\``).toBe(true);
+    // Guard against the build having silently produced nothing at all, which
+    // would make the real assertion below pass for the wrong reason.
+    const pages = fs.readdirSync(path.join(root, "test"));
+    expect(pages.length, "the gate-off build produced no pages, so it proves nothing")
+      .toBeGreaterThan(0);
+    for (const rel of ["v1", "v2", "v3", "nested/v2"]) {
+      expect(fs.existsSync(path.join(root, "test", rel, "book.html")),
+        `${rel} built a book with buildBook = false, so the gate is not holding`)
+        .toBe(false);
+    }
   });
 
   // The checks the "Verifying the output" table in docs/configuration/

@@ -119,6 +119,12 @@ versionBanner = false
 versionBannerText = ""
 versionSpecificBanner = true
 
+# See hugo-enterprise.toml for why the fixture sets this and no real consumer
+# does. Needed on BOTH brands: the book spec runs against each, and the OSS
+# fixture is the half that proves a consumer with no [params.pdfDownload] table
+# still renders a book and simply omits the download menu item.
+buildBook = true
+
 # This module's page-context partial dispatches on this flag. The fixture was
 # authored against the docs convention (Site.Params.folder / currentProduct).
 # Other consumers that follow the /docs/<section>/<version>/... URL shape can

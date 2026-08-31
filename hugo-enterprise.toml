@@ -119,6 +119,15 @@ versionBanner = false
 versionBannerText = ""
 versionSpecificBanner = true
 
+# The fixture is the only site that builds books as part of an ORDINARY build,
+# because tests/book-document.spec.ts asserts against the built book.html. Every
+# real consumer leaves this unset and passes HUGO_PARAMS_BUILDBOOK=true from its
+# PDF workflow instead — see layouts/_partials/utils/build-book.html for why the
+# default is off. Set as a plain param, not under [params.themeExtras], so the
+# one spelling works both here and as the environment variable: Hugo lowercases
+# every config key, so this and HUGO_PARAMS_BUILDBOOK both land as `buildbook`.
+buildBook = true
+
 # This module's page-context partial dispatches on this flag. The fixture was
 # authored against the docs convention (Site.Params.folder / currentProduct).
 # Other consumers that follow the /docs/<section>/<version>/... URL shape can

@@ -307,20 +307,52 @@ def validate(doc):
     return ids, dupes, jumps, dangling
 
 
-def fix_svg_fonts(root):
-    """Drop the "Segoe UI Emoji" fallback from diagram SVGs under `root`.
+EXCALIDRAW_MARKER = "svg-source:excalidraw"
 
-    Excalidraw exports every text run as font-family="Helvetica, Segoe UI Emoji".
-    That second family does not exist on Linux, and WeasyPrint resolves the
-    SPACE character through the broken fallback, giving it a wildly wrong
-    advance: "Gloo Mesh resources" renders as "Gloo    Mesh    resources", and
-    a diagram legend turns into overlapping words. Helvetica alone resolves to
-    Liberation Sans (Arial metrics) and lays out correctly.
+# A `mask="url(#mask-...)"` reference on a group. Matched with the leading
+# whitespace so removing it leaves the surrounding attributes well formed.
+SVG_MASK_REF = re.compile(r'\s+mask="url\(#[^")]*\)"')
 
-    Rewrites the BUILT copies under public/, never the sources in assets/ —
-    the website wants the fallback, only this renderer is confused by it.
+
+def fix_svgs(root):
+    """Work around two WeasyPrint bugs in the diagram SVGs under `root`.
+
+    Both only affect Excalidraw exports, and both are renderer bugs rather than
+    anything wrong with the drawings: every one of these SVGs is correct in a
+    browser. So this rewrites the BUILT copies under public/, never the sources
+    in assets/ — the website wants the files exactly as exported.
+
+    1. The "Segoe UI Emoji" fallback. Excalidraw writes every text run as
+       font-family="Helvetica, Segoe UI Emoji". That second family does not
+       exist on Linux, and WeasyPrint resolves the SPACE character through the
+       broken fallback, giving it a wildly wrong advance: "Gloo Mesh resources"
+       renders as "Gloo    Mesh    resources", and a diagram legend turns into
+       overlapping words. Helvetica alone resolves to Liberation Sans (Arial
+       metrics) and lays out correctly.
+
+    2. `<mask>`. Excalidraw punches a hole in a connector where its label sits,
+       using a two-rect luminance mask — a white rect over the whole canvas
+       (show everything) and a black rect behind the label (hide the line under
+       the text) — applied as `<g mask="url(#mask-...)">`. WeasyPrint 69 gets
+       this wrong badly enough that the masked group renders as very nearly
+       nothing: in kagent's network-architecture diagram, all 18 connectors and
+       almost every label disappear, leaving loose numbered badges and a few
+       clipped words floating on the page. Dropping the mask reference restores
+       the whole drawing; the only thing lost is the hole, so a connector now
+       draws through its own label instead of stopping short of it, which is
+       legible and is what an unmasked Excalidraw export looks like anyway.
+
+       WeasyPrint reports no error for this, so the render step's `^ERROR:`
+       gate cannot catch it — the PDF just quietly ships a gutted diagram. That
+       is the reason to fix it here rather than wait for an upstream release.
+
+       Guarded on the Excalidraw marker comment: a hand-authored or
+       tool-exported SVG elsewhere may well depend on its mask, and stripping
+       that would reveal content the author meant to hide, which is a worse
+       failure than the one being fixed.
     """
-    changed = 0
+    defallbacked = 0
+    unmasked = 0
     for dirpath, _, names in os.walk(root):
         for name in names:
             if not name.endswith(".svg"):
@@ -331,12 +363,19 @@ def fix_svg_fonts(root):
                     svg = fh.read()
             except OSError:
                 continue
-            if "Helvetica, Segoe UI Emoji" not in svg:
+            out = svg
+            if "Helvetica, Segoe UI Emoji" in out:
+                out = out.replace("Helvetica, Segoe UI Emoji", "Helvetica")
+                defallbacked += 1
+            if EXCALIDRAW_MARKER in out:
+                out, n = SVG_MASK_REF.subn("", out)
+                if n:
+                    unmasked += 1
+            if out == svg:
                 continue
             with open(path, "w", encoding="utf-8") as fh:
-                fh.write(svg.replace("Helvetica, Segoe UI Emoji", "Helvetica"))
-            changed += 1
-    return changed
+                fh.write(out)
+    return {"defallbacked": defallbacked, "unmasked": unmasked}
 
 
 def replace_iframes(doc):
@@ -586,9 +625,18 @@ def prepare(src_path, out_path, prod_host, color_emoji=False):
     doc = lxml_html.parse(src_path).getroot()
     chapters = doc.cssselect("section.pdf-chapter[data-source-path]")
     if not chapters:
+        # Unconditional, not gated on --strict, and that is the point: a book
+        # with no chapters is not a small book, it is a build that produced no
+        # book. Nothing downstream notices — WeasyPrint renders the cover and an
+        # empty contents page, exits 0, and the workflow publishes a
+        # plausible-looking empty manual.
         raise SystemExit(
             f"{src_path}: no .pdf-chapter[data-source-path] elements found. "
-            "Is this really a `book` output-format document?"
+            "Either this is not a `book` output-format document, or the site "
+            "was built without asking for books: docs-theme-extras defaults "
+            "them off, so a build needs HUGO_PARAMS_BUILDBOOK=true (see "
+            "layouts/_partials/utils/build-book.html). Also check that the "
+            'version root still lists "book" in its `outputs` front matter.'
         )
 
     id_maps, renamed = uniquify_ids(chapters)
@@ -625,13 +673,18 @@ def main():
         help="exit non-zero if any duplicate id or dangling jump survives",
     )
     ap.add_argument(
+        "--fix-svgs",
         "--fix-svg-fonts",
+        dest="fix_svgs",
         metavar="DIR",
         help=(
-            "rewrite built SVGs under DIR to drop the non-existent "
-            "\"Segoe UI Emoji\" font fallback, which makes WeasyPrint render "
-            "spaces in diagram text at the wrong width. Point it at the build "
-            "output (e.g. public), never at the sources."
+            "rewrite built SVGs under DIR to work around two WeasyPrint bugs: "
+            "the non-existent \"Segoe UI Emoji\" font fallback, which makes it "
+            "render spaces in diagram text at the wrong width, and <mask> on "
+            "Excalidraw exports, which makes it drop most of a diagram without "
+            "reporting an error. Point it at the build output (e.g. public), "
+            "never at the sources. --fix-svg-fonts is the former name, kept so "
+            "an existing caller keeps working; it now does both."
         ),
     )
     ap.add_argument(
@@ -659,8 +712,10 @@ def main():
     )
     args = ap.parse_args()
 
-    if args.fix_svg_fonts:
-        print(f"SVGs de-fallbacked:       {fix_svg_fonts(args.fix_svg_fonts)}")
+    if args.fix_svgs:
+        svgs = fix_svgs(args.fix_svgs)
+        print(f"SVGs de-fallbacked:       {svgs['defallbacked']}")
+        print(f"SVGs unmasked:            {svgs['unmasked']}")
 
     chapters, renamed, stats, iframes, doc = prepare(
         args.source, args.output, args.prod_host, color_emoji=args.color_emoji

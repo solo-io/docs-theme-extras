@@ -1,0 +1,37 @@
+# THE GATE-OFF HALF of the book opt-in, and the only build here that renders no
+# books.
+#
+# An overlay on hugo-enterprise.toml (comma-joined, later file wins) rather than
+# a fixture of its own, so it is the SAME content, the same version trees and the
+# same `outputs` front matter as the build that does produce books, differing in
+# exactly two keys: publishDir, and buildBook. That is what makes the comparison
+# mean something — anything else that differed would be a candidate explanation
+# for the missing book.
+#
+# WHY IT NEEDS A BUILD AT ALL. `params.buildbook` is now the single point of
+# failure for the whole PDF feature, and it fails silently in both directions.
+# Inverted so it is always on, every consumer build quietly pays for 92 MB of
+# books nobody reads and republishes them at crawlable URLs — the exact thing
+# the gate was added to stop, and nothing would notice. Broken so it is always
+# off, no PDF can ever be built, but the failure surfaces in a different repo's
+# workflow rather than here. The suite should be able to tell.
+#
+# Built by `make build-nobook`; asserted by tests/book-document.spec.ts, which
+# reaches this publishDir as a sibling of the brand build's.
+
+# Keeps hugo-enterprise.toml's baseURL ("/test") deliberately — the whole value
+# of this build is being identical to that one but for buildBook.
+#
+# The "/test" suffix here is NOT decoration and NOT the baseURL path: the brand
+# configs publish to "public-<brand>/test", so the harness's builtRoot is the
+# PARENT of the site (see the Makefile's build-oss comment for why). Dropping it
+# moves every page up one level, which does not fail the build and does not fail
+# the spec either — it just makes the spec look for books where none were ever
+# going to be, so the assertion passes for the wrong reason. Caught by flipping
+# buildBook back to true and finding the test still green.
+publishDir = "public-nobook/test"
+
+[params]
+  # The one key under test. hugo-enterprise.toml sets it true; unset would also
+  # do here, but stating it false documents which half of the pair this is.
+  buildBook = false

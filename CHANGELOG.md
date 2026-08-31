@@ -35,13 +35,62 @@ pdf-cover`, `.pdf-chapter ol`), and the download item renders **only** when
 anything is `id="pdf-contents"` on the book's contents heading, which no book has ever
 targeted.
 
-Two things a consumer that **already builds a book** does see, both under [Fix](#fix). The
-print stylesheet is published at `css/print-book-<version>.css` rather than
-`css/print-book.css`, because the target name is keyed on the version so two books in one
-build cannot share a cached copy — internal, since only the book document links it. And the
-version on the cover and in the running footer now comes from the book's own version tree
-rather than the site-wide `latest` entry, so a book of any other tree is relabelled. That one
-is a visible change to the artifact, and a correction: the old label was wrong.
+A consumer that **already builds a book** sees three changes. One is breaking and is listed
+below. The other two are under [Fix](#fix): the print stylesheet is published at
+`css/print-book-<version>.css` rather than `css/print-book.css`, because the target name is
+keyed on the version so two books in one build cannot share a cached copy — internal, since
+only the book document links it; and the version on the cover and in the running footer now
+comes from the book's own version tree rather than the site-wide `latest` entry, so a book of
+any other tree is relabelled. That one is a visible change to the artifact, and a correction:
+the old label was wrong.
+
+Kept as a patch despite the breaking change because solo-io/docs is the only consumer that
+builds books at all — ambientmesh.io piloted the pipeline and has no PDF workflow today — and
+the change ships together with that repo's workflow update. Read the entry below before
+bumping the pin if that is no longer true for you.
+
+### Breaking
+
+- **Book documents are no longer built unless the build asks for one
+  (`layouts/docs/list.book.html`, `layouts/docs/single.book.html`, new
+  `layouts/_partials/utils/build-book.html`).** A build that wants books now sets
+  `HUGO_PARAMS_BUILDBOOK=true`; without it, a page that opts into the `book` output format
+  renders nothing and no `book.html` is written.
+
+  **What to change.** One line in the PDF workflow, on the step that builds the site — not in
+  a site config, which would be the same as not having the switch:
+
+  ```yaml
+  - name: Build site
+    env:
+      HUGO_PARAMS_BUILDBOOK: "true"
+    run: hugo --config=hugo-${{ matrix.product }}.toml
+  ```
+
+  **Why.** `outputs` front matter selects the output format but cannot say *when* — it is
+  static, so an opt-in applies to every build of that page, and a book is an entire version
+  tree stitched into one file. On [solo-io/docs](https://docs.solo.io/kagent/latest/) that
+  meant every ordinary production build also produced 12 book documents totalling 92 MB on top
+  of a 4.3 GB site, about 7% of the build time on the largest product, and — the part that
+  actually matters — 12 publicly reachable URLs each carrying a complete unstyled duplicate of
+  a manual, with no `noindex` and no canonical, because a book document deliberately skips
+  `baseof.html` and all the normal head chrome. Confirm on any deployed product before the
+  bump: `curl -sI https://docs.solo.io/kagent/latest/book.html` answers 200. It also forced
+  the link checker to exclude `book.html`, whose relative links do not resolve from its own
+  location until `prepare_book.py` rewrites them. None of that output was deployed or read by
+  anyone; the PDF workflow does its own build.
+
+  **If you forget it**, you do not get a broken PDF, which is the failure mode worth knowing:
+  the book document still renders a cover and an empty table of contents, and WeasyPrint
+  paginates that happily and exits 0. `prepare_book.py` already refused a zero-chapter book,
+  and its error message now names this variable.
+
+  Verified by building kagent both ways against a local module replace: without the variable,
+  81 pages and no `book.html` anywhere; with it, 81 pages and a `book.html` **byte-identical**
+  to the one built before this change. Build time on gloo-mesh-enterprise went from 60.0s to
+  54.2s. Covered by a new `make build-nobook` fixture build — `build-enterprise` with that one
+  key flipped and nothing else — and an assertion in `tests/book-document.spec.ts`;
+  mutation-tested by flipping the key back and confirming the test fails.
 
 ### Add
 
@@ -287,6 +336,38 @@ is a visible change to the artifact, and a correction: the old label was wrong.
   never opted into `book`, covers the other gate.
 
 ### Fix
+
+- **An Excalidraw diagram no longer loses its connectors and labels in the PDF
+  (`scripts/prepare_book.py`).** Reported from the kagent manual, where the
+  [network-architecture diagram](https://docs.solo.io/kagent/latest/install/sys-reqs/) printed as
+  loose numbered badges and a few clipped words — all 18 connectors, both cluster labels, the
+  legend and almost every port annotation simply gone — on a page that is correct in every
+  browser. Only WeasyPrint disagrees, and it says nothing: it logs no error, so the render
+  step's `^ERROR:` gate cannot catch this and a published manual can ship a gutted diagram
+  while the job stays green. That is what makes it worth working around here rather than
+  waiting for an upstream release.
+
+  The cause is `<mask>`. Excalidraw punches a hole in a connector where its label sits, using a
+  two-rect luminance mask — a white rect over the whole canvas, then a black rect behind the
+  label — applied as `<g mask="url(#mask-…)">`. WeasyPrint 69 renders that group as very nearly
+  nothing. `fix_svgs()` (the function behind `--fix-svg-fonts`, which now also does this)
+  removes the mask *reference* from the built copy under `public/`, never from the source in
+  `assets/`; the `<mask>` element is left in place, inert, so the diff is one attribute per
+  group. The only thing lost is the hole, so a connector draws through its own label instead of
+  stopping short of it — legible, and exactly what an unmasked Excalidraw export looks like.
+
+  Stripping is guarded on the `svg-source:excalidraw` marker comment. A hand-authored mask is
+  load-bearing, and revealing content an author meant to hide would be a worse failure than the
+  one being fixed; one such SVG (`img/gateway/gloo-ai-gateway-dark.svg`) is deliberately left
+  alone. 31 of the hub's 499 SVGs carry a mask reference, 30 of them Excalidraw, spread across
+  gateway, gloo-mesh-enterprise, gloo-mesh-gateway, istio, and kagent — so every one of those
+  manuals was affected, not just the one reported.
+
+  Verified by rendering the real built SVG through WeasyPrint 69 in the CI container: before,
+  an exact reproduction of the reported page; after `fix_svgs()`, the complete diagram with its
+  embedded Nunito webfont intact. Six unit tests cover the marker guard, attribute-only
+  removal, and both fixes in one pass. The flag keeps its old name on purpose — it is an alias
+  now — so a historical build that fetches the `MIN_EXTRAS` scripts still parses it.
 
 - **A table row split by a page break no longer prints its continuation with EMPTY value
   columns (`assets/css/print-book.css`).** Reported from a real

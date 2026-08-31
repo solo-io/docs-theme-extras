@@ -1,0 +1,34 @@
+{{- /*
+  Returns whether this build should actually render book documents.
+
+  Why a gate exists at all. The `book` output format is selected by `outputs`
+  front matter on a version root, and front matter is static — there is no way
+  to opt in "only when a PDF is being made". So every ordinary build renders
+  every book too, and a book is the whole version tree stitched into one file.
+  On solo-io/docs that was 12 files and 92 MB on top of a 4.3 GB site, ~7% of
+  the build time on the largest product, and — the part that actually matters —
+  12 publicly reachable URLs carrying a complete unstyled duplicate of a manual,
+  with no `noindex` and no canonical, because a book document deliberately skips
+  baseof.html and all the normal head chrome. It also forced the link checker to
+  exclude `book.html`, since the stitched document's relative links do not
+  resolve from its own location (that is prepare_book.py's job, and it runs
+  later).
+
+  None of that output is deployed or read by anyone. The PDF workflow does its
+  own build. So the default is OFF, and the PDF build asks for books explicitly:
+
+      HUGO_PARAMS_BUILDBOOK=true hugo --config=hugo-<product>.toml
+
+  Hugo lowercases every config key, and `HUGO_PARAMS_BUILDBOOK` and a TOML
+  `buildBook = true` both land as `buildbook` — which is why this reads the
+  lowercase spelling, and why reading `.buildBook` instead would silently always
+  be false.
+
+  Default OFF is safe here in a way it usually would not be: solo-io/docs is the
+  only consumer that builds books at all. ambientmesh.io piloted the pipeline
+  but has no PDF workflow today, so nothing else can regress. A consumer that
+  forgets to set it does not get a wrong PDF, it gets a book with no chapters,
+  and prepare_book.py --strict fails on that rather than publishing an empty
+  manual.
+*/ -}}
+{{- return (site.Params.buildbook | default false) -}}

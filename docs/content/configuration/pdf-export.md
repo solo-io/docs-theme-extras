@@ -33,7 +33,8 @@ importing the module did not give you a PDF.
 | `assets/css/print-book.css` | **This module** | Ordinary asset, linked by the book document itself |
 | The `outputFormats.book` block | **This module** | Hugo merges a module's top-level `outputFormats` into the importing project |
 | `book` in a page's `outputs` front matter | **Your repo** | Per-page opt-in. List the whole set — `outputs` replaces the defaults |
-| `scripts/render-pdf.mjs` | Fetched from this repo | See [Fetching the renderer](#4-fetching-the-renderer) |
+| `HUGO_PARAMS_BUILDBOOK=true` | **Your repo's PDF workflow** | Per-*build* opt-in. Front matter cannot say "only when a PDF is being made" |
+| `scripts/render-pdf.mjs` | Fetched from this repo | See [Fetching the renderer](#5-fetching-the-renderer) |
 | `playwright`, `pdf-lib` | **Your repo's** `package.json` | Node resolves `node_modules` relative to the invoking project, not to wherever the script was downloaded |
 
 ## 1. The output format
@@ -119,7 +120,40 @@ because Hugo resolves an output format's template per page **kind**.
 > `book.html` that looks plausible and is not a book document at all. The tell is
 > a missing `paged.polyfill.js` script tag — see [Verifying](#verifying-the-output).
 
-## 3. Add the dependencies
+## 3. Ask the build for a book
+
+Front matter selects the output format, but it cannot say *when*. It is static, so
+an opt-in applies to **every** build of that page, and a book is the whole version
+tree stitched into one file. Books are therefore off by default, and a build that
+wants one says so:
+
+```sh
+HUGO_PARAMS_BUILDBOOK=true hugo --config=hugo-<product>.toml
+```
+
+Set it in the PDF workflow, not in a site config. Setting it in the config is the
+same as not having the switch at all.
+
+The cost of not having it, measured on solo-io/docs: 12 book documents and 92 MB on
+top of a 4.3 GB site, about 7% of the build time on the largest product, and 12
+publicly reachable URLs each carrying a complete unstyled duplicate of a manual
+with no `noindex` and no canonical, because a book document deliberately skips
+`baseof.html` and all the normal head chrome. It also forces the link checker to
+exclude `book.html`, whose relative links do not resolve from its own location
+until `prepare_book.py` rewrites them.
+
+Two ways to read the switch, since Hugo lowercases every config key: the
+environment variable `HUGO_PARAMS_BUILDBOOK` and a TOML `buildBook = true` both
+land as `params.buildbook`, which is what the theme reads.
+
+> [!NOTE]
+> Forgetting it does not produce a broken PDF, which is the failure mode worth
+> knowing. The book document still renders — cover, table of contents, and no
+> chapters — and WeasyPrint paginates that perfectly happily and exits 0.
+> `prepare_book.py` fails on a zero-chapter book for exactly this reason, and its
+> error names this variable.
+
+## 4. Add the dependencies
 
 ```sh
 npm install --save-dev playwright pdf-lib
@@ -138,7 +172,7 @@ is easy to miss locally and then fail in CI.
 Paged.js is loaded from a CDN by the book document itself, so it is **not** an
 npm dependency. A `pagedjs` entry in `package.json` is unused weight.
 
-## 4. Fetching the renderer
+## 5. Fetching the renderer
 
 `scripts/render-pdf.mjs` is **not** a module mount. `module.mounts` covers only
 `layouts`, `assets` and `data`, so the file rides along in this repo purely as
@@ -163,7 +197,7 @@ pdf:
 The version is part of the cached filename, so a pin bump fetches a new copy
 instead of reusing a stale one.
 
-## 5. Run it
+## 6. Run it
 
 Build the site first — the script serves the built `public/` directory itself.
 Most repos wrap what follows in a `make pdf` target; see
@@ -637,6 +671,42 @@ The flag is opt-in because it is a WeasyPrint workaround. A Paged.js consumer
 renders in Chromium, which draws the real color font, and there the tint would
 repaint emoji that are already correct.
 
+### Diagram SVGs need two fixes, and neither one reports an error
+
+`prepare_book.py --fix-svgs public` rewrites the **built** SVGs under `public/`
+(never the sources under `assets/`) to work around two WeasyPrint bugs. Both are
+specific to Excalidraw exports, and neither is anything wrong with the drawings:
+every one of these files is correct in a browser.
+
+| Symptom in the PDF | Cause |
+| --- | --- |
+| `Gloo Mesh resources` prints as `Gloo    Mesh    resources`, legends overlap | Excalidraw writes `font-family="Helvetica, Segoe UI Emoji"`. That second family does not exist on Linux, and WeasyPrint resolves the SPACE character through it, giving the space a wildly wrong advance |
+| Connectors and most labels are simply **gone**, leaving loose badges and a few clipped words | `<mask>`. Excalidraw punches a hole in a connector where its label sits, with a two-rect luminance mask applied as `<g mask="url(#mask-…)">`. WeasyPrint 69 renders that group as very nearly nothing |
+
+The mask fix removes the mask *reference* and leaves the `<mask>` element in
+place, inert. The only thing lost is the hole, so a connector draws through its
+own label instead of stopping short of it — legible, and what an unmasked
+Excalidraw export looks like anyway. It is guarded on the `svg-source:excalidraw`
+marker comment, because a hand-authored mask is usually load-bearing and
+revealing content an author meant to hide is a worse failure than the one being
+fixed.
+
+> [!WARNING]
+> **WeasyPrint logs nothing for either of these.** The render step's `^ERROR:`
+> check catches an image it cannot load at all; it cannot catch one it renders
+> incorrectly. A published manual can ship a gutted diagram with the job green,
+> which is why this runs unconditionally rather than waiting for an upstream
+> release. When a diagram looks wrong, render the single SVG on its own and
+> compare — a one-page probe is far faster than re-rendering the book:
+>
+> ```sh
+> printf '%s' '<meta charset="utf-8"><img src="arch.svg">' > probe.html
+> weasyprint probe.html probe.pdf
+> ```
+
+`--fix-svg-fonts` is the flag's former name and still works, which matters for a
+historical build that fetches an older `prepare_book.py`. It now does both fixes.
+
 ### Pandoc did not produce a PDF from this content at all
 
 This is why the status row above says **never enabled**, and why the Pandoc
@@ -712,10 +782,13 @@ This is the question you actually have most of the time, and it needs none of th
 splitting or numbering machinery:
 
 ```sh
-hugo --config=hugo-<product>.toml
+HUGO_PARAMS_BUILDBOOK=true hugo --config=hugo-<product>.toml
 python3 -m http.server 8000 --bind 127.0.0.1 --directory public &
 weasyprint "http://127.0.0.1:8000/<product>/<version>/book.html" out.pdf
 ```
+
+Without `HUGO_PARAMS_BUILDBOOK=true` there is no `book.html` to serve at all — see
+[Ask the build for a book](#3-ask-the-build-for-a-book).
 
 Serve the tree rather than opening the file directly — WeasyPrint has no notion
 of a site root, so root-relative image and stylesheet URLs only resolve over
@@ -732,10 +805,10 @@ cross-references, numbered contents — with the four stages the workflow runs, 
 order:
 
 ```sh
-# 1. Prepare: unique ids, deferred jumps, emoji color, SVG font fix, split.
+# 1. Prepare: unique ids, deferred jumps, emoji color, SVG fixes, split.
 python3 prepare_book.py public/<product>/<version>/book.html \
         public/<product>/<version>/book.html https://docs.solo.io \
-        --strict --color-emoji --fix-svg-fonts public
+        --strict --color-emoji --fix-svgs public
 
 # 2. Render each part IN ORDER, telling each one where its page numbers start.
 #    Sequential is not an optimization choice — a part cannot know its first

@@ -11,10 +11,8 @@
   in-page TOC) entirely — this document is a print artifact, not a browsable
   page, so it's a self-contained HTML file from <!DOCTYPE html> down.
 
-  Only reachable at all when a consumer's own hugo.yaml defines the `book`
-  output format (Hugo doesn't merge top-level outputFormats config from an
-  imported module) and a page opts in via `outputs: ["html", "book"]` front
-  matter — both stay in the consumer, this partial (and its two thin
+  Only reachable at all when a page opts in via `outputs` front matter — that
+  stays in the consumer, this partial (and its two thin
   callers, layouts/docs/list.book.html and layouts/docs/single.book.html)
   is the only shared part. Both callers exist because Hugo resolves output
   format templates per page KIND — a section/list page (has its own
@@ -26,10 +24,14 @@
   src=".../paged.polyfill.js">, since it never rendered from this partial
   at all).
 
-  Proven on ambientmesh.io, a flat/unversioned site with a single fixed docs
-  root. Adapting this to a VERSIONED site (per-version book generation,
-  version-root scoping) is real work not yet done — see the version-related
-  comments below for the one place that already anticipates it.
+  First proven on ambientmesh.io, a flat/unversioned site with a single fixed
+  docs root, then extended to VERSIONED sites: solo-io/docs opts in one
+  `_index.md` per version root and gets one book per version tree, with the
+  cover labelled from that tree's own `params.versions` entry (see
+  utils/book-version.html) rather than from the site's newest version, and
+  from its `params.sections` entry where a product nests trees under a
+  section (utils/book-section.html). An unversioned consumer is unaffected:
+  both partials fall through to the flat behavior.
 
   `bookChunkRoot: true` front matter (opt-in, defaults unset/false — no
   behavior change for a consumer that never sets it, e.g. ambientmesh.io)

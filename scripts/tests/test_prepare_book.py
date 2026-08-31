@@ -201,20 +201,97 @@ class TestFixSvgFonts:
         # second family and gives it a wrong advance, so legends overlap.
         p = tmp_path / "d.svg"
         p.write_text('<svg><text font-family="Helvetica, Segoe UI Emoji">a b</text></svg>')
-        assert pb.fix_svg_fonts(str(tmp_path)) == 1
+        assert pb.fix_svgs(str(tmp_path))["defallbacked"] == 1
         assert 'font-family="Helvetica"' in p.read_text()
 
     def test_leaves_other_svgs_alone(self, tmp_path):
         p = tmp_path / "d.svg"
         p.write_text('<svg><text font-family="Arial">a</text></svg>')
-        assert pb.fix_svg_fonts(str(tmp_path)) == 0
+        assert pb.fix_svgs(str(tmp_path))["defallbacked"] == 0
         assert "Arial" in p.read_text()
 
     def test_ignores_non_svg_files(self, tmp_path):
         p = tmp_path / "notes.txt"
         p.write_text("Helvetica, Segoe UI Emoji")
-        assert pb.fix_svg_fonts(str(tmp_path)) == 0
+        assert pb.fix_svgs(str(tmp_path))["defallbacked"] == 0
         assert "Segoe UI Emoji" in p.read_text()
+
+
+# An Excalidraw connector and its label: a two-rect luminance mask that hides
+# the line where the text sits. WeasyPrint 69 renders the masked group as very
+# nearly nothing, so the connector and its label both vanish from the PDF.
+EXCALIDRAW_MASKED = (
+    '<svg><!-- svg-source:excalidraw -->'
+    '<mask id="mask-abc" maskUnits="userSpaceOnUse" x="0" y="0" width="10" height="10">'
+    '<rect fill="#fff" width="10" height="10"></rect>'
+    '<rect fill="#000" x="2" y="2" width="3" height="3"></rect></mask>'
+    '<g mask="url(#mask-abc)" stroke-linecap="round"><path d="M0 0 L9 9"></path></g>'
+    "</svg>"
+)
+
+
+class TestFixSvgMasks:
+    def test_drops_the_mask_reference_from_an_excalidraw_export(self, tmp_path):
+        p = tmp_path / "arch.svg"
+        p.write_text(EXCALIDRAW_MASKED)
+        assert pb.fix_svgs(str(tmp_path))["unmasked"] == 1
+        out = p.read_text()
+        assert "mask=" not in out.replace("<mask ", "")
+        # Only the reference goes. The <mask> element itself is inert once
+        # nothing points at it, and leaving it keeps the diff to one attribute.
+        assert '<mask id="mask-abc"' in out
+        # The group and its other attributes survive intact.
+        assert '<g stroke-linecap="round">' in out
+
+    def test_keeps_masks_on_svgs_from_other_tools(self, tmp_path):
+        # A hand-authored mask is load-bearing: stripping it would reveal
+        # content the author meant to hide, a worse failure than the one being
+        # fixed. Only the Excalidraw marker opts a file in.
+        p = tmp_path / "logo.svg"
+        p.write_text(EXCALIDRAW_MASKED.replace("<!-- svg-source:excalidraw -->", ""))
+        assert pb.fix_svgs(str(tmp_path))["unmasked"] == 0
+        assert 'mask="url(#mask-abc)"' in p.read_text()
+
+    def test_fixes_fonts_and_masks_in_one_pass(self, tmp_path):
+        p = tmp_path / "arch.svg"
+        p.write_text(
+            EXCALIDRAW_MASKED.replace(
+                "</svg>", '<text font-family="Helvetica, Segoe UI Emoji">a b</text></svg>'
+            )
+        )
+        assert pb.fix_svgs(str(tmp_path)) == {"defallbacked": 1, "unmasked": 1}
+        out = p.read_text()
+        assert 'font-family="Helvetica"' in out and 'mask="url(' not in out
+
+
+class TestEmptyBookIsRejected:
+    """A zero-chapter book is a build that produced no book, not a small one.
+
+    This was already enforced; the tests exist because the theme now defaults
+    books OFF, which makes "cover and contents, no chapters" the shape an
+    ordinary build produces, so the guard went from theoretical to load-bearing.
+    Deliberately NOT gated on --strict, and deliberately covered without it:
+    nothing downstream notices an empty book, so there is no safe way to let one
+    through. Goes through prepare() rather than main() because that is where the
+    check lives.
+    """
+
+    def _prepare(self, tmp_path, body):
+        src = tmp_path / "book.html"
+        src.write_text(f"<html><body>{body}</body></html>")
+        return pb.prepare(str(src), str(src), "https://docs.solo.io")
+
+    def test_a_book_with_only_a_cover_and_contents_is_fatal(self, tmp_path):
+        with pytest.raises(SystemExit) as e:
+            self._prepare(tmp_path, "<h1>Contents</h1>")
+        # The message has to name the cause, because the most likely one is now
+        # a missing environment variable rather than a malformed document.
+        assert "HUGO_PARAMS_BUILDBOOK" in str(e.value)
+
+    def test_one_chapter_is_enough(self, tmp_path):
+        body = chapter("c1", "/kagent/latest/install/", "<h2>Install</h2>")
+        chapters, _, _, _, _ = self._prepare(tmp_path, body)
+        assert chapters == 1
 
 
 class TestReplaceIframes:
