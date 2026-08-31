@@ -381,11 +381,18 @@
         </button>
       </li>
       <li class="copy-md-dropdown-sep" role="separator"></li>
+      <li role="none">
+        <button role="menuitem" data-action="print">
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+          Print
+        </button>
+      </li>
       {{- with $pdfURL }}
-      {{- /* Sits next to Print because it answers the same need — a portable
-             copy. Labelled "all docs" on purpose: every other item in this
-             menu acts on THIS page, and without the distinction Print sitting
-             directly below invites the reader to expect a one-page file. */ -}}
+      {{- /* Last, after Print, because both answer the same need — a portable
+             copy — and Print is the one most readers are looking for.
+             Labelled "all docs" on purpose: every other item in this menu acts
+             on THIS page, and Print sitting directly above it would otherwise
+             invite the reader to expect a one-page file. */ -}}
       <li role="none">
         <button role="menuitem" data-action="download-pdf" data-pdf-url="{{ . }}">
           <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
@@ -393,12 +400,6 @@
         </button>
       </li>
       {{- end }}
-      <li role="none">
-        <button role="menuitem" data-action="print">
-          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
-          Print
-        </button>
-      </li>
     </ul>
   </div>
   <dialog class="copy-md-dialog" aria-label="Page as Markdown">

@@ -40,8 +40,15 @@
 {{- $html = $html | replaceRE `(?s)(<div class="hextra-tabs[^"]*"[^>]*>)<nav[^>]*>.*?</nav>` "$1" -}}
 
 {{- /* Label each panel with its own name. One opening <div> is replaced by
-       one opening <div>, so tag balance is preserved. */ -}}
-{{- $html = $html | replaceRE `<div class="hextra-tab-panel"[^>]*data-tab-name="([^"]*)"[^>]*>` `<div style="display:block"><p><strong>Option: $1</strong></p>` -}}
+       one opening <div>, so tag balance is preserved.
+
+       `hextra-tab-panel[^"]*` and NOT `hextra-tab-panel"`: only the ACTIVE
+       panel of each group carries that class alone. Every other one is
+       `class="hextra-tab-panel hx:hidden"`, so anchoring on the closing quote
+       labels the first option of every tab group and silently skips the rest —
+       which still render here, because the hx: utility that would hide them is
+       not loaded in this document. */ -}}
+{{- $html = $html | replaceRE `<div class="hextra-tab-panel[^"]*"[^>]*data-tab-name="([^"]*)"[^>]*>` `<div style="display:block"><p><strong>Option: $1</strong></p>` -}}
 
 {{- /* Some content hand-numbers a tab's list to continue from the step it's
        nested under via the list's native `start` attribute (e.g. two tabs

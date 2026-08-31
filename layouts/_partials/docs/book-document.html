@@ -90,6 +90,21 @@
     <p class="pdf-cover-subtitle">Documentation</p>
     {{- with $productVersion }}<p class="pdf-cover-version">Version {{ . }}</p>{{ end }}
     <p class="pdf-cover-date">{{ now.Format "January 2, 2006" }}</p>
+    {{- /* Company mark at the foot of an ENTERPRISE cover only. The product
+           logo above says what the manual is; this says who publishes it,
+           which is a claim an OSS site should not make — kgateway.dev and
+           agentgateway.dev document upstream projects, not a Solo product.
+           Gated on the same `themeExtras.brand` the breadcrumb already uses,
+           so there is no second switch to keep in sync, and skipped when the
+           navbar logo IS the cover logo (a site with no separate product
+           mark), which would otherwise print the same image twice. */ -}}
+    {{- if eq (site.Params.themeExtras.brand | default "") "enterprise" }}
+      {{- with site.Params.navbar.logo.path }}
+        {{- if ne . $logo }}
+    <img src="{{ . | relURL }}" alt="{{ site.Params.footer.company | default "Solo.io" }}" class="pdf-cover-brand">
+        {{- end }}
+      {{- end }}
+    {{- end }}
   </section>
 
   <nav class="pdf-toc">

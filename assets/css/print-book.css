@@ -98,6 +98,19 @@ h6 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.03em; }
   color: #666;
 }
 
+/* Company mark low on an enterprise cover. Pushed down with a plain margin
+   rather than height:100% + flex or absolute positioning, for the same reason
+   .pdf-cover itself pads down from the top: a cover that fills the page box
+   exactly is one rounding error away from spilling into a second, and
+   .pdf-cover carries `break-after: page`, so the spill would print as a
+   near-empty second cover before the table of contents. A margin leaves the
+   slack visible and adjustable. */
+.pdf-cover-brand {
+  margin: 9cm auto 0;
+  max-width: 150px;
+  display: block;
+}
+
 .pdf-toc {
   break-after: page;
 }
