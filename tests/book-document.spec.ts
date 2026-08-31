@@ -34,6 +34,20 @@ const BOOK_NESTED = path.join(TEST_PRODUCT_ROOT, "nested/v2/book.html");
 // A book on the docTabs tree, where the tab band and the book pipeline meet.
 const BOOK_TABS = path.join(TEST_PRODUCT_ROOT, "v3/book.html");
 
+// This suite runs against ANY consumer's built output, not just the bundled
+// fixture — solo-io/docs' framework-test-static job points it at that repo's own
+// `test` product, which mounts the fixture CONTENT but keeps its own Hugo config.
+// So every assertion that depends on fixture CONFIG (releaseVersion on v1, the
+// pdfDownload table, the product/distribution in a download URL) or on fixture
+// content the consumer does not mount (only `v3/_index.md` is mounted there, not
+// the tab subtree) has to be gated on the target.
+//
+// Same gate and same reason as tests/section-nested-versions.spec.ts. It is a
+// target check, NOT a brand check: the hub's test product is also the enterprise
+// brand, so `target.brand` cannot tell them apart. That is exactly how these
+// assertions went green locally and red in the hub.
+const IS_FIXTURE_TARGET = target.name.startsWith("docs-theme-extras-fixture");
+
 function book(): string {
   return fs.readFileSync(BOOK, "utf8");
 }
@@ -92,12 +106,15 @@ test.describe("book document", () => {
   // one of them passes with the bug still present, because the site-wide answer
   // for this fixture happens to be v2.
   test.describe("version labelling is per version tree, not site-wide", () => {
+    // Only the cover/footer/URL assertions below need the gate; they are marked
+    // individually so the brand-agnostic stylesheet checks still run everywhere.
     test("both books are built", () => {
       expect(fs.existsSync(BOOK), `${BOOK} was not built`).toBe(true);
       expect(fs.existsSync(BOOK_V1), `${BOOK_V1} was not built`).toBe(true);
     });
 
     test("each cover names its own version", () => {
+      test.skip(!IS_FIXTURE_TARGET, "asserts the bundled fixture's version config");
       const cover = (h: string) =>
         h.match(/<p class="pdf-cover-version">([^<]*)<\/p>/)?.[1]?.trim();
 
@@ -130,6 +147,7 @@ test.describe("book document", () => {
     // publishes, which is named from the version directory. Making these agree
     // would break the link on every product whose tree is served at /latest/.
     test("the download item names its own version segment", () => {
+      test.skip(!IS_FIXTURE_TARGET, "asserts the bundled fixture's version config");
       test.skip(target.brand !== "enterprise", "only the enterprise fixture sets pdfDownload");
       const urlOn = (rel: string) => {
         const h = fs.readFileSync(path.join(TEST_PRODUCT_ROOT, rel, "index.html"), "utf8");
@@ -156,6 +174,7 @@ test.describe("book document", () => {
     // which is where the site-wide lookup's second copy used to be. Reading the
     // built CSS is the only way to see it — it never appears in the HTML.
     test("each stylesheet's running footer names its own version", () => {
+      test.skip(!IS_FIXTURE_TARGET, "asserts the bundled fixture's version config");
       const cssFor = (h: string) => {
         const href = stylesheetHref(h);
         const f = path.join(target.builtRoot, href.replace(/^\/+/, ""));
@@ -274,6 +293,7 @@ test.describe("book document", () => {
   // assembled from three separate config values. It has TWO gates and each one
   // fails in a different, silent direction.
   test.describe("the download item's two gates", () => {
+    test.skip(!IS_FIXTURE_TARGET, "asserts the bundled fixture's pdfDownload config");
     const PDF_URL = /https:\/\/github\.com\/solo-io\/docs-pdfs\/releases\/download\//;
 
     function pageHTML(rel: string): string {
@@ -318,6 +338,7 @@ test.describe("book document", () => {
   // version alone can tell them apart. agentgateway is the production case, with
   // kubernetes/latest and standalone/latest.
   test.describe("a section-nested book identifies its section", () => {
+    test.skip(!IS_FIXTURE_TARGET, "asserts the bundled fixture's `nested` section tree");
     test("the book is built", () => {
       expect(fs.existsSync(BOOK_NESTED), `${BOOK_NESTED} was not built`).toBe(true);
     });
@@ -365,6 +386,7 @@ test.describe("book document", () => {
   // tab, and a change teaching the book to do likewise would drop every
   // non-default tab from the manual silently.
   test.describe("a book on a docTabs tree keeps every tab", () => {
+    test.skip(!IS_FIXTURE_TARGET, "asserts the bundled fixture's tabs-demo subtree, which a consumer need not mount");
     test("the book is built", () => {
       expect(fs.existsSync(BOOK_TABS), `${BOOK_TABS} was not built`).toBe(true);
     });

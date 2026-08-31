@@ -586,6 +586,30 @@ is a visible change to the artifact, and a correction: the old label was wrong.
 Both take effect for a consumer that bumps its extras pin **and** passes the new flag; the
 `docs` hub's `pdf-export.yml` does both.
 
+### Test harness — the new book assertions were consumer-config-dependent (`tests/book-document.spec.ts`)
+
+`tests/book-document.spec.ts` runs against **any** consumer's built output, not only the
+bundled fixture: solo-io/docs' `framework-test-static` job points it at that repo's own `test`
+product, which mounts the fixture CONTENT but keeps its own Hugo config. Six of this release's
+new assertions depend on fixture CONFIG — `releaseVersion` on `v1`, the `[params.pdfDownload]`
+table, the product and distribution baked into a download URL — or on fixture content a
+consumer need not mount, since the hub mounts only `fixture/tabs-demo/v3/_index.md` and not the
+tab subtree beneath it. All six passed locally on both brands and went red in the hub.
+
+The tell in the failure output was the running footer reading `Docs framework test fixture v1`
+without the `(enterprise brand)` suffix the fixture's own config sets — the suite was reading a
+different site's build. Note `target.brand` could not have caught this: the hub's test product
+is *also* the enterprise brand, so the two targets are indistinguishable by brand and only
+`target.name` separates them.
+
+Gated on `target.name.startsWith("docs-theme-extras-fixture")`, the same gate and the same
+reason as `tests/section-nested-versions.spec.ts`. The brand-agnostic assertions — the book
+builds, it is the book template, chapter ids are unique, the `tr` break rule is present, each
+book links its own executed stylesheet — deliberately stay ungated so a consumer still gets
+real coverage. Verified by running the suite against the hub's `.docs-test.toml` with its `test`
+product built (14 passed, 10 skipped) and against both fixture brands unchanged (2,231 and
+2,229 passed).
+
 ### Test harness — the PDF pipeline had no tests at all
 
 Every PDF bug in this release was found by a human opening the finished file. That was the
