@@ -765,18 +765,41 @@ how a diagram goes missing from a green build. The workflow greps its own log fo
 ## Linking to the published PDF
 
 Set `params.pdfDownload` and the Copy-as-Markdown menu on every docs page gains a
-**Download all docs (PDF)** item, next to Print:
+**Download all docs (PDF)** item, next to Print. For a site publishing to
+`solo-io/docs-pdfs`, one line is the whole configuration:
 
 ```toml
 [params.pdfDownload]
-  urlTemplate = "https://github.com/solo-io/docs-pdfs/releases/download/{product}-{distribution}-{version}/{product}-{distribution}-{version}.pdf"
   distribution = "enterprise"
+```
+
+The release-asset URL shape is supplied by the partial, so it is not repeated per
+consumer. Setting `distribution` is what turns the item on. Override the shape
+only if you publish somewhere else:
+
+```toml
+[params.pdfDownload]
+  urlTemplate = "/downloads/docs.pdf"
 ```
 
 `{product}` comes from `params.pdfDownload.product`, falling back to
 `params.currentProduct` and then `params.folder`. `{version}` is the version
-segment of the current URL. Without `urlTemplate` the item does not render at
-all, so a site that publishes no PDFs needs no other change.
+segment of the current URL. With neither `distribution` nor `urlTemplate` the
+item does not render at all, so a site that publishes no PDFs needs no change —
+and that is deliberate rather than incidental. A site that renders its PDF into
+its own `static/` (kgateway.dev, ambientmesh.io) builds a book and still wants no
+item, so defaulting the URL for every consumer would give those sites a link to a
+release that does not exist.
+
+> [!WARNING]
+> `[params.pdfDownload]` is a fully-qualified TOML table header, so **every bare
+> `key = value` line after it belongs to it** until the next header. Dropped in
+> above the loose keys of a `[params]` block, it silently swallows
+> `currentProduct`, `folder` and everything else that follows — and the symptom is
+> not a build error, it is a download URL with a product name like
+> `Docs%20framework%20test%20fixture` in it, because `{product}` fell through to
+> the next candidate. Put it after the loose keys, immediately before the next
+> table header.
 
 **The item appears only for a version that builds a book**, because it asks the
 version root for its output formats rather than reading a separate flag:

@@ -153,6 +153,40 @@ is a visible change to the artifact, and a correction: the old label was wrong.
   physically, and with the cover unnumbered the printed number is one lower. Without both,
   every line of the contents page is off by one — silently, and only on paper.
 
+- **`params.pdfDownload.distribution` alone is enough to render the download item;
+  `urlTemplate` no longer has to be written out (`layouts/partials/copy-markdown.html`,
+  `hugo-enterprise.toml`, `tests/book-document.spec.ts`).** Wiring the remaining seven
+  products in solo-io/docs for PDF export meant writing the same 130-character release URL
+  into 24 files — three configs (prod, preview, local) for each of eight products, every
+  copy identical, and each one a place for a typo that fails by producing a link to nothing.
+  A shared config file is the obvious alternative and is worse there: 24 places in that repo
+  invoke Hugo with a per-product config, and a forgotten second `--config` removes the menu
+  item **silently** rather than failing a build. So the shape moved into the partial, and a
+  consumer now states only what actually differs between consumers.
+
+  **The default is gated on `distribution` rather than applied unconditionally, and that
+  gate is the whole safety property.** Two consumers build books and publish them to their
+  own pages instead of to a release — kgateway.dev writes
+  `static/downloads/kgateway-envoy-latest.pdf` from its `make pdf` target, and ambientmesh.io
+  does the same — and neither sets `pdfDownload` at all. An unconditional default would have
+  handed both of them a menu item pointing at a `solo-io/docs-pdfs` release that does not
+  exist. Neither sets `distribution`, so neither is affected. Any site wanting a different
+  host still sets `urlTemplate`, and an explicit value wins.
+
+  Verify on any enterprise product page — for example
+  [the Istio 1.30.x docs](https://docs.solo.io/istio/1.30.x/) — by opening the
+  Copy-as-Markdown menu, or in view-source by searching for `docs-pdfs/releases/download`:
+  the href is assembled from the defaulted template even though `hugo-istio.toml` sets only
+  `distribution = "enterprise"`.
+
+  This item had **no test coverage at all** before this change, which is uncomfortable for a
+  URL assembled from three separate config values. `tests/book-document.spec.ts` now asserts
+  both gates, and the two fixture configs are deliberately asymmetric to do it:
+  `hugo-enterprise.toml` sets `distribution` and no `urlTemplate` (so the default is the
+  thing under test), while `hugo-oss.toml` sets no `pdfDownload` table at all and stands in
+  for kgateway.dev — it must build a book and still render no item. The `main` tree, which
+  never opted into `book`, covers the other gate.
+
 ### Fix
 
 - **A book's cover and running footer name the version tree the book actually
