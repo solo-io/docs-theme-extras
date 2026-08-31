@@ -32,7 +32,7 @@ importing the module did not give you a PDF.
 | `assets/css/print-book.css` | **This module** | Ordinary asset, linked by the book document itself |
 | The `outputFormats` block | **Your repo** | Hugo does **not** merge top-level `outputFormats` config from an imported module |
 | `outputs: ["html", "book"]` front matter | **Your repo** | Per-page opt-in |
-| `scripts/render-pdf.mjs` | Fetched from this repo | See [Fetching the renderer](#fetching-the-renderer) |
+| `scripts/render-pdf.mjs` | Fetched from this repo | See [Fetching the renderer](#4-fetching-the-renderer) |
 | `playwright`, `pdf-lib` | **Your repo's** `package.json` | Node resolves `node_modules` relative to the invoking project, not to wherever the script was downloaded |
 
 ## 1. Define the output format
@@ -140,6 +140,9 @@ instead of reusing a stale one.
 ## 5. Run it
 
 Build the site first — the script serves the built `public/` directory itself.
+Most repos wrap what follows in a `make pdf` target; see
+[Generating a PDF locally](#generating-a-pdf-locally) for that and for the
+WeasyPrint equivalent.
 
 | Variable | Required | Default | What it does |
 | --- | --- | --- | --- |
@@ -317,8 +320,13 @@ against `docs-theme-extras` v0.3.3. Two chunks were used as the benchmark:
 `reference` (584 KB of stitched HTML, 246 tables) and `traffic-management`
 (2.8 MB, 77 chapters).
 
-| | Paged.js + Chromium (current) | WeasyPrint 69.0 | Pandoc 3.10.2 + TeX Live |
+**Two of these three are in production and the third was never enabled.** Read
+the status row first — the rest of the table is a comparison of capabilities, not
+a menu of supported options.
+
+| | Paged.js + Chromium | WeasyPrint 69.0 | Pandoc 3.10.2 + TeX Live |
 | --- | --- | --- | --- |
+| **Status** | **Shipping.** Drives `render-pdf.mjs`; kgateway.dev publishes with it (`make pdf`) | **Shipping.** Drives the split/merge pipeline; solo-io/docs publishes every product PDF with it | **Never enabled.** Evaluated once, in the spike above, and abandoned. No supported path uses it and none is planned |
 | `print-book.css` | Used as authored | Used as authored, **zero** unsupported-property warnings | Discarded; CSS has no role in a LaTeX pipeline |
 | `string-set` running headers, `@bottom-*` boxes, `counter(page)` | Yes | Yes | Reimplement in a LaTeX template |
 | Repeats `<thead>` when a table splits | **No** | **Yes** | Yes, via `longtable` |
@@ -327,6 +335,21 @@ against `docs-theme-extras` v0.3.3. Two chunks were used as the benchmark:
 | Whole tree as ONE document (7.1 MB, 227 chapters) | Never completes (inherited claim, not re-measured here) | 1,879 pages, **~90s** | Not reached |
 | Extra runtime dependency | Chromium | Pango, GLib | TeX Live, `rsvg-convert` |
 | Client-side JS, for example mermaid | Renders it | Needs a pre-render step | Needs a pre-render step |
+
+> [!WARNING]
+> **Pandoc is not a supported engine, and the row above is the whole story.**
+> Every attempt in the spike ended without a PDF, so there are no page counts or
+> timings to compare against — the two "No PDF produced" cells are not gaps in
+> the measurements, they are the result. See
+> [Pandoc did not produce a PDF](#pandoc-did-not-produce-a-pdf-from-this-content-at-all)
+> below for the five configurations that were tried and where each one stopped.
+> Choosing it is a project, not a configuration change.
+
+**Which of the two shipping engines applies to you** depends on which pipeline
+your site is wired into, not on a preference: an OSS site that curls
+`render-pdf.mjs` from a `make pdf` target is on Paged.js, and a product built by
+solo-io/docs's `pdf-export.yml` is on WeasyPrint. Nothing selects between them at
+runtime, and there is no engine setting to change.
 
 **WeasyPrint is the closest substitute, and it is the only one that removes the
 chunking requirement.** It consumed `print-book.css` without a single
@@ -486,7 +509,12 @@ rejected outright:
 
 The trade-off is that 🟡 and 🟢 lose their color and differ only by shading.
 
-**Pandoc did not produce a PDF from this content at all.** Five configurations
+### Pandoc did not produce a PDF from this content at all
+
+This is why the status row above says **never enabled**, and why the Pandoc
+column has no page counts to compare: there was never an output to count.
+
+Five configurations
 were tried, and each fix surfaced the next failure: a missing `rsvg-convert`, then
 emoji that `pdflatex` cannot typeset, then LaTeX's nested-list depth limit
 ("Too deeply nested"), then the `svg` package wanting `-shell-escape`, then a
@@ -504,6 +532,122 @@ throwing `print-book.css` away.
 > unloaded machine; a CI runner deserves its own measurement before anyone
 > promises a number. The structural results (page counts, link counts, duplicate
 > ids, which CSS is honored) are stable and repeatable; the clock is not.
+
+## Generating a PDF locally
+
+Which command you run depends on which engine your site is wired into — see the
+status row in [Choosing a rendering engine](#choosing-a-rendering-engine).
+
+### Paged.js sites (kgateway.dev)
+
+There is a `make` target, because the renderer is a Node script the repo already
+curls:
+
+```sh
+make pdf     # Hugo first, then render-pdf.mjs over the built public/
+```
+
+`make serve` runs the same thing with `PDF_OUTPUT` redirected into `static/`, so
+the download link resolves during local preview instead of 404ing — see
+[The dev server never sees it](#the-dev-server-never-sees-it).
+
+### WeasyPrint sites (solo-io/docs)
+
+**There is no `make` target for this one.** The pipeline lives in
+`.github/workflows/pdf-export.yml`, and that workflow is the source of truth —
+the steps below reproduce it rather than replace it, so check them against the
+workflow if the two ever disagree.
+
+Run it in a container. Not for isolation, but because **the fonts are part of
+the output**: the renderer picks up whatever emoji font the host provides, and
+the wrong one silently prints ✅/❌ as invisible specks (see
+[Fonts the renderer needs](#fonts-the-renderer-needs)). A container that matches
+CI is the only way to see locally what will actually publish.
+
+```dockerfile
+FROM ubuntu:24.04
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
+      libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b \
+      fonts-dejavu-core fonts-liberation \
+      fontconfig curl ca-certificates python3-pip poppler-utils
+RUN pip install --quiet --break-system-packages weasyprint lxml cssselect pypdf
+RUN curl -fsSL -o /usr/local/share/fonts/NotoEmoji.ttf \
+      "https://github.com/google/fonts/raw/main/ofl/notoemoji/NotoEmoji%5Bwght%5D.ttf"
+COPY 99-no-colour-emoji.conf /etc/fonts/conf.d/
+RUN fc-cache -f
+```
+
+#### The quick check: does this page look right?
+
+This is the question you actually have most of the time, and it needs none of the
+splitting or numbering machinery:
+
+```sh
+hugo --config=hugo-<product>.toml
+python3 -m http.server 8000 --bind 127.0.0.1 --directory public &
+weasyprint "http://127.0.0.1:8000/<product>/<version>/book.html" out.pdf
+```
+
+Serve the tree rather than opening the file directly — WeasyPrint has no notion
+of a site root, so root-relative image and stylesheet URLs only resolve over
+HTTP.
+
+Two things will look wrong, and both are expected here: **the table of contents
+has no page numbers**, and on a large book this either takes many minutes or
+exhausts memory, because nothing has split it. Neither is a bug in your page.
+
+#### The full pipeline
+
+Reproduce the published artifact — split, continuous page numbers, working
+cross-references, numbered contents — with the four stages the workflow runs, in
+order:
+
+```sh
+# 1. Prepare: unique ids, deferred jumps, SVG font fix, split into parts.
+python3 prepare_book.py public/<product>/<version>/book.html \
+        public/<product>/<version>/book.html https://docs.solo.io \
+        --strict --fix-svg-fonts public
+
+# 2. Render each part IN ORDER, telling each one where its page numbers start.
+#    Sequential is not an optimization choice — a part cannot know its first
+#    page number until every earlier part has been rendered and counted.
+echo "@page :first { counter-reset: page $NEXT; }" > offset.css
+weasyprint -s offset.css "http://127.0.0.1:8000/<product>/<version>/$NAME.html" "$PDF"
+
+# 3. Merge, and record where every destination landed.
+python3 merge_book.py out.pdf pdf-parts/*.pdf --page-map pages.json
+
+# 4. Number the contents, re-render only that part, merge again.
+python3 number_toc.py pages.json --manifest public/<product>/<version>/book.parts.txt
+#    ...re-render the part it names, then merge once more.
+```
+
+Stage 2's loop over `book.parts.txt` and stage 4's re-render are the fiddly
+parts; copy them out of the workflow's `Render PDF` step rather than retyping
+them.
+
+### Checking what you produced
+
+The failures worth catching do not announce themselves — a diagram that vanished,
+emoji that rendered as specks, a contents page of blanks. These read the finished
+file:
+
+```sh
+# Emoji resolved to the outline font, not the bitmap one.
+python3 -c "from pypdf import PdfReader; print([str(f.get_object()['/BaseFont']) \
+  for f in PdfReader('out.pdf').pages[0]['/Resources']['/Font'].values()])"
+
+# Look at a page instead of guessing.
+pdftoppm -png -r 100 -f 12 -l 12 out.pdf page
+```
+
+`merge_book.py` already fails on any cross-reference that resolves to nothing,
+and `number_toc.py` fails on any contents entry with no page — so a clean run of
+the full pipeline is itself a check. A WeasyPrint `ERROR:` line, though, does
+**not** stop it: the renderer logs an unrenderable image and exits 0, which is
+how a diagram goes missing from a green build. The workflow greps its own log for
+`^ERROR:` and fails; do the same locally.
 
 ## Linking to the published PDF
 

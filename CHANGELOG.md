@@ -250,6 +250,65 @@ element only the splitter creates, and the download item renders **only** when
 Both take effect for a consumer that bumps its extras pin **and** passes the new flag; the
 `docs` hub's `pdf-export.yml` does both.
 
+### Test harness — the PDF pipeline had no tests at all
+
+Every PDF bug in this release was found by a human opening the finished file. That was the
+only way to find one, because **nothing in the suite executed any of it.**
+
+- **The fixture now builds a book** (`outputs: ["html", "book"]` on `fixture/.../v2/_index.md`,
+  plus `[outputFormats.book]` in the four configs that build that content). Until this,
+  `docs/list.book.html`, `docs/single.book.html`, `_partials/docs/book-document.html` and
+  `print-book.css` were never *run*. Hugo parses every template, so a **syntax** error did
+  fail the build — nothing semantic did. Measured, not assumed: a deliberate
+  `{{ .ThisMethodDoesNotExist.AtAll }}` in `book-document.html` built green across the whole
+  suite, and after this change the identical edit fails with
+  `can't evaluate field ThisMethodDoesNotExist in type *hugolib.pageState`.
+
+  `v2` is the opted-in section because it is the deep one — nested subsections give the book
+  a multi-level contents tree and chapter walk, and `everything.md` drags tabs, callouts,
+  tables and code fences through the same render. The format has to be declared in **every**
+  config that builds the content, including both `-local` variants, or the build fails
+  outright with `OutputFormat with key "book" not found`; the fixture now demonstrates the
+  trap the docs warn about.
+
+- **`tests/book-document.spec.ts`** asserts structure, not appearance — there is no renderer
+  here, so what it can prove is that the document handed to one has the shape the rest of the
+  pipeline assumes. The load-bearing one is that **every contents entry points at a chapter
+  that exists**, since that is exactly what `number_toc.py` resolves against; break the
+  anchor on either side and every printed page number silently disappears. Also: the page
+  slots are present and *empty* (a pre-filled slot means someone hardcoded a number), chapter
+  ids are unique before `prepare_book.py` de-duplicates, one breadcrumb source per chapter,
+  the contents nests, and no site chrome — which is what a PDF of the *website* looks like.
+
+  It also re-checks tab flattening, because the book is a **second** caller of
+  `utils/unhide-tabs.html` and this release's tab bug was in that path and not the other.
+  The book cannot be its own reference — flattening removes the button bar, so counting tab
+  groups in the book finds zero however broken the partial is. (The first version of this
+  test did exactly that and skipped itself.) The reference is the ordinary rendered pages,
+  reached through each chapter's `data-source-path`.
+
+- **`scripts/tests/` — 69 unit tests over the ~940 lines of Python** in `prepare_book.py`,
+  `merge_book.py` and `number_toc.py`, which had none. All pure functions over an lxml tree
+  or a synthetic pypdf document: no Hugo, no WeasyPrint, no fonts, no network, 0.8s. They
+  cover the failures that cannot be seen without opening the PDF and clicking things — a
+  link that lands on the wrong chapter, one page's duplicate ids merging into one
+  destination, a slice boundary cutting a table in half, a relative link resolved against
+  `book.html` instead of its own page, the percent-encoded destination, and the fixed-width
+  contents invariant.
+
+  **Verified to fail, not just to pass.** Re-introducing two real regressions — dropping
+  `unquote()` from the destination lookup, and re-anchoring `find_toc_part` on
+  `class="pdf-toc"` so `--minify` defeats it — turns exactly those two tests red and leaves
+  the other 67 green.
+
+- **A `python-scripts` CI job**, added to the `test-all` required check so it can actually
+  block. Its own job rather than a step in the brand matrix: it needs no Hugo, Node, browser
+  or fixture build, so it reports in seconds instead of riding a 15-minute leg, and it would
+  otherwise run twice.
+
+Consumer-neutral: no layout, asset or shortcode changes here. Verified with the full suite on
+both brands.
+
 ## [0.3.5] — 2026-08-28
 
 **Scope of this release.** One new optional config key (`params.versions[].sectionBanners`),

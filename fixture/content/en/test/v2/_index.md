@@ -1,6 +1,13 @@
 ---
 title: v2 (current)
 weight: 10
+# Builds a book document at v2/book.html alongside index.html, so the PDF
+# layouts and print-book.css are executed by the test build. v2 is the right
+# section to opt in because it is the deep one — nested subsections give the
+# book a multi-level table of contents and chapter tree, and everything.md
+# drags tabs, callouts, tables and code fences through the same render.
+# Asserted by tests/book-document.spec.ts.
+outputs: ["html", "book"]
 ---
 
 The current version of the test fixture. Open [Everything](everything/) to see every shortcode pattern rendered, or [Rebased](rebased/) to see the same content rendered through the `rebase` shortcode.
