@@ -27,11 +27,35 @@
        shows a link that 404s until the next one — dispatch the PDF workflow
        when enabling a version, rather than waiting for the schedule.
 
-       Renders nothing at all unless the site sets `params.pdfDownload.urlTemplate`,
-       so a consumer that publishes no PDFs is unaffected. */ -}}
+       WHERE THE URL COMES FROM. `urlTemplate` is what turns this item on, and
+       for a site publishing to solo-io/docs-pdfs it does not need to be written
+       out: setting `distribution` alone selects the release-asset shape below.
+       That default exists because the alternative was 24 copies of one long URL
+       in solo-io/docs — three configs (prod, preview, local) for each of eight
+       products, every one identical. A shared config file would have been the
+       obvious fix and is a worse one there: 24 places invoke Hugo with a
+       per-product config, and a forgotten second `--config` removes this item
+       SILENTLY rather than failing a build.
+
+       Defaulting is gated on `distribution` rather than applied unconditionally,
+       and that is the whole safety property. A consumer that publishes its PDF
+       to its OWN site rather than to a release — kgateway.dev writes
+       `/downloads/kgateway-envoy-latest.pdf` from its `make pdf` target, and
+       ambientmesh.io does the same — sets no `pdfDownload` at all today. An
+       unconditional default would give both of them a menu item pointing at a
+       docs-pdfs release that does not exist. Such a site sets `urlTemplate`
+       explicitly when it wants the item, and an explicit value always wins.
+
+       So: renders nothing unless the site sets either `distribution` or
+       `urlTemplate` under `params.pdfDownload`, and a consumer that publishes no
+       PDFs is unaffected either way. */ -}}
 {{- $pdfURL := "" -}}
 {{- $pd := site.Params.pdfDownload | default dict -}}
-{{- with $pd.urlTemplate -}}
+{{- $default := "" -}}
+{{- with $pd.distribution -}}
+  {{- $default = "https://github.com/solo-io/docs-pdfs/releases/download/{product}-{distribution}-{version}/{product}-{distribution}-{version}.pdf" -}}
+{{- end -}}
+{{- with $pd.urlTemplate | default $default -}}
   {{- $tmpl := . -}}
   {{- $vr := partial "utils/version-root.html" $ -}}
   {{- with $vr.docsSection -}}

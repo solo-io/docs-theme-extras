@@ -4,11 +4,26 @@
    page numbers. Not the same stylesheet as docs-theme-extras.css's `@media
    print` block, which hides UI chrome for single-page browser printing. */
 
-{{- /* See utils/resolve-latest-version.html, shared with the identical need
-       in docs/book-document.html. Resolves to "" on a site with no
-       site.Params.versions at all, so @bottom-right below just shows the
-       product name alone, unchanged. */ -}}
-{{- $productVersion := partial "utils/resolve-latest-version.html" . -}}
+{{- /* The version printed in the running footer (@bottom-right, below), handed
+       in by docs/book-document.html rather than looked up here.
+
+       It used to call utils/resolve-latest-version.html itself, which meant the
+       footer and the cover each resolved the version independently and both
+       resolved it site-wide — so a book of any tree other than the flagged
+       `latest` one was labelled with the wrong version in both places. The
+       answer now belongs to the book's own version root, which only the page
+       knows, so the page computes it and passes it in. See
+       utils/book-version.html.
+
+       Empty on a site with no site.Params.versions at all (ambientmesh.io), so
+       @bottom-right just shows the product name alone, unchanged.
+
+       NOTE for whoever adds the next interpolation here: this template's dot is
+       that dict, NOT the Page. `now` and `site` are globals and keep working;
+       anything page-specific has to be added to the dict in book-document.html
+       alongside the resource target name, which is keyed on the version so two
+       books in one build don't share a cached stylesheet. */ -}}
+{{- $productVersion := .version | default "" -}}
 
 @page {
   size: letter;

@@ -35,6 +35,14 @@ pdf-cover`, `.pdf-chapter ol`), and the download item renders **only** when
 anything is `id="pdf-contents"` on the book's contents heading, which no book has ever
 targeted.
 
+Two things a consumer that **already builds a book** does see, both under [Fix](#fix). The
+print stylesheet is published at `css/print-book-<version>.css` rather than
+`css/print-book.css`, because the target name is keyed on the version so two books in one
+build cannot share a cached copy — internal, since only the book document links it. And the
+version on the cover and in the running footer now comes from the book's own version tree
+rather than the site-wide `latest` entry, so a book of any other tree is relabelled. That one
+is a visible change to the artifact, and a correction: the old label was wrong.
+
 ### Add
 
 - **`prepare_book.py --max-part-bytes` splits a book into renderable parts, and
@@ -146,6 +154,56 @@ targeted.
   every line of the contents page is off by one — silently, and only on paper.
 
 ### Fix
+
+- **A book's cover and running footer name the version tree the book actually
+  walked (`layouts/_partials/utils/book-version.html`,
+  `layouts/_partials/docs/book-document.html`, `assets/css/print-book.css`,
+  `fixture/content/en/test/v1/_index.md`, `tests/book-document.spec.ts`).** Both
+  places resolved the version through `utils/resolve-latest-version.html`, which
+  answers a **site-wide** question: whichever `params.versions` entry carries
+  `linkVersion: "latest"`, else the first entry in the list. A book only ever
+  stitches the subtree of the page that opted into the `book` output format, so
+  the two answers agree only while the opted-in tree happens to be the flagged
+  one.
+
+  solo-io/docs is where they stopped agreeing. `hugo-istio.toml` flags no entry
+  `latest` at all, so the lookup fell through to the first entry, `1.31.x` — a
+  tree marked under development with a blank dropdown. Rendering the stable
+  [1.30.x docs](https://docs.solo.io/istio/1.30.x/) as a book therefore produced
+  a manual whose content was 1.30.x from cover to back page and whose cover, and
+  every single page footer, read "Version 1.31.x". That is the worst shape this
+  class of bug comes in: nothing is missing or malformed, so a reader has no way
+  to tell, and neither does a build log. To see it, open a published manual and
+  compare the cover line against the release tag it came from
+  ([the Gloo Mesh Enterprise manual](https://github.com/solo-io/docs-pdfs/releases/tag/gloo-mesh-enterprise-enterprise-latest)
+  is the case where they match, because `latest` is flagged there and is also
+  the tree that opts in — which is exactly why this shipped unnoticed).
+
+  The version is now resolved from the book root's own version root
+  (`utils/version-root.html`), whose `versionEntry` is the entry for the tree
+  being walked, and resolved **once** in `book-document.html` rather than
+  independently in two files. `print-book.css` receives it instead of looking it
+  up, so the footer cannot drift from the cover. `resolve-latest-version.html`
+  survives as the last fallback, for a site that has a `params.versions` list but
+  no version segment in its URLs.
+
+  One non-obvious consequence, and the reason the resource target name changed:
+  Hugo caches an `resources.ExecuteAsTemplate` result under its target path, and
+  that path was the constant `css/print-book.css`. Harmless while every book in a
+  build got the same version string; a defect the moment the string comes from
+  the page, because the first book rendered would win and the second would link
+  its stylesheet — printing the wrong version in the footer while its cover was
+  right. The name is keyed on the version now.
+
+  Verified two ways. The fixture opts a **second** version tree (`v1`) into
+  `book`, chosen because `v1` is not the tree any site-wide lookup would pick —
+  this fixture lists `v2` first and flags nothing `latest`, so with only `v2`
+  opted in the wrong answer and the right answer are the same string, which is
+  how the suite ran green over this for two releases. `tests/book-document.spec.ts`
+  asserts each cover names its own version, each book links its own executed
+  stylesheet, and each stylesheet's `@bottom-right` names its own version. All
+  three fail when `book-version.html` is reduced to the old site-wide call, and
+  the surrounding 2,220 tests pass unchanged in both brands.
 
 - **The PDF bookmark tree survives the split (`merge_book.py --outline-from`,
   `id="pdf-contents"` in `docs/book-document.html`).** In the published

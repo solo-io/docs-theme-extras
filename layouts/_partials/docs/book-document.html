@@ -54,6 +54,16 @@
   currently parsing together, so this works the same inside a partial as it
   did inside a plain layout file.
 */ -}}
+{{- /* Resolved HERE, above the document, because two places downstream need the
+       same answer: the cover section far below, and print-book.css, which is
+       executed as a template from inside <head>. Computing it once and handing
+       it to both is what keeps them from disagreeing.
+
+       Sites with no site.Params.versions at all (ambientmesh.io) resolve this to
+       "", and the cover line and the footer suffix then simply don't render.
+       See utils/book-version.html for why this is NOT the site-wide
+       resolve-latest-version.html lookup it used to be. */ -}}
+{{- $productVersion := partial "utils/book-version.html" . -}}
 <!DOCTYPE html>
 <html lang="{{ site.Language.Lang }}">
 <head>
@@ -62,20 +72,32 @@
   {{- /* ExecuteAsTemplate lets print-book.css use the current build date in
          its footer (@bottom-left) — plain resources.Get would emit that
          Hugo template syntax as literal, invalid CSS text instead of
-         evaluating it. */ -}}
+         evaluating it.
+
+         THE TARGET NAME CARRIES THE VERSION, and that is load-bearing rather
+         than cosmetic. Hugo caches an executed resource under its target path,
+         so a fixed name means the FIRST book rendered in a build wins and every
+         later book links the same file. That was harmless while the footer's
+         version came from a site-wide lookup (every book got the same string
+         anyway), and became a real defect the moment it came from the page: two
+         version trees opting into `book` in one build would print the first
+         one's version in the second one's footer. Keyed per version, each book
+         gets its own stylesheet and Hugo still executes the template only once
+         per distinct version.
+
+         The context is a dict, not the Page, because the version is the only
+         thing the stylesheet needs from it and passing the resolved string
+         keeps the lookup in ONE place. Everything else print-book.css
+         interpolates (`now`, `site.Title`) is a global. */ -}}
   {{- with resources.Get "css/print-book.css" }}
-  {{- $css := . | resources.ExecuteAsTemplate "css/print-book.css" $ }}
+  {{- $slug := $productVersion | default "unversioned" | replaceRE `[^A-Za-z0-9._-]+` "-" }}
+  {{- $css := . | resources.ExecuteAsTemplate (printf "css/print-book-%s.css" $slug) (dict "version" $productVersion) }}
   <link rel="stylesheet" href="{{ $css.RelPermalink }}">
   {{- end }}
 </head>
 <body>
-  {{- /* Conditional: sites with no site.Params.versions at all (ambientmesh.io,
-         the only site this has run on so far) always resolve $productVersion
-         to "" here, so the version line/footer suffix below simply don't
-         render — but a versioned site (agw, kgw, the docs hub) should show
-         one. See utils/resolve-latest-version.html, shared with the
-         identical need in print-book.css, for how the version is picked. */ -}}
-  {{- $productVersion := partial "utils/resolve-latest-version.html" . -}}
+  {{- /* $productVersion is resolved once at the top of this file, above
+         <!DOCTYPE html>, because print-book.css needs the same answer. */ -}}
   {{- $isChunkRoot := .Params.bookChunkRoot | default false -}}
   <section class="pdf-cover">
     {{- /* Prefer the SIDEBAR logo: that is the PRODUCT mark (logo-gloo-mesh.svg),

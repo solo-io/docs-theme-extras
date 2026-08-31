@@ -21,9 +21,25 @@ import { target } from "./helpers/target";
 // renderer will be handed has the shape the rest of the pipeline assumes.
 
 const BOOK = path.join(TEST_PRODUCT_ROOT, "v2/book.html");
+// The fixture opts in TWO version trees. v1 is the one that matters for the
+// version-labelling checks below: it is not the tree any site-wide lookup would
+// pick, so it is the only one that can tell a per-tree answer from a site-wide
+// one. See fixture/content/en/test/v1/_index.md.
+const BOOK_V1 = path.join(TEST_PRODUCT_ROOT, "v1/book.html");
 
 function book(): string {
   return fs.readFileSync(BOOK, "utf8");
+}
+
+function bookV1(): string {
+  return fs.readFileSync(BOOK_V1, "utf8");
+}
+
+// The <link> the book emits for its executed print-book.css.
+function stylesheetHref(h: string): string {
+  const m = h.match(/<link rel="stylesheet" href="([^"]*print-book[^"]*)">/);
+  expect(m, "no print-book stylesheet link in the book document").not.toBeNull();
+  return m![1];
 }
 
 function count(h: string, re: RegExp): number {
@@ -55,6 +71,67 @@ test.describe("book document", () => {
     const h = book();
     expect(count(h, /class="pdf-cover"/g)).toBe(1);
     expect(count(h, /<nav class="pdf-toc">/g)).toBe(1);
+  });
+
+  // THE REGRESSION THIS GROUP EXISTS FOR. The cover version and the running
+  // footer version used to come from utils/resolve-latest-version.html, a
+  // SITE-WIDE lookup: whichever params.versions entry carries
+  // linkVersion "latest", else the first entry. A book only ever walks the
+  // subtree of the page that opted in, so any product opting in a tree other
+  // than that one shipped a manual of the right content under the wrong
+  // version — istio's 1.30.x book printed "Version 1.31.x" throughout.
+  //
+  // These assertions are the reason v1 opts in at all. Against v2 alone every
+  // one of them passes with the bug still present, because the site-wide answer
+  // for this fixture happens to be v2.
+  test.describe("version labelling is per version tree, not site-wide", () => {
+    test("both books are built", () => {
+      expect(fs.existsSync(BOOK), `${BOOK} was not built`).toBe(true);
+      expect(fs.existsSync(BOOK_V1), `${BOOK_V1} was not built`).toBe(true);
+    });
+
+    test("each cover names its own version", () => {
+      const cover = (h: string) =>
+        h.match(/<p class="pdf-cover-version">([^<]*)<\/p>/)?.[1]?.trim();
+
+      expect(cover(book()), "the v2 cover lost its version line").toBe("Version v2");
+      // The whole bug in one assertion: this read "Version v2" before the fix.
+      expect(cover(bookV1()), "the v1 book is labelled with another tree's version")
+        .toBe("Version v1");
+    });
+
+    // print-book.css is executed per book through resources.ExecuteAsTemplate,
+    // and Hugo caches an executed resource under its TARGET NAME. A fixed name
+    // means the first book in the build wins and every later book links the
+    // same file, so v1's footer would print v2's version. The target name is
+    // keyed on the version to prevent that; two identical hrefs here means the
+    // key went back to being constant.
+    test("each book links its own executed stylesheet", () => {
+      const a = stylesheetHref(book());
+      const b = stylesheetHref(bookV1());
+      expect(a, "v2 and v1 share one cached print-book.css").not.toBe(b);
+    });
+
+    // The footer version lives inside that stylesheet's @bottom-right content,
+    // which is where the site-wide lookup's second copy used to be. Reading the
+    // built CSS is the only way to see it — it never appears in the HTML.
+    test("each stylesheet's running footer names its own version", () => {
+      const cssFor = (h: string) => {
+        const href = stylesheetHref(h);
+        const f = path.join(target.builtRoot, href.replace(/^\/+/, ""));
+        expect(fs.existsSync(f), `executed stylesheet not found at ${f}`).toBe(true);
+        return fs.readFileSync(f, "utf8");
+      };
+      const footer = (css: string) =>
+        css.match(/@bottom-right\s*\{\s*content:\s*"([^"]*)"/)?.[1];
+
+      const v2Footer = footer(cssFor(book()));
+      const v1Footer = footer(cssFor(bookV1()));
+      expect(v2Footer, "no @bottom-right content in the executed stylesheet")
+        .toBeDefined();
+      expect(v2Footer!.endsWith(" v2"), `v2 footer reads ${v2Footer}`).toBe(true);
+      expect(v1Footer!.endsWith(" v1"), `v1 footer reads ${v1Footer}`).toBe(true);
+    });
   });
 
   // The invariant the whole numbering pass rests on: scripts/number_toc.py

@@ -1,0 +1,59 @@
+{{- /* book-version.html — the version string to print on THIS book's cover and
+       in its running footer. Input is the book's root Page (`.`); output is a
+       string, "" when there is no version to show.
+
+       WHY THIS IS NOT utils/resolve-latest-version.html. That partial answers a
+       SITE-WIDE question: "which entry in site.Params.versions carries
+       linkVersion `latest`, else the first entry." A book is not site-wide — it
+       only ever walks the subtree of the page that opted into the `book` output
+       format — so the version it should print is a property of that page. The
+       two answers agree only while the opted-in tree happens to be the flagged
+       one, and diverge silently otherwise, because nothing in the book document
+       or in print-book.css looks at the page at all.
+
+       solo-io/docs hit exactly that on istio, which flags NO entry `latest`, so
+       the site-wide answer fell through to the first configured entry: the
+       1.30.x book printed "Version 1.31.x" on its cover and in the footer of
+       every page. The content was the right tree throughout — only the label
+       was wrong, which is the worst shape for this kind of bug, since a reader
+       has no way to tell.
+
+       RESOLUTION ORDER:
+
+         1. The page's own version root (utils/version-root.html). Its
+            `versionEntry` is the site.Params.versions entry for exactly the
+            tree being walked, so `.version` is that tree's configured version
+            string.
+         2. `versionEntry` is "" when the version segment matched only by SHAPE
+            — a tree with no configured entry, which version-root.html
+            deliberately still treats as versioned. Print the matched segment
+            itself rather than nothing.
+         3. An unversioned site (ambientmesh.io) is not versioned at all, so
+            neither of the above produces anything; fall back to the site-wide
+            answer, which on such a site is "" too. The fallback is kept rather
+            than returning "" directly so a site that grows a params.versions
+            list without a version tree in its URLs still gets a label.
+
+       A caller should treat "" as "omit the version line", not as an error —
+       ambientmesh.io renders a book with no version at all and always has.
+
+       ASSIGN the version-root result, then read it. Do NOT write
+       `{{ with partial "utils/version-root.html" . }}`: `with` rebinds the dot
+       to the returned dict, and Hugo's return-partial wrapper then calls
+       `._pushPartialDecorator` on it, so the build dies pointing at
+       version-root.html:1:10 — a location with nothing to do with the mistake.
+       See the same warning inside version-root.html itself. */ -}}
+{{- $v := "" -}}
+{{- $vr := partial "utils/version-root.html" . -}}
+{{- if $vr.isVersioned -}}
+  {{- with $vr.versionEntry -}}
+    {{- $v = .version | default .linkVersion -}}
+  {{- end -}}
+  {{- if not $v -}}
+    {{- $v = $vr.currentVersion -}}
+  {{- end -}}
+{{- end -}}
+{{- if not $v -}}
+  {{- $v = partial "utils/resolve-latest-version.html" . -}}
+{{- end -}}
+{{- return $v -}}

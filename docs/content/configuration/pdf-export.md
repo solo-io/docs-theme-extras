@@ -13,12 +13,13 @@ The consumer provides the Node half that paginates it and prints it.
 
 > [!IMPORTANT]
 > This pipeline is proven on a flat site (ambientmesh.io, one book) and on a
-> versioned one (kgateway.dev, 14 chunks merged into a 1,828-page PDF). On a
-> versioned site, opt **one version tree in at a time**. A book stitches
-> whichever page opts in plus that page's own subtree, so version scoping falls
-> out of where the opt-in lives rather than needing any version logic of its
-> own. The one piece that is still not version-aware is the version string
-> printed on the cover and in the running footer. See
+> versioned one (kgateway.dev, 14 chunks merged into a 1,828-page PDF). A book
+> stitches whichever page opts in plus that page's own subtree, so version
+> scoping falls out of where the opt-in lives rather than needing any version
+> logic of its own, and the version printed on the cover and in the running
+> footer is read from that same tree. Several version trees of one product can
+> opt in, each producing its own book. The constraint that remains is on the
+> **download link**, not on the books: see
 > [Known limitations](#known-limitations).
 
 ## How the pieces split
@@ -827,15 +828,29 @@ from `<!DOCTYPE html>` down. So a quick check on the built `book.html`:
 
 ## Known limitations
 
-**The printed version string is not version-aware.** Content scoping on a
-versioned site works, because a book only ever walks the subtree of the page
-that opted in. The version printed on the cover and in the running footer does
-not: `utils/resolve-latest-version.html` returns whichever `params.versions`
-entry carries `linkVersion: "latest"`, regardless of which version tree the book
-actually walked. On kgateway.dev that happens to be right, since `latest` is
-also the only tree that opts in. Opting an older or a `main` tree in as well
-gives that book a cover labeled with the `latest` version instead of its own.
-Until per-page version-root scoping is done, keep one version tree opted in.
+**The download link cannot tell two trees apart that share a version segment.**
+`copy-markdown.html` fills `{version}` from `utils/version-root.html`'s
+`currentVersion`, which is the version **segment** of the URL and nothing above
+it. A product whose version trees nest under a section — agentgateway's
+`/agentgateway/kubernetes/latest/` and `/agentgateway/standalone/latest/` — has
+two trees whose segment is `latest`, so both resolve to the same download URL.
+Opting both in publishes two books and links only one of them. Until the
+template grows a `{section}` of its own, opt in **one tree per version
+segment**.
+
+**A version string only prints as well as it is configured.** The cover and
+footer read `version` off the tree's own `params.versions` entry, through
+`utils/book-version.html`. Where that field holds a real number the label is a real number,
+but agentregistry, kagent and agentgateway set `version = "latest"` literally
+and keep the release number in `dropdown` (`2026.8.0 (latest)`), so their covers
+read "Version latest". That is the config's shape, not a resolution bug —
+nothing in the entry carries the number in a form a template could print.
+
+**A tree with no `params.versions` entry falls back to its URL segment.**
+`utils/version-root.html` treats a segment matching `X.Y.x`, `X.Y.Z`, `latest`
+or `main` as a version even with nothing configured for it, so an unregistered
+tree prints the segment itself rather than nothing. Correct, but it is the raw
+segment: a `main` tree's cover reads "Version main".
 
 **The Paged.js page ceiling** is a property of the renderer, not of this module.
 Chunking is the workaround, not a fix.
