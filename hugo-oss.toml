@@ -246,6 +246,19 @@ pageContextMode = "siteParams"
 
 [[params.versions]]
   version = "v1"
+  # The PRINT label for this tree's book, read only by
+  # utils/book-version.html. Set here and nowhere else in this fixture, so the
+  # two books test the two branches of that resolution: v2 has no
+  # releaseVersion and falls back to `.version` ("v2"), while v1 proves an
+  # explicit releaseVersion WINS over its `.version` ("v1").
+  #
+  # It stands in for agentregistry/kagent/agentgateway in solo-io/docs, whose
+  # current tree sets `version = "latest"` because that field also names
+  # assemble-assets.py's asset directories and is what reuse.html matches URL
+  # segments against — so the real release number cannot live there. The value
+  # here is deliberately a string that appears nowhere else, and in particular
+  # is NOT "v1", so an assertion cannot pass by accident.
+  releaseVersion = "1.9.3"
   sections = ["demo", "nested"]
   # Second ossVersion mapping, used only by the keepVersion collision probe in
   # conrefs/test/version-remap.md: it makes the token `v3` — which is also a

@@ -20,19 +20,46 @@
 
        RESOLUTION ORDER:
 
-         1. The page's own version root (utils/version-root.html). Its
-            `versionEntry` is the site.Params.versions entry for exactly the
-            tree being walked, so `.version` is that tree's configured version
-            string.
-         2. `versionEntry` is "" when the version segment matched only by SHAPE
+         1. `releaseVersion` on the tree's own site.Params.versions entry, when
+            set. See WHY THIS FIELD EXISTS below.
+         2. Otherwise `.version` on that entry — the canonical version string,
+            which is what most products already put there
+            (gloo-mesh-enterprise's `latest` tree carries `version = "2.13.x"`,
+            and its book cover reads "Version 2.13.x" with nothing extra
+            configured).
+         3. `versionEntry` is "" when the version segment matched only by SHAPE
             — a tree with no configured entry, which version-root.html
             deliberately still treats as versioned. Print the matched segment
             itself rather than nothing.
-         3. An unversioned site (ambientmesh.io) is not versioned at all, so
-            neither of the above produces anything; fall back to the site-wide
+         4. An unversioned site (ambientmesh.io) is not versioned at all, so
+            none of the above produces anything; fall back to the site-wide
             answer, which on such a site is "" too. The fallback is kept rather
             than returning "" directly so a site that grows a params.versions
             list without a version tree in its URLs still gets a label.
+
+       WHY `releaseVersion` EXISTS, rather than just fixing `.version`. Three
+       products in solo-io/docs — agentregistry, kagent and agentgateway — set
+       `version = "latest"` literally on their current tree and keep the real
+       release number only in `dropdown` ("2026.8.0 (latest)"). Their covers
+       therefore read "Version latest", which tells a reader holding the PDF
+       nothing about what they are holding, and is worse on paper than on the
+       web: a downloaded file outlives the release it documents.
+
+       Correcting `.version` to the real number is the obvious fix and it is not
+       safe. That field is NOT display-only. `assemble-assets.py` names asset
+       directories `assets/<product>/<version>`, and `_shortcodes/reuse.html`
+       finds them by matching each URL segment against `.version` — so for
+       agentgateway, whose URL segment IS `latest`, renaming the field breaks
+       the match, `$resolvedVersion` comes back empty, and every reused snippet
+       silently falls back to the unversioned asset path. `reuse.html` and
+       `rebase.html` also substitute `.version` into content for the
+       OSS→enterprise version remap. None of that fails loudly.
+
+       So the print label gets its own field. Nothing else reads it, it is
+       opt-in per entry, and a product whose `.version` is already correct needs
+       nothing. It is deliberately NOT parsed out of `dropdown`: that string is
+       a UI label, carries a "(latest)" suffix, and is sometimes a single space
+       to hide an entry from the switcher.
 
        A caller should treat "" as "omit the version line", not as an error —
        ambientmesh.io renders a book with no version at all and always has.
@@ -47,7 +74,7 @@
 {{- $vr := partial "utils/version-root.html" . -}}
 {{- if $vr.isVersioned -}}
   {{- with $vr.versionEntry -}}
-    {{- $v = .version | default .linkVersion -}}
+    {{- $v = .releaseVersion | default .version | default .linkVersion -}}
   {{- end -}}
   {{- if not $v -}}
     {{- $v = $vr.currentVersion -}}

@@ -94,10 +94,14 @@ test.describe("book document", () => {
       const cover = (h: string) =>
         h.match(/<p class="pdf-cover-version">([^<]*)<\/p>/)?.[1]?.trim();
 
+      // v2 sets no releaseVersion, so this is the `.version` fallback.
       expect(cover(book()), "the v2 cover lost its version line").toBe("Version v2");
-      // The whole bug in one assertion: this read "Version v2" before the fix.
-      expect(cover(bookV1()), "the v1 book is labelled with another tree's version")
-        .toBe("Version v1");
+      // v1 sets releaseVersion = "1.9.3", which must WIN over its .version of
+      // "v1". Two failures are distinguishable here and both matter: "Version
+      // v2" means the resolution went back to being site-wide, and "Version v1"
+      // means releaseVersion is being ignored.
+      expect(cover(bookV1()), "the v1 book is not using its releaseVersion")
+        .toBe("Version 1.9.3");
     });
 
     // print-book.css is executed per book through resources.ExecuteAsTemplate,
@@ -112,9 +116,13 @@ test.describe("book document", () => {
       expect(a, "v2 and v1 share one cached print-book.css").not.toBe(b);
     });
 
-    // The download item's URL carries the same version, from the same resolution,
-    // so it moves with the book rather than with the site's `latest` flag.
-    test("the download item names its own version", () => {
+    // The download URL uses the URL SEGMENT, deliberately NOT the print label —
+    // so v1 stays `test-enterprise-v1` even though its cover reads 1.9.3. The
+    // two coordinates are different on purpose: the cover answers "what am I
+    // holding", while the URL has to match the release asset the PDF workflow
+    // publishes, which is named from the version directory. Making these agree
+    // would break the link on every product whose tree is served at /latest/.
+    test("the download item names its own version segment", () => {
       test.skip(target.brand !== "enterprise", "only the enterprise fixture sets pdfDownload");
       const urlOn = (rel: string) => {
         const h = fs.readFileSync(path.join(TEST_PRODUCT_ROOT, rel, "index.html"), "utf8");
@@ -141,8 +149,10 @@ test.describe("book document", () => {
       const v1Footer = footer(cssFor(bookV1()));
       expect(v2Footer, "no @bottom-right content in the executed stylesheet")
         .toBeDefined();
+      // Same two values as the covers, which is the point: the footer used to
+      // resolve the version independently, so the two could disagree.
       expect(v2Footer!.endsWith(" v2"), `v2 footer reads ${v2Footer}`).toBe(true);
-      expect(v1Footer!.endsWith(" v1"), `v1 footer reads ${v1Footer}`).toBe(true);
+      expect(v1Footer!.endsWith(" 1.9.3"), `v1 footer reads ${v1Footer}`).toBe(true);
     });
   });
 

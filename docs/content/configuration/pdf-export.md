@@ -762,6 +762,60 @@ the full pipeline is itself a check. A WeasyPrint `ERROR:` line, though, does
 how a diagram goes missing from a green build. The workflow greps its own log for
 `^ERROR:` and fails; do the same locally.
 
+## Naming the version on the cover
+
+The cover and the running footer print the version of the tree the book walked,
+resolved by `utils/book-version.html` from that tree's own `params.versions`
+entry. Most products need no configuration at all — the entry's `version` already
+holds a real number:
+
+```toml
+[[params.versions]]
+  version = "2.13.x"      # printed: "Version 2.13.x"
+  linkVersion = "latest"  # served at /latest/
+```
+
+A product that instead puts the URL segment in `version` has nothing printable,
+and its book comes out labelled **"Version latest"**:
+
+```toml
+[[params.versions]]
+  version = "latest"                # printed: "Version latest"  ← useless on paper
+  dropdown = "2026.8.0 (latest)"    # the real number, but this is a UI label
+  linkVersion = "latest"
+```
+
+Add `releaseVersion`, which wins over `version` and is read by nothing else:
+
+```toml
+[[params.versions]]
+  version = "latest"
+  releaseVersion = "2026.8.0"       # printed: "Version 2026.8.0"
+  dropdown = "2026.8.0 (latest)"
+  linkVersion = "latest"
+```
+
+> [!WARNING]
+> **Do not fix this by correcting `version` instead.** That field is not
+> display-only. `assemble-assets.py` in solo-io/docs names asset directories
+> `assets/<product>/<version>`, and `reuse.html` locates them by matching each
+> URL segment against `.version` — so on a tree served at `/latest/`, renaming
+> the field breaks the match, the resolved version comes back empty, and every
+> `{{< reuse >}}` snippet silently falls back to the unversioned asset path.
+> `reuse.html` and `rebase.html` also substitute `.version` into content for the
+> OSS→enterprise version remap. None of it fails loudly.
+
+`releaseVersion` is deliberately not parsed out of `dropdown`. That string is a
+UI label: it carries a `(latest)` suffix, and a hidden entry sets it to a single
+space.
+
+**It changes the print label only, not the download URL.** The link in the
+Copy-as-Markdown menu resolves `{version}` from the URL segment, because it has
+to match the release asset the PDF workflow publishes — and that asset is named
+from the version directory. So a tree at `/latest/` keeps a stable
+`…-latest.pdf` URL while its cover names the actual release. Those two
+coordinates answer different questions and are meant to differ.
+
 ## Linking to the published PDF
 
 Set `params.pdfDownload` and the Copy-as-Markdown menu on every docs page gains a
@@ -861,13 +915,14 @@ Opting both in publishes two books and links only one of them. Until the
 template grows a `{section}` of its own, opt in **one tree per version
 segment**.
 
-**A version string only prints as well as it is configured.** The cover and
-footer read `version` off the tree's own `params.versions` entry, through
-`utils/book-version.html`. Where that field holds a real number the label is a real number,
-but agentregistry, kagent and agentgateway set `version = "latest"` literally
-and keep the release number in `dropdown` (`2026.8.0 (latest)`), so their covers
-read "Version latest". That is the config's shape, not a resolution bug —
-nothing in the entry carries the number in a form a template could print.
+**A tree served at `/latest/` needs `releaseVersion` to print a real number.**
+The cover and footer read `releaseVersion` off the tree's own `params.versions`
+entry, falling back to `version`. Most products need nothing: their `version`
+already holds the real number, so gloo-mesh-enterprise's `latest` tree prints
+"Version 2.13.x" with no extra configuration. But agentregistry, kagent and
+agentgateway set `version = "latest"` literally and keep the number only in
+`dropdown`, so without `releaseVersion` their covers read "Version latest" — see
+[Naming the version on the cover](#naming-the-version-on-the-cover).
 
 **A tree with no `params.versions` entry falls back to its URL segment.**
 `utils/version-root.html` treats a segment matching `X.Y.x`, `X.Y.Z`, `latest`

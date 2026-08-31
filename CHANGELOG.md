@@ -153,6 +153,44 @@ is a visible change to the artifact, and a correction: the old label was wrong.
   physically, and with the cover unnumbered the printed number is one lower. Without both,
   every line of the contents page is off by one — silently, and only on paper.
 
+- **`releaseVersion` on a `params.versions` entry names the real release on the book's cover
+  and footer, for a tree served at `/latest/` (`layouts/_partials/utils/book-version.html`,
+  `hugo-{enterprise,oss}.toml`, `tests/book-document.spec.ts`).** With the cover now reading
+  the version off the tree the book walked, three products in solo-io/docs printed **"Version
+  latest"** — agentregistry, kagent and agentgateway all set `version = "latest"` literally on
+  their current tree and keep the release number only in `dropdown`
+  (`2026.8.0 (latest)`). On the website that is fine, because the reader is standing on the URL
+  that says it; in a downloaded PDF it tells them nothing, and the file outlives the release it
+  documents. Products whose `version` already holds a number were never affected:
+  [the Gloo Mesh Enterprise manual](https://github.com/solo-io/docs-pdfs/releases/tag/gloo-mesh-enterprise-enterprise-latest)
+  is served at `/latest/` and its cover reads "Version 2.13.x", because its entry pairs
+  `version = "2.13.x"` with `linkVersion = "latest"`.
+
+  **Correcting `version` to the real number is the obvious fix and it is unsafe**, which is why
+  this is a new field rather than a config change. `version` is not display-only:
+  `assemble-assets.py` names asset directories `assets/<product>/<version>`, and
+  `_shortcodes/reuse.html` locates them by matching each URL segment against `.version`. On
+  agentgateway, whose segment IS `latest`, renaming the field breaks that match,
+  `$resolvedVersion` comes back empty, and every `{{< reuse >}}` snippet silently resolves to
+  the unversioned asset path. `reuse.html` and `rebase.html` additionally substitute `.version`
+  into content for the OSS→enterprise remap. None of it fails loudly. `releaseVersion` is read
+  by `book-version.html` and nothing else, is opt-in per entry, and wins over `version` when
+  present. It is deliberately not parsed out of `dropdown`, which is a UI label carrying a
+  `(latest)` suffix and sometimes a single space.
+
+  **The download URL is unchanged, deliberately.** `copy-markdown.html` resolves `{version}`
+  from the URL segment because it has to match the release asset the PDF workflow publishes,
+  and that asset is named from the version directory. A tree at `/latest/` therefore keeps a
+  stable `…-latest.pdf` link while its cover names the actual release — two coordinates
+  answering different questions.
+
+  Verified in the fixture, which now sets `releaseVersion = "1.9.3"` on its `v1` entry and
+  nothing on `v2`, so the two books exercise both branches: v2 falls back to `.version` ("v2")
+  and v1 proves the override wins over its own `.version` ("v1"). The value appears nowhere
+  else in the fixture, so no assertion can pass by coincidence, and the cover, the running
+  footer in the executed stylesheet, and the *unchanged* `test-enterprise-v1` download URL are
+  each asserted separately. Both brands: 2,225 and 2,224 passing.
+
 - **`params.pdfDownload.distribution` alone is enough to render the download item;
   `urlTemplate` no longer has to be written out (`layouts/partials/copy-markdown.html`,
   `hugo-enterprise.toml`, `tests/book-document.spec.ts`).** Wiring the remaining seven
