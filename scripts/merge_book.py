@@ -41,16 +41,49 @@ Requires pypdf.
 """
 
 import argparse
+import json
 import sys
 from urllib.parse import unquote
 
 from pypdf import PdfWriter
-from pypdf.generic import NameObject
+from pypdf.generic import IndirectObject, NameObject
 
 JUMP_SCHEME = "pdfjump:"
 
 
-def merge(parts, out_path):
+def page_numbers(writer, dests):
+    """Map each named destination to the printed page number it lands on.
+
+    Used to fill in the printed table of contents (see number_toc.py): once
+    every part is in one file, a destination's page is finally knowable.
+
+    The reverse index is built ONCE. pypdf's get_page_number() scans the page
+    list per call, so resolving ~2,900 destinations against a ~6,500-page book
+    that way is ~19 million comparisons; this is two linear passes.
+
+    "Printed page number" is index + 1 because the caller renders parts in
+    order and hands each one `@page :first { counter-reset: page N }` with N
+    picking up exactly where the previous part stopped — so the counter never
+    diverges from the physical position. There is no front matter numbered
+    separately and no page-label dictionary to consult.
+    """
+    index = {}
+    for i, page in enumerate(writer.pages):
+        ref = page.indirect_reference
+        if ref is not None:
+            index[(ref.idnum, ref.generation)] = i + 1
+
+    out = {}
+    for name, dest in dests.items():
+        target = dest.dest_array[0] if dest.dest_array else None
+        if isinstance(target, IndirectObject):
+            n = index.get((target.idnum, target.generation))
+            if n is not None:
+                out[str(name)] = n
+    return out
+
+
+def merge(parts, out_path, page_map_path=None):
     writer = PdfWriter()
     for p in parts:
         # append (not add_page) so each part's outline entries and named
@@ -59,6 +92,10 @@ def merge(parts, out_path):
         writer.append(p)
 
     dests = dict(writer.named_destinations)
+
+    if page_map_path:
+        with open(page_map_path, "w", encoding="utf-8") as fh:
+            json.dump(page_numbers(writer, dests), fh)
 
     fixed = kept = 0
     unresolved = []
@@ -97,9 +134,17 @@ def main():
         action="store_true",
         help="warn instead of failing when a jump points at no destination",
     )
+    ap.add_argument(
+        "--page-map",
+        metavar="PATH",
+        help="also write a JSON map of destination name -> printed page number, "
+        "for number_toc.py to fill the table of contents from",
+    )
     args = ap.parse_args()
 
-    pages, dests, fixed, kept, unresolved = merge(args.parts, args.output)
+    pages, dests, fixed, kept, unresolved = merge(
+        args.parts, args.output, args.page_map
+    )
 
     print(f"parts merged:             {len(args.parts)}")
     print(f"pages:                    {pages}")

@@ -410,6 +410,82 @@ On the gloo-mesh-enterprise book this took peak memory from >15 GB to 2,134 MB
 and total render time from 32+ minutes, never finishing, to 5m20s across 10
 parts.
 
+### Page numbers in the table of contents
+
+Splitting costs one more thing than links, and it is not obvious: the printed
+contents page.
+
+CSS Paged Media has an answer — `target-counter(attr(href url), page)` on a TOC
+link prints the page its target landed on, and WeasyPrint implements it. It
+works only while the book is **one document**, and a book long enough to want a
+printed contents page is exactly the book that had to be cut up. After the cut,
+every chapter the TOC points at lives in a different document from the TOC, and
+`target-counter` has nothing to count.
+
+So the numbers come from the finished article instead:
+
+1. Render every part and merge, with `merge_book.py --page-map pages.json`. The
+   merged file is the first moment any destination's page is knowable.
+2. `number_toc.py pages.json --manifest book.parts.txt` finds the part holding
+   the TOC, writes the numbers into its empty `.pdf-toc-page` spans, and prints
+   that part's path.
+3. Re-render **only** that part, at the same page offset it had before.
+4. Merge again.
+
+The second render cannot invalidate the numbers it is printing, because
+`.pdf-toc-page` is `flex: 0 0 3em` — a fixed-width column, so an empty box and a
+`1234` box take identical space. No title rewraps, the TOC keeps its length, and
+every chapter after it stays where it was. That invariant is the whole design, so
+`number_toc.py --expect-pages/--assert-pages` checks it rather than assuming it,
+and fails the build if the count moved.
+
+Reading destinations back is two linear passes. pypdf's `get_page_number()`
+scans the page list per call, which on this book would be ~2,900 destinations
+against ~6,500 pages, or roughly 19 million comparisons.
+
+### Fonts the renderer needs
+
+Beyond `fonts-dejavu-core` and `fonts-liberation` (diagram SVGs ask for
+Helvetica, and Liberation Sans is the metric-compatible stand-in), the emoji
+font matters more than it sounds like it should. Comparison tables in this
+content use ✅ and ❌, and **Noto Color Emoji is a CBDT bitmap font whose glyphs
+WeasyPrint scales wrongly** — they print about 2 mm tall, some outside their own
+cell, so the table reads as empty. Install the monochrome outline font,
+[Noto Emoji](https://github.com/google/fonts/tree/main/ofl/notoemoji), instead.
+
+Installing it is not sufficient on its own. A hosted GitHub runner image already
+ships the color font, and Pango keeps choosing it, so the color font has to be
+rejected outright:
+
+```xml
+<!-- /etc/fonts/conf.d/99-no-color-emoji.conf -->
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <selectfont>
+    <rejectfont>
+      <pattern>
+        <patelt name="family"><string>Noto Color Emoji</string></patelt>
+      </pattern>
+    </rejectfont>
+  </selectfont>
+</fontconfig>
+```
+
+> [!WARNING]
+> Do not verify this with `fc-match`. `fc-match "sans-serif:charset=2705"`
+> answers `Noto Emoji` even in the configuration that ships color glyphs,
+> because Pango resolves emoji fallback by script tag rather than by that query.
+> Render the characters and read back the embedded font instead:
+>
+> ```sh
+> printf '%s' '<meta charset="utf-8"><p>&#x2705;</p>' > probe.html
+> weasyprint probe.html probe.pdf
+> python3 -c "from pypdf import PdfReader; print([str(f.get_object()['/BaseFont']) for f in PdfReader('probe.pdf').pages[0]['/Resources']['/Font'].values()])"
+> ```
+
+The trade-off is that 🟡 and 🟢 lose their color and differ only by shading.
+
 **Pandoc did not produce a PDF from this content at all.** Five configurations
 were tried, and each fix surfaced the next failure: a missing `rsvg-convert`, then
 emoji that `pdflatex` cannot typeset, then LaTeX's nested-list depth limit

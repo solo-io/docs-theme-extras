@@ -67,6 +67,36 @@ element only the splitter creates, and the download item renders **only** when
   32+ minutes (never finishing) to **5m20s**. The slice boundary inside the CVE chapter is
   visually seamless — same running header, consecutive page numbers, no stray break.
 
+- **Printed page numbers in the book's table of contents (`scripts/number_toc.py`,
+  `merge_book.py --page-map`, `.pdf-toc-*` in `print-book.css`).** A 6,485-page manual whose
+  contents page lists 458 chapter titles and not one page number is a contents page you
+  cannot use on paper. The PDF's bookmark tree navigates fine on screen, which is exactly
+  why this was easy to miss.
+
+  CSS Paged Media already solves this — `target-counter(attr(href url), page)` on a TOC
+  link prints where its target landed, and WeasyPrint supports it. It solves it only for a
+  book rendered as ONE document, though, and a book long enough to want a printed contents
+  page is precisely the book `prepare_book.py` has to cut into parts to stay inside a 16 GB
+  runner. After the cut, every chapter the TOC points at is in a different document from
+  the TOC and there is nothing left to count.
+
+  So the numbers are taken from the finished article instead: `merge_book.py --page-map`
+  writes out where every named destination actually landed, `number_toc.py` fills those
+  numbers into the TOC's empty spans, and the caller re-renders **only** the part holding
+  the TOC and merges once more. Reading destinations back is two linear passes rather than
+  pypdf's `get_page_number()` per destination, which on this book would be ~19 million
+  comparisons.
+
+  Entries are laid out as a flex row — title, dotted leader, number — with the leader drawn
+  as a bottom border rather than repeated `.` characters, so it cannot be selected, copied
+  or read aloud from the tagged PDF.
+
+  The second render cannot invalidate the numbers it is printing, because `.pdf-toc-page`
+  is `flex: 0 0 3em` — a fixed-width column, so an empty box and a `1234` box take
+  identical space, no title rewraps and the TOC keeps its length. That is the load-bearing
+  detail in the whole design, so `number_toc.py --expect-pages/--assert-pages` checks it on
+  every run instead of trusting it.
+
 - **A "Download all docs (PDF)" item in the Copy-as-Markdown menu.** A published PDF that
   nobody can find is not much use, and the menu on every docs page is already the "get this
   content in another form" control — it sits next to Print, which answers the same need.
@@ -108,15 +138,80 @@ element only the splitter creates, and the download item renders **only** when
     in current Hextra markup — so it was a silent no-op, leaving a dead button bar above two
     indistinguishable code blocks. Rewritten against `hextra-tab-panel` + `data-tab-name`,
     which carries the visible name directly and removes the need for the old id→name map.
-    **This also fixes the `markdown` output format and "Copy as Markdown"**, which call the
-    same partial and were emitting both tab bodies unlabelled. Verified: 150 "Option:"
-    labels and zero tab buttons in the built book.
+    **This also fixes the `markdown` output format**, which calls the same partial.
+
+    Two follow-ups, both from reading the output rather than the diff:
+
+    - The first rewrite anchored on `class="hextra-tab-panel"`, but only the *active* panel
+      of a group carries that class alone; every other one is `hextra-tab-panel hx:hidden`.
+      So it labelled the first option of each group and silently skipped the rest, which
+      still printed, because the utility class that would hide them is not loaded in this
+      document. `[^"]*` in place of the closing quote takes it from 150 labels to **449**,
+      with 0 panels left unconverted on
+      [the enterprise install guide](https://docs.solo.io/gloo-mesh-enterprise/latest/setup/install/enterprise_installation/)
+      and everywhere else.
+    - Stripping the button bar removes the only thing on the page that said "these are
+      alternatives", leaving several `Option:` blocks that read as one long sequence of
+      steps. The bar is now replaced by the sentence **"You can choose from the following
+      options."** — once per tab group, not per panel — and each option gets a rule down
+      its left edge (`.pdf-tab-option`). Measured on the gloo-mesh-enterprise book: 150 tab
+      groups, 150 lead-in sentences, 449 `Option:` labels, 0 button bars left and 0
+      unconverted panels.
+  - **"Copy as Markdown" kept its own copy of the tab-flattening regexes, the copies
+    drifted, and they drifted in BOTH directions.** This is the root cause of the bug above
+    and of a second one nobody had hit yet.
+
+    One way: `copy-markdown.html` had a near-identical but separately-maintained pair of
+    patterns, so the button people actually click kept working while
+    `utils/unhide-tabs.html` quietly did nothing for months.
+
+    The other way, and the more serious one: **stock Hextra tab markup was handled ONLY in
+    `copy-markdown.html`.** The `data-tab-name` markup that `unhide-tabs.html` was written
+    against does not come from Hextra at all — it comes from solo-io/docs's own
+    `layouts/_shortcodes/tabs.html` override. A consumer without that override (this
+    module's own fixture, and every OSS site) emits `[role="tablist"]` +
+    `.hextra-tabs-panel[aria-labelledby]`, which `unhide-tabs.html` did not match. Such a
+    site would have got labelled options in "Copy as Markdown" and **unlabelled, stacked
+    ones in its PDF and `markdown` output** — latent until someone enables a book for an OSS
+    site, which is the next thing on the list. Both markups now live in the shared partial,
+    and `copy-markdown.html` calls it and nothing else.
+
+  - **Test coverage for the flattening, which had none** (`tests/tab-flatten.spec.ts`, in
+    the `static` project's `testMatch` allowlist). Three tab bugs in a row were found by a
+    human reading finished output, so the spec asserts a *counting* invariant rather than
+    the presence of any one string: every tab group in the rendered page contributes exactly
+    one lead-in sentence, and every panel contributes exactly one `Option:` label. A pattern
+    that matches only each group's first panel fails it, and so does one that matches
+    nothing. **Verified in both directions** — 6 fixture pages pass, and re-anchoring the
+    panel pattern the way the original bug did turns that into `Expected: 11, Received: 0`.
+    The fixture exercises stock Hextra; the override markup is covered when the suite runs
+    against a consumer that has it.
   - **Comparison tables looked empty.** `fonts-noto-color-emoji` is a CBDT *bitmap* font
     and WeasyPrint scales its glyphs wrongly, so ✅/❌ printed ~2 mm tall, some outside
     their own cell. The renderer needs the monochrome outline font instead. ✅ and ❌ alone
-    appear 108 times in this one book, across 20 distinct pictographic characters. Consumer
-    action: install Noto Emoji rather than Noto Color Emoji. Trade-off: 🟡 and 🟢 lose their
-    colour and differ only by shading.
+    appear 108 times in this one book, across 20 distinct pictographic characters.
+    Trade-off: 🟡 and 🟢 lose their colour and differ only by shading.
+
+    **Consumer action, and the first version of this advice was wrong:** it is not enough
+    to install Noto Emoji and stop installing Noto Color Emoji. A hosted GitHub runner
+    image *already ships* the colour font, and Pango keeps choosing it — so the first fix
+    changed nothing and a colour-emoji book was published under it. The colour font has to
+    be actively rejected:
+
+    ```xml
+    <!-- /etc/fonts/conf.d/99-no-colour-emoji.conf -->
+    <fontconfig><selectfont><rejectfont><pattern>
+      <patelt name="family"><string>Noto Color Emoji</string></patelt>
+    </pattern></rejectfont></selectfont></fontconfig>
+    ```
+
+    Verify by rendering, not by asking fontconfig: `fc-match "sans-serif:charset=2705"`
+    answers `Noto Emoji` even in the configuration that ships colour glyphs, because Pango
+    resolves emoji fallback by script tag rather than by that query. Render `&#x2705;` and
+    read back the embedded `/BaseFont` — measured on a matching container, that is
+    `Noto-Color-Emoji` without the reject rule and `Noto-Emoji` with it, and the published
+    [gloo-mesh-enterprise PDF](https://github.com/solo-io/docs-pdfs/releases) carried
+    `DZLENL+Noto-Color-Emoji`.
   - **Diagram legends printed as overlapping words.** Not the Excalidraw fonts, despite the
     `Virgil` warnings — installing Virgil and Cascadia under corrected family names changed
     nothing, because the text uses `font-family="Helvetica, Segoe UI Emoji"` and those

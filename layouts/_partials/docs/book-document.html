@@ -130,13 +130,31 @@
        anchor links instead of content. `self` (only ever set on the initial
        call from <body>, never on a recursive one) wraps the whole tree in
        one extra <li> for the root page's own title — see bookChunkRoot in
-       this file's header comment. */ -}}
+       this file's header comment.
+
+       Each entry is a three-part flex row: title, dot leader, page number.
+       The page number is left EMPTY here and filled in afterwards by
+       scripts/number_toc.py, because nothing at Hugo time — and nothing at
+       render time either — knows what page a chapter lands on. CSS
+       `target-counter(attr(href url), page)` would do it in one pass on an
+       unsplit document, but a book big enough to need a printed TOC is
+       exactly the book that prepare_book.py has to split into parts, and
+       every one of these targets then lives in a DIFFERENT part than the
+       TOC. So the numbers are resolved from the merged PDF instead, and the
+       part holding the TOC is re-rendered once with them written in.
+
+       The number span is sized in CSS and NOT auto-width, which is what makes
+       that second render safe: an empty 3em box and a full one occupy the
+       same space, so filling the numbers in cannot reflow the TOC, cannot
+       change how many pages it takes, and therefore cannot invalidate the
+       very numbers being written. number_toc.py asserts that page count
+       anyway. */ -}}
 {{- define "book-toc-tree" -}}
   {{- $page := .page -}}
   {{- if .self -}}
     <ul>
       <li>
-        <a href="#{{ $page.RelPermalink | anchorize }}">{{ $page.LinkTitle | default $page.Title }}</a>
+        {{- template "book-toc-entry" (dict "anchor" ($page.RelPermalink | anchorize) "title" ($page.LinkTitle | default $page.Title)) -}}
         {{- template "book-toc-tree" (dict "page" $page) -}}
       </li>
     </ul>
@@ -145,13 +163,17 @@
       <ul>
         {{- range . -}}
           <li>
-            <a href="#{{ .RelPermalink | anchorize }}">{{ .LinkTitle | default .Title }}</a>
+            {{- template "book-toc-entry" (dict "anchor" (.RelPermalink | anchorize) "title" (.LinkTitle | default .Title)) -}}
             {{- template "book-toc-tree" (dict "page" .) -}}
           </li>
         {{- end -}}
       </ul>
     {{- end -}}
   {{- end -}}
+{{- end -}}
+
+{{- define "book-toc-entry" -}}
+  <a href="#{{ .anchor }}"><span class="pdf-toc-title">{{ .title }}</span><span class="pdf-toc-dots"></span><span class="pdf-toc-page"></span></a>
 {{- end -}}
 
 {{- /* Chapter walk: depth-first, one <section> per page. Heading level is

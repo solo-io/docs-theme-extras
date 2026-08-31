@@ -124,9 +124,45 @@ h6 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.03em; }
   padding-left: 0;
 }
 
+/* Each entry is one flex row: title, dot leader, page number. Flex rather
+   than a right float, because a float inside an <li> that also contains the
+   nested child <ul> escapes the entry and lands beside the children instead
+   of beside its own title.
+
+   The number column is `flex: 0 0 3em` — a FIXED width, not auto. That is
+   load-bearing, not cosmetic: scripts/number_toc.py fills these spans in
+   after the book has already been rendered and paginated once, so if an
+   empty box and a "1234" box took different widths, writing the numbers
+   could rewrap a title, add a page to the TOC, shift every chapter after it
+   and invalidate the numbers just written. 3em holds four digits at 11pt
+   with room to spare; the whole book would have to pass 99,999 pages to
+   overflow it. */
 .pdf-toc a {
   color: inherit;
   text-decoration: none;
+  display: flex;
+  align-items: baseline;
+  gap: 0.35em;
+}
+
+.pdf-toc-title {
+  flex: 0 1 auto;
+}
+
+/* The leader takes up the slack between title and number. Its dots are a
+   bottom border rather than repeated "." characters so they cannot be
+   selected, copied, or read out by a screen reader from the tagged PDF. */
+.pdf-toc-dots {
+  flex: 1 1 auto;
+  border-bottom: 1px dotted #c7c7c7;
+  min-width: 1em;
+}
+
+.pdf-toc-page {
+  flex: 0 0 3em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #444;
 }
 
 .pdf-chapter {
@@ -419,6 +455,27 @@ h6 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.03em; }
 .pdf-chapter th code,
 .pdf-chapter td code {
   word-break: break-all;
+}
+
+/* Tab groups, flattened by utils/unhide-tabs.html. On the live site the row
+   of tab buttons is what tells a reader that the blocks below are
+   alternatives; in print that row is gone, so the partial injects a lead-in
+   sentence in its place and labels each option. The rule down the left edge
+   does the rest of that job visually — without it, a five-step option and
+   the option after it read as one ten-step sequence, which is the opposite
+   of what the page says. */
+.pdf-tab-intro {
+  margin-bottom: 0.5rem;
+}
+
+.pdf-tab-option {
+  border-left: 2px solid #d1d5db;
+  padding-left: 0.9rem;
+  margin: 0.75rem 0;
+}
+
+.pdf-tab-option-label {
+  margin: 0 0 0.5rem;
 }
 
 /* Code blocks and diagrams shouldn't split across a page boundary if they

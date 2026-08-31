@@ -91,21 +91,20 @@
        hl_lines wraps the highlighted gutter number in <span class="hl">, so the first
        child is not always <span class="lnt">. class="lntable" is the real guard. */ -}}
 {{- $html = $html | replaceRE `(?s)<table class="?lntable"?>(?:\s|&#10;)*<tr>(?:\s|&#10;)*<td class="?lntd"?>(?:\s|&#10;)*<pre[^>]*><code[^>]*>(?:\s|&#10;)*<span[^>]*>.*?</td>(?:\s|&#10;)*<td class="?lntd"?>(?:\s|&#10;)*(<pre[^>]*><code[^>]*>.*?</code></pre>)(?:\s|&#10;)*</td>(?:\s|&#10;)*</tr>(?:\s|&#10;)*</table>` "$1" -}}
-{{- /* Tabs cleanup — we run two pattern sets so the same partial works for both
-       tab variants. Each set is a no-op against markup the other consumer emits.
+{{- /* Tabs cleanup, delegated to the SHARED partial, which handles both tab
+       markups (a consumer that overrides Hextra's tabs shortcode, and stock
+       Hextra) so the flattening is identical here, in the `markdown` output
+       format and in the PDF book.
 
-       Variant 1: docs's tab override emits <div class="hextra-tabs"> wrapping
-       <nav> + .hextra-tab-panel[data-tab-name]. Strip the nav, relabel panels. */ -}}
-{{- $html = $html | replaceRE `(?s)(<div class="hextra-tabs[^"]*"[^>]*>)\s*<nav[^>]*>.*?</nav>` "$1" -}}
-{{- $html = $html | replaceRE `<div class="hextra-tab-panel[^"]*"[^>]*data-tab-name="([^"]*)"[^>]*>` `<div><p><strong>Option: $1</strong></p>` -}}
-{{- /* Variant 2: Hextra default tabs — [role="tablist"] holds the buttons,
-       .hextra-tabs-panel[aria-labelledby] is the panel. Strip the tablist,
-       drop the panel-scoped aria-hidden so all panels show in the copy
-       (page-wide aria-hidden on icon <svg>s is intentionally untouched),
-       then relabel each panel with "Option: <id>". */ -}}
-{{- $html = $html | replaceRE `(?s)<div[^>]*role="tablist"[^>]*>.*?</div>` "" -}}
-{{- $html = $html | replaceRE `(<div class="hextra-tabs-panel[^"]*"[^>]*) aria-hidden="true"` "$1" -}}
-{{- $html = $html | replaceRE `<div class="hextra-tabs-panel[^"]*"[^>]*aria-labelledby="([^"]*)"[^>]*>` `<div style="display:block"><p><strong>Option: $1</strong></p>` -}}
+       This file used to carry its own copy of these patterns, and the copies
+       drifted in BOTH directions. utils/unhide-tabs.html was written against
+       markup Hextra no longer emits and quietly did nothing for months, which
+       nobody noticed because this file — the one behind a visible button —
+       still worked. In the other direction, stock-Hextra tab handling existed
+       ONLY here, so a consumer without a tabs override got labelled options in
+       "Copy as Markdown" and unlabelled, stacked ones in its PDF. Add a
+       pattern to the shared partial, not to this file. */ -}}
+{{- $html = partial "utils/unhide-tabs.html" $html -}}
 
 {{- /* Strip the dark-mode image variant emitted by the module's reuse-image-dark
        shortcode (class "toggle-light", hidden in light mode). Otherwise the

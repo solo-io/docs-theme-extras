@@ -1,43 +1,72 @@
-{{- /* Unhides Hextra tab panels for linear-reading contexts that have no JS to
-       switch between them (markdown export, "Copy as Markdown", PDF/book
-       stitching): strips the tab button bar, removes aria-hidden, and forces
-       every panel visible with an injected "Option: <name>" label using each
-       tab's REAL visible name — not the internal DOM id its aria-labelledby
-       points at (e.g. "tabs-tab-tabs-03-1"), which is all that's left once
-       the button bar carrying the name is discarded. Hextra's own tabs
-       partial (_partials/shortcodes/tabs.html) nests a tab's visible name two
-       <span>s deep inside its button (id="tabs-tab-...
-       "><span class="..."><span>{{ $item.name }}</span></span></button>), so
-       the id->name map has to be built from the buttons BEFORE they're
-       stripped below.
+{{- /* Flattens Hextra tab groups for linear-reading contexts that have no JS to
+       switch between them: the PDF/book stitching (docs/book-document.html),
+       the `markdown` output format (page-to-markdown.html), and the
+       "Copy as Markdown" button (partials/copy-markdown.html). Replaces the
+       tab button bar with a lead-in sentence, labels each panel "Option:
+       <name>" from the name the reader would have seen on its button, and
+       drops aria-hidden.
+
+       ALL THREE consumers call this partial. copy-markdown.html used to keep
+       its own copy of these patterns, and the copies drifted far enough apart
+       that this one matched markup Hextra had stopped emitting and silently
+       did nothing for months, while the copy behind the visible button kept
+       working. Add a pattern here, not there.
 
        Usage: {{ $html = partial "utils/unhide-tabs.html" $html }}
        Input/output is HTML as a string (or template.HTML); the caller marks
        the result safeHTML again if re-emitting as markup. */ -}}
 {{- $html := . -}}
 
-{{- /* CURRENT Hextra tabs markup (v0.12+):
+{{- /* TWO markups, both live, and a consumer produces one or the other:
+
+       VARIANT A — a consumer that overrides Hextra's tabs shortcode. This is
+       what solo-io/docs emits from its own layouts/_shortcodes/tabs.html:
 
          <div class="hextra-tabs ...">
            <nav ...><button class="hextra-tab-btn ...">meshctl</button>...</nav>
            <div class="hextra-tab-panels ...">
              <div class="hextra-tab-panel" data-tab-name="meshctl">...</div>
 
-       Nothing is hidden in the static HTML — the panels are shown and hidden
-       by JS at runtime — so a JS-less context renders EVERY option stacked,
-       under one button bar that no longer switches anything. The reader gets
-       two code blocks with nothing saying which belongs to which option.
+       VARIANT B — stock Hextra v0.12, which is what this module's own fixture
+       and any consumer WITHOUT that override emits:
 
-       This used to match on role="tab"/role="tablist"/aria-labelledby and a
-       "hextra-tabs-panel" class, none of which exist in this markup, so it
-       silently did nothing at all. The panel now carries its own visible name
-       in data-tab-name, so no id->name map is needed. */ -}}
+         <div ... role="tablist"><button role="tab" id="tabs-tab-tabs-14-0">
+           <span><span>meshctl</span></span></button>...</div>
+         <div class="hextra-tabs-panel ..." aria-labelledby="tabs-tab-tabs-14-0"
+              aria-hidden="false">...</div>
 
-{{- /* Drop the button bar, anchored to the tabs container so an unrelated
+       Both are handled here. Variant B used to live ONLY in copy-markdown.html,
+       so a stock-Hextra consumer got labelled options in "Copy as Markdown" and
+       unlabelled, stacked ones in its PDF and `markdown` output — invisible
+       until someone enabled a book for an OSS site.
+
+       In neither variant is anything hidden in the static HTML: panels are
+       shown and hidden by JS at runtime, so a JS-less context renders EVERY
+       option stacked under a button bar that no longer switches anything.
+
+       Variant B's panel cannot name itself — the visible name lives two
+       <span>s deep inside the button that is about to be stripped, and the
+       panel only points at that button's DOM id. So variant B labels with the
+       id (e.g. "tabs-tab-tabs-14-0"), which is poor but honest; a consumer
+       that wants real names has variant A available. */ -}}
+
+{{- /* VARIANT A. Drop the button bar, anchored to the tabs container so an unrelated
        <nav> (the book's own .pdf-toc, the sidebar) can never be swallowed.
        Go's RE2 has no lookahead, so the anchor is the only thing keeping the
-       non-greedy .*?</nav> honest. */ -}}
-{{- $html = $html | replaceRE `(?s)(<div class="hextra-tabs[^"]*"[^>]*>)<nav[^>]*>.*?</nav>` "$1" -}}
+       non-greedy .*?</nav> honest.
+
+       The bar is replaced by a lead-in sentence rather than by nothing. On the
+       live site the row of buttons IS the signal that what follows is a set of
+       alternatives; strip it and the reader is left with several "Option: …"
+       blocks and no statement that they are alternatives at all — which reads
+       as a sequence of steps to work through in order, the opposite of what
+       the page means. The sentence goes in once per tab GROUP, because this
+       replacement matches the group's container, not its panels. */ -}}
+{{- /* `(?:\s|&#10;)*` and not `\s*`: content that reached .Content through
+       utils/flatten-rendered ({{< reuse >}}, a rebased page, a callout body)
+       has every newline replaced by the &#10; entity, so a plain `\s*`
+       between the two tags silently never matches there. */ -}}
+{{- $html = $html | replaceRE `(?s)(<div class="hextra-tabs[^"]*"[^>]*>)(?:\s|&#10;)*<nav[^>]*>.*?</nav>` "$1<p class=\"pdf-tab-intro\">You can choose from the following options.</p>" -}}
 
 {{- /* Label each panel with its own name. One opening <div> is replaced by
        one opening <div>, so tag balance is preserved.
@@ -48,7 +77,14 @@
        labels the first option of every tab group and silently skips the rest —
        which still render here, because the hx: utility that would hide them is
        not loaded in this document. */ -}}
-{{- $html = $html | replaceRE `<div class="hextra-tab-panel[^"]*"[^>]*data-tab-name="([^"]*)"[^>]*>` `<div style="display:block"><p><strong>Option: $1</strong></p>` -}}
+{{- $html = $html | replaceRE `<div class="hextra-tab-panel[^"]*"[^>]*data-tab-name="([^"]*)"[^>]*>` `<div class="pdf-tab-option" style="display:block"><p class="pdf-tab-option-label"><strong>Option: $1</strong></p>` -}}
+
+{{- /* VARIANT B, stock Hextra. The button bar is a role="tablist" container
+       rather than a <nav>, and it is NOT nested inside the panels' wrapper, so
+       it is matched on its own. `.*?</div>` is safe here only because a
+       tablist contains buttons and spans, never a nested <div>. */ -}}
+{{- $html = $html | replaceRE `(?s)<div[^>]*role="tablist"[^>]*>.*?</div>` "<p class=\"pdf-tab-intro\">You can choose from the following options.</p>" -}}
+{{- $html = $html | replaceRE `<div class="hextra-tabs-panel[^"]*"[^>]*aria-labelledby="([^"]*)"[^>]*>` `<div class="pdf-tab-option" style="display:block"><p class="pdf-tab-option-label"><strong>Option: $1</strong></p>` -}}
 
 {{- /* Some content hand-numbers a tab's list to continue from the step it's
        nested under via the list's native `start` attribute (e.g. two tabs
@@ -64,7 +100,7 @@
        list — the actual case this addresses — never a list elsewhere on the
        page). replaceRE's `$1` keeps everything up to (and including)
        "<ol", dropping just the ` start="N"` that followed it. */ -}}
-{{- $html = $html | replaceRE `(<p><strong>Option: [^<]*</strong></p><ol) start="\d+"` "$1" -}}
+{{- $html = $html | replaceRE `(<p class="pdf-tab-option-label"><strong>Option: [^<]*</strong></p><ol) start="\d+"` "$1" -}}
 
 {{- $html = $html | replaceRE `aria-hidden="true"` "" -}}
 {{- return $html -}}
