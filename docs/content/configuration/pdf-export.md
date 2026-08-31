@@ -899,7 +899,7 @@ Add `releaseVersion`, which wins over `version` and is read by nothing else:
 > `assets/<product>/<version>`, and `reuse.html` locates them by matching each
 > URL segment against `.version` — so on a tree served at `/latest/`, renaming
 > the field breaks the match, the resolved version comes back empty, and every
-> `{{< reuse >}}` snippet silently falls back to the unversioned asset path.
+> `{{</* reuse */>}}` snippet silently falls back to the unversioned asset path.
 > `reuse.html` and `rebase.html` also substitute `.version` into content for the
 > OSS→enterprise version remap. None of it fails loudly.
 
