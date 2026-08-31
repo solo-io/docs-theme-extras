@@ -62,9 +62,39 @@
     {{- if .OutputFormats.Get "book" -}}
       {{- $product := $pd.product | default site.Params.currentProduct | default site.Params.folder | default "" -}}
       {{- $dist := $pd.distribution | default "" -}}
+      {{- /* `{version}` is the version SEGMENT, prefixed by the SECTION segment
+             on a product that nests version trees under one. Without the prefix
+             a product with parallel sections has two books and one URL: the
+             version segment alone does not identify a tree.
+
+             agentgateway is the case. It ships the same `latest` line in two
+             deployment modes, so /agentgateway/kubernetes/latest/ and
+             /agentgateway/standalone/latest/ are separate trees that each build
+             their own book — and both used to resolve to
+             `agentgateway-enterprise-latest`. Publishing both then meant
+             whichever rendered last sat behind the link on BOTH modes' pages,
+             silently, because the PDF workflow uploads with --clobber.
+
+             Read through utils/section-segment.html, NOT `$vr.section`. That
+             field is overloaded: version-root.html fills it with the section for
+             a product that registers `params.sections`, and with the PRODUCT
+             segment otherwise — so using it would prefix every ordinary
+             product's URL with its own name and break every published link.
+             section-segment.html returns "" unless `params.sections` is set AND
+             a registered key appears in the path, which is exactly the condition
+             that makes the version segment ambiguous.
+
+             The workflow that publishes these assets derives its release tag
+             from the version PATH the same way (`kubernetes/latest` becomes
+             `kubernetes-latest`), so the two agree by construction. */ -}}
+      {{- $versionKey := $vr.currentVersion -}}
+      {{- $sec := partial "utils/section-segment.html" $ -}}
+      {{- with $sec.segment -}}
+        {{- $versionKey = printf "%s-%s" . $vr.currentVersion -}}
+      {{- end -}}
       {{- $u := replace $tmpl "{product}" $product -}}
       {{- $u = replace $u "{distribution}" $dist -}}
-      {{- $pdfURL = replace $u "{version}" $vr.currentVersion -}}
+      {{- $pdfURL = replace $u "{version}" $versionKey -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}

@@ -7,7 +7,12 @@ weight: 10
 # book a multi-level table of contents and chapter tree, and everything.md
 # drags tabs, callouts, tables and code fences through the same render.
 # Asserted by tests/book-document.spec.ts.
-outputs: ["html", "book"]
+# NOTE the full list. Hugo's `outputs` front matter REPLACES the page's default
+# outputs rather than adding to them, so naming only ["html", "book"] silently
+# drops this section's .md, RSS and llms.txt — the version root, and only the
+# version root, stops serving Copy-as-Markdown and llms discovery. Keep this in
+# sync with `[outputs] section` in the config.
+outputs: ["html", "rss", "markdown", "book"]
 ---
 
 The current version of the test fixture. Open [Everything](everything/) to see every shortcode pattern rendered, or [Rebased](rebased/) to see the same content rendered through the `rebase` shortcode.

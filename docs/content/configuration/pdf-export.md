@@ -32,7 +32,7 @@ importing the module did not give you a PDF.
 | `docs/list.book.html`, `docs/single.book.html`, `_partials/docs/book-document.html` | **This module** | Ordinary layouts, so `module.mounts` carries them |
 | `assets/css/print-book.css` | **This module** | Ordinary asset, linked by the book document itself |
 | The `outputFormats` block | **Your repo** | Hugo does **not** merge top-level `outputFormats` config from an imported module |
-| `outputs: ["html", "book"]` front matter | **Your repo** | Per-page opt-in |
+| `book` in a page's `outputs` front matter | **Your repo** | Per-page opt-in. List the whole set — `outputs` replaces the defaults |
 | `scripts/render-pdf.mjs` | Fetched from this repo | See [Fetching the renderer](#4-fetching-the-renderer) |
 | `playwright`, `pdf-lib` | **Your repo's** `package.json` | Node resolves `node_modules` relative to the invoking project, not to wherever the script was downloaded |
 
@@ -80,9 +80,27 @@ outputFormats:
 ```yaml
 ---
 title: Documentation
-outputs: ["html", "book"]
+outputs: ["html", "rss", "markdown", "llms", "book"]
 ---
 ```
+
+> [!WARNING]
+> **List every output the page should have, not just `html` and `book`.** Hugo's
+> `outputs` front matter **replaces** a page's default outputs rather than adding
+> to them, so `outputs: ["html", "book"]` silently drops that page's `.md`, RSS
+> and `llms.txt`. Copy `[outputs] section` out of your config and append `book`.
+>
+> Nothing fails, and the damage is narrow enough to survive review: only the
+> **version root** loses them, while every page below it keeps its `.md`, so what
+> breaks is Copy-as-Markdown and llms discovery on exactly one page per product.
+> Check it directly on the built output:
+>
+> ```sh
+> ls public/<product>/<version>/index.md public/<product>/<version>/llms.txt
+> ```
+>
+> Compare against a version tree that did **not** opt in — that is the control
+> that makes the missing files obvious.
 
 A section page (one with its own `_index.md`) renders through
 `list.book.html`; a leaf page renders through `single.book.html`. Both exist
@@ -261,7 +279,7 @@ Above that size, generate one book per top-level section and merge. Each chunk
 root sets `bookChunkRoot: true` in addition to opting in:
 
 ```yaml
-outputs: ["html", "book"]
+outputs: ["html", "rss", "markdown", "llms", "book"]
 bookChunkRoot: true
 ```
 
@@ -295,7 +313,7 @@ fast path that skips the merge entirely.
 > cascade:
 >   - target:
 >       path: "/docs/envoy/latest/*"
->     outputs: ["html", "book"]
+>     outputs: ["html", "rss", "markdown", "llms", "book"]
 >     params:
 >       bookChunkRoot: true
 > ```
@@ -863,7 +881,7 @@ version root for its output formats rather than reading a separate flag:
 {{ with $vr.docsSection }}{{ if .OutputFormats.Get "book" }}…{{ end }}{{ end }}
 ```
 
-That is the same `outputs: ["html", "book"]` opt-in that makes a PDF publishable
+That is the same `book` output-format opt-in that makes a PDF publishable
 in the first place, so the menu follows the build and there is nothing to keep
 in sync.
 

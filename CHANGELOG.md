@@ -153,6 +153,38 @@ is a visible change to the artifact, and a correction: the old label was wrong.
   physically, and with the cover unnumbered the printed number is one lower. Without both,
   every line of the contents page is off by one — silently, and only on paper.
 
+- **A product with parallel SECTIONS can publish one book per section
+  (`layouts/partials/copy-markdown.html`, `layouts/_partials/utils/book-section.html`,
+  `layouts/_partials/docs/book-document.html`, `fixture/content/en/test/nested/v2/_index.md`,
+  `tests/book-document.spec.ts`).** A section nests version trees one level deeper
+  (`/<product>/<section>/<version>/`), so each section's tree is its own book — but two of them
+  were indistinguishable in both of the ways that matter.
+
+  The download URL filled `{version}` from the version SEGMENT alone, and
+  [agentgateway](https://docs.solo.io/agentgateway/) ships the same `latest` line in both
+  deployment modes, so `/agentgateway/kubernetes/latest/` and
+  `/agentgateway/standalone/latest/` both resolved to `agentgateway-enterprise-latest`.
+  Publishing both would have put whichever rendered last behind the link on **both** modes'
+  pages, silently, because the export uploads with `--clobber`. `{version}` is now prefixed
+  with the section segment. Read through `utils/section-segment.html` and **not**
+  `version-root.html`'s `section` field, which is overloaded — it holds the PRODUCT segment for
+  a product with no `params.sections`, so using it would have prefixed every ordinary product's
+  URL with its own name and broken every published link. The regression half is asserted
+  explicitly.
+
+  The covers were the other half: same product logo, same "Documentation" subtitle, same
+  version, so the only thing telling two manuals apart was the filename — the first thing lost
+  when a file is renamed or printed, and the section is not in the logo because a product has
+  one product mark. The subtitle now names the section, resolved by `utils/book-section.html`
+  through the same ladder `resolve-sections.html` uses for the website's section selector
+  (humanized key → landing-page title → the section's configured `title`), so the cover uses
+  the site's own vocabulary rather than inventing a second one.
+
+  Verified against the fixture's `nested` section, which is the exact shape: its tree is at
+  `/test/nested/v2/` and its version segment is the same `v2` as the top-level tree's, so
+  nothing keyed on the version alone can separate them. Asserts the section URL, the unchanged
+  non-section URL, the section-named cover and the unchanged generic cover.
+
 - **`releaseVersion` on a `params.versions` entry names the real release on the book's cover
   and footer, for a tree served at `/latest/` (`layouts/_partials/utils/book-version.html`,
   `hugo-{enterprise,oss}.toml`, `tests/book-document.spec.ts`).** With the cover now reading
@@ -226,6 +258,45 @@ is a visible change to the artifact, and a correction: the old label was wrong.
   never opted into `book`, covers the other gate.
 
 ### Fix
+
+- **A table row split by a page break no longer prints its continuation with EMPTY value
+  columns (`assets/css/print-book.css`).** Reported from a real
+  [agentgateway feature-comparison table](https://docs.solo.io/agentgateway/kubernetes/latest/about/):
+  page 44 ended on "Intelligent routing for self-hosted models with ✅ ✅" and page 45 opened
+  on "Inference Extension support" with **nothing** under Enterprise or Open Source. Nothing is
+  lost — every word and every mark still prints — but that is worse than loss, because the
+  continuation is not obviously debris. WeasyPrint repeats `<thead>` on each fragment of a
+  split table, so it reads as a legitimate row, and a reader turning the page sees a feature
+  marked unsupported in both columns when the ✅ printed overleaf. A comparison table that
+  misstates its own data is a correctness defect, not a cosmetic one.
+
+  The cause is that `print-book.css` set `break-inside: avoid` on `pre`, `.mermaid` and
+  `.section-card` but never on `tr`: the cell marks stay with the first fragment while the
+  wrapped label continues over the break. Reproduced in the CI container against this
+  stylesheet with 40 wrapping rows, which produced the reported shape exactly, and re-rendered
+  with the rule in place — the page then ends on a complete row. Content is identical either
+  way (40/40 rows, 40 ✅, 40 ❌) and so is the page count, so this only decides WHERE the break
+  falls and costs nothing in length.
+
+  One limit is inherent rather than a gap: a row TALLER than the text block has nowhere to move
+  to, so it still splits and its continuation pages still show empty value columns — verified
+  with a single ~900-word row, which splits across six pages regardless. `break-inside: avoid`
+  is a constraint the layout satisfies when it can.
+
+- **The `outputs` front matter documented for the book opt-in silently dropped a page's other
+  outputs (`docs/content/configuration/pdf-export.md`, `fixture/content/en/test/*/_index.md`,
+  `fixture/tabs-demo/v3/_index.md`).** The opt-in was documented as
+  `outputs: ["html", "book"]`, and Hugo's `outputs` **replaces** a page's default outputs
+  rather than adding to them — so every version root that followed the instruction stopped
+  emitting its `.md`, its RSS and its `llms.txt`. Copy-as-Markdown and llms discovery broke on
+  exactly one page per product, which is narrow enough that it survived review and a green
+  build: every page BELOW the version root keeps its `.md`, so the tree looks intact.
+
+  Caught by `tests/llms-directive.spec.ts` only once a SECOND fixture tree opted in — the
+  original opted-in tree was not the one that spec sampled, so the fixture had been carrying
+  the defect quietly. The docs now show the full list with a warning and a one-line check
+  against the built output, and every fixture root names its whole set. Consumers must update
+  their own front matter; the module cannot fix this for them, since the list is per-site.
 
 - **A book's cover and running footer name the version tree the book actually
   walked (`layouts/_partials/utils/book-version.html`,

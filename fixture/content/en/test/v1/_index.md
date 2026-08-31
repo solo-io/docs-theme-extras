@@ -13,7 +13,12 @@ weight: 20
 # (utils/book-version.html), and that two books in one build get separate
 # print-book.css resources rather than sharing whichever Hugo cached first.
 # Asserted by tests/book-document.spec.ts.
-outputs: ["html", "book"]
+# NOTE the full list. Hugo's `outputs` front matter REPLACES the page's default
+# outputs rather than adding to them, so naming only ["html", "book"] silently
+# drops this section's .md, RSS and llms.txt — the version root, and only the
+# version root, stops serving Copy-as-Markdown and llms discovery. Keep this in
+# sync with `[outputs] section` in the config.
+outputs: ["html", "rss", "markdown", "book"]
 ---
 
 The v1 version of the test fixture. Open [Everything](everything/) to see version-conditional rendering for v1.

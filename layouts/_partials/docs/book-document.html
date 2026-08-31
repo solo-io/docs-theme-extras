@@ -109,7 +109,17 @@
     {{- with $logo }}
     <img src="{{ . | relURL }}" alt="{{ site.Title }}" class="pdf-cover-logo">
     {{- end }}
-    <p class="pdf-cover-subtitle">Documentation</p>
+    {{- /* The SECTION this book covers, when the product has parallel sections
+           (agentgateway's Kubernetes and standalone modes), replacing the
+           generic subtitle rather than sitting beside it — the configured label
+           already reads as one ("Kubernetes docs"), so both would be redundant.
+           A product with no sections resolves this to "" and keeps
+           "Documentation" exactly as before.
+
+           Without it, a product's two manuals have identical covers: same
+           product logo, same subtitle, same version, distinguishable only by
+           filename. See utils/book-section.html. */ -}}
+    <p class="pdf-cover-subtitle">{{ partial "utils/book-section.html" . | default "Documentation" }}</p>
     {{- with $productVersion }}<p class="pdf-cover-version">Version {{ . }}</p>{{ end }}
     <p class="pdf-cover-date">{{ now.Format "January 2, 2006" }}</p>
     {{- /* Company mark at the foot of an ENTERPRISE cover only. The product

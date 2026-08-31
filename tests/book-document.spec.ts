@@ -26,6 +26,13 @@ const BOOK = path.join(TEST_PRODUCT_ROOT, "v2/book.html");
 // pick, so it is the only one that can tell a per-tree answer from a site-wide
 // one. See fixture/content/en/test/v1/_index.md.
 const BOOK_V1 = path.join(TEST_PRODUCT_ROOT, "v1/book.html");
+// A book on a SECTION-NESTED tree (/test/nested/v2/). Its version segment is the
+// same `v2` as the top-level tree's, which is what makes it the useful case:
+// agentgateway has exactly this shape and its two mode trees both sit on
+// `latest`.
+const BOOK_NESTED = path.join(TEST_PRODUCT_ROOT, "nested/v2/book.html");
+// A book on the docTabs tree, where the tab band and the book pipeline meet.
+const BOOK_TABS = path.join(TEST_PRODUCT_ROOT, "v3/book.html");
 
 function book(): string {
   return fs.readFileSync(BOOK, "utf8");
@@ -130,6 +137,19 @@ test.describe("book document", () => {
       };
       expect(urlOn("v2")).toContain("test-enterprise-v2/test-enterprise-v2.pdf");
       expect(urlOn("v1")).toContain("test-enterprise-v1/test-enterprise-v1.pdf");
+    });
+
+    // A page-geometry rule, asserted here because this harness has no renderer
+    // and the alternative is no coverage at all. It is a deletion guard, not a
+    // behavior test: a split table row keeps its cell marks on the first
+    // fragment and continues with EMPTY value columns, so a comparison table
+    // reads as "unsupported" on the page after the break. Verified against a
+    // real WeasyPrint render; see the comment on the rule itself.
+    test("the executed stylesheet keeps table rows off page boundaries", () => {
+      const href = stylesheetHref(book());
+      const css = fs.readFileSync(path.join(target.builtRoot, href.replace(/^\/+/, "")), "utf8");
+      expect(css, "the tr break-inside rule is gone — split rows will print with empty value columns")
+        .toMatch(/\.pdf-chapter tr\s*\{[^}]*break-inside:\s*avoid/);
     });
 
     // The footer version lives inside that stylesheet's @bottom-right content,
@@ -288,6 +308,87 @@ test.describe("book document", () => {
         expect(pageHTML(rel), `${rel} rendered a download item with no pdfDownload configured`)
           .not.toMatch(PDF_URL);
       }
+    });
+  });
+
+  // A product with parallel SECTIONS has one book per section, and both used to
+  // be indistinguishable — same download URL, same cover. The fixture's `nested`
+  // section is the shape: its tree is at /test/nested/v2/, and its version
+  // segment is the same `v2` as the top-level tree's, so nothing keyed on the
+  // version alone can tell them apart. agentgateway is the production case, with
+  // kubernetes/latest and standalone/latest.
+  test.describe("a section-nested book identifies its section", () => {
+    test("the book is built", () => {
+      expect(fs.existsSync(BOOK_NESTED), `${BOOK_NESTED} was not built`).toBe(true);
+    });
+
+    // Two books, two release assets. Before the section prefix, both of these
+    // resolved to `test-enterprise-v2`, and because the PDF workflow publishes
+    // with --clobber the second render would replace the first with no error and
+    // both sections' pages would link the survivor.
+    test("the download URL carries the section segment", () => {
+      test.skip(target.brand !== "enterprise", "only the enterprise fixture sets pdfDownload");
+      const urlOn = (rel: string) =>
+        fs.readFileSync(path.join(TEST_PRODUCT_ROOT, rel, "index.html"), "utf8")
+          .match(/docs-pdfs\/releases\/download\/([^/]+)\//)?.[1];
+
+      expect(urlOn("nested/v2")).toBe("test-enterprise-nested-v2");
+      // The regression half, and the more dangerous one: an ordinary product
+      // must NOT gain a prefix. version-root.html's `section` field holds the
+      // PRODUCT segment for a product with no params.sections, so reading it
+      // instead of utils/section-segment.html would rewrite every published URL
+      // on every product.
+      expect(urlOn("v2"), "a non-section tree gained a section prefix").toBe("test-enterprise-v2");
+    });
+
+    // The cover is the other half. Two manuals with the same logo, subtitle and
+    // version are only distinguishable by filename, which is the first thing
+    // lost when a file is renamed or printed.
+    test("the cover subtitle names the section, and only for a section tree", () => {
+      const subtitle = (f: string) =>
+        fs.readFileSync(f, "utf8").match(/<p class="pdf-cover-subtitle">([^<]*)<\/p>/)?.[1]?.trim();
+
+      // The fixture's `nested` config sets no `title`, so this comes from the
+      // section landing page — the middle rung of book-section.html's ladder.
+      expect(subtitle(BOOK_NESTED), "the section-nested cover does not name its section")
+        .toBe("Nested");
+      expect(subtitle(BOOK), "a non-section cover lost its generic subtitle")
+        .toBe("Documentation");
+    });
+  });
+
+  // docTabs and the book pipeline interact by accident of layout, not by design:
+  // a tab `id` is a top-level content directory under the version root, and the
+  // book walks that root's children recursively, so each tab becomes a top-level
+  // chapter with its subtree below it. No book-specific handling exists, which is
+  // what makes it worth pinning — the SIDEBAR deliberately scopes itself to one
+  // tab, and a change teaching the book to do likewise would drop every
+  // non-default tab from the manual silently.
+  test.describe("a book on a docTabs tree keeps every tab", () => {
+    test("the book is built", () => {
+      expect(fs.existsSync(BOOK_TABS), `${BOOK_TABS} was not built`).toBe(true);
+    });
+
+    test("each tab directory is a top-level chapter, with its subtree nested", () => {
+      const h = fs.readFileSync(BOOK_TABS, "utf8");
+      const chapters = [
+        ...h.matchAll(/<section class="pdf-chapter[^"]*" id="([^"]+)"[\s\S]*?<(h[2-6])[ >]/g),
+      ].map((m) => ({ id: m[1], level: m[2] }));
+
+      // Every configured tab id must appear, and at h2 — the top chapter level.
+      // A tab missing entirely is the failure this test exists for.
+      for (const tab of ["documentation", "api", "changelog"]) {
+        const ch = chapters.find((c) => c.id.endsWith(tab));
+        expect(ch, `tab '${tab}' has no chapter in the book`).toBeDefined();
+        expect(ch!.level, `tab '${tab}' is not a top-level chapter`).toBe("h2");
+      }
+
+      // And the tabs' contents nest BELOW them rather than being flattened
+      // alongside, which is what makes the grouping readable in print.
+      expect(
+        chapters.some((c) => c.id.includes("documentation") && c.level === "h3"),
+        "no chapter nests under the documentation tab — the subtree was flattened or dropped",
+      ).toBe(true);
     });
   });
 

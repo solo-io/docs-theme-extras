@@ -563,6 +563,36 @@ h6 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.03em; }
   white-space: pre-wrap;
 }
 
+/* Keep a table row whole across a page boundary. NOT cosmetic — a split row
+   MISREPRESENTS its own data, which is worse than the ragged look it fixes.
+   Nothing is lost: every word and every cell mark still prints. But the cell
+   marks stay with the FIRST fragment while the wrapped label continues onto the
+   next page, so the continuation renders as a row whose value columns are
+   EMPTY. In a feature-comparison table, a reader turning the page sees a
+   feature name with nothing under "Enterprise" or "Open Source" and reads it as
+   unsupported — the exact opposite of the ✅ that printed overleaf.
+
+   Measured in the CI container against this stylesheet, 40 wrapping rows: the
+   unfixed render ended a page on "…deliberately long label so / ✅ ❌" and
+   opened the next on "the cell wraps across / several lines" with no marks at
+   all. With this rule the page ends on a complete row instead. Content is
+   identical either way (40/40 rows, 40 ✅, 40 ❌) and so is the page count, so
+   this costs nothing in length — it only decides WHERE the break falls.
+
+   `thead` repetition is already handled: WeasyPrint repeats it on every
+   fragment of a split table, which is why the continuation looked like a
+   legitimate first row rather than obvious debris.
+
+   LIMIT, and it is inherent rather than a gap here: a row TALLER than the text
+   block has nowhere to move to, so it still splits and its continuation pages
+   still show empty value columns. `break-inside: avoid` is a constraint the
+   layout satisfies when it can. Verified: a single row of ~900 words splits
+   across six pages with this rule in place. Author around it — that much
+   content in one cell does not read as a table on paper anyway. */
+.pdf-chapter tr {
+  break-inside: avoid;
+}
+
 .pdf-chapter pre {
   background: #f6f8fa;
   border: 1px solid #e5e7eb;
