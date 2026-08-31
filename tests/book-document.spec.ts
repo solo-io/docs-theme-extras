@@ -112,6 +112,18 @@ test.describe("book document", () => {
       expect(a, "v2 and v1 share one cached print-book.css").not.toBe(b);
     });
 
+    // The download item's URL carries the same version, from the same resolution,
+    // so it moves with the book rather than with the site's `latest` flag.
+    test("the download item names its own version", () => {
+      test.skip(target.brand !== "enterprise", "only the enterprise fixture sets pdfDownload");
+      const urlOn = (rel: string) => {
+        const h = fs.readFileSync(path.join(TEST_PRODUCT_ROOT, rel, "index.html"), "utf8");
+        return h.match(/https:\/\/github\.com\/solo-io\/docs-pdfs\/releases\/download\/[^"]+/)?.[0];
+      };
+      expect(urlOn("v2")).toContain("test-enterprise-v2/test-enterprise-v2.pdf");
+      expect(urlOn("v1")).toContain("test-enterprise-v1/test-enterprise-v1.pdf");
+    });
+
     // The footer version lives inside that stylesheet's @bottom-right content,
     // which is where the site-wide lookup's second copy used to be. Reading the
     // built CSS is the only way to see it — it never appears in the HTML.
@@ -225,6 +237,48 @@ test.describe("book document", () => {
     const levels = new Set(chapters.map((m) => m[2]));
     expect(levels.size, "every chapter is at the same level — nesting is lost")
       .toBeGreaterThan(1);
+  });
+
+  // The "Download all docs (PDF)" item in copy-markdown.html had no coverage at
+  // all until this group, which is uncomfortable for a menu item whose URL is
+  // assembled from three separate config values. It has TWO gates and each one
+  // fails in a different, silent direction.
+  test.describe("the download item's two gates", () => {
+    const PDF_URL = /https:\/\/github\.com\/solo-io\/docs-pdfs\/releases\/download\//;
+
+    function pageHTML(rel: string): string {
+      return fs.readFileSync(path.join(TEST_PRODUCT_ROOT, rel, "index.html"), "utf8");
+    }
+
+    // GATE 1: the version root's own output formats. This is what lets the menu
+    // follow the build instead of a second flag somebody has to keep in sync —
+    // and it is why agentgateway's standalone tree, which does not opt in, shows
+    // no item while its kubernetes tree does. `main` is this fixture's
+    // equivalent: a real version tree that never opted into `book`.
+    test("a version tree that builds no book shows no item", () => {
+      test.skip(target.brand !== "enterprise", "only the enterprise fixture sets pdfDownload");
+      expect(fs.existsSync(path.join(TEST_PRODUCT_ROOT, "main/book.html")),
+        "the `main` tree opted into `book`, so it can no longer stand in for a tree that did not")
+        .toBe(false);
+      expect(pageHTML("main"), "an item rendered for a version that publishes no PDF")
+        .not.toMatch(PDF_URL);
+    });
+
+    // GATE 2: `params.pdfDownload.distribution`. The URL template is defaulted
+    // rather than repeated in every consumer config, and this gate is the only
+    // thing keeping that default off the consumers it would be WRONG for —
+    // kgateway.dev and ambientmesh.io both build books and both publish to their
+    // own pages, so an unconditional default would hand them a link to a
+    // docs-pdfs release that does not exist. hugo-oss.toml stands in for them.
+    test("a site that sets no pdfDownload shows no item, even with a book", () => {
+      test.skip(target.brand !== "oss", "hugo-oss.toml is the config with no pdfDownload");
+      expect(fs.existsSync(BOOK), "the OSS fixture must still BUILD a book, or this proves nothing")
+        .toBe(true);
+      for (const rel of ["v2", "v1"]) {
+        expect(pageHTML(rel), `${rel} rendered a download item with no pdfDownload configured`)
+          .not.toMatch(PDF_URL);
+      }
+    });
   });
 
   // The book is a SECOND caller of utils/unhide-tabs.html, separate from

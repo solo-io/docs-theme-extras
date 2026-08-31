@@ -126,6 +126,21 @@ versionSpecificBanner = true
 pageContextMode = "siteParams"
 
 # Brand layer selector for head-end.html. Loads brand-enterprise.css.
+# ENTERPRISE BRAND ONLY, and the asymmetry is the test. copy-markdown.html's
+# "Download all docs (PDF)" item had no coverage at all, and it now defaults its
+# release URL rather than requiring `urlTemplate` in every consumer config —
+# which is only safe because the default is gated on `distribution`. hugo-oss.toml
+# deliberately sets NO pdfDownload table, standing in for the consumers that
+# publish a PDF to their own pages (kgateway.dev, ambientmesh.io): they must keep
+# rendering no item at all. tests/book-document.spec.ts asserts both halves
+# against target.brand.
+#
+# No `urlTemplate` here on purpose either — supplying one would test the explicit
+# path and leave the default, which is what every product in solo-io/docs now
+# relies on, unexercised.
+[params.pdfDownload]
+  distribution = "enterprise"
+
 [params.themeExtras]
   brand = "enterprise"
   # No custom alertTypes here: solo is built into the theme
