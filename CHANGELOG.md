@@ -164,22 +164,32 @@ targeted.
   The part HTML still knows the answer — levels there are absolute, because the book layout
   emits a chapter at h2 plus its depth and `utils/shift-headings.html` pushes each page's
   own headings down to match — so `--outline-from book.parts.txt` drops the imported trees,
-  reads the headings back out of the HTML, and builds one tree over the merged file. A
-  chapter's title heading has no id of its own, so it borrows its `<section>`'s; the
-  contents heading is not in a chapter, which is why it now carries `id="pdf-contents"`.
+  reads the headings back out of the HTML, and builds one tree over the merged file. The
+  contents heading is not inside a chapter, which is why it now carries `id="pdf-contents"`.
 
-  The risky part was dropping the imported outlines at all: `merge_book.py` resolves every
-  `pdfjump:` cross-reference against the merged file's **named destinations**, and if those
-  had travelled with the outline, repairing the bookmarks would have broken every link in
-  the book. They do not — proven by a test, not by reading the pypdf source.
+  Two things had to be got right, and the first was only caught by running the pass over the
+  **real** 16 MB book rather than a fixture:
 
-  **Verified** on a 4-part synthetic book rendered through the real pipeline in an
-  Ubuntu 24.04 + WeasyPrint 69 container: 11 bookmarks rebuilt, 0 headings without a page,
-  nesting correct **across all three part boundaries** (`Setup → Install → Helm` where the
-  three sit in different parts), 64 jumps rewired and 0 unresolved. Plus 13 unit tests
-  covering level jumps, the borrowed section id, and the destinations-survive-the-drop case.
-  Takes effect when a consumer bumps its pin **and** passes `--outline-from` to both merges
-  — the second merge rewrites the same file, so leaving it off puts the flat trees back.
+  - **A heading's id is almost never on the `<h*>`.** Hextra's render hook emits it on an
+    empty offset anchor span inside the heading. Reading `el.get("id")` found 459 headings —
+    one per chapter, none inside a page — so the panel would have gone from 2,869 bookmarks
+    to 459 while looking entirely plausible. A chapter's title heading is emitted by the
+    layout rather than by Goldmark and has neither, so it borrows its `<section>`'s id.
+  - **Dropping the imported outlines could have broken every link in the book.**
+    `merge_book.py` resolves every `pdfjump:` cross-reference against the merged file's
+    **named destinations**, and if those had travelled with the outline, repairing the
+    bookmarks would have severed the lot. They do not — proven by a test, not by reading the
+    pypdf source.
+
+  **Verified on the real gloo-mesh-enterprise book** (16 MB, 458 chapters, 10 parts):
+  **2,869** headings recovered — matching the published PDF's bookmark count exactly — with
+  **13 top-level entries instead of 60**, zero duplicate destinations, and "Before you
+  begin" back at depth 3 where it belongs instead of sitting beside "Get started". Also run
+  end to end through an Ubuntu 24.04 + WeasyPrint 69 container on a 4-part synthetic book:
+  nesting correct across all three boundaries, 64 jumps rewired, 0 unresolved. Plus 15 unit
+  tests. Takes effect when a consumer bumps its pin **and** passes `--outline-from` to both
+  merges — the second merge rewrites the same file, so leaving it off puts the flat trees
+  back.
 
 - **Color is back in ✅ ❌ 🟡 🟢 (`prepare_book.py --color-emoji`, `.pdf-emoji` in
   `print-book.css`).** 0.3.6 fixed emoji printing as invisible specks by rejecting the color
@@ -383,7 +393,7 @@ only way to find one, because **nothing in the suite executed any of it.**
   test did exactly that and skipped itself.) The reference is the ordinary rendered pages,
   reached through each chapter's `data-source-path`.
 
-- **`scripts/tests/` — 91 unit tests over the ~1,050 lines of Python** in `prepare_book.py`,
+- **`scripts/tests/` — 93 unit tests over the ~1,060 lines of Python** in `prepare_book.py`,
   `merge_book.py` and `number_toc.py`, which had none. All pure functions over an lxml tree
   or a synthetic pypdf document: no Hugo, no WeasyPrint, no fonts, no network, 0.8s. They
   cover the failures that cannot be seen without opening the PDF and clicking things — a

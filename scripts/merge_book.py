@@ -110,9 +110,21 @@ def html_outline(manifest_path):
     utils/shift-headings.html pushes each page's own headings down to match. So
     the tree is read back from the HTML and rebuilt over the merged file.
 
-    A chapter's title heading carries no id of its own — the <section> around
-    it does — so the first id-less heading in a chapter borrows the section's
-    id. Any later one is skipped rather than pointed at the same place twice.
+    WHERE A HEADING'S ID ACTUALLY LIVES
+    -----------------------------------
+    Rarely on the <h*> element. Hextra's heading render hook emits it on an
+    empty offset anchor span INSIDE the heading —
+    `<h5>Title<span class="hx:absolute hx:-mt-20" id="…"></span>…</h5>` — so
+    reading `el.get("id")` alone finds nothing on a real page. On the
+    gloo-mesh-enterprise book that meant 459 headings instead of 2,884: one per
+    chapter and not a single one inside a page. So a descendant id is used when
+    the element has none, which is also what WeasyPrint's own bookmark pass
+    effectively resolved to.
+
+    A chapter's title heading is emitted by the book layout rather than by
+    Goldmark, so it has neither — the <section> around it holds the id, and the
+    first id-less heading in a chapter borrows it. Any later one is skipped
+    rather than pointed at the same place twice.
 
     Requires lxml, imported here rather than at module scope so that merging
     without --outline-from keeps its single pypdf dependency.
@@ -130,7 +142,9 @@ def html_outline(manifest_path):
             title = " ".join(el.text_content().split())
             if not title:
                 continue
-            anchor = el.get("id")
+            anchor = el.get("id") or next(
+                (k.get("id") for k in el.iterdescendants() if k.get("id")), None
+            )
             if not anchor:
                 section = el.getparent()
                 while section is not None and "pdf-chapter" not in (

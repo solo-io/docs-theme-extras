@@ -122,6 +122,35 @@ class TestHtmlOutline:
         m = self.write(tmp_path, '<section class="pdf-chapter" id="about"><h2>About</h2></section>')
         assert mb.html_outline(m) == [(2, "About", "about")]
 
+    def test_hextra_puts_the_id_on_an_anchor_span_inside_the_heading(self, tmp_path):
+        # This is what a REAL heading looks like: Hextra's render hook emits an
+        # empty offset span carrying the id, and leaves the <h*> bare. Reading
+        # el.get("id") alone found 459 headings in the gloo-mesh-enterprise
+        # book instead of 2,869 — one per chapter, none inside a page — so the
+        # bookmark panel would have lost every sub-page entry.
+        m = self.write(
+            tmp_path,
+            '<section class="pdf-chapter" id="ch"><h2>Chapter</h2>'
+            '<h5>Before you begin'
+            '<span class="hx:absolute hx:-mt-20" id="ch--before-you-begin"></span>'
+            '<a href="pdfjump:ch--before-you-begin" class="subheading-anchor"></a>'
+            "</h5></section>",
+        )
+        assert mb.html_outline(m) == [
+            (2, "Chapter", "ch"),
+            (5, "Before you begin", "ch--before-you-begin"),
+        ]
+
+    def test_the_anchor_markup_does_not_leak_into_the_title(self, tmp_path):
+        m = self.write(
+            tmp_path,
+            '<section class="pdf-chapter" id="ch"><h3>Set up'
+            '<span class="hx:absolute" id="ch--set-up"></span>'
+            '<a href="#x" class="subheading-anchor" aria-label="Permalink"></a>'
+            "</h3></section>",
+        )
+        assert mb.html_outline(m) == [(3, "Set up", "ch--set-up")]
+
     def test_a_body_heading_keeps_its_own_id(self, tmp_path):
         m = self.write(
             tmp_path,

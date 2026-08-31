@@ -502,10 +502,21 @@ file.
 
 Two things this depends on, both easy to break by accident:
 
-- A chapter's title heading carries no id of its own — the `<section>` around it
-  does — so the first id-less heading in a chapter borrows the section's id. The
-  contents heading is not in a chapter, which is why the layout gives it
-  `id="pdf-contents"` explicitly.
+- **A heading's id is almost never on the `<h*>` element.** Hextra's heading
+  render hook emits it on an empty offset anchor span *inside* the heading:
+
+  ```html
+  <h5>Before you begin<span class="hx:absolute hx:-mt-20" id="…"></span>
+    <a href="#…" class="subheading-anchor"></a></h5>
+  ```
+
+  So a descendant id is used when the element has none. Reading only the
+  element's own id finds 459 headings in the gloo-mesh-enterprise book — one per
+  chapter and not one inside a page — which produces a plausible-looking panel
+  missing 84% of its entries. A chapter's title heading comes from the layout
+  rather than from Goldmark and has neither, so it borrows its `<section>`'s id;
+  the contents heading is not in a chapter at all, which is why the layout gives
+  it `id="pdf-contents"` explicitly.
 - Pass `--outline-from` to **both** merges. The second merge (after the contents
   page is re-rendered with its numbers) rewrites the same file, so leaving it off
   puts the flat trees straight back into the artifact people download.
