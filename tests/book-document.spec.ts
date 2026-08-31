@@ -118,6 +118,38 @@ test.describe("book document", () => {
     expect(count(h, /class="pdf-toc-dots"/g)).toBe(tocLinks);
   });
 
+  // merge_book.py --outline-from rebuilds the PDF bookmark tree by reading the
+  // headings back out of this document, and it can only bookmark a heading it
+  // can point at. Every chapter heading borrows its <section>'s id; the
+  // contents heading sits in a <nav> and has to carry its own, or the manual
+  // opens with no bookmark for its own table of contents. Nothing about that
+  // failure is visible in the HTML, hence the assertion here.
+  test("the contents heading has an id the bookmark pass can target", () => {
+    const toc = book().match(/<nav class="pdf-toc">([\s\S]*?)<\/nav>/)![1];
+    expect(toc, "the Contents heading lost its id").toMatch(
+      /<h2 id="pdf-contents"[^>]*>/,
+    );
+  });
+
+  // The same rebuild reads a heading's LEVEL as its nesting depth, so the
+  // levels have to descend with the tree: a top-level chapter at h2, its
+  // children at h3, and so on. A chapter emitted at the wrong level would nest
+  // under the wrong parent in the bookmark panel and nowhere in the HTML.
+  test("chapter heading levels descend with the section tree", () => {
+    const h = book();
+    const chapters = [
+      ...h.matchAll(
+        /<section class="pdf-chapter[^"]*" id="([^"]+)"[^>]*>[\s\S]*?<(h[2-6])[ >]/g,
+      ),
+    ];
+    expect(chapters.length, "no chapter headings found").toBeGreaterThan(0);
+    // The first chapter is a top-level one, so it anchors the scale.
+    expect(chapters[0][2], "the first chapter is not an h2").toBe("h2");
+    const levels = new Set(chapters.map((m) => m[2]));
+    expect(levels.size, "every chapter is at the same level — nesting is lost")
+      .toBeGreaterThan(1);
+  });
+
   // The book is a SECOND caller of utils/unhide-tabs.html, separate from
   // copy-markdown.html. Today's tab bug was in exactly this path and not the
   // other, so tab-flatten.spec.ts alone would not have caught it.

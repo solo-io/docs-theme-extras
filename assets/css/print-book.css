@@ -20,8 +20,14 @@
     color: #666;
   }
 
+  /* Same 9pt/#666 as the date and product name either side of it. Without
+     these it inherited the 11pt body size and near-black body colour, so the
+     page number sat louder in the footer than the two labels it belongs
+     with. */
   @bottom-center {
     content: counter(page);
+    font-size: 9pt;
+    color: #666;
   }
 
   @bottom-right {
@@ -73,6 +79,27 @@ h6 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.03em; }
   break-after: page;
   text-align: center;
   padding-top: 6cm;
+  page: pdf-cover;
+}
+
+/* The cover carries no running header and no footer, so page numbering starts
+   at the table of contents: contents is page 1, and the number a reader reads
+   off the footer is the number the contents printed against that chapter.
+
+   A NAMED page, not `@page :first`. `:first` means the first page of the
+   document being rendered, and this book is rendered as several documents —
+   one per part (see prepare_book.py --max-part-bytes) — so it would blank the
+   footer on the first page of every part, scattered through the book. The
+   cover element exists exactly once, so a page named after it does too.
+
+   The other half of this lives in the caller: it renders the first part with
+   `counter-reset: page 0` rather than 1, and passes merge_book.py the matching
+   --first-page 0 so the printed contents agrees with the printed footers. */
+@page pdf-cover {
+  @top-left { content: ""; }
+  @bottom-left { content: ""; }
+  @bottom-center { content: ""; }
+  @bottom-right { content: ""; }
 }
 
 .pdf-cover-logo {
@@ -455,6 +482,32 @@ h6 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.03em; }
 .pdf-chapter th code,
 .pdf-chapter td code {
   word-break: break-all;
+}
+
+/* Nested ordered lists count 1 / a / i, then start over. A browser numbers
+   EVERY level with decimals, so a procedure with sub-steps printed as "1. 2.
+   3." inside "1. 2. 3." and the only clue about which was which was the
+   indent — which a page break can put on the far side of the page from the
+   list it belongs to. The site's own stylesheet does the same thing; this
+   document just never loads it.
+
+   Descendant selectors, not child ones: a numbered list nested through an
+   intervening bulleted list is still a second-level list to a reader. Level 4
+   restarts the cycle rather than falling back to the browser default, so the
+   pattern stays predictable on the rare page that nests that deep. */
+.pdf-chapter ol { list-style-type: decimal; }
+.pdf-chapter ol ol { list-style-type: lower-alpha; }
+.pdf-chapter ol ol ol { list-style-type: lower-roman; }
+.pdf-chapter ol ol ol ol { list-style-type: decimal; }
+
+/* Emoji tinted by prepare_book.py --color-emoji. The colour itself is inline,
+   per character; this rule only keeps the span from disturbing the line it
+   sits in. See EMOJI_COLOURS in that script for why the colour cannot simply
+   come from the font: WeasyPrint draws colour fonts as blank boxes, so the
+   book uses a monochrome outline font and the colour is reapplied as CSS. */
+.pdf-emoji {
+  font-style: normal;
+  font-weight: normal;
 }
 
 /* Tab groups, flattened by utils/unhide-tabs.html. On the live site the row

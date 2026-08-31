@@ -235,6 +235,78 @@ class TestReplaceIframes:
         assert pb.replace_iframes(d) == 0
 
 
+class TestColorizeEmoji:
+    """Putting colour back into emoji that WeasyPrint will not draw in colour.
+
+    The failure this guards against is not a crash — it is text quietly going
+    missing. These wrap characters mid-sentence, and lxml keeps the text after
+    an element in that element's `.tail`, so a wrapper that forgets one deletes
+    the rest of the paragraph.
+    """
+
+    def text(self, d):
+        return d.text_content()
+
+    def test_a_mapped_emoji_is_wrapped_and_tinted(self):
+        d = doc("<p>Status \U0001f7e2 here</p>")
+        assert pb.colorize_emoji(d) == 1
+        span = d.cssselect("span.pdf-emoji")[0]
+        assert span.text == "\U0001f7e2"
+        assert span.get("style") == "color:#2da44e"
+
+    def test_surrounding_text_is_preserved_exactly(self):
+        d = doc("<p>before ✅ middle ❌ after</p>")
+        assert pb.colorize_emoji(d) == 2
+        assert self.text(d) == "before ✅ middle ❌ after"
+
+    def test_the_variation_selector_travels_with_its_character(self):
+        # "⚠️" is U+26A0 U+FE0F. Leaving the selector behind puts a stray
+        # codepoint in the text layer and can change how the glyph resolves.
+        d = doc("<p>⚠️ careful</p>")
+        pb.colorize_emoji(d)
+        assert d.cssselect("span.pdf-emoji")[0].text == "⚠️"
+        assert self.text(d) == "⚠️ careful"
+
+    def test_an_emoji_in_a_tail_is_found_too(self):
+        # Text after an inline element is a `.tail`, not `.text`, and a table
+        # cell like "<code>x</code> ✅" is exactly that shape.
+        d = doc("<p><code>flag</code> ✅ supported</p>")
+        assert pb.colorize_emoji(d) == 1
+        assert self.text(d) == "flag ✅ supported"
+
+    def test_several_emoji_in_one_run_all_survive(self):
+        d = doc("<p>a \U0001f7e1 b \U0001f7e2 c \U0001f534 d</p>")
+        assert pb.colorize_emoji(d) == 3
+        assert self.text(d) == "a \U0001f7e1 b \U0001f7e2 c \U0001f534 d"
+        colours = [s.get("style") for s in d.cssselect("span.pdf-emoji")]
+        assert colours == ["color:#d4a72c", "color:#2da44e", "color:#cf222e"]
+
+    def test_an_unmapped_emoji_is_left_alone(self):
+        # The monochrome font still draws it; this pass only claims the set it
+        # knows a meaningful colour for.
+        d = doc("<p>ship it \U0001f680</p>")
+        assert pb.colorize_emoji(d) == 0
+        assert d.cssselect("span.pdf-emoji") == []
+
+    def test_running_it_twice_does_not_double_wrap(self):
+        # prepare() runs once, but the book is written back over its own source
+        # in the workflow, so a re-run on an already-prepared file is one typo
+        # away and must not nest spans.
+        d = doc("<p>✅ yes</p>")
+        pb.colorize_emoji(d)
+        assert pb.colorize_emoji(d) == 0
+        assert len(d.cssselect("span.pdf-emoji")) == 1
+
+    def test_white_circle_is_grey_not_white(self):
+        # White on a white page is an invisible glyph, which is worse than the
+        # monochrome one it replaced.
+        assert pb.EMOJI_COLOURS["⚪"] != "#ffffff"
+
+    def test_emoji_inside_a_heading_still_gets_tinted(self):
+        d = doc("<h2>Support ✅</h2>")
+        assert pb.colorize_emoji(d) == 1
+
+
 class TestSliceOversized:
     def test_small_chapter_is_returned_whole(self):
         d = doc(chapter("ch1", "/a/", "<p>x</p>"))

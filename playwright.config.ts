@@ -49,6 +49,25 @@ export default defineConfig({
   use: {
     baseURL: BASE_URL,
     trace: "retain-on-failure",
+    launchOptions: {
+      // Blackhole the webfont CDNs. Every fixture page links two
+      // fonts.googleapis.com stylesheets, which pull four fonts.gstatic.com
+      // files — SIX blocking requests per navigation, and Playwright gives
+      // each test a fresh BrowserContext, so nothing is cached between them.
+      // Locally that is ~290ms a page against warm DNS/TLS; on a CI runner it
+      // is cold every time, and the browser suite ran 9x slower there than
+      // here (a contrast test: 3.0s local, 26-30s CI against a 30s timeout,
+      // which is what finally made it flake).
+      //
+      // MAP ... ~NOTFOUND fails resolution immediately rather than refusing a
+      // connection or, worse, hanging — no waiting on a network that has
+      // nothing to give a fixture. The theme's own CSS is served locally and
+      // is unaffected; what is lost is the WEBFONT FACE, so text renders in
+      // the fallback. Verified below to change no assertion in this suite.
+      args: [
+        "--host-resolver-rules=MAP fonts.googleapis.com ~NOTFOUND, MAP fonts.gstatic.com ~NOTFOUND",
+      ],
+    },
   },
   webServer: {
     command: `npx serve ${PUBLIC_DIR} -l ${PORT} --no-clipboard --no-port-switching`,

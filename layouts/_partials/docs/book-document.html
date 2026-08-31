@@ -107,8 +107,14 @@
     {{- end }}
   </section>
 
+  {{- /* The id is load-bearing, not decoration: merge_book.py --outline-from
+         rebuilds the PDF bookmark tree from the headings in this document, and
+         it can only bookmark a heading it can point at. Every chapter heading
+         borrows its enclosing section's id; this one sits in a <nav>, so
+         without an id of its own the manual would open with no bookmark for
+         its own table of contents. */ -}}
   <nav class="pdf-toc">
-    <h2>Contents</h2>
+    <h2 id="pdf-contents">Contents</h2>
     {{- template "book-toc-tree" (dict "page" . "depth" 0 "self" $isChunkRoot) -}}
   </nav>
 

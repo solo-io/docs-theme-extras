@@ -22,14 +22,18 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
-## [0.3.6] — 2026-08-28
+## [0.3.6] — 2026-08-31
 
-**Scope of this release.** PDF pipeline only: one new script (`scripts/merge_book.py`), one
-new flag on `scripts/prepare_book.py`, one new CSS rule in `print-book.css`, and one new
-optional menu item. Versioned as a patch because a consumer that sets nothing new is
-byte-identical — neither script is a Hugo import, the `.pdf-chapter-cont` rule matches an
-element only the splitter creates, and the download item renders **only** when
-`params.pdfDownload.urlTemplate` is set.
+**Scope of this release.** PDF pipeline only: two new scripts (`scripts/merge_book.py`,
+`scripts/number_toc.py`), three new flags on `scripts/prepare_book.py` and `merge_book.py`,
+new rules in `print-book.css`, and one new optional menu item. Versioned as a patch because
+a consumer that sets nothing new is byte-identical — no script is a Hugo import, every new
+CSS rule matches either an element only the pipeline creates (`.pdf-chapter-cont`,
+`.pdf-emoji`) or one that exists only inside a book document (`.pdf-toc-*`, `@page
+pdf-cover`, `.pdf-chapter ol`), and the download item renders **only** when
+`params.pdfDownload.urlTemplate` is set. The one change a consumer sees without opting into
+anything is `id="pdf-contents"` on the book's contents heading, which no book has ever
+targeted.
 
 ### Add
 
@@ -61,9 +65,13 @@ element only the splitter creates, and the download item renders **only** when
 
   **Verified** on the real gloo-mesh-enterprise book (16 MB, 458 chapters): 10 parts, all
   ≤1.9 MB; merged to 6,485 pages with continuous numbering (page index 2946 prints "2947",
-  spanning a part boundary), 2,869 bookmarks with nesting intact across parts, 7,929
-  internal links and **zero** pointing outside the document, zero unresolved jumps, and zero
-  render errors. Peak memory fell from >15 GB to **2,134 MB**, and total render time from
+  spanning a part boundary), 2,869 bookmarks, 7,929 internal links and **zero** pointing
+  outside the document, zero unresolved jumps, and zero render errors.
+
+  **Correction.** That verification originally also claimed "nesting intact across parts".
+  It is not, and counting bookmarks did not show it: the tree is nested correctly *within*
+  each part and re-rooted at every boundary. See the bookmark-tree fix below, which is what
+  actually makes the claim true. Peak memory fell from >15 GB to **2,134 MB**, and total render time from
   32+ minutes (never finishing) to **5m20s**. The slice boundary inside the CVE chapter is
   visually seamless — same running header, consecutive page numbers, no stray break.
 
@@ -125,7 +133,95 @@ element only the splitter creates, and the download item renders **only** when
   and on a page three levels deep inside it, with the correct release URL, and is absent
   from `2.12.x` and `main`, neither of which builds a book.
 
+- **Page numbering starts at the contents page, and the cover carries no footer
+  (`@page pdf-cover` in `print-book.css`, `merge_book.py --first-page`).** The cover was
+  page 1, which is not how a manual is numbered and cost a page of offset against every
+  printed contents entry. `@page :first` cannot do this job — it means the first page of
+  the document *being rendered*, and this book is rendered as one document per part, so it
+  would have blanked a footer in the middle of the book for every part after the first. A
+  named page bound to the cover element runs exactly once.
+
+  `--first-page` is the other half: the page map records where destinations landed
+  physically, and with the cover unnumbered the printed number is one lower. Without both,
+  every line of the contents page is off by one — silently, and only on paper.
+
 ### Fix
+
+- **The PDF bookmark tree survives the split (`merge_book.py --outline-from`,
+  `id="pdf-contents"` in `docs/book-document.html`).** In the published
+  [Gloo Mesh Enterprise manual](https://github.com/solo-io/docs-pdfs/releases/tag/gloo-mesh-enterprise-enterprise-latest),
+  the bookmark panel is correct for exactly three entries — "Get started", "About", "Setup"
+  — and then goes flat: **60 top-level entries where there should be 13**, and the extra 47
+  are third- and fourth-level headings like "Before you begin" and "Example script gist",
+  sitting beside the sections they belong inside.
+
+  The cause is that WeasyPrint derives bookmark nesting from heading levels **per
+  document**, and each part is its own document. Part 2 opens on an `<h5>` deep inside
+  Setup, so that heading becomes part 2's root, and nothing later in the part can nest above
+  it. Concatenating the per-part trees preserves each one faithfully and produces a wrong
+  book.
+
+  The part HTML still knows the answer — levels there are absolute, because the book layout
+  emits a chapter at h2 plus its depth and `utils/shift-headings.html` pushes each page's
+  own headings down to match — so `--outline-from book.parts.txt` drops the imported trees,
+  reads the headings back out of the HTML, and builds one tree over the merged file. A
+  chapter's title heading has no id of its own, so it borrows its `<section>`'s; the
+  contents heading is not in a chapter, which is why it now carries `id="pdf-contents"`.
+
+  The risky part was dropping the imported outlines at all: `merge_book.py` resolves every
+  `pdfjump:` cross-reference against the merged file's **named destinations**, and if those
+  had travelled with the outline, repairing the bookmarks would have broken every link in
+  the book. They do not — proven by a test, not by reading the pypdf source.
+
+  **Verified** on a 4-part synthetic book rendered through the real pipeline in an
+  Ubuntu 24.04 + WeasyPrint 69 container: 11 bookmarks rebuilt, 0 headings without a page,
+  nesting correct **across all three part boundaries** (`Setup → Install → Helm` where the
+  three sit in different parts), 64 jumps rewired and 0 unresolved. Plus 13 unit tests
+  covering level jumps, the borrowed section id, and the destinations-survive-the-drop case.
+  Takes effect when a consumer bumps its pin **and** passes `--outline-from` to both merges
+  — the second merge rewrites the same file, so leaving it off puts the flat trees back.
+
+- **Color is back in ✅ ❌ 🟡 🟢 (`prepare_book.py --color-emoji`, `.pdf-emoji` in
+  `print-book.css`).** 0.3.6 fixed emoji printing as invisible specks by rejecting the color
+  font and installing the monochrome outline one, which made them legible and made 🟡 and 🟢
+  two nearly identical gray hatched circles — in a support matrix where the color *is* the
+  information.
+
+  The obvious fix does not exist. Rendered side by side in an Ubuntu 24.04 + WeasyPrint 69
+  container, **all three kinds of color font come out blank**: Noto Color Emoji (CBDT
+  bitmap), Noto COLRv1, and Twemoji Mozilla (COLRv0). Each embeds into the PDF, each
+  reserves the advance, none places any ink. There is no color font to switch to.
+
+  So the color is put back on the **characters** instead, before the renderer sees them:
+  each mapped emoji is wrapped in `<span class="pdf-emoji" style="color:…">`, and an outline
+  glyph honors `color` where a bitmap one does not — which is the reason the monochrome font
+  is the right one to install rather than a workaround around it. Tinting rather than
+  substituting a CSS shape keeps the character in the PDF's text layer, so it still copies,
+  searches and reads out, and it keeps Noto Emoji's per-emoji hatching, so the distinction
+  does not rest on hue alone for a color-blind reader. ⚪ and ⬜ map to gray, not white:
+  white on a white page is an invisible glyph, which is worse than what it replaced.
+
+  Opt-in, because it is a WeasyPrint workaround — a Paged.js consumer renders in Chromium,
+  which draws the real color font. Visible in the next export of
+  [the Gloo Mesh Enterprise manual](https://github.com/solo-io/docs-pdfs/releases/tag/gloo-mesh-enterprise-enterprise-latest),
+  whose content uses 582 ✅, 148 ❌, 26 🟡, 25 🟢 and one 🔴.
+
+  **Verified** by rendering each font configuration in the container and reading back both
+  the embedded `/BaseFont` and the rasterized page, then by a full-pipeline run: 5 emoji
+  tinted, correct colors on the page. Plus 9 unit tests, one of which caught a real bug —
+  the pass was not idempotent, and a second run nested every span inside itself.
+
+- **Nested ordered lists count 1 / a / i (`print-book.css`).** Every level printed as
+  decimals, so a procedure with sub-steps read as "1. 2. 3." inside "1. 2. 3." and the only
+  cue was the indent — which a page break can put on the far side of the page from the list
+  it belongs to. The website's own stylesheet already does this; the print document just
+  never loads it. Verified in the container: `1.` → `a.` → `i.` on a three-deep list.
+
+- **The page number matched neither of the two labels it sits between
+  (`print-book.css`).** `@bottom-center` set no font-size and no color, so it inherited 11pt
+  near-black body text while `@bottom-left` (the date) and `@bottom-right` (the product
+  name) were 9pt `#666`. The number sat louder in the footer than the labels it belongs
+  with. Now the same 9pt `#666`.
 
 - **Nine rendering defects found by reading a finished 6,485-page book.** Each was
   reproduced in isolation before being fixed, and two turned out not to be what they
@@ -287,7 +383,7 @@ only way to find one, because **nothing in the suite executed any of it.**
   test did exactly that and skipped itself.) The reference is the ordinary rendered pages,
   reached through each chapter's `data-source-path`.
 
-- **`scripts/tests/` — 69 unit tests over the ~940 lines of Python** in `prepare_book.py`,
+- **`scripts/tests/` — 91 unit tests over the ~1,050 lines of Python** in `prepare_book.py`,
   `merge_book.py` and `number_toc.py`, which had none. All pure functions over an lxml tree
   or a synthetic pypdf document: no Hugo, no WeasyPrint, no fonts, no network, 0.8s. They
   cover the failures that cannot be seen without opening the PDF and clicking things — a
@@ -299,7 +395,9 @@ only way to find one, because **nothing in the suite executed any of it.**
   **Verified to fail, not just to pass.** Re-introducing two real regressions — dropping
   `unquote()` from the destination lookup, and re-anchoring `find_toc_part` on
   `class="pdf-toc"` so `--minify` defeats it — turns exactly those two tests red and leaves
-  the other 67 green.
+  the rest green. The emoji tests earned their place the same way, by catching a real bug
+  during review rather than after: the tinting pass was not idempotent, and a second run
+  nested every span inside itself.
 
 - **A `python-scripts` CI job**, added to the `test-all` required check so it can actually
   block. Its own job rather than a step in the brand matrix: it needs no Hugo, Node, browser
@@ -308,6 +406,54 @@ only way to find one, because **nothing in the suite executed any of it.**
 
 Consumer-neutral: no layout, asset or shortcode changes here. Verified with the full suite on
 both brands.
+
+### Test harness — the browser suite was paying for Google Fonts on every navigation
+
+**Why.** `framework-test-browser` in solo-io/docs kept flaking on
+`contrast.spec.ts › accent text contrast … dark mode`, and the cause was not the assertion:
+the test **timed out**. It had been sitting at 29.5–30.1s against a 30s ceiling for days
+(passing by fractions of a second on 2026-08-29 and 08-30, failing on 08-31), while the same
+test takes **3.0s locally**. The whole browser suite ran ~9x slower on CI than here.
+
+Every fixture page links two `fonts.googleapis.com` stylesheets, which pull four
+`fonts.gstatic.com` files — **six blocking requests per navigation**. Playwright gives each
+test a fresh `BrowserContext`, so none of it is cached between tests: every navigation in the
+suite pays the full cost again, warm locally and cold on a runner.
+
+This was already half-known. `cross-browser.spec.ts` carries a comment explaining that
+`networkidle` had to be dropped because "firefox counts in-flight Google Fonts + Material
+Symbols + Mermaid CDN requests in its idle calculation, which on CI runners can leave the
+network busy past 15s" — the same cost, worked around one spec at a time.
+
+**Fix.** `use.launchOptions.args` blackholes both hosts with Chromium's
+`--host-resolver-rules=… ~NOTFOUND`, which fails resolution immediately rather than waiting on
+a network that has nothing to give a fixture. What is lost is the webfont *face*; the theme's
+own CSS is served locally and is untouched.
+
+Two consequences worth stating:
+
+- **The three console-error collectors had to agree with each other.** A blackholed request
+  logs `net::ERR_NAME_NOT_RESOLVED`, and `browser.spec.ts` / `cross-browser.spec.ts` reported
+  it as a page defect. This is not a new judgement call — `console-errors.spec.ts` has
+  suppressed these two hosts in `BUILTIN_NOISE` all along, commented "may time out on
+  restricted CI runners with no external network access"; the other two were simply
+  inconsistent with it. Now shared via `tests/helpers/blocked-hosts.ts`, matched **only**
+  against those hosts, so a theme error or a 404 on a local asset still fails.
+- Matching them meant reading `msg.location().url`: a browser-generated
+  `Failed to load resource: …` carries **no URL in `.text()`**, which is exactly the trap
+  `console-errors.spec.ts` documents. Both collectors now append it, which also makes their
+  failure reports say *which* resource failed.
+
+`--host-resolver-rules` is Chromium-only, so the Firefox and WebKit legs still pay the cost.
+They run 11 tests each, so it is not worth solving twice; both were verified to ignore the
+unknown flag rather than choke on it.
+
+**Verified**: the browser project goes from **49.8s to 21.8s** locally with **identical**
+results (140 passed, 14 skipped, no assertion changed — including the layout, overflow and
+table-width specs that a missing webfont could plausibly have shifted), and the full suite
+from 57.4s to **34.4s** (oss) and 57.5s to **38.6s** (enterprise), at 2193 passed on both.
+Firefox and WebKit were run separately and ignore the flag rather than choke on it. The local
+numbers are all with warm DNS and TLS; the CI effect should be larger, which is the point.
 
 ## [0.3.5] — 2026-08-28
 

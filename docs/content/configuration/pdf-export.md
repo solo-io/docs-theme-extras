@@ -466,15 +466,78 @@ Reading destinations back is two linear passes. pypdf's `get_page_number()`
 scans the page list per call, which on this book would be ~2,900 destinations
 against ~6,500 pages, or roughly 19 million comparisons.
 
+#### Numbering starts at the contents page
+
+The cover is unnumbered, which is the usual convention for a manual and also
+means the number a reader reads off the footer is the number the contents page
+printed against that chapter. Two settings have to agree for that:
+
+- `print-book.css` blanks all four margin boxes on `@page pdf-cover`, a **named
+  page** that only the cover element uses. `@page :first` cannot do this job —
+  it means the first page of the document being rendered, and the book is
+  rendered as one document per part, so it would blank a footer somewhere in the
+  middle of the book for every part after the first.
+- The caller renders the first part with `counter-reset: page 0` rather than `1`,
+  and passes `merge_book.py --page-map` the matching `--first-page 0`. Without
+  the second half, the page map holds physical positions while the footers hold
+  printed ones, and every line of the contents page is one out.
+
+### The bookmark tree has to be rebuilt after a split
+
+WeasyPrint derives the PDF bookmark tree from heading levels, **per document**.
+Each part is its own document, so each part's tree is nested against the
+shallowest heading that part happens to contain rather than against the book.
+Concatenate those trees and the bookmark panel is correct until the first part
+boundary and flat afterwards. In the gloo-mesh-enterprise manual that meant
+"Get started", "About" and "Setup" nested properly and then 56 more entries at
+the top level, most of them third- and fourth-level headings whose parents were
+in an earlier part.
+
+The part HTML still knows the real answer, because the levels there are
+absolute: the book layout emits a chapter at h2 plus its depth, and
+`utils/shift-headings.html` pushes each page's own headings down to match. So
+`merge_book.py --outline-from book.parts.txt` drops the imported per-part trees,
+reads the headings back out of the HTML, and builds one tree over the merged
+file.
+
+Two things this depends on, both easy to break by accident:
+
+- A chapter's title heading carries no id of its own — the `<section>` around it
+  does — so the first id-less heading in a chapter borrows the section's id. The
+  contents heading is not in a chapter, which is why the layout gives it
+  `id="pdf-contents"` explicitly.
+- Pass `--outline-from` to **both** merges. The second merge (after the contents
+  page is re-rendered with its numbers) rewrites the same file, so leaving it off
+  puts the flat trees straight back into the artifact people download.
+
+One limit carries over rather than being introduced here: heading levels stop at
+`h6`, so a chapter nested five or more deep and the body headings inside it all
+land at `h6` and become siblings in the panel. `utils/shift-headings.html` caps
+there because HTML has nothing deeper, and WeasyPrint's own tree had the same
+ceiling.
+
 ### Fonts the renderer needs
 
 Beyond `fonts-dejavu-core` and `fonts-liberation` (diagram SVGs ask for
 Helvetica, and Liberation Sans is the metric-compatible stand-in), the emoji
 font matters more than it sounds like it should. Comparison tables in this
-content use ✅ and ❌, and **Noto Color Emoji is a CBDT bitmap font whose glyphs
-WeasyPrint scales wrongly** — they print about 2 mm tall, some outside their own
-cell, so the table reads as empty. Install the monochrome outline font,
-[Noto Emoji](https://github.com/google/fonts/tree/main/ofl/notoemoji), instead.
+content use ✅ and ❌, and under WeasyPrint they came out unreadable.
+
+**WeasyPrint cannot draw a color font.** Not badly — at all. Rendered side by
+side in the container below, all three kinds embed into the PDF and all three
+leave the glyph box blank:
+
+| Font | Technology | What WeasyPrint 69 draws |
+| ---- | ---------- | ------------------------ |
+| Noto Color Emoji | CBDT (bitmap) | nothing; the advance is reserved and no ink is placed |
+| Noto COLRv1 | COLRv1 (vector) | nothing |
+| Twemoji Mozilla | COLRv0 (vector) | nothing |
+| Noto Emoji | `glyf` (outline) | the glyph, in the inherited text color |
+
+So install the monochrome outline font,
+[Noto Emoji](https://github.com/google/fonts/tree/main/ofl/notoemoji), and get
+the color back a different way — see
+[Color emoji](#color-emoji-come-from-the-html-not-the-font) below.
 
 Installing it is not sufficient on its own. A hosted GitHub runner image already
 ships the color font, and Pango keeps choosing it, so the color font has to be
@@ -507,7 +570,35 @@ rejected outright:
 > python3 -c "from pypdf import PdfReader; print([str(f.get_object()['/BaseFont']) for f in PdfReader('probe.pdf').pages[0]['/Resources']['/Font'].values()])"
 > ```
 
-The trade-off is that 🟡 and 🟢 lose their color and differ only by shading.
+### Color emoji come from the HTML, not the font
+
+Because no color font renders, the color is reapplied to the **characters**
+instead, before the renderer sees them. `prepare_book.py --color-emoji` wraps
+each emoji it knows a meaning-bearing color for in
+`<span class="pdf-emoji" style="color:…">`. An outline glyph honors `color`; a
+bitmap one does not, which is the reason the monochrome font is the one
+installed rather than a workaround around it.
+
+The map lives in `EMOJI_COLOURS` in that script and covers the colored circles
+and squares (🔴 🟠 🟡 🟢 🔵 🟣 🟤 ⚫ ⚪ and the square set) plus the status
+marks (✅ ✔ ❌ ❎ ✖ ❗ ⛔ 🚫 ⚠ ❓ ℹ). Values are GitHub Primer colors, so a
+table of status dots in the PDF reads the way the same table reads on the
+website. Anything outside the map is left to the monochrome font.
+
+Three details worth knowing before you change it:
+
+- **Tinting, not substituting.** The character stays in the PDF's text layer, so
+  it still copies, searches and reads out. A CSS shape in its place would look
+  cleaner and lose all three.
+- **Noto Emoji's hatching survives**, and that is a feature: 🟡 is dotted, 🟢 is
+  diagonally hatched and 🔴 is vertically striped, so the distinction does not
+  rest on hue alone for a color-blind reader.
+- **⚪ and ⬜ are gray, not white.** White on a white page is an invisible glyph,
+  which is worse than the monochrome one it replaced.
+
+The flag is opt-in because it is a WeasyPrint workaround. A Paged.js consumer
+renders in Chromium, which draws the real color font, and there the tint would
+repaint emoji that are already correct.
 
 ### Pandoc did not produce a PDF from this content at all
 
@@ -604,19 +695,22 @@ cross-references, numbered contents — with the four stages the workflow runs, 
 order:
 
 ```sh
-# 1. Prepare: unique ids, deferred jumps, SVG font fix, split into parts.
+# 1. Prepare: unique ids, deferred jumps, emoji color, SVG font fix, split.
 python3 prepare_book.py public/<product>/<version>/book.html \
         public/<product>/<version>/book.html https://docs.solo.io \
-        --strict --fix-svg-fonts public
+        --strict --color-emoji --fix-svg-fonts public
 
 # 2. Render each part IN ORDER, telling each one where its page numbers start.
 #    Sequential is not an optimization choice — a part cannot know its first
 #    page number until every earlier part has been rendered and counted.
+#    The FIRST part starts at 0, because the cover is unnumbered.
 echo "@page :first { counter-reset: page $NEXT; }" > offset.css
 weasyprint -s offset.css "http://127.0.0.1:8000/<product>/<version>/$NAME.html" "$PDF"
 
-# 3. Merge, and record where every destination landed.
-python3 merge_book.py out.pdf pdf-parts/*.pdf --page-map pages.json
+# 3. Merge: record where every destination landed, and rebuild the bookmark
+#    tree from the part HTML. --first-page must match the first part's offset.
+python3 merge_book.py out.pdf pdf-parts/*.pdf --page-map pages.json \
+        --first-page 0 --outline-from public/<product>/<version>/book.parts.txt
 
 # 4. Number the contents, re-render only that part, merge again.
 python3 number_toc.py pages.json --manifest public/<product>/<version>/book.parts.txt
@@ -630,13 +724,20 @@ them.
 ### Checking what you produced
 
 The failures worth catching do not announce themselves — a diagram that vanished,
-emoji that rendered as specks, a contents page of blanks. These read the finished
-file:
+emoji that rendered blank, a contents page of blanks, a bookmark panel that goes
+flat halfway down. These read the finished file:
 
 ```sh
-# Emoji resolved to the outline font, not the bitmap one.
+# Emoji resolved to the outline font, not a color one.
 python3 -c "from pypdf import PdfReader; print([str(f.get_object()['/BaseFont']) \
   for f in PdfReader('out.pdf').pages[0]['/Resources']['/Font'].values()])"
+
+# Bookmark nesting. Every top-level entry should be a top-level SECTION; a run
+# of deep headings here is the per-part flattening described above.
+python3 -c "
+from pypdf import PdfReader
+r = PdfReader('out.pdf')
+print([i.title for i in r.outline if not isinstance(i, list)])"
 
 # Look at a page instead of guessing.
 pdftoppm -png -r 100 -f 12 -l 12 out.pdf page
