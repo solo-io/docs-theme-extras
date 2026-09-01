@@ -5,15 +5,16 @@ import { TEST_PAGES, readFixture } from "./helpers/fixture";
 // groups for every linear-reading context: the PDF/book stitching, the
 // `markdown` output format, and the "Copy as Markdown" button.
 //
-// WHY THIS EXISTS. The partial had NO coverage, and it silently did nothing
-// for months: it was written against `role="tab"` / `role="tablist"` /
-// `hextra-tabs-panel`, none of which Hextra emits any more. Nobody noticed,
-// because copy-markdown.html carried its own near-identical copy of the same
-// patterns and that copy still worked, so the visible button looked fine while
-// the book shipped unlabelled, stacked options. The next attempt fixed the
-// wrong half — it anchored on `class="hextra-tab-panel"`, which only the
-// ACTIVE panel of each group carries, so it labelled the first option of every
-// group and skipped the rest. Both bugs were found by a human reading output.
+// WHY THIS EXISTS. The partial had NO coverage, and it handled only ONE of the
+// two live tab markups: a consumer with a tabs override (solo-io/docs) hit
+// patterns that matched nothing here, so its book shipped unlabelled, stacked
+// options. Nobody noticed, because copy-markdown.html carried its own copy that
+// handled both, so the visible button looked fine. The next attempt fixed the
+// wrong half — it anchored on `class="hextra-tab-panel"`, which only the ACTIVE
+// panel of each group carries, so it labelled the first option of every group
+// and skipped the rest. The one after that dropped the id -> name map and
+// labelled stock-Hextra panels `Option: tabs-tab-tabs-14-0`. All three were
+// found by a human reading output.
 //
 // So this spec asserts a COUNTING invariant rather than the presence of any
 // one string: every tab group in the rendered page contributes exactly one
@@ -82,6 +83,13 @@ test.describe("tab groups flatten with one lead-in and one label per option", ()
       // One label per PANEL — the assertion that catches an anchor which
       // matches only each group's active panel.
       expect(count(md, /\*\*Option: /g)).toBe(panels);
+
+      // Every label names the tab the reader would have clicked, not the DOM
+      // id the panel's aria-labelledby points at. Stock Hextra's ids all look
+      // like `tabs-tab-tabs-14-0`, so an id leaking through as a label is
+      // recognizable on sight — and it is what ships if the id -> name map in
+      // unhide-tabs.html is dropped or built AFTER the button bar is stripped.
+      expect(md).not.toMatch(/\*\*Option: tabs-tab-/);
 
       // The button bar is a dead control once there is no JS to switch tabs,
       // so it must not survive into the flattened output.

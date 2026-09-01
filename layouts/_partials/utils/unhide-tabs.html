@@ -7,10 +7,13 @@
        drops aria-hidden.
 
        ALL THREE consumers call this partial. copy-markdown.html used to keep
-       its own copy of these patterns, and the copies drifted far enough apart
-       that this one matched markup Hextra had stopped emitting and silently
-       did nothing for months, while the copy behind the visible button kept
-       working. Add a pattern here, not there.
+       its own copy of these patterns, and the copies drifted: this file handled
+       only the markup a consumer with a tabs OVERRIDE emits (variant B below
+       was missing), while copy-markdown.html handled both but labelled variant
+       B with a raw DOM id. So solo-io/docs, whose override emits variant A, got
+       nothing from the variant B patterns here, and the four stock-Hextra sites
+       got real names in one place and ids in the other. Add a pattern here, not
+       there.
 
        Usage: {{ $html = partial "utils/unhide-tabs.html" $html }}
        Input/output is HTML as a string (or template.HTML); the caller marks
@@ -44,11 +47,45 @@
        shown and hidden by JS at runtime, so a JS-less context renders EVERY
        option stacked under a button bar that no longer switches anything.
 
-       Variant B's panel cannot name itself — the visible name lives two
-       <span>s deep inside the button that is about to be stripped, and the
-       panel only points at that button's DOM id. So variant B labels with the
-       id (e.g. "tabs-tab-tabs-14-0"), which is poor but honest; a consumer
-       that wants real names has variant A available. */ -}}
+       Variant B's panel cannot name ITSELF — the visible name lives two
+       <span>s deep inside the button, and the panel only points at that
+       button's DOM id — but the document can, so the id is resolved through a
+       map built from the buttons BEFORE the bar is stripped. Labelling with the
+       raw id instead ships "Option: tabs-tab-tabs-14-0" to every consumer
+       without a tabs override, which is all four OSS sites. */ -}}
+
+{{- /* The id -> name map for variant B. Built FIRST: the buttons carrying the
+       names are discarded by the tablist replacement further down, so there is
+       no second chance at them.
+
+       Scoped to `role="tab"` so an unrelated button (a code block's copy
+       control, say) can never land in the map. The name is taken from the
+       innermost ATTRIBUTE-LESS <span>, which is the only thing distinguishing
+       it from the styled wrapper span around it:
+
+         <button ... id="tabs-tab-tabs-14-0" role="tab">
+           <span class="hx:inline-flex …"><span>Cloud Provider LoadBalancer</span></span>
+
+       findRE's limit is 100 rather than Hugo's default 10. A page with more
+       than 100 tab buttons silently loses the names past that point and falls
+       back to ids, which is the same output as not having this map at all.
+
+       A button with no attribute-less span contributes NOTHING rather than a
+       bad entry: replaceRE returns its subject unchanged when nothing matches,
+       so computing the name unguarded would map the id to the entire button
+       markup, class soup and all. */ -}}
+{{- $names := newScratch -}}
+{{- range findRE `(?s)<button[^>]*role="tab"[^>]*>.*?</button>` $html 100 -}}
+  {{- $button := . -}}
+  {{- $spans := findRE `<span>[^<]*</span>` $button 100 -}}
+  {{- if $spans -}}
+    {{- $id := $button | replaceRE `(?s).*\bid="([^"]*)".*` "$1" -}}
+    {{- $name := index $spans (sub (len $spans) 1) | replaceRE `<span>([^<]*)</span>` "$1" -}}
+    {{- if ne $id $button -}}
+      {{- $names.Set $id $name -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
 
 {{- /* VARIANT A. Drop the button bar, anchored to the tabs container so an unrelated
        <nav> (the book's own .pdf-toc, the sidebar) can never be swallowed.
@@ -84,7 +121,24 @@
        it is matched on its own. `.*?</div>` is safe here only because a
        tablist contains buttons and spans, never a nested <div>. */ -}}
 {{- $html = $html | replaceRE `(?s)<div[^>]*role="tablist"[^>]*>.*?</div>` "<p class=\"pdf-tab-intro\">You can choose from the following options.</p>" -}}
-{{- $html = $html | replaceRE `<div class="hextra-tabs-panel[^"]*"[^>]*aria-labelledby="([^"]*)"[^>]*>` `<div class="pdf-tab-option" style="display:block"><p class="pdf-tab-option-label"><strong>Option: $1</strong></p>` -}}
+
+{{- /* One panel at a time, rather than a single global replaceRE, because a
+       replacement template can only emit a literal and a backreference — it
+       cannot look an id up in the map above. Each panel's opening <div> is
+       replaced by one opening <div>, so tag balance is preserved, and an id
+       missing from the map falls back to the id itself.
+
+       Plain `replace`, unlike `replaceRE`, takes its subject FIRST
+       (replace SUBJECT OLD NEW). Piping $html in here the way replaceRE is
+       piped above would put $html in the NEW slot instead and collapse the
+       whole document down to the opening tag. It is safe against repeats
+       because the tag carries the panel's own unique id. */ -}}
+{{- range findRE `<div class="hextra-tabs-panel[^"]*"[^>]*aria-labelledby="[^"]*"[^>]*>` $html 100 -}}
+  {{- $openTag := . -}}
+  {{- $id := $openTag | replaceRE `(?s).*aria-labelledby="([^"]*)".*` "$1" -}}
+  {{- $name := $names.Get $id | default $id -}}
+  {{- $html = replace $html $openTag (printf `<div class="pdf-tab-option" style="display:block"><p class="pdf-tab-option-label"><strong>Option: %s</strong></p>` $name) -}}
+{{- end -}}
 
 {{- /* Some content hand-numbers a tab's list to continue from the step it's
        nested under via the list's native `start` attribute (e.g. two tabs

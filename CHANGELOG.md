@@ -24,16 +24,22 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ## [0.3.6] — 2026-08-31
 
-**Scope of this release.** PDF pipeline only: two new scripts (`scripts/merge_book.py`,
+**Scope of this release.** Mostly the PDF pipeline: two new scripts (`scripts/merge_book.py`,
 `scripts/number_toc.py`), three new flags on `scripts/prepare_book.py` and `merge_book.py`,
 new rules in `print-book.css`, and one new optional menu item. Versioned as a patch because
-a consumer that sets nothing new is byte-identical — no script is a Hugo import, every new
+none of that reaches a consumer that sets nothing new — no script is a Hugo import, every new
 CSS rule matches either an element only the pipeline creates (`.pdf-chapter-cont`,
 `.pdf-emoji`) or one that exists only inside a book document (`.pdf-toc-*`, `@page
 pdf-cover`, `.pdf-chapter ol`), and the download item renders **only** when
-`params.pdfDownload.urlTemplate` is set. The one change a consumer sees without opting into
-anything is `id="pdf-contents"` on the book's contents heading, which no book has ever
-targeted.
+`params.pdfDownload.distribution` or `params.pdfDownload.urlTemplate` is set.
+
+**One change does reach every consumer, PDF or not.** Tab flattening moved out of
+`partials/copy-markdown.html` and into the shared `utils/unhide-tabs.html`, which the
+`markdown` output format already used — so on any site with a tabbed page, both that output
+and the "Copy as Markdown" payload gain a lead-in sentence above each flattened group and
+consistent `Option:` labels. It is a fix rather than a new behavior, and it is listed under
+[Fix](#fix). The only other change a consumer sees without opting into anything is
+`id="pdf-contents"` on the book's contents heading, which no book has ever targeted.
 
 A consumer that **already builds a book** sees three changes. One is breaking and is listed
 below. The other two are under [Fix](#fix): the print stylesheet is published at
@@ -336,6 +342,43 @@ bumping the pin if that is no longer true for you.
   never opted into `book`, covers the other gate.
 
 ### Fix
+
+- **A flattened tab group now says that its options are alternatives, and every option is
+  labelled with the name from its own tab (`layouts/_partials/utils/unhide-tabs.html`,
+  `layouts/partials/copy-markdown.html`, new `tests/tab-flatten.spec.ts`).** Tabs are shown
+  and hidden by JavaScript at runtime, so anything that reads a page without running it — the
+  book, the `markdown` output format, the "Copy as Markdown" payload — gets every option
+  stacked under a button bar that no longer switches anything. Stripping that bar and leaving
+  nothing in its place is worse than it sounds: the row of buttons **is** the signal that what
+  follows is a set of alternatives, so without it a reader, or a model reading `llms.txt`,
+  sees several blocks in sequence and works through them in order. A lead-in sentence now
+  replaces the bar, once per group.
+
+  **Why it was inconsistent.** Two tab markups are live, and a consumer emits one or the
+  other: a repo that overrides Hextra's tabs shortcode
+  ([solo-io/docs](https://docs.solo.io/kgateway/2.3.x/portal/overview/)) emits `<nav>` plus
+  panels carrying `data-tab-name`, and stock Hextra
+  ([kgateway.dev](https://kgateway.dev/docs/envoy/latest/quickstart/), and the other three OSS
+  sites) emits `[role="tablist"]` plus panels carrying `aria-labelledby`. This partial handled
+  only the first, `copy-markdown.html` kept its own copy that handled both, and the copies
+  drifted — so the same page flattened differently depending on which of the two ways a reader
+  asked for it. There is now one implementation, and `copy-markdown.html` calls it.
+
+  **The stock-Hextra label needs a lookup, not a backreference.** That panel points at its
+  button's DOM id, and the visible name sits two `<span>`s deep inside the button, which the
+  bar-stripping pass is about to discard. Labelling straight off the backreference is what
+  produces `Option: tabs-tab-tabs-14-0`, so the id is resolved through a map built from the
+  buttons **before** they are stripped. Verify on any tabbed page above: open Copy as Markdown
+  and confirm each option is named after its tab.
+
+  **Verified** on both brands. The spec asserts a counting invariant rather than the presence
+  of any one string — every tab group contributes exactly one lead-in sentence and every panel
+  contributes exactly one `Option:` label — because the two previous attempts at this both
+  failed by matching a subset: one matched no stock-Hextra markup at all, and one anchored on
+  `class="hextra-tab-panel"`, which only each group's ACTIVE panel carries, so it labelled the
+  first option of every group and skipped the rest. A third assertion rejects any label that
+  still looks like a DOM id. Mutation-tested by removing the id-to-name map and confirming the
+  suite goes red with `**Option: tabs-tab-tabs-14-0**`.
 
 - **An Excalidraw diagram no longer loses its connectors and labels in the PDF
   (`scripts/prepare_book.py`).** Reported from the kagent manual, where the
@@ -770,10 +813,25 @@ This was already half-known. `cross-browser.spec.ts` carries a comment explainin
 Symbols + Mermaid CDN requests in its idle calculation, which on CI runners can leave the
 network busy past 15s" — the same cost, worked around one spec at a time.
 
-**Fix.** `use.launchOptions.args` blackholes both hosts with Chromium's
+**Fix.** `launchOptions.args` blackholes both hosts with Chromium's
 `--host-resolver-rules=… ~NOTFOUND`, which fails resolution immediately rather than waiting on
 a network that has nothing to give a fixture. What is lost is the webfont *face*; the theme's
 own CSS is served locally and is untouched.
+
+**Chromium projects only** (`browser`, `cross-browser-chromium`, `browser-crawl`), spread per
+project rather than set once in the top-level `use`. That flag is Chromium's: Firefox ignores
+an argument it does not know, but WebKit refuses to start on one —
+
+```
+Cannot parse arguments: Unknown option --host-resolver-rules=...
+browserType.launch: Target page, context or browser has been closed
+```
+
+Setting it globally therefore failed **all 12 `cross-browser-webkit` tests on both brands**,
+deterministically, and only in CI: the macOS WebKit build tolerates the flag, so a full local
+`make test-all` stayed green while every CI run went red. Firefox and WebKit still fetch the
+fonts. They run only `cross-browser.spec.ts`, and the flake this entry is about was in the
+chromium `browser` project, so the saving is kept where it was needed.
 
 Two consequences worth stating:
 
