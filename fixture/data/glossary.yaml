@@ -1,0 +1,20 @@
+# Glossary entries for the self-test fixture only.
+#
+# Deliberately under fixture/ and mounted through `source = "fixture/data"`,
+# NOT alongside the shipped data/icons.yaml. A Hugo module ships its whole
+# data/ directory, so putting these at the repo root would hand every consumer
+# a set of fake glossary terms that would then union with their own
+# data/glossary.yaml — and unlike a layout override there is no way for them to
+# decline it per key.
+#
+# Two entries, because the `gloss` shortcode has two distinct paths worth
+# covering: a key it finds (renders the term plus a tooltip) and a key it does
+# not (falls back to plain text). MARKER_GLOSS_DEF is the sentinel the tooltip
+# body carries, so a test can tell "the definition is in the document" from
+# "the term is in the document" — the whole point of the PDF assertion, where
+# the term must survive and the definition must not.
+MCP:
+  short: "MARKER_GLOSS_DEF Model Context Protocol, a standard for exposing tools to a model."
+
+Data Plane:
+  short: "MARKER_GLOSS_DEF_TWO Proxies that process live network traffic."

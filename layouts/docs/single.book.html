@@ -6,5 +6,9 @@
        ["html", "book"]` should also set `bookChunkRoot: true`, or it gets
        no chapter at all (book-chapter-tree's default branch walks
        $page.Pages, which is always empty for a leaf page) — an empty book
-       with a cover and TOC but no content. */ -}}
-{{- partial "docs/book-document.html" . -}}
+       with a cover and TOC but no content.
+
+       Gated on utils/build-book.html, the same way list.book.html is — see
+       that partial for why, and for how a PDF build opts in. */ -}}
+{{- $build := partial "utils/build-book.html" . -}}
+{{- if $build -}}{{- partial "docs/book-document.html" . -}}{{- end -}}

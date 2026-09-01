@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { target } from "./helpers/target";
+import { isBlockedHostNoise } from "./helpers/blocked-hosts";
 
 // Desktop cross-browser smoke. Runs at 1280x800 in chromium, firefox,
 // and webkit (Safari engine). Edge is intentionally omitted: it uses the
@@ -50,7 +51,12 @@ test.describe("page renders without errors", () => {
       const errors: string[] = [];
       page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
       page.on("console", (msg) => {
-        if (msg.type() === "error") errors.push(`console.error: ${msg.text()}`);
+        if (msg.type() === "error") {
+          // See browser.spec.ts: the URL lives in .location(), not .text().
+          const url = msg.location()?.url ?? "";
+          const txt = `console.error: ${msg.text()}${url ? ` (${url})` : ""}`;
+          if (!isBlockedHostNoise(txt)) errors.push(txt);
+        }
       });
       await page.goto(url);
       // page.goto() already waits for "load". Don't add waitForLoadState

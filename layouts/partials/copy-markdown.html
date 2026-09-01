@@ -8,6 +8,97 @@
 
        Absolute URL host comes from utils/prod-host (explicit
        themeExtras.prodHost > site.BaseURL host > empty). */ -}}
+{{- /* "Download all docs (PDF)" menu item.
+
+       Resolved HERE, at the top, because `.` is unambiguously the Page at this
+       point; further down the file it is buried in markup and easy to get
+       wrong.
+
+       WHETHER TO SHOW IT is decided by the version root's own output formats:
+       a version that publishes a PDF is exactly a version whose `_index.md`
+       carries `outputs: ["html", "book"]`, so the page asks the build rather
+       than a separate flag somebody has to remember to keep in sync. Note the
+       version root is resolved through utils/version-root.html and NOT through
+       `.FirstSection`, which returns the wrong page inside a subtree.
+
+       The one thing this cannot know is whether the PDF has been PUBLISHED
+       yet. The build only knows the book is produced; the nightly job in
+       solo-io/docs is what uploads it. So a version enabled between two runs
+       shows a link that 404s until the next one — dispatch the PDF workflow
+       when enabling a version, rather than waiting for the schedule.
+
+       WHERE THE URL COMES FROM. `urlTemplate` is what turns this item on, and
+       for a site publishing to solo-io/docs-pdfs it does not need to be written
+       out: setting `distribution` alone selects the release-asset shape below.
+       That default exists because the alternative was 24 copies of one long URL
+       in solo-io/docs — three configs (prod, preview, local) for each of eight
+       products, every one identical. A shared config file would have been the
+       obvious fix and is a worse one there: 24 places invoke Hugo with a
+       per-product config, and a forgotten second `--config` removes this item
+       SILENTLY rather than failing a build.
+
+       Defaulting is gated on `distribution` rather than applied unconditionally,
+       and that is the whole safety property. A consumer that publishes its PDF
+       to its OWN site rather than to a release — kgateway.dev writes
+       `/downloads/kgateway-envoy-latest.pdf` from its `make pdf` target, and
+       ambientmesh.io does the same — sets no `pdfDownload` at all today. An
+       unconditional default would give both of them a menu item pointing at a
+       docs-pdfs release that does not exist. Such a site sets `urlTemplate`
+       explicitly when it wants the item, and an explicit value always wins.
+
+       So: renders nothing unless the site sets either `distribution` or
+       `urlTemplate` under `params.pdfDownload`, and a consumer that publishes no
+       PDFs is unaffected either way. */ -}}
+{{- $pdfURL := "" -}}
+{{- $pd := site.Params.pdfDownload | default dict -}}
+{{- $default := "" -}}
+{{- with $pd.distribution -}}
+  {{- $default = "https://github.com/solo-io/docs-pdfs/releases/download/{product}-{distribution}-{version}/{product}-{distribution}-{version}.pdf" -}}
+{{- end -}}
+{{- with $pd.urlTemplate | default $default -}}
+  {{- $tmpl := . -}}
+  {{- $vr := partial "utils/version-root.html" $ -}}
+  {{- with $vr.docsSection -}}
+    {{- if .OutputFormats.Get "book" -}}
+      {{- $product := $pd.product | default site.Params.currentProduct | default site.Params.folder | default "" -}}
+      {{- $dist := $pd.distribution | default "" -}}
+      {{- /* `{version}` is the version SEGMENT, prefixed by the SECTION segment
+             on a product that nests version trees under one. Without the prefix
+             a product with parallel sections has two books and one URL: the
+             version segment alone does not identify a tree.
+
+             agentgateway is the case. It ships the same `latest` line in two
+             deployment modes, so /agentgateway/kubernetes/latest/ and
+             /agentgateway/standalone/latest/ are separate trees that each build
+             their own book — and both used to resolve to
+             `agentgateway-enterprise-latest`. Publishing both then meant
+             whichever rendered last sat behind the link on BOTH modes' pages,
+             silently, because the PDF workflow uploads with --clobber.
+
+             Read through utils/section-segment.html, NOT `$vr.section`. That
+             field is overloaded: version-root.html fills it with the section for
+             a product that registers `params.sections`, and with the PRODUCT
+             segment otherwise — so using it would prefix every ordinary
+             product's URL with its own name and break every published link.
+             section-segment.html returns "" unless `params.sections` is set AND
+             a registered key appears in the path, which is exactly the condition
+             that makes the version segment ambiguous.
+
+             The workflow that publishes these assets derives its release tag
+             from the version PATH the same way (`kubernetes/latest` becomes
+             `kubernetes-latest`), so the two agree by construction. */ -}}
+      {{- $versionKey := $vr.currentVersion -}}
+      {{- $sec := partial "utils/section-segment.html" $ -}}
+      {{- with $sec.segment -}}
+        {{- $versionKey = printf "%s-%s" . $vr.currentVersion -}}
+      {{- end -}}
+      {{- $u := replace $tmpl "{product}" $product -}}
+      {{- $u = replace $u "{distribution}" $dist -}}
+      {{- $pdfURL = replace $u "{version}" $versionKey -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
 {{- $html := .Content -}}
 {{- $prodHost := partial "utils/prod-host.html" . -}}
 {{- /* Pull the footnotes block off the end of .Content so it can be re-appended
@@ -54,21 +145,20 @@
        hl_lines wraps the highlighted gutter number in <span class="hl">, so the first
        child is not always <span class="lnt">. class="lntable" is the real guard. */ -}}
 {{- $html = $html | replaceRE `(?s)<table class="?lntable"?>(?:\s|&#10;)*<tr>(?:\s|&#10;)*<td class="?lntd"?>(?:\s|&#10;)*<pre[^>]*><code[^>]*>(?:\s|&#10;)*<span[^>]*>.*?</td>(?:\s|&#10;)*<td class="?lntd"?>(?:\s|&#10;)*(<pre[^>]*><code[^>]*>.*?</code></pre>)(?:\s|&#10;)*</td>(?:\s|&#10;)*</tr>(?:\s|&#10;)*</table>` "$1" -}}
-{{- /* Tabs cleanup — we run two pattern sets so the same partial works for both
-       tab variants. Each set is a no-op against markup the other consumer emits.
+{{- /* Tabs cleanup, delegated to the SHARED partial, which handles both tab
+       markups (a consumer that overrides Hextra's tabs shortcode, and stock
+       Hextra) so the flattening is identical here, in the `markdown` output
+       format and in the PDF book.
 
-       Variant 1: docs's tab override emits <div class="hextra-tabs"> wrapping
-       <nav> + .hextra-tab-panel[data-tab-name]. Strip the nav, relabel panels. */ -}}
-{{- $html = $html | replaceRE `(?s)(<div class="hextra-tabs[^"]*"[^>]*>)\s*<nav[^>]*>.*?</nav>` "$1" -}}
-{{- $html = $html | replaceRE `<div class="hextra-tab-panel[^"]*"[^>]*data-tab-name="([^"]*)"[^>]*>` `<div><p><strong>Option: $1</strong></p>` -}}
-{{- /* Variant 2: Hextra default tabs — [role="tablist"] holds the buttons,
-       .hextra-tabs-panel[aria-labelledby] is the panel. Strip the tablist,
-       drop the panel-scoped aria-hidden so all panels show in the copy
-       (page-wide aria-hidden on icon <svg>s is intentionally untouched),
-       then relabel each panel with "Option: <id>". */ -}}
-{{- $html = $html | replaceRE `(?s)<div[^>]*role="tablist"[^>]*>.*?</div>` "" -}}
-{{- $html = $html | replaceRE `(<div class="hextra-tabs-panel[^"]*"[^>]*) aria-hidden="true"` "$1" -}}
-{{- $html = $html | replaceRE `<div class="hextra-tabs-panel[^"]*"[^>]*aria-labelledby="([^"]*)"[^>]*>` `<div style="display:block"><p><strong>Option: $1</strong></p>` -}}
+       This file used to carry its own copy of these patterns, and the copies
+       drifted in BOTH directions. utils/unhide-tabs.html was written against
+       markup Hextra no longer emits and quietly did nothing for months, which
+       nobody noticed because this file — the one behind a visible button —
+       still worked. In the other direction, stock-Hextra tab handling existed
+       ONLY here, so a consumer without a tabs override got labelled options in
+       "Copy as Markdown" and unlabelled, stacked ones in its PDF. Add a
+       pattern to the shared partial, not to this file. */ -}}
+{{- $html = partial "utils/unhide-tabs.html" $html -}}
 
 {{- /* Strip the dark-mode image variant emitted by the module's reuse-image-dark
        shortcode (class "toggle-light", hidden in light mode). Otherwise the
@@ -350,6 +440,19 @@
           Print
         </button>
       </li>
+      {{- with $pdfURL }}
+      {{- /* Last, after Print, because both answer the same need — a portable
+             copy — and Print is the one most readers are looking for.
+             Labelled "all docs" on purpose: every other item in this menu acts
+             on THIS page, and Print sitting directly above it would otherwise
+             invite the reader to expect a one-page file. */ -}}
+      <li role="none">
+        <button role="menuitem" data-action="download-pdf" data-pdf-url="{{ . }}">
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+          Download all docs (PDF)
+        </button>
+      </li>
+      {{- end }}
     </ul>
   </div>
   <dialog class="copy-md-dialog" aria-label="Page as Markdown">

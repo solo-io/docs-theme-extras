@@ -4,11 +4,26 @@
    page numbers. Not the same stylesheet as docs-theme-extras.css's `@media
    print` block, which hides UI chrome for single-page browser printing. */
 
-{{- /* See utils/resolve-latest-version.html, shared with the identical need
-       in docs/book-document.html. Resolves to "" on a site with no
-       site.Params.versions at all, so @bottom-right below just shows the
-       product name alone, unchanged. */ -}}
-{{- $productVersion := partial "utils/resolve-latest-version.html" . -}}
+{{- /* The version printed in the running footer (@bottom-right, below), handed
+       in by docs/book-document.html rather than looked up here.
+
+       It used to call utils/resolve-latest-version.html itself, which meant the
+       footer and the cover each resolved the version independently and both
+       resolved it site-wide — so a book of any tree other than the flagged
+       `latest` one was labelled with the wrong version in both places. The
+       answer now belongs to the book's own version root, which only the page
+       knows, so the page computes it and passes it in. See
+       utils/book-version.html.
+
+       Empty on a site with no site.Params.versions at all (ambientmesh.io), so
+       @bottom-right just shows the product name alone, unchanged.
+
+       NOTE for whoever adds the next interpolation here: this template's dot is
+       that dict, NOT the Page. `now` and `site` are globals and keep working;
+       anything page-specific has to be added to the dict in book-document.html
+       alongside the resource target name, which is keyed on the version so two
+       books in one build don't share a cached stylesheet. */ -}}
+{{- $productVersion := .version | default "" -}}
 
 @page {
   size: letter;
@@ -20,8 +35,14 @@
     color: #666;
   }
 
+  /* Same 9pt/#666 as the date and product name either side of it. Without
+     these it inherited the 11pt body size and near-black body colour, so the
+     page number sat louder in the footer than the two labels it belongs
+     with. */
   @bottom-center {
     content: counter(page);
+    font-size: 9pt;
+    color: #666;
   }
 
   @bottom-right {
@@ -73,6 +94,27 @@ h6 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.03em; }
   break-after: page;
   text-align: center;
   padding-top: 6cm;
+  page: pdf-cover;
+}
+
+/* The cover carries no running header and no footer, so page numbering starts
+   at the table of contents: contents is page 1, and the number a reader reads
+   off the footer is the number the contents printed against that chapter.
+
+   A NAMED page, not `@page :first`. `:first` means the first page of the
+   document being rendered, and this book is rendered as several documents —
+   one per part (see prepare_book.py --max-part-bytes) — so it would blank the
+   footer on the first page of every part, scattered through the book. The
+   cover element exists exactly once, so a page named after it does too.
+
+   The other half of this lives in the caller: it renders the first part with
+   `counter-reset: page 0` rather than 1, and passes merge_book.py the matching
+   --first-page 0 so the printed contents agrees with the printed footers. */
+@page pdf-cover {
+  @top-left { content: ""; }
+  @bottom-left { content: ""; }
+  @bottom-center { content: ""; }
+  @bottom-right { content: ""; }
 }
 
 .pdf-cover-logo {
@@ -98,6 +140,19 @@ h6 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.03em; }
   color: #666;
 }
 
+/* Company mark low on an enterprise cover. Pushed down with a plain margin
+   rather than height:100% + flex or absolute positioning, for the same reason
+   .pdf-cover itself pads down from the top: a cover that fills the page box
+   exactly is one rounding error away from spilling into a second, and
+   .pdf-cover carries `break-after: page`, so the spill would print as a
+   near-empty second cover before the table of contents. A margin leaves the
+   slack visible and adjustable. */
+.pdf-cover-brand {
+  margin: 9cm auto 0;
+  max-width: 150px;
+  display: block;
+}
+
 .pdf-toc {
   break-after: page;
 }
@@ -111,13 +166,58 @@ h6 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.03em; }
   padding-left: 0;
 }
 
+/* Each entry is one flex row: title, dot leader, page number. Flex rather
+   than a right float, because a float inside an <li> that also contains the
+   nested child <ul> escapes the entry and lands beside the children instead
+   of beside its own title.
+
+   The number column is `flex: 0 0 3em` — a FIXED width, not auto. That is
+   load-bearing, not cosmetic: scripts/number_toc.py fills these spans in
+   after the book has already been rendered and paginated once, so if an
+   empty box and a "1234" box took different widths, writing the numbers
+   could rewrap a title, add a page to the TOC, shift every chapter after it
+   and invalidate the numbers just written. 3em holds four digits at 11pt
+   with room to spare; the whole book would have to pass 99,999 pages to
+   overflow it. */
 .pdf-toc a {
   color: inherit;
   text-decoration: none;
+  display: flex;
+  align-items: baseline;
+  gap: 0.35em;
+}
+
+.pdf-toc-title {
+  flex: 0 1 auto;
+}
+
+/* The leader takes up the slack between title and number. Its dots are a
+   bottom border rather than repeated "." characters so they cannot be
+   selected, copied, or read out by a screen reader from the tagged PDF. */
+.pdf-toc-dots {
+  flex: 1 1 auto;
+  border-bottom: 1px dotted #c7c7c7;
+  min-width: 1em;
+}
+
+.pdf-toc-page {
+  flex: 0 0 3em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #444;
 }
 
 .pdf-chapter {
   break-before: page;
+}
+
+/* A chapter too large to render in one part is cut across parts by
+   prepare_book.py --max-part-bytes, which marks every slice after the first.
+   Those are continuations of a page the reader is already on, not new
+   chapters, so they must NOT force a page break — without this the split
+   would be visible as a stray blank-ish break mid-page. */
+.pdf-chapter-cont {
+  break-before: auto;
 }
 
 /* "Part divider" treatment for section landings with no body content
@@ -129,9 +229,13 @@ h6 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.03em; }
    Paged.js sizes page boxes during its own pagination pass, so a
    percentage height set before that can resolve against the wrong
    containing block. */
+/* Part-divider page: centered horizontally, but starting at the top of the
+   text area rather than floating in the middle of the page. The 10cm offset
+   this used to carry pushed the title below the fold of a reader's screen and
+   left the page looking half-empty in print. */
 .pdf-divider {
   text-align: center;
-  padding-top: 10cm;
+  padding-top: 0;
 }
 
 .pdf-divider-description {
@@ -268,6 +372,183 @@ h6 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.03em; }
   color: #7f1d1d;
 }
 
+/* The alert's leading icon is inline <svg stroke="currentColor">, spaced on
+   the live site by a Tailwind `hx:mr-2` this stylesheet never loads. So it
+   printed BLACK against a coloured title, and jammed right up against it.
+   `color: inherit` is doing real work here and is not redundant: WeasyPrint
+   does not carry the inherited `color` into an inline SVG, so `currentColor`
+   resolves to black — but an explicit declaration on the svg element is
+   honoured. Setting `stroke` in CSS does NOT work, because the element's own
+   `stroke="currentColor"` presentation attribute wins; all four combinations
+   were rendered side by side to confirm which one takes effect.
+   Using `inherit` rather than a literal keeps one rule correct for every
+   alert type, including any a consumer defines itself. */
+.pdf-chapter [data-alert-type] svg {
+  color: inherit;
+  margin-right: 0.45em;
+}
+
+/* The OTHER alert family: the `callout`/`alert` shortcodes, which emit
+   `<div class="solo-alert alert-info" role="note">` and take their box from
+   .solo-alert in docs-theme-extras.css — a stylesheet this standalone print
+   document never loads, exactly like the hx: classes above. Left alone a
+   callout printed as unset-off body text, so on paper it read as ordinary
+   prose rather than as an aside. Same box as [data-alert-type] on purpose:
+   a manual should not have two different-looking admonition styles just
+   because one call site wrote a `> [!NOTE]` blockquote and another wrote a
+   callout shortcode call. (Not written out here: this file is run through
+   resources.ExecuteAsTemplate, so a literal shortcode call in a comment is
+   parsed as Go template syntax and fails the build.)
+
+   Colors and radius are copied from the GitHub-alert rules rather than from
+   .solo-alert's own lighter web palette, for the same reason those were
+   chosen: a tint that reads on a backlit screen can vanish in print, and the
+   per-type hue is what lets a scanned page tell a warning from a note.
+
+   `rem` here (not `em`) matches the [data-alert-type] block deliberately, so
+   the two boxes get byte-identical geometry. Note that this document sets no
+   root font-size, so 1rem is the 16px default rather than the 11pt body size
+   — see the .section-card-title comment below for where that bites. */
+.pdf-chapter .solo-alert {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  background: #dcfce7;
+  color: #14532d;
+}
+
+.pdf-chapter .solo-alert.alert-info,
+.pdf-chapter .solo-alert.alert-default {
+  border-color: #bfdbfe;
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+
+.pdf-chapter .solo-alert.alert-warning {
+  border-color: #fde68a;
+  background: #fef3c7;
+  color: #78350f;
+}
+
+/* Covers both `danger` and `error`: callout.html's $color_map folds them onto
+   the one class, so there is nothing else to key off here. */
+.pdf-chapter .solo-alert.alert-danger {
+  border-color: #fecaca;
+  background: #fee2e2;
+  color: #7f1d1d;
+}
+
+/* THE ICON, and why it becomes a word. callout.html renders its icon as a
+   Material Icons LIGATURE — `<i class="material-icons">info</i>` — not as an
+   inline <svg> the way the GitHub alerts above do. That font is part of the
+   live site's asset pipeline, so in the book document the `<i>` had no font,
+   no font-style: normal, and no display rule: it printed the ligature NAME as
+   literal italic text. Live symptom: the "info" sitting above the operator
+   note on page 11 of istio-enterprise-1.30.x.pdf.
+   https://github.com/solo-io/docs-pdfs/releases/tag/istio-enterprise-1.30.x
+   Same trap as `i.section-card-icon` below, which has been hidden since the
+   pipeline was written; callout icons were simply never given the rule.
+
+   Hiding it alone would have been enough to remove the stray word, but it
+   also throws away the one thing that distinguishes an info callout from a
+   warning for a reader printing in grayscale, where the per-type tints above
+   all reduce to the same pale gray. So the ligature is replaced by a text
+   label, which costs nothing on paper and is the same convention the
+   [data-alert-type] alerts already print (github-style-alert.html emits the
+   type name as a visible title). Labels use the GitHub callout vocabulary
+   rather than echoing the CSS class, so "alert-danger" prints as "Caution".
+
+   The label goes on .solo-alert-icon rather than on .solo-alert itself
+   because .solo-alert is a plain block here — its web `display: flex` is in
+   the stylesheet this document does not load — so the icon div is already a
+   full-width block sitting above the body. Generated content on it lands
+   exactly where a title belongs, with no flex to re-create. */
+.pdf-chapter .solo-alert-icon i.material-icons {
+  display: none;
+}
+
+.pdf-chapter .solo-alert-icon {
+  font-weight: 600;
+  margin-bottom: 0.15em;
+  /* The label must not be the last line on a page with its body overleaf. */
+  break-after: avoid;
+}
+
+.pdf-chapter .solo-alert-icon::before {
+  content: "Note";
+}
+
+.pdf-chapter .alert-warning .solo-alert-icon::before {
+  content: "Warning";
+}
+
+.pdf-chapter .alert-success .solo-alert-icon::before {
+  content: "Tip";
+}
+
+.pdf-chapter .alert-danger .solo-alert-icon::before {
+  content: "Caution";
+}
+
+/* An explicit `icon=` override that resolves to a site.Data.icons entry emits
+   an inline <svg class="solo-alert-icon-svg"> instead of the ligature, so it
+   survives with no font and is left visible — a consumer that passed a
+   branded icon asked for it. It follows the label rather than preceding it,
+   which is the one cosmetic compromise here: reordering would need the flex
+   container this document has no CSS for, and callout `icon=` is rare enough
+   (the alert shortcode does not even forward the parameter) that buying the
+   order back is not worth a layout mode. */
+.pdf-chapter .solo-alert-icon .solo-alert-icon-svg {
+  margin-left: 0.35em;
+}
+
+/* .solo-alert-body p carries `margin: 0 !important` on the live site. Without
+   it the UA default 1em top margin stacked on top of the box's own padding,
+   which pushed the first line away from its label and made every callout
+   noticeably taller than the [data-alert-type] box beside it. */
+.pdf-chapter .solo-alert-body p {
+  margin: 0 0 0.5em;
+}
+
+.pdf-chapter .solo-alert-body > :last-child {
+  margin-bottom: 0;
+}
+
+/* Glossary tooltips (the `gloss` shortcode) are DROPPED from a book, not
+   restyled. Third instance of the same root cause as the two blocks above: the
+   tooltip is hidden on the live site by `.glossary-term > span { display:none }`
+   in glossary.css, a stylesheet this document does not load, so left alone the
+   whole definition was dumped inline into the middle of the sentence — and the
+   term itself printed TWICE, because the shortcode repeats it inside the
+   tooltip as a `<strong>` heading. A sentence reading "routed through MCPMCP
+   Model Context Protocol, a standard for exposing tools to a model. before it
+   reaches the model" is strictly worse than one reading "routed through MCP".
+
+   Dropped rather than converted to a footnote, which was the obvious
+   alternative: a tooltip is a hover affordance for a reader who does not
+   recognise a term, and on paper the equivalent would be a footnote apparatus
+   with numbering, per-page collection and back-references — real machinery for
+   content that is, by construction, a one-line gloss the surrounding prose
+   already works without. Anything genuinely load-bearing does not belong in a
+   tooltip in the first place. If a manual ever does need the definitions, the
+   right shape is a generated glossary appendix chapter, not per-mention notes.
+
+   The TERM survives as plain text with no marker, which needs no rule: the
+   dotted `border-bottom` that signals hoverability also lives in glossary.css,
+   so `.glossary-term` already renders as ordinary inline text here. That is
+   the correct print treatment — a dotted underline on paper invites a hover
+   that cannot happen.
+
+   Keyed on `.tooltip-content` rather than the `> span` the web rule uses, so a
+   term whose display text contains its own inline markup cannot have that
+   markup swallowed. Visible on any page using the shortcode, e.g.
+   https://kgateway.dev/docs/envoy/latest/ai/about/ — inspect a dotted term
+   there, then look for the same definition text in that tree's PDF. */
+.pdf-chapter .glossary-term > .tooltip-content {
+  display: none;
+}
+
 /* Auto-generated child cards (partials/auto-section-cards.html), e.g. the
    "## Guides" links under a docs section landing page. Rendered as a plain
    bordered-box list rather than mirroring the live site's card grid — a
@@ -366,6 +647,66 @@ h6 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.03em; }
   font-weight: 600;
 }
 
+/* A long dotted identifier in a reference table — say
+   `JWTPolicySpec.Config.Provider.LocalJWKS.SecretRef` — still ran off the
+   right margin despite the overflow-wrap above. WeasyPrint honours NEITHER
+   `overflow-wrap: break-word` NOR `overflow-wrap: anywhere` for an unbroken
+   token in a `table-layout: fixed` cell; both were rendered side by side and
+   both overflowed. `word-break: break-all` is the only one that wraps.
+   Scoped to code inside cells, so ordinary prose still breaks on spaces
+   rather than mid-word. */
+.pdf-chapter th code,
+.pdf-chapter td code {
+  word-break: break-all;
+}
+
+/* Nested ordered lists count 1 / a / i, then start over. A browser numbers
+   EVERY level with decimals, so a procedure with sub-steps printed as "1. 2.
+   3." inside "1. 2. 3." and the only clue about which was which was the
+   indent — which a page break can put on the far side of the page from the
+   list it belongs to. The site's own stylesheet does the same thing; this
+   document just never loads it.
+
+   Descendant selectors, not child ones: a numbered list nested through an
+   intervening bulleted list is still a second-level list to a reader. Level 4
+   restarts the cycle rather than falling back to the browser default, so the
+   pattern stays predictable on the rare page that nests that deep. */
+.pdf-chapter ol { list-style-type: decimal; }
+.pdf-chapter ol ol { list-style-type: lower-alpha; }
+.pdf-chapter ol ol ol { list-style-type: lower-roman; }
+.pdf-chapter ol ol ol ol { list-style-type: decimal; }
+
+/* Emoji tinted by prepare_book.py --color-emoji. The colour itself is inline,
+   per character; this rule only keeps the span from disturbing the line it
+   sits in. See EMOJI_COLOURS in that script for why the colour cannot simply
+   come from the font: WeasyPrint draws colour fonts as blank boxes, so the
+   book uses a monochrome outline font and the colour is reapplied as CSS. */
+.pdf-emoji {
+  font-style: normal;
+  font-weight: normal;
+}
+
+/* Tab groups, flattened by utils/unhide-tabs.html. On the live site the row
+   of tab buttons is what tells a reader that the blocks below are
+   alternatives; in print that row is gone, so the partial injects a lead-in
+   sentence in its place and labels each option. The rule down the left edge
+   does the rest of that job visually — without it, a five-step option and
+   the option after it read as one ten-step sequence, which is the opposite
+   of what the page says. */
+.pdf-tab-intro {
+  margin-bottom: 0.5rem;
+}
+
+.pdf-tab-option {
+  border-left: 2px solid #d1d5db;
+  padding-left: 0.9rem;
+  margin: 0.75rem 0;
+}
+
+.pdf-tab-option-label {
+  margin: 0 0 0.5rem;
+}
+
 /* Code blocks and diagrams shouldn't split across a page boundary if they
    can help it — Paged.js honors break-inside on block-level elements. Long
    lines wrap instead of overflowing the page, since a PDF can't scroll.
@@ -381,6 +722,36 @@ h6 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.03em; }
   max-width: 100%;
   overflow-wrap: break-word;
   white-space: pre-wrap;
+}
+
+/* Keep a table row whole across a page boundary. NOT cosmetic — a split row
+   MISREPRESENTS its own data, which is worse than the ragged look it fixes.
+   Nothing is lost: every word and every cell mark still prints. But the cell
+   marks stay with the FIRST fragment while the wrapped label continues onto the
+   next page, so the continuation renders as a row whose value columns are
+   EMPTY. In a feature-comparison table, a reader turning the page sees a
+   feature name with nothing under "Enterprise" or "Open Source" and reads it as
+   unsupported — the exact opposite of the ✅ that printed overleaf.
+
+   Measured in the CI container against this stylesheet, 40 wrapping rows: the
+   unfixed render ended a page on "…deliberately long label so / ✅ ❌" and
+   opened the next on "the cell wraps across / several lines" with no marks at
+   all. With this rule the page ends on a complete row instead. Content is
+   identical either way (40/40 rows, 40 ✅, 40 ❌) and so is the page count, so
+   this costs nothing in length — it only decides WHERE the break falls.
+
+   `thead` repetition is already handled: WeasyPrint repeats it on every
+   fragment of a split table, which is why the continuation looked like a
+   legitimate first row rather than obvious debris.
+
+   LIMIT, and it is inherent rather than a gap here: a row TALLER than the text
+   block has nowhere to move to, so it still splits and its continuation pages
+   still show empty value columns. `break-inside: avoid` is a constraint the
+   layout satisfies when it can. Verified: a single row of ~900 words splits
+   across six pages with this rule in place. Author around it — that much
+   content in one cell does not read as a table on paper anyway. */
+.pdf-chapter tr {
+  break-inside: avoid;
 }
 
 .pdf-chapter pre {

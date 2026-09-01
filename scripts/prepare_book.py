@@ -48,15 +48,104 @@ only rewrites HTML, so it stays useful whichever renderer consumes the result.
 """
 
 import argparse
+import copy
+import os
+import re
 import sys
 from urllib.parse import unquote, urljoin, urlparse
 
+from lxml import etree
 from lxml import html as lxml_html
 
 # Separator between a chapter id and the id it owns. Two hyphens rather than
 # one, so a rewritten id stays visually distinguishable from a heading whose
 # own slug contains hyphens (nearly all of them do).
 SEP = "--"
+
+# Scheme for a jump that has to survive being written into one part and landing
+# in another. WeasyPrint DROPS `<a href="#x">` when x is not in the document it
+# is rendering ("ERROR: No anchor #x for internal URI reference"), so a split
+# document would silently lose every cross-part link. An unknown scheme is kept
+# as an ordinary link annotation instead, and merge_book.py turns it back into
+# a real jump once every part is in the same file.
+JUMP_SCHEME = "pdfjump:"
+
+# Default ceiling for one part, in bytes of serialized HTML.
+#
+# Peak renderer memory tracks OUTPUT PAGES, not input bytes: measured across
+# gloo-mesh-enterprise it is a steady ~1.6 MB per page from 347 pages up to
+# 3,481. Input bytes are only a proxy for pages, and a leaky one — ordinary
+# prose yields ~250 pages/MB while a table-dense reference page yields ~620,
+# because table rows expand vertically far more than paragraphs do. So the
+# ceiling is set for the table-dense case: 2 MB is ~1,240 pages ~= 2 GB there,
+# and ~500 pages ~= 0.8 GB for prose. Both leave real headroom on a 16 GB
+# runner, which is the point — the whole 15.8 MB document is ~6,800 pages and
+# ~11 GB, and it does not survive.
+DEFAULT_MAX_PART_BYTES = 2_000_000
+
+# Emoji whose meaning IS a colour, and the colour to draw each one in.
+#
+# WHY THIS EXISTS. WeasyPrint cannot draw a colour font at all. Not badly — at
+# all: rendered side by side, Noto Color Emoji (CBDT bitmap), Noto COLRv1 and
+# Twemoji Mozilla (COLRv0) each embed into the PDF and each leave the glyph box
+# completely blank. So the book is rendered with the MONOCHROME Noto Emoji
+# outline font, which draws real shapes, and this pass puts the colour back by
+# tinting them with CSS — an outline glyph honours `color`, a bitmap one does
+# not, which is the whole reason the monochrome font is the one installed.
+#
+# Tinting rather than substituting a shape keeps the character itself in the
+# PDF's text layer, so the emoji still copies, searches and reads out. It also
+# keeps Noto Emoji's per-emoji hatching (🟡 is dotted, 🟢 is diagonally hatched,
+# 🔴 is vertically striped), which means the distinction survives for a
+# colour-blind reader too, instead of resting on hue alone.
+#
+# Colours are GitHub Primer values, so a table of status dots in the PDF reads
+# the same way as the same table on the website.
+EMOJI_COLOURS = {
+    # Coloured circles and squares. Nothing but the colour distinguishes these
+    # from each other, which is exactly why the monochrome render was reported
+    # as "the yellow and green dots are grey now".
+    "\U0001f534": "#cf222e",  # red circle
+    "\U0001f7e0": "#bc4c00",  # orange circle
+    "\U0001f7e1": "#d4a72c",  # yellow circle
+    "\U0001f7e2": "#2da44e",  # green circle
+    "\U0001f535": "#0969da",  # blue circle
+    "\U0001f7e3": "#8250df",  # purple circle
+    "\U0001f7e4": "#8b5a2b",  # brown circle
+    "⚫": "#24292f",  # black circle
+    "\U0001f7e5": "#cf222e",  # red square
+    "\U0001f7e7": "#bc4c00",  # orange square
+    "\U0001f7e8": "#d4a72c",  # yellow square
+    "\U0001f7e9": "#2da44e",  # green square
+    "\U0001f7e6": "#0969da",  # blue square
+    "\U0001f7ea": "#8250df",  # purple square
+    "\U0001f7eb": "#8b5a2b",  # brown square
+    "⬛": "#24292f",  # black square
+    # White circle and square are deliberately GREY, not white: the page is
+    # white, so the honest colour would be an invisible one.
+    "⚪": "#afb8c1",  # white circle
+    "⬜": "#afb8c1",  # white square
+    # Status marks. These stay legible in monochrome, so the tint is a
+    # readability gain rather than a rescue — but a support matrix of 582 green
+    # ticks and 148 red crosses is a great deal faster to scan in colour.
+    "✅": "#1a7f37",  # white heavy check mark
+    "✔": "#1a7f37",  # heavy check mark
+    "❌": "#cf222e",  # cross mark
+    "❎": "#cf222e",  # negative squared cross mark
+    "✖": "#cf222e",  # heavy multiplication x
+    "❗": "#cf222e",  # heavy exclamation mark
+    "⛔": "#cf222e",  # no entry
+    "\U0001f6ab": "#cf222e",  # prohibited
+    "⚠": "#bf8700",  # warning sign
+    "❓": "#0969da",  # question mark
+    "ℹ": "#0969da",  # information source
+}
+
+# Each mapped character, optionally followed by VARIATION SELECTOR-16, which is
+# what turns a dual-use dingbat into its emoji presentation ("⚠️" is U+26A0
+# U+FE0F, two codepoints). The selector has to be inside the span with the
+# character it modifies, or it becomes a stray codepoint in the text layer.
+EMOJI_RE = re.compile("([" + "".join(EMOJI_COLOURS) + "])\\uFE0F?")
 
 
 def normalize(path):
@@ -218,17 +307,343 @@ def validate(doc):
     return ids, dupes, jumps, dangling
 
 
-def prepare(src_path, out_path, prod_host):
+EXCALIDRAW_MARKER = "svg-source:excalidraw"
+
+# A `mask="url(#mask-...)"` reference on a group. Matched with the leading
+# whitespace so removing it leaves the surrounding attributes well formed.
+SVG_MASK_REF = re.compile(r'\s+mask="url\(#[^")]*\)"')
+
+
+def fix_svgs(root):
+    """Work around two WeasyPrint bugs in the diagram SVGs under `root`.
+
+    Both only affect Excalidraw exports, and both are renderer bugs rather than
+    anything wrong with the drawings: every one of these SVGs is correct in a
+    browser. So this rewrites the BUILT copies under public/, never the sources
+    in assets/ — the website wants the files exactly as exported.
+
+    1. The "Segoe UI Emoji" fallback. Excalidraw writes every text run as
+       font-family="Helvetica, Segoe UI Emoji". That second family does not
+       exist on Linux, and WeasyPrint resolves the SPACE character through the
+       broken fallback, giving it a wildly wrong advance: "Gloo Mesh resources"
+       renders as "Gloo    Mesh    resources", and a diagram legend turns into
+       overlapping words. Helvetica alone resolves to Liberation Sans (Arial
+       metrics) and lays out correctly.
+
+    2. `<mask>`. Excalidraw punches a hole in a connector where its label sits,
+       using a two-rect luminance mask — a white rect over the whole canvas
+       (show everything) and a black rect behind the label (hide the line under
+       the text) — applied as `<g mask="url(#mask-...)">`. WeasyPrint 69 gets
+       this wrong badly enough that the masked group renders as very nearly
+       nothing: in kagent's network-architecture diagram, all 18 connectors and
+       almost every label disappear, leaving loose numbered badges and a few
+       clipped words floating on the page. Dropping the mask reference restores
+       the whole drawing; the only thing lost is the hole, so a connector now
+       draws through its own label instead of stopping short of it, which is
+       legible and is what an unmasked Excalidraw export looks like anyway.
+
+       WeasyPrint reports no error for this, so the render step's `^ERROR:`
+       gate cannot catch it — the PDF just quietly ships a gutted diagram. That
+       is the reason to fix it here rather than wait for an upstream release.
+
+       Guarded on the Excalidraw marker comment: a hand-authored or
+       tool-exported SVG elsewhere may well depend on its mask, and stripping
+       that would reveal content the author meant to hide, which is a worse
+       failure than the one being fixed.
+    """
+    defallbacked = 0
+    unmasked = 0
+    for dirpath, _, names in os.walk(root):
+        for name in names:
+            if not name.endswith(".svg"):
+                continue
+            path = os.path.join(dirpath, name)
+            try:
+                with open(path, encoding="utf-8", errors="ignore") as fh:
+                    svg = fh.read()
+            except OSError:
+                continue
+            out = svg
+            if "Helvetica, Segoe UI Emoji" in out:
+                out = out.replace("Helvetica, Segoe UI Emoji", "Helvetica")
+                defallbacked += 1
+            if EXCALIDRAW_MARKER in out:
+                out, n = SVG_MASK_REF.subn("", out)
+                if n:
+                    unmasked += 1
+            if out == svg:
+                continue
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(out)
+    return {"defallbacked": defallbacked, "unmasked": unmasked}
+
+
+def replace_iframes(doc):
+    """Turn each embedded player into a link.
+
+    An <iframe> has no meaning in a PDF — WeasyPrint draws it as a thin empty
+    box, which reads as a broken image right after a sentence promising a
+    video. A link at least tells the reader what was there and how to reach it.
+    """
+    n = 0
+    for frame in list(doc.iter("iframe")):
+        src = frame.get("src") or ""
+        parent = frame.getparent()
+        if parent is None or not src:
+            continue
+        if src.startswith("//"):
+            src = "https:" + src
+        # A YouTube embed URL is not the page a human can open.
+        watch = src.replace("/embed/", "/watch?v=") if "/embed/" in src else src
+        title = frame.get("title") or "Video"
+        p = etree.Element("p")
+        p.set("class", "pdf-embed-link")
+        p.text = f"{title}: "
+        a = etree.SubElement(p, "a")
+        a.set("href", watch)
+        a.text = watch
+        parent.replace(frame, p)
+        n += 1
+    return n
+
+
+def _tint_run(parent, index, text):
+    """Wrap every mapped emoji in one text run, returning how many were wrapped.
+
+    `index` is None for parent.text, otherwise the position of the child whose
+    .tail holds the run. Every match in the run is handled in this one call, so
+    no tail this creates can still contain an emoji — which is what keeps the
+    caller from having to re-scan its own output.
+    """
+    pieces, pos = [], 0
+    for m in EMOJI_RE.finditer(text):
+        pieces.append((text[pos:m.start()], m.group(0)))
+        pos = m.end()
+    if not pieces:
+        return 0
+    trailing = text[pos:]
+
+    spans = []
+    for before, emoji in pieces:
+        span = etree.Element("span")
+        span.set("class", "pdf-emoji")
+        span.set("style", f"color:{EMOJI_COLOURS[emoji[0]]}")
+        span.text = emoji
+        spans.append((before, span))
+
+    # The text before the FIRST emoji stays where the run started; every later
+    # literal becomes the tail of the span that precedes it.
+    if index is None:
+        parent.text = spans[0][0]
+        at = 0
+    else:
+        parent[index].tail = spans[0][0]
+        at = index + 1
+
+    for k, (_, span) in enumerate(spans):
+        parent.insert(at + k, span)
+        span.tail = spans[k + 1][0] if k + 1 < len(spans) else trailing
+    return len(spans)
+
+
+def colorize_emoji(doc):
+    """Tint every mapped emoji so it prints in colour instead of black.
+
+    See EMOJI_COLOURS for why this is needed at all: WeasyPrint draws nothing
+    whatsoever for a colour font, so the book is rendered with a monochrome
+    outline font and the colour is reapplied here, as CSS on the character.
+
+    Opt-in (--color-emoji), because it is a WeasyPrint workaround: a Paged.js
+    consumer renders in Chromium, which draws the real colour font, and there
+    the tint would repaint emoji that are already correct.
+    """
+    n = 0
+    # A snapshot, not a live walk: this inserts elements, and iterating the
+    # document while adding to it would hand the loop its own new spans.
+    for parent in list(doc.iter()):
+        if parent.tag in ("script", "style") or not isinstance(parent.tag, str):
+            continue
+        # A span this pass already made. Without this the function is not
+        # idempotent: run it twice and every emoji ends up wrapped in a wrapped
+        # wrapper, since the second run's snapshot DOES include the spans the
+        # first run added.
+        if "pdf-emoji" in (parent.get("class") or ""):
+            continue
+        if parent.text:
+            n += _tint_run(parent, None, parent.text)
+        # Right to left, so inserting after child i cannot shift a child this
+        # loop has yet to reach.
+        for i in range(len(parent) - 1, -1, -1):
+            tail = parent[i].tail
+            if tail:
+                n += _tint_run(parent, i, tail)
+    return n
+
+
+def to_jump_scheme(doc):
+    """Rewrite every same-document jump to the JUMP_SCHEME form.
+
+    Applied to the WHOLE document before splitting, not just to the links that
+    happen to cross a part boundary. Uniform rewriting means the splitter never
+    has to know which part a target landed in, which removes the entire class
+    of off-by-one boundary bugs — and costs nothing, because the intermediate
+    part PDFs are never shipped.
+    """
+    n = 0
+    for a in doc.iter("a"):
+        href = a.get("href") or ""
+        if href.startswith("#"):
+            a.set("href", JUMP_SCHEME + href[1:])
+            n += 1
+    return n
+
+
+def _size(el):
+    return len(lxml_html.tostring(el))
+
+
+def slice_oversized(ch, max_bytes):
+    """Cut one chapter into slices, each at most max_bytes where possible.
+
+    Boundaries fall BETWEEN direct children, so no table, list or `details`
+    block is ever cut in half. Heading boundaries are not used: the element
+    that forces this path in gloo-mesh-enterprise (the CVE scan reference, 5.4
+    MB and a third of the whole book) has 306 direct children and just two
+    headings, so heading-splitting would not divide it at all.
+
+    The first slice keeps the chapter's id; continuations must not, since ids
+    have to stay unique document-wide. Descendant ids are untouched, and those
+    are what links actually target. Each continuation carries a copy of the
+    breadcrumb source element so the running header stays right, and is marked
+    `pdf-chapter-cont` so the stylesheet does not start a fresh page for it.
+    """
+    kids = list(ch)
+    if not kids:
+        return [ch]
+
+    sizes = [_size(k) for k in kids]
+    runs, cur, cur_size = [], [], 0
+    for k, n in zip(kids, sizes):
+        if cur and cur_size + n > max_bytes:
+            runs.append(cur)
+            cur, cur_size = [], 0
+        cur.append(k)
+        cur_size += n
+    if cur:
+        runs.append(cur)
+
+    if len(runs) == 1:
+        return [ch]
+
+    # The breadcrumb source is emitted as the chapter's first child; copy it
+    # into each continuation so @top-left keeps resolving string(pdf-breadcrumb).
+    crumb = None
+    if kids and "pdf-breadcrumb-source" in (kids[0].get("class") or ""):
+        crumb = kids[0]
+
+    slices = []
+    for i, run in enumerate(runs):
+        if i == 0:
+            for k in list(ch):
+                if k not in run:
+                    ch.remove(k)
+            slices.append(ch)
+            continue
+        cont = etree.Element(ch.tag)
+        for key, val in ch.attrib.items():
+            cont.set(key, val)
+        cont.set("class", (ch.get("class") or "") + " pdf-chapter-cont")
+        if "id" in cont.attrib:
+            del cont.attrib["id"]
+        if crumb is not None:
+            cont.append(copy.deepcopy(crumb))
+        for k in run:
+            cont.append(k)  # moves it out of ch
+        slices.append(cont)
+    return slices
+
+
+def split_body(doc, max_bytes):
+    """Group the body's children into parts of at most max_bytes.
+
+    Returns a list of lists of elements, in document order. Elements are still
+    attached to the source tree; write_parts moves them out one part at a time
+    so the whole document is never duplicated in memory.
+    """
+    units, oversized = [], 0
+    for child in list(doc.body):
+        n = _size(child)
+        if n > max_bytes and "pdf-chapter" in (child.get("class") or ""):
+            pieces = slice_oversized(child, max_bytes)
+            if len(pieces) > 1:
+                oversized += 1
+            units.extend(pieces)
+        else:
+            units.append(child)
+
+    parts, cur, cur_size = [], [], 0
+    for u in units:
+        n = _size(u)
+        if cur and cur_size + n > max_bytes:
+            parts.append(cur)
+            cur, cur_size = [], 0
+        cur.append(u)
+        cur_size += n
+    if cur:
+        parts.append(cur)
+    return parts, oversized
+
+
+def write_parts(doc, parts, stem):
+    """Write each part as a standalone document sharing the original <head>."""
+    head = doc.find("head")
+    body_attrib = dict(doc.body.attrib)
+    written = []
+
+    for i, part in enumerate(parts, 1):
+        root = etree.Element("html")
+        for k, v in doc.attrib.items():
+            root.set(k, v)
+        if head is not None:
+            root.append(copy.deepcopy(head))
+        body = etree.SubElement(root, "body")
+        for k, v in body_attrib.items():
+            body.set(k, v)
+        for el in part:
+            body.append(el)  # moves it out of the source tree
+
+        path = f"{stem}.part{i:02d}.html"
+        with open(path, "wb") as fh:
+            fh.write(lxml_html.tostring(root, doctype="<!DOCTYPE html>"))
+        written.append((path, os.path.getsize(path)))
+        root.clear()
+
+    return written
+
+
+def prepare(src_path, out_path, prod_host, color_emoji=False):
     doc = lxml_html.parse(src_path).getroot()
     chapters = doc.cssselect("section.pdf-chapter[data-source-path]")
     if not chapters:
+        # Unconditional, not gated on --strict, and that is the point: a book
+        # with no chapters is not a small book, it is a build that produced no
+        # book. Nothing downstream notices — WeasyPrint renders the cover and an
+        # empty contents page, exits 0, and the workflow publishes a
+        # plausible-looking empty manual.
         raise SystemExit(
             f"{src_path}: no .pdf-chapter[data-source-path] elements found. "
-            "Is this really a `book` output-format document?"
+            "Either this is not a `book` output-format document, or the site "
+            "was built without asking for books: docs-theme-extras defaults "
+            "them off, so a build needs HUGO_PARAMS_BUILDBOOK=true (see "
+            "layouts/_partials/utils/build-book.html). Also check that the "
+            'version root still lists "book" in its `outputs` front matter.'
         )
 
     id_maps, renamed = uniquify_ids(chapters)
     stats = rewrite_links(doc, chapters, id_maps, prod_host)
+
+    iframes = replace_iframes(doc)
+    stats["emoji"] = colorize_emoji(doc) if color_emoji else 0
 
     # The `details` shortcode defaults to closed, which is right for a
     # browsable page and wrong for a PDF, where there is no click affordance
@@ -244,7 +659,7 @@ def prepare(src_path, out_path, prod_host):
     with open(out_path, "wb") as fh:
         fh.write(lxml_html.tostring(doc, doctype="<!DOCTYPE html>"))
 
-    return len(chapters), renamed, stats, doc
+    return len(chapters), renamed, stats, iframes, doc
 
 
 def main():
@@ -257,9 +672,54 @@ def main():
         action="store_true",
         help="exit non-zero if any duplicate id or dangling jump survives",
     )
+    ap.add_argument(
+        "--fix-svgs",
+        "--fix-svg-fonts",
+        dest="fix_svgs",
+        metavar="DIR",
+        help=(
+            "rewrite built SVGs under DIR to work around two WeasyPrint bugs: "
+            "the non-existent \"Segoe UI Emoji\" font fallback, which makes it "
+            "render spaces in diagram text at the wrong width, and <mask> on "
+            "Excalidraw exports, which makes it drop most of a diagram without "
+            "reporting an error. Point it at the build output (e.g. public), "
+            "never at the sources. --fix-svg-fonts is the former name, kept so "
+            "an existing caller keeps working; it now does both."
+        ),
+    )
+    ap.add_argument(
+        "--color-emoji",
+        action="store_true",
+        help=(
+            "tint the emoji this script knows a colour for, so they print in "
+            "colour under WeasyPrint. Needed because WeasyPrint draws nothing "
+            "at all for a colour font, so the book is rendered with a "
+            "monochrome outline font instead. Leave it off for a Paged.js "
+            "consumer, which renders the real colour font in Chromium."
+        ),
+    )
+    ap.add_argument(
+        "--max-part-bytes",
+        type=int,
+        default=DEFAULT_MAX_PART_BYTES,
+        metavar="N",
+        help=(
+            "split the prepared document into parts of at most N bytes, written "
+            "next to OUTPUT as <stem>.partNN.html and listed in <stem>.parts.txt. "
+            "0 disables splitting. Rendering one part at a time is what keeps "
+            "peak memory bounded; merge_book.py reassembles the PDFs."
+        ),
+    )
     args = ap.parse_args()
 
-    chapters, renamed, stats, doc = prepare(args.source, args.output, args.prod_host)
+    if args.fix_svgs:
+        svgs = fix_svgs(args.fix_svgs)
+        print(f"SVGs de-fallbacked:       {svgs['defallbacked']}")
+        print(f"SVGs unmasked:            {svgs['unmasked']}")
+
+    chapters, renamed, stats, iframes, doc = prepare(
+        args.source, args.output, args.prod_host, color_emoji=args.color_emoji
+    )
     ids, dupes, jumps, dangling = validate(doc)
 
     print(f"chapters:                 {chapters}")
@@ -268,6 +728,8 @@ def main():
     print(f"links within a chapter:   {stats['intra']}")
     print(f"links made absolute:      {stats['external']}")
     print(f"links left alone:         {stats['untouched']}")
+    print(f"iframes made links:       {iframes}")
+    print(f"emoji tinted:             {stats['emoji']}")
     print(f"total ids:                {len(ids)}")
     print(f"same-document jumps:      {jumps}")
     print(f"duplicate ids:            {len(dupes)}")
@@ -284,6 +746,33 @@ def main():
             file=sys.stderr,
         )
         return 1
+
+    # Split AFTER validating: validate() checks "#id" jumps against the ids in
+    # one document, which is exactly the invariant the split relies on and the
+    # last moment it can be checked on a whole document.
+    if args.max_part_bytes > 0:
+        converted = to_jump_scheme(doc)
+        parts, oversized = split_body(doc, args.max_part_bytes)
+        stem = args.output[:-5] if args.output.endswith(".html") else args.output
+        written = write_parts(doc, parts, stem)
+
+        manifest = f"{stem}.parts.txt"
+        with open(manifest, "w") as fh:
+            fh.write("".join(f"{p}\n" for p, _ in written))
+
+        print(f"jumps deferred to merge:  {converted}")
+        print(f"chapters sliced:          {oversized}")
+        print(f"parts written:            {len(written)} -> {manifest}")
+        for p, n in written:
+            print(f"  {os.path.basename(p)}  {n / 1024 / 1024:.1f} MB")
+        big = [(p, n) for p, n in written if n > args.max_part_bytes * 1.5]
+        for p, n in big:
+            print(
+                f"  NOTE: {os.path.basename(p)} is {n / 1024 / 1024:.1f} MB, past the "
+                f"{args.max_part_bytes / 1024 / 1024:.1f} MB target — it holds a single "
+                "child element that cannot be divided further.",
+                file=sys.stderr,
+            )
     return 0
 
 

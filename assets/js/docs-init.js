@@ -364,6 +364,11 @@ document.addEventListener('DOMContentLoaded', function(){
               if (!blocks.length) return;
               navigator.clipboard.writeText(blocks.join('\n\n'));
             })();
+          } else if (item.dataset.action === 'download-pdf') {
+            // The URL is baked into the markup by copy-markdown.html, which
+            // only renders this item for a version that builds a book.
+            var pdfUrl = item.getAttribute('data-pdf-url');
+            if (pdfUrl) window.open(pdfUrl, '_blank', 'noopener');
           } else if (item.dataset.action === 'print') {
             window.print();
           }

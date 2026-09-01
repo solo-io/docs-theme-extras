@@ -377,7 +377,7 @@ The `github-table` shortcode is a section-extracting variant of `github` — fet
 
 MARKER_GITHUB_TABLE. The extracted "Functions" section appears below:
 
-{{% github-table url="https://raw.githubusercontent.com/agentgateway/agentgateway/refs/heads/main/schema/cel-functions.md" section="Functions" %}}
+{{% github-table url="https://raw.githubusercontent.com/agentgateway/agentgateway/refs/heads/main/schema/cel-functions.md" section="Functions" timeout="60s" %}}
 
 ## GitHub YAML
 

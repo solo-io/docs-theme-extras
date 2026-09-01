@@ -1,0 +1,45 @@
+{{- /* book-section.html — the display label for the SECTION whose tree this book
+       walked, or "" for a product that does not nest version trees under a
+       section. Input is the book's root Page (`.`).
+
+       WHY A BOOK NEEDS THIS. A product with parallel sections has one book per
+       section, and until they are labelled the two are indistinguishable on
+       paper: agentgateway's Kubernetes and standalone manuals ship the same
+       `latest` line, so both covers carried the same logo, the same
+       "Documentation" subtitle and the same version, and the only thing telling
+       them apart was the filename — which is exactly the information a reader
+       loses the moment the file is renamed or printed. The section is not in the
+       logo either, since a product has one product mark.
+
+       Label resolution deliberately mirrors utils/resolve-sections.html, which
+       renders the section selector on the website, so the cover names a section
+       the same way the site does rather than inventing a second vocabulary:
+
+         1. the registered key, humanized ("kubernetes" → "Kubernetes")
+         2. the section landing page's title, if that page exists
+         3. `title` on the section's own config table, which wins
+
+       Returns "" for every product that sets no `params.sections`, so the caller
+       falls back to whatever it rendered before and nothing changes for them. */ -}}
+{{- $label := "" -}}
+{{- $sec := partial "utils/section-segment.html" . -}}
+{{- with $sec.segment -}}
+  {{- $key := . -}}
+  {{- $label = $key | humanize -}}
+  {{- /* Both lookup shapes, same as resolve-sections.html: the enterprise hub
+         mounts a product subtree as its contentDir, so the section landing is
+         at /<section>, while an OSS site keeps a /docs/ prefix. */ -}}
+  {{- $landing := site.GetPage (printf "/%s" $key) -}}
+  {{- if not $landing -}}
+    {{- $landing = site.GetPage (printf "/docs/%s" $key) -}}
+  {{- end -}}
+  {{- with $landing -}}
+    {{- $label = partial "utils/title" . -}}
+  {{- end -}}
+  {{- with index site.Params.sections $key -}}
+    {{- with .title -}}
+      {{- $label = . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- return $label -}}

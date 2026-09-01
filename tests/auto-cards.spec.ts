@@ -114,6 +114,16 @@ const V2_ONLY_TOPICS = [
     title: "Section gating (no section)",
     descriptionContains: "outside any section tree",
   },
+  // glossary-term is the fixture's only page calling the `gloss` shortcode, added
+  // so tests/book-document.spec.ts can assert that a book keeps the TERM and
+  // drops its tooltip definition — the web page hides that tooltip via
+  // glossary.css, which a book document never loads. Ordinary child topic of
+  // the v2 tree, so it gets an ordinary section card.
+  {
+    slug: "glossary-term",
+    title: "Glossary term",
+    descriptionContains: "gloss shortcode",
+  },
 ];
 
 // removed-feature is a v1-ONLY page: it is the fixture's only page with no

@@ -12,6 +12,26 @@ contentDir = "fixture/content/en/test"
 publishDir = "public-oss/test"
 enableInlineShortcodes = true
 
+
+# The `book` output format, so the fixture actually BUILDS a book document.
+#
+# Without this the book layouts (docs/list.book.html, docs/single.book.html,
+# _partials/docs/book-document.html) and assets/css/print-book.css are never
+# executed by any test. Hugo parses every template, so a SYNTAX error in them
+# still fails the build — but nothing semantic does. A deliberate
+# `{{ .ThisMethodDoesNotExist }}` in book-document.html built green across the
+# whole suite before this was added.
+#
+# It has to be in EVERY config that builds fixture/content/en/test, not just
+# this one: `outputs` is a property of the PAGE, so a config missing the format
+# fails the entire build with `OutputFormat with key "book" not found`. That is
+# hugo-oss, hugo-enterprise, and both -local variants. The section-title and
+# section-current builds are comma-joined overlays on this file and inherit it.
+[outputFormats.book]
+  mediaType = "text/html"
+  baseName  = "book"
+  isHTML    = true
+
 [module]
   [[module.imports]]
     path = "github.com/imfing/hextra"
@@ -70,6 +90,14 @@ enableInlineShortcodes = true
     source = "data"
     target = "data"
 
+  # Fixture-only glossary terms, unioned onto the target above. Kept out of the
+  # shipped data/ for the reason fixture/data/glossary.yaml explains: a module
+  # ships its whole data tree, so a test glossary at the repo root would reach
+  # every consumer.
+  [[module.mounts]]
+    source = "fixture/data"
+    target = "data"
+
 [build]
   writeStats = true
   [[build.cachebusters]]
@@ -98,6 +126,12 @@ folder = "test"
 versionBanner = false
 versionBannerText = ""
 versionSpecificBanner = true
+
+# See hugo-enterprise.toml for why the fixture sets this and no real consumer
+# does. Needed on BOTH brands: the book spec runs against each, and the OSS
+# fixture is the half that proves a consumer with no [params.pdfDownload] table
+# still renders a book and simply omits the download menu item.
+buildBook = true
 
 # This module's page-context partial dispatches on this flag. The fixture was
 # authored against the docs convention (Site.Params.folder / currentProduct).
@@ -226,6 +260,19 @@ pageContextMode = "siteParams"
 
 [[params.versions]]
   version = "v1"
+  # The PRINT label for this tree's book, read only by
+  # utils/book-version.html. Set here and nowhere else in this fixture, so the
+  # two books test the two branches of that resolution: v2 has no
+  # releaseVersion and falls back to `.version` ("v2"), while v1 proves an
+  # explicit releaseVersion WINS over its `.version` ("v1").
+  #
+  # It stands in for agentregistry/kagent/agentgateway in solo-io/docs, whose
+  # current tree sets `version = "latest"` because that field also names
+  # assemble-assets.py's asset directories and is what reuse.html matches URL
+  # segments against — so the real release number cannot live there. The value
+  # here is deliberately a string that appears nowhere else, and in particular
+  # is NOT "v1", so an assertion cannot pass by accident.
+  releaseVersion = "1.9.3"
   sections = ["demo", "nested"]
   # Second ossVersion mapping, used only by the keepVersion collision probe in
   # conrefs/test/version-remap.md: it makes the token `v3` — which is also a

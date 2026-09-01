@@ -2,5 +2,11 @@
        output format — see _partials/docs/book-document.html for everything
        this actually does. layouts/docs/single.book.html is this file's
        twin for a leaf page (no _index.md, no children); both exist because
-       Hugo resolves an output format's template per page KIND. */ -}}
-{{- partial "docs/book-document.html" . -}}
+       Hugo resolves an output format's template per page KIND.
+
+       Gated on utils/build-book.html: `outputs` front matter cannot say "only
+       when a PDF is being made", so without this every ordinary build pays for
+       a book nobody reads and publishes it at a crawlable URL. See that partial
+       for the numbers and for how a PDF build opts in. */ -}}
+{{- $build := partial "utils/build-book.html" . -}}
+{{- if $build -}}{{- partial "docs/book-document.html" . -}}{{- end -}}

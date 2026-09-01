@@ -22,6 +22,952 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
+## [0.3.6] — 2026-09-01
+
+**Scope of this release.** Mostly the PDF pipeline: two new scripts (`scripts/merge_book.py`,
+`scripts/number_toc.py`), three new flags on `scripts/prepare_book.py` and `merge_book.py`,
+new rules in `print-book.css`, and one new optional menu item. Versioned as a patch because
+none of that reaches a consumer that sets nothing new — no script is a Hugo import, every new
+CSS rule matches either an element only the pipeline creates (`.pdf-chapter-cont`,
+`.pdf-emoji`) or one that exists only inside a book document (`.pdf-toc-*`, `@page
+pdf-cover`, `.pdf-chapter ol`), and the download item renders **only** when
+`params.pdfDownload.distribution` or `params.pdfDownload.urlTemplate` is set.
+
+**One change does reach every consumer, PDF or not.** Tab flattening moved out of
+`partials/copy-markdown.html` and into the shared `utils/unhide-tabs.html`, which the
+`markdown` output format already used — so on any site with a tabbed page, both that output
+and the "Copy as Markdown" payload gain a lead-in sentence above each flattened group and
+consistent `Option:` labels. It is a fix rather than a new behavior, and it is listed under
+[Fix](#fix). The only other change a consumer sees without opting into anything is
+`id="pdf-contents"` on the book's contents heading, which no book has ever targeted.
+
+A consumer that **already builds a book** sees three changes. One is breaking and is listed
+below. The other two are under [Fix](#fix): the print stylesheet is published at
+`css/print-book-<version>.css` rather than `css/print-book.css`, because the target name is
+keyed on the version so two books in one build cannot share a cached copy — internal, since
+only the book document links it; and the version on the cover and in the running footer now
+comes from the book's own version tree rather than the site-wide `latest` entry, so a book of
+any other tree is relabelled. That one is a visible change to the artifact, and a correction:
+the old label was wrong.
+
+Kept as a patch despite the breaking change because solo-io/docs is the only consumer that
+builds books at all — ambientmesh.io piloted the pipeline and has no PDF workflow today — and
+the change ships together with that repo's workflow update. Read the entry below before
+bumping the pin if that is no longer true for you.
+
+### Breaking
+
+- **Book documents are no longer built unless the build asks for one
+  (`layouts/docs/list.book.html`, `layouts/docs/single.book.html`, new
+  `layouts/_partials/utils/build-book.html`).** A build that wants books now sets
+  `HUGO_PARAMS_BUILDBOOK=true`; without it, a page that opts into the `book` output format
+  renders nothing and no `book.html` is written.
+
+  **What to change.** One line in the PDF workflow, on the step that builds the site — not in
+  a site config, which would be the same as not having the switch:
+
+  ```yaml
+  - name: Build site
+    env:
+      HUGO_PARAMS_BUILDBOOK: "true"
+    run: hugo --config=hugo-${{ matrix.product }}.toml
+  ```
+
+  **Why.** `outputs` front matter selects the output format but cannot say *when* — it is
+  static, so an opt-in applies to every build of that page, and a book is an entire version
+  tree stitched into one file. On [solo-io/docs](https://docs.solo.io/kagent/latest/) that
+  meant every ordinary production build also produced 12 book documents totalling 92 MB on top
+  of a 4.3 GB site, about 7% of the build time on the largest product, and — the part that
+  actually matters — 12 publicly reachable URLs each carrying a complete unstyled duplicate of
+  a manual, with no `noindex` and no canonical, because a book document deliberately skips
+  `baseof.html` and all the normal head chrome. Confirm on any deployed product before the
+  bump: `curl -sI https://docs.solo.io/kagent/latest/book.html` answers 200. It also forced
+  the link checker to exclude `book.html`, whose relative links do not resolve from its own
+  location until `prepare_book.py` rewrites them. None of that output was deployed or read by
+  anyone; the PDF workflow does its own build.
+
+  **If you forget it**, you do not get a broken PDF, which is the failure mode worth knowing:
+  the book document still renders a cover and an empty table of contents, and WeasyPrint
+  paginates that happily and exits 0. `prepare_book.py` already refused a zero-chapter book,
+  and its error message now names this variable.
+
+  Verified by building kagent both ways against a local module replace: without the variable,
+  81 pages and no `book.html` anywhere; with it, 81 pages and a `book.html` **byte-identical**
+  to the one built before this change. Build time on gloo-mesh-enterprise went from 60.0s to
+  54.2s. Covered by a new `make build-nobook` fixture build — `build-enterprise` with that one
+  key flipped and nothing else — and an assertion in `tests/book-document.spec.ts`;
+  mutation-tested by flipping the key back and confirming the test fails.
+
+### Add
+
+- **`github-table` takes an optional `timeout=`, because 15s is no longer enough for
+  every remote the shortcode is pointed at** (`layouts/_shortcodes/github-table.html`,
+  `tests/helpers/remote-fetch.ts`, `tests/build-resilience.spec.ts`,
+  `fixture/assets/conrefs/test/everything.md`,
+  `docs/content/authoring/shortcodes/github-table.md`). The 15s cap added in v0.1.20 was
+  sized for the schema files this shortcode was written for, which are tens of kilobytes:
+  `schema/cel.md` is 15 KB, `schema/cel-functions.md` 14 KB. One remote has since outgrown
+  that by three orders of magnitude. agentgateway's `schema/config.md` passed **16.2 MB** in
+  August 2026 and grows with every commit to the upstream repo (15.3 MB on Aug 19 → 16.2 MB
+  on Aug 24), and a throttled CI runner cannot pull it inside 15s. The fetch then fails, the
+  page publishes the "Unable to load table" fallback, and the docs-hub `hugo-warnings` test
+  escalates the `warnf` to a red build — which is exactly what it is meant to do, and exactly
+  what [solo-io/docs run 33428115057](https://github.com/solo-io/docs/actions/runs/33428115057/job/99610680180)
+  did on the `agentgateway` content job.
+
+  Raising the shared default was the wrong lever: it would slow the failure of every other
+  fetch to suit one page. The cap is now `default "15s" (.Get "timeout")`, so the value lives
+  on the call that needs it — agentgateway's static-configuration page passes
+  `timeout="120s"`, and the CEL reference keeps the 15s default. The parameter is a pressure
+  valve, not a fix. The page it exists for downloads 16 MB to render **105 of the file's
+  82,699 table rows** (its `exclude=` regex drops the rest), on every build of every
+  consumer, and the durable answer is a smaller remote or a checked-in table.
+
+  A variable cap can fail in a way a literal cannot: `(dict "timeout" $timeout)` still
+  contains the word `timeout`, so the existing source scan would keep calling it capped even
+  if `$timeout` resolved to `""` — an uncapped fetch wearing the shape of a capped one, which
+  is the ~20-minute build hang the cap was added to prevent. So `findUndefaultedTimeoutVar`
+  now requires any variable timeout to be assigned through `default "<literal>"` in the same
+  file, and the theme-source scan runs it over all of `layouts/`. Verified non-vacuous by
+  rewriting the assignment to a bare `.Get "timeout"` and watching the scan go red. Observable
+  in production on
+  [agentgateway — Static configuration](https://agentgateway.dev/docs/standalone/latest/configuration/static-configuration/),
+  whose schema table is the 16 MB fetch: before the fix a slow build published "Unable to load
+  table from …" in place of the table. Both fixture brands build warning-free with a
+  `timeout=` on the call (`build exit=0`, no `github-table` WARN), and `make test-oss` /
+  `make test-enterprise` pass at 2247 / 2249. Takes effect when a consumer bumps its extras
+  pin; until then `timeout=` is inert and the 15s cap applies.
+
+- **`prepare_book.py --max-part-bytes` splits a book into renderable parts, and
+  `merge_book.py` puts the rendered PDFs back together.** A single-document render of
+  gloo-mesh-enterprise was killed on a 16 GB GitHub runner with no diagnosis at all — the
+  runner is torn down, so the job reports only `The runner has received a shutdown signal`
+  and exit 143 after 32 minutes. Measuring across cuts of the real book showed why, and
+  showed that the obvious mental model is wrong: **peak memory tracks output PAGES, not
+  input bytes**, at a steady ~1.6 MB per page from 347 pages up to 3,481. The book is
+  ~6,500 pages, so it needs ~11 GB before allocator overhead. Input size is only a proxy
+  for pages and a leaky one — prose yields ~250 pages/MB, while
+  [the CVE scan reference](https://docs.solo.io/gloo-mesh-enterprise/latest/reference/security_updates/)
+  (967 tables, 22,217 rows, and alone a third of the whole book) yields ~620 — so the
+  default 2 MB ceiling is set for the table-dense case.
+
+  Splitting costs nothing in fidelity because WeasyPrint writes internal links as jumps to
+  *named* destinations and emits one per element id, and `prepare_book.py` already made ids
+  unique document-wide, so the merged file has a single global namespace. The one gap is
+  that WeasyPrint **drops** `<a href="#x">` when `x` is absent from the part being rendered
+  (`No anchor #x for internal URI reference`), so every jump is rewritten to a `pdfjump:`
+  URI that survives as a link annotation and is turned back into a real jump at merge time.
+  Rewriting *all* jumps rather than only the crossing ones means the splitter never needs to
+  know which part a target landed in.
+
+  Oversized chapters are cut between their direct children, never inside a table or
+  `details` block. Heading boundaries are deliberately not used: the CVE page has 306 direct
+  children and two headings, so heading-splitting would not divide it at all.
+
+  **Verified** on the real gloo-mesh-enterprise book (16 MB, 458 chapters): 10 parts, all
+  ≤1.9 MB; merged to 6,485 pages with continuous numbering (page index 2946 prints "2947",
+  spanning a part boundary), 2,869 bookmarks, 7,929 internal links and **zero** pointing
+  outside the document, zero unresolved jumps, and zero render errors.
+
+  **Correction.** That verification originally also claimed "nesting intact across parts".
+  It is not, and counting bookmarks did not show it: the tree is nested correctly *within*
+  each part and re-rooted at every boundary. See the bookmark-tree fix below, which is what
+  actually makes the claim true. Peak memory fell from >15 GB to **2,134 MB**, and total render time from
+  32+ minutes (never finishing) to **5m20s**. The slice boundary inside the CVE chapter is
+  visually seamless — same running header, consecutive page numbers, no stray break.
+
+- **Printed page numbers in the book's table of contents (`scripts/number_toc.py`,
+  `merge_book.py --page-map`, `.pdf-toc-*` in `print-book.css`).** A 6,485-page manual whose
+  contents page lists 458 chapter titles and not one page number is a contents page you
+  cannot use on paper. The PDF's bookmark tree navigates fine on screen, which is exactly
+  why this was easy to miss.
+
+  CSS Paged Media already solves this — `target-counter(attr(href url), page)` on a TOC
+  link prints where its target landed, and WeasyPrint supports it. It solves it only for a
+  book rendered as ONE document, though, and a book long enough to want a printed contents
+  page is precisely the book `prepare_book.py` has to cut into parts to stay inside a 16 GB
+  runner. After the cut, every chapter the TOC points at is in a different document from
+  the TOC and there is nothing left to count.
+
+  So the numbers are taken from the finished article instead: `merge_book.py --page-map`
+  writes out where every named destination actually landed, `number_toc.py` fills those
+  numbers into the TOC's empty spans, and the caller re-renders **only** the part holding
+  the TOC and merges once more. Reading destinations back is two linear passes rather than
+  pypdf's `get_page_number()` per destination, which on this book would be ~19 million
+  comparisons.
+
+  Entries are laid out as a flex row — title, dotted leader, number — with the leader drawn
+  as a bottom border rather than repeated `.` characters, so it cannot be selected, copied
+  or read aloud from the tagged PDF.
+
+  The second render cannot invalidate the numbers it is printing, because `.pdf-toc-page`
+  is `flex: 0 0 3em` — a fixed-width column, so an empty box and a `1234` box take
+  identical space, no title rewraps and the TOC keeps its length. That is the load-bearing
+  detail in the whole design, so `number_toc.py --expect-pages/--assert-pages` checks it on
+  every run instead of trusting it.
+
+- **A "Download all docs (PDF)" item in the Copy-as-Markdown menu.** A published PDF that
+  nobody can find is not much use, and the menu on every docs page is already the "get this
+  content in another form" control — it sits next to Print, which answers the same need.
+  Discovery aside, the interesting part is how the item decides whether to appear: it asks
+  the version root for its output formats, so a version shows the link exactly when its
+  `_index.md` carries `outputs: ["html", "book"]`. That is the same condition that makes a
+  PDF publishable, so there is no second flag to keep in sync and nothing to drift. The
+  version root is resolved through `utils/version-root.html`, not `.FirstSection`, which
+  returns the wrong page inside a subtree.
+
+  Opt in with `params.pdfDownload.urlTemplate` (placeholders `{product}`, `{distribution}`,
+  `{version}`) plus `params.pdfDownload.distribution`. `distribution` is not decoration:
+  kgateway, agentgateway, agentregistry and kagent are each documented as both enterprise
+  and open source, and their release tags would otherwise collide. Set the params in
+  **every** config a product builds with, or the item silently disappears from preview
+  builds — the same trap as `[outputFormats.book]`.
+
+  The one thing it cannot know is whether the PDF has been *published* yet; the build only
+  knows the book is produced. A version enabled between two nightly runs shows a link that
+  404s until the next one, so dispatch the PDF workflow when enabling a version. A
+  build-time existence check was prototyped and rejected: it needs `[security.http]` widened
+  to permit HEAD in every consumer, and `caches.getresource` defaults to `maxage = -1`, so a
+  cached "missing" answer would never expire.
+
+  **Verified** on a real gloo-mesh-enterprise build: the item renders on the `latest` tree
+  and on a page three levels deep inside it, with the correct release URL, and is absent
+  from `2.12.x` and `main`, neither of which builds a book.
+
+- **Page numbering starts at the contents page, and the cover carries no footer
+  (`@page pdf-cover` in `print-book.css`, `merge_book.py --first-page`).** The cover was
+  page 1, which is not how a manual is numbered and cost a page of offset against every
+  printed contents entry. `@page :first` cannot do this job — it means the first page of
+  the document *being rendered*, and this book is rendered as one document per part, so it
+  would have blanked a footer in the middle of the book for every part after the first. A
+  named page bound to the cover element runs exactly once.
+
+  `--first-page` is the other half: the page map records where destinations landed
+  physically, and with the cover unnumbered the printed number is one lower. Without both,
+  every line of the contents page is off by one — silently, and only on paper.
+
+- **The `book` output format is declared by the module, so consumers no longer repeat it in
+  every config (`hugo.toml`, `docs/content/configuration/pdf-export.md`).** This page of the
+  docs asserted, for three releases, that Hugo does **not** merge a module's top-level
+  `outputFormats` and that the block therefore had to live in each consumer config. That claim
+  is false on Hugo 0.160.1, and it was expensive: solo-io/docs carried **25 identical copies** —
+  three configs for each of eight products, plus the all-products preview — and forgetting one
+  did not degrade the PDF, it failed the **entire** build, because the `outputs` front matter
+  that selects the format belongs to the page and so applies to every config that builds that
+  content.
+
+  Verified rather than assumed, since the whole duplication rested on it: the block was added to
+  this module's consumer-facing `hugo.toml`, deleted from one consumer's `hugo-kagent.toml`, and
+  the product built clean with `book.html` rendering at 2.75 MB. Control: deleting it from the
+  module config too reproduces `OutputFormat with key "book" not found`. In hindsight the merge
+  is unsurprising — that same file already exports `[[module.imports]]` (hextra) and
+  `[[module.mounts]]` transitively.
+
+  **Inert for a consumer that publishes no PDF.** Defining an output format renders nothing by
+  itself; a page opts in through `outputs` front matter and no `[outputs]` default includes
+  `book`. A consumer that keeps its own identical block is also unaffected — project config wins
+  over module config, which is the escape hatch for anyone on an older Hugo. The copies in this
+  repo's own `hugo-{oss,enterprise}*.toml` stay, and are not redundant: those builds pass
+  `--config`, which replaces Hugo's default config lookup, so the module `hugo.toml` is never
+  read for them.
+
+  Observable on any enterprise product page, for example
+  [the Istio 1.30.x docs](https://docs.solo.io/istio/1.30.x/), whose `book.html` still builds
+  with no `[outputFormats]` block anywhere in `hugo-istio.toml`.
+
+- **A product with parallel SECTIONS can publish one book per section
+  (`layouts/partials/copy-markdown.html`, `layouts/_partials/utils/book-section.html`,
+  `layouts/_partials/docs/book-document.html`, `fixture/content/en/test/nested/v2/_index.md`,
+  `tests/book-document.spec.ts`).** A section nests version trees one level deeper
+  (`/<product>/<section>/<version>/`), so each section's tree is its own book — but two of them
+  were indistinguishable in both of the ways that matter.
+
+  The download URL filled `{version}` from the version SEGMENT alone, and
+  [agentgateway](https://docs.solo.io/agentgateway/) ships the same `latest` line in both
+  deployment modes, so `/agentgateway/kubernetes/latest/` and
+  `/agentgateway/standalone/latest/` both resolved to `agentgateway-enterprise-latest`.
+  Publishing both would have put whichever rendered last behind the link on **both** modes'
+  pages, silently, because the export uploads with `--clobber`. `{version}` is now prefixed
+  with the section segment. Read through `utils/section-segment.html` and **not**
+  `version-root.html`'s `section` field, which is overloaded — it holds the PRODUCT segment for
+  a product with no `params.sections`, so using it would have prefixed every ordinary product's
+  URL with its own name and broken every published link. The regression half is asserted
+  explicitly.
+
+  The covers were the other half: same product logo, same "Documentation" subtitle, same
+  version, so the only thing telling two manuals apart was the filename — the first thing lost
+  when a file is renamed or printed, and the section is not in the logo because a product has
+  one product mark. The subtitle now names the section, resolved by `utils/book-section.html`
+  through the same ladder `resolve-sections.html` uses for the website's section selector
+  (humanized key → landing-page title → the section's configured `title`), so the cover uses
+  the site's own vocabulary rather than inventing a second one.
+
+  Verified against the fixture's `nested` section, which is the exact shape: its tree is at
+  `/test/nested/v2/` and its version segment is the same `v2` as the top-level tree's, so
+  nothing keyed on the version alone can separate them. Asserts the section URL, the unchanged
+  non-section URL, the section-named cover and the unchanged generic cover.
+
+- **`releaseVersion` on a `params.versions` entry names the real release on the book's cover
+  and footer, for a tree served at `/latest/` (`layouts/_partials/utils/book-version.html`,
+  `hugo-{enterprise,oss}.toml`, `tests/book-document.spec.ts`).** With the cover now reading
+  the version off the tree the book walked, three products in solo-io/docs printed **"Version
+  latest"** — agentregistry, kagent and agentgateway all set `version = "latest"` literally on
+  their current tree and keep the release number only in `dropdown`
+  (`2026.8.0 (latest)`). On the website that is fine, because the reader is standing on the URL
+  that says it; in a downloaded PDF it tells them nothing, and the file outlives the release it
+  documents. Products whose `version` already holds a number were never affected:
+  [the Gloo Mesh Enterprise manual](https://github.com/solo-io/docs-pdfs/releases/tag/gloo-mesh-enterprise-enterprise-latest)
+  is served at `/latest/` and its cover reads "Version 2.13.x", because its entry pairs
+  `version = "2.13.x"` with `linkVersion = "latest"`.
+
+  **Correcting `version` to the real number is the obvious fix and it is unsafe**, which is why
+  this is a new field rather than a config change. `version` is not display-only:
+  `assemble-assets.py` names asset directories `assets/<product>/<version>`, and
+  `_shortcodes/reuse.html` locates them by matching each URL segment against `.version`. On
+  agentgateway, whose segment IS `latest`, renaming the field breaks that match,
+  `$resolvedVersion` comes back empty, and every `{{< reuse >}}` snippet silently resolves to
+  the unversioned asset path. `reuse.html` and `rebase.html` additionally substitute `.version`
+  into content for the OSS→enterprise remap. None of it fails loudly. `releaseVersion` is read
+  by `book-version.html` and nothing else, is opt-in per entry, and wins over `version` when
+  present. It is deliberately not parsed out of `dropdown`, which is a UI label carrying a
+  `(latest)` suffix and sometimes a single space.
+
+  **The download URL is unchanged, deliberately.** `copy-markdown.html` resolves `{version}`
+  from the URL segment because it has to match the release asset the PDF workflow publishes,
+  and that asset is named from the version directory. A tree at `/latest/` therefore keeps a
+  stable `…-latest.pdf` link while its cover names the actual release — two coordinates
+  answering different questions.
+
+  Verified in the fixture, which now sets `releaseVersion = "1.9.3"` on its `v1` entry and
+  nothing on `v2`, so the two books exercise both branches: v2 falls back to `.version` ("v2")
+  and v1 proves the override wins over its own `.version` ("v1"). The value appears nowhere
+  else in the fixture, so no assertion can pass by coincidence, and the cover, the running
+  footer in the executed stylesheet, and the *unchanged* `test-enterprise-v1` download URL are
+  each asserted separately. Both brands: 2,225 and 2,224 passing.
+
+- **`params.pdfDownload.distribution` alone is enough to render the download item;
+  `urlTemplate` no longer has to be written out (`layouts/partials/copy-markdown.html`,
+  `hugo-enterprise.toml`, `tests/book-document.spec.ts`).** Wiring the remaining seven
+  products in solo-io/docs for PDF export meant writing the same 130-character release URL
+  into 24 files — three configs (prod, preview, local) for each of eight products, every
+  copy identical, and each one a place for a typo that fails by producing a link to nothing.
+  A shared config file is the obvious alternative and is worse there: 24 places in that repo
+  invoke Hugo with a per-product config, and a forgotten second `--config` removes the menu
+  item **silently** rather than failing a build. So the shape moved into the partial, and a
+  consumer now states only what actually differs between consumers.
+
+  **The default is gated on `distribution` rather than applied unconditionally, and that
+  gate is the whole safety property.** Two consumers build books and publish them to their
+  own pages instead of to a release — kgateway.dev writes
+  `static/downloads/kgateway-envoy-latest.pdf` from its `make pdf` target, and ambientmesh.io
+  does the same — and neither sets `pdfDownload` at all. An unconditional default would have
+  handed both of them a menu item pointing at a `solo-io/docs-pdfs` release that does not
+  exist. Neither sets `distribution`, so neither is affected. Any site wanting a different
+  host still sets `urlTemplate`, and an explicit value wins.
+
+  Verify on any enterprise product page — for example
+  [the Istio 1.30.x docs](https://docs.solo.io/istio/1.30.x/) — by opening the
+  Copy-as-Markdown menu, or in view-source by searching for `docs-pdfs/releases/download`:
+  the href is assembled from the defaulted template even though `hugo-istio.toml` sets only
+  `distribution = "enterprise"`.
+
+  This item had **no test coverage at all** before this change, which is uncomfortable for a
+  URL assembled from three separate config values. `tests/book-document.spec.ts` now asserts
+  both gates, and the two fixture configs are deliberately asymmetric to do it:
+  `hugo-enterprise.toml` sets `distribution` and no `urlTemplate` (so the default is the
+  thing under test), while `hugo-oss.toml` sets no `pdfDownload` table at all and stands in
+  for kgateway.dev — it must build a book and still render no item. The `main` tree, which
+  never opted into `book`, covers the other gate.
+
+### Fix
+
+- **A flattened tab group now says that its options are alternatives, and every option is
+  labelled with the name from its own tab (`layouts/_partials/utils/unhide-tabs.html`,
+  `layouts/partials/copy-markdown.html`, new `tests/tab-flatten.spec.ts`).** Tabs are shown
+  and hidden by JavaScript at runtime, so anything that reads a page without running it — the
+  book, the `markdown` output format, the "Copy as Markdown" payload — gets every option
+  stacked under a button bar that no longer switches anything. Stripping that bar and leaving
+  nothing in its place is worse than it sounds: the row of buttons **is** the signal that what
+  follows is a set of alternatives, so without it a reader, or a model reading `llms.txt`,
+  sees several blocks in sequence and works through them in order. A lead-in sentence now
+  replaces the bar, once per group.
+
+  **Why it was inconsistent.** Two tab markups are live, and a consumer emits one or the
+  other: a repo that overrides Hextra's tabs shortcode
+  ([solo-io/docs](https://docs.solo.io/kgateway/2.3.x/portal/overview/)) emits `<nav>` plus
+  panels carrying `data-tab-name`, and stock Hextra
+  ([kgateway.dev](https://kgateway.dev/docs/envoy/latest/quickstart/), and the other three OSS
+  sites) emits `[role="tablist"]` plus panels carrying `aria-labelledby`. This partial handled
+  only the first, `copy-markdown.html` kept its own copy that handled both, and the copies
+  drifted — so the same page flattened differently depending on which of the two ways a reader
+  asked for it. There is now one implementation, and `copy-markdown.html` calls it.
+
+  **The stock-Hextra label needs a lookup, not a backreference.** That panel points at its
+  button's DOM id, and the visible name sits two `<span>`s deep inside the button, which the
+  bar-stripping pass is about to discard. Labelling straight off the backreference is what
+  produces `Option: tabs-tab-tabs-14-0`, so the id is resolved through a map built from the
+  buttons **before** they are stripped. Verify on any tabbed page above: open Copy as Markdown
+  and confirm each option is named after its tab.
+
+  **Verified** on both brands. The spec asserts a counting invariant rather than the presence
+  of any one string — every tab group contributes exactly one lead-in sentence and every panel
+  contributes exactly one `Option:` label — because the two previous attempts at this both
+  failed by matching a subset: one matched no stock-Hextra markup at all, and one anchored on
+  `class="hextra-tab-panel"`, which only each group's ACTIVE panel carries, so it labelled the
+  first option of every group and skipped the rest. A third assertion rejects any label that
+  still looks like a DOM id. Mutation-tested by removing the id-to-name map and confirming the
+  suite goes red with `**Option: tabs-tab-tabs-14-0**`.
+
+- **An Excalidraw diagram no longer loses its connectors and labels in the PDF
+  (`scripts/prepare_book.py`).** Reported from the kagent manual, where the
+  [network-architecture diagram](https://docs.solo.io/kagent/latest/install/sys-reqs/) printed as
+  loose numbered badges and a few clipped words — all 18 connectors, both cluster labels, the
+  legend and almost every port annotation simply gone — on a page that is correct in every
+  browser. Only WeasyPrint disagrees, and it says nothing: it logs no error, so the render
+  step's `^ERROR:` gate cannot catch this and a published manual can ship a gutted diagram
+  while the job stays green. That is what makes it worth working around here rather than
+  waiting for an upstream release.
+
+  The cause is `<mask>`. Excalidraw punches a hole in a connector where its label sits, using a
+  two-rect luminance mask — a white rect over the whole canvas, then a black rect behind the
+  label — applied as `<g mask="url(#mask-…)">`. WeasyPrint 69 renders that group as very nearly
+  nothing. `fix_svgs()` (the function behind `--fix-svg-fonts`, which now also does this)
+  removes the mask *reference* from the built copy under `public/`, never from the source in
+  `assets/`; the `<mask>` element is left in place, inert, so the diff is one attribute per
+  group. The only thing lost is the hole, so a connector draws through its own label instead of
+  stopping short of it — legible, and exactly what an unmasked Excalidraw export looks like.
+
+  Stripping is guarded on the `svg-source:excalidraw` marker comment. A hand-authored mask is
+  load-bearing, and revealing content an author meant to hide would be a worse failure than the
+  one being fixed; one such SVG (`img/gateway/gloo-ai-gateway-dark.svg`) is deliberately left
+  alone. 31 of the hub's 499 SVGs carry a mask reference, 30 of them Excalidraw, spread across
+  gateway, gloo-mesh-enterprise, gloo-mesh-gateway, istio, and kagent — so every one of those
+  manuals was affected, not just the one reported.
+
+  Verified by rendering the real built SVG through WeasyPrint 69 in the CI container: before,
+  an exact reproduction of the reported page; after `fix_svgs()`, the complete diagram with its
+  embedded Nunito webfont intact. Six unit tests cover the marker guard, attribute-only
+  removal, and both fixes in one pass. The flag keeps its old name on purpose — it is an alias
+  now — so a historical build that fetches the `MIN_EXTRAS` scripts still parses it.
+
+- **A table row split by a page break no longer prints its continuation with EMPTY value
+  columns (`assets/css/print-book.css`).** Reported from a real
+  [agentgateway feature-comparison table](https://docs.solo.io/agentgateway/kubernetes/latest/about/):
+  page 44 ended on "Intelligent routing for self-hosted models with ✅ ✅" and page 45 opened
+  on "Inference Extension support" with **nothing** under Enterprise or Open Source. Nothing is
+  lost — every word and every mark still prints — but that is worse than loss, because the
+  continuation is not obviously debris. WeasyPrint repeats `<thead>` on each fragment of a
+  split table, so it reads as a legitimate row, and a reader turning the page sees a feature
+  marked unsupported in both columns when the ✅ printed overleaf. A comparison table that
+  misstates its own data is a correctness defect, not a cosmetic one.
+
+  The cause is that `print-book.css` set `break-inside: avoid` on `pre`, `.mermaid` and
+  `.section-card` but never on `tr`: the cell marks stay with the first fragment while the
+  wrapped label continues over the break. Reproduced in the CI container against this
+  stylesheet with 40 wrapping rows, which produced the reported shape exactly, and re-rendered
+  with the rule in place — the page then ends on a complete row. Content is identical either
+  way (40/40 rows, 40 ✅, 40 ❌) and so is the page count, so this only decides WHERE the break
+  falls and costs nothing in length.
+
+  One limit is inherent rather than a gap: a row TALLER than the text block has nowhere to move
+  to, so it still splits and its continuation pages still show empty value columns — verified
+  with a single ~900-word row, which splits across six pages regardless. `break-inside: avoid`
+  is a constraint the layout satisfies when it can.
+
+- **The `outputs` front matter documented for the book opt-in silently dropped a page's other
+  outputs (`docs/content/configuration/pdf-export.md`, `fixture/content/en/test/*/_index.md`,
+  `fixture/tabs-demo/v3/_index.md`).** The opt-in was documented as
+  `outputs: ["html", "book"]`, and Hugo's `outputs` **replaces** a page's default outputs
+  rather than adding to them — so every version root that followed the instruction stopped
+  emitting its `.md`, its RSS and its `llms.txt`. Copy-as-Markdown and llms discovery broke on
+  exactly one page per product, which is narrow enough that it survived review and a green
+  build: every page BELOW the version root keeps its `.md`, so the tree looks intact.
+
+  Caught by `tests/llms-directive.spec.ts` only once a SECOND fixture tree opted in — the
+  original opted-in tree was not the one that spec sampled, so the fixture had been carrying
+  the defect quietly. The docs now show the full list with a warning and a one-line check
+  against the built output, and every fixture root names its whole set. Consumers must update
+  their own front matter; the module cannot fix this for them, since the list is per-site.
+
+- **A book's cover and running footer name the version tree the book actually
+  walked (`layouts/_partials/utils/book-version.html`,
+  `layouts/_partials/docs/book-document.html`, `assets/css/print-book.css`,
+  `fixture/content/en/test/v1/_index.md`, `tests/book-document.spec.ts`).** Both
+  places resolved the version through `utils/resolve-latest-version.html`, which
+  answers a **site-wide** question: whichever `params.versions` entry carries
+  `linkVersion: "latest"`, else the first entry in the list. A book only ever
+  stitches the subtree of the page that opted into the `book` output format, so
+  the two answers agree only while the opted-in tree happens to be the flagged
+  one.
+
+  solo-io/docs is where they stopped agreeing. `hugo-istio.toml` flags no entry
+  `latest` at all, so the lookup fell through to the first entry, `1.31.x` — a
+  tree marked under development with a blank dropdown. Rendering the stable
+  [1.30.x docs](https://docs.solo.io/istio/1.30.x/) as a book therefore produced
+  a manual whose content was 1.30.x from cover to back page and whose cover, and
+  every single page footer, read "Version 1.31.x". That is the worst shape this
+  class of bug comes in: nothing is missing or malformed, so a reader has no way
+  to tell, and neither does a build log. To see it, open a published manual and
+  compare the cover line against the release tag it came from
+  ([the Gloo Mesh Enterprise manual](https://github.com/solo-io/docs-pdfs/releases/tag/gloo-mesh-enterprise-enterprise-latest)
+  is the case where they match, because `latest` is flagged there and is also
+  the tree that opts in — which is exactly why this shipped unnoticed).
+
+  The version is now resolved from the book root's own version root
+  (`utils/version-root.html`), whose `versionEntry` is the entry for the tree
+  being walked, and resolved **once** in `book-document.html` rather than
+  independently in two files. `print-book.css` receives it instead of looking it
+  up, so the footer cannot drift from the cover. `resolve-latest-version.html`
+  survives as the last fallback, for a site that has a `params.versions` list but
+  no version segment in its URLs.
+
+  One non-obvious consequence, and the reason the resource target name changed:
+  Hugo caches an `resources.ExecuteAsTemplate` result under its target path, and
+  that path was the constant `css/print-book.css`. Harmless while every book in a
+  build got the same version string; a defect the moment the string comes from
+  the page, because the first book rendered would win and the second would link
+  its stylesheet — printing the wrong version in the footer while its cover was
+  right. The name is keyed on the version now.
+
+  Verified two ways. The fixture opts a **second** version tree (`v1`) into
+  `book`, chosen because `v1` is not the tree any site-wide lookup would pick —
+  this fixture lists `v2` first and flags nothing `latest`, so with only `v2`
+  opted in the wrong answer and the right answer are the same string, which is
+  how the suite ran green over this for two releases. `tests/book-document.spec.ts`
+  asserts each cover names its own version, each book links its own executed
+  stylesheet, and each stylesheet's `@bottom-right` names its own version. All
+  three fail when `book-version.html` is reduced to the old site-wide call, and
+  the surrounding 2,220 tests pass unchanged in both brands.
+
+- **The PDF bookmark tree survives the split (`merge_book.py --outline-from`,
+  `id="pdf-contents"` in `docs/book-document.html`).** In the published
+  [Gloo Mesh Enterprise manual](https://github.com/solo-io/docs-pdfs/releases/tag/gloo-mesh-enterprise-enterprise-latest),
+  the bookmark panel is correct for exactly three entries — "Get started", "About", "Setup"
+  — and then goes flat: **60 top-level entries where there should be 13**, and the extra 47
+  are third- and fourth-level headings like "Before you begin" and "Example script gist",
+  sitting beside the sections they belong inside.
+
+  The cause is that WeasyPrint derives bookmark nesting from heading levels **per
+  document**, and each part is its own document. Part 2 opens on an `<h5>` deep inside
+  Setup, so that heading becomes part 2's root, and nothing later in the part can nest above
+  it. Concatenating the per-part trees preserves each one faithfully and produces a wrong
+  book.
+
+  The part HTML still knows the answer — levels there are absolute, because the book layout
+  emits a chapter at h2 plus its depth and `utils/shift-headings.html` pushes each page's
+  own headings down to match — so `--outline-from book.parts.txt` drops the imported trees,
+  reads the headings back out of the HTML, and builds one tree over the merged file. The
+  contents heading is not inside a chapter, which is why it now carries `id="pdf-contents"`.
+
+  Two things had to be got right, and the first was only caught by running the pass over the
+  **real** 16 MB book rather than a fixture:
+
+  - **A heading's id is almost never on the `<h*>`.** Hextra's render hook emits it on an
+    empty offset anchor span inside the heading. Reading `el.get("id")` found 459 headings —
+    one per chapter, none inside a page — so the panel would have gone from 2,869 bookmarks
+    to 459 while looking entirely plausible. A chapter's title heading is emitted by the
+    layout rather than by Goldmark and has neither, so it borrows its `<section>`'s id.
+  - **Dropping the imported outlines could have broken every link in the book.**
+    `merge_book.py` resolves every `pdfjump:` cross-reference against the merged file's
+    **named destinations**, and if those had travelled with the outline, repairing the
+    bookmarks would have severed the lot. They do not — proven by a test, not by reading the
+    pypdf source.
+
+  **Verified on the real gloo-mesh-enterprise book** (16 MB, 458 chapters, 10 parts):
+  **2,869** headings recovered — matching the published PDF's bookmark count exactly — with
+  **13 top-level entries instead of 60**, zero duplicate destinations, and "Before you
+  begin" back at depth 3 where it belongs instead of sitting beside "Get started". Also run
+  end to end through an Ubuntu 24.04 + WeasyPrint 69 container on a 4-part synthetic book:
+  nesting correct across all three boundaries, 64 jumps rewired, 0 unresolved. Plus 15 unit
+  tests. Takes effect when a consumer bumps its pin **and** passes `--outline-from` to both
+  merges — the second merge rewrites the same file, so leaving it off puts the flat trees
+  back.
+
+- **Color is back in ✅ ❌ 🟡 🟢 (`prepare_book.py --color-emoji`, `.pdf-emoji` in
+  `print-book.css`).** 0.3.6 fixed emoji printing as invisible specks by rejecting the color
+  font and installing the monochrome outline one, which made them legible and made 🟡 and 🟢
+  two nearly identical gray hatched circles — in a support matrix where the color *is* the
+  information.
+
+  The obvious fix does not exist. Rendered side by side in an Ubuntu 24.04 + WeasyPrint 69
+  container, **all three kinds of color font come out blank**: Noto Color Emoji (CBDT
+  bitmap), Noto COLRv1, and Twemoji Mozilla (COLRv0). Each embeds into the PDF, each
+  reserves the advance, none places any ink. There is no color font to switch to.
+
+  So the color is put back on the **characters** instead, before the renderer sees them:
+  each mapped emoji is wrapped in `<span class="pdf-emoji" style="color:…">`, and an outline
+  glyph honors `color` where a bitmap one does not — which is the reason the monochrome font
+  is the right one to install rather than a workaround around it. Tinting rather than
+  substituting a CSS shape keeps the character in the PDF's text layer, so it still copies,
+  searches and reads out, and it keeps Noto Emoji's per-emoji hatching, so the distinction
+  does not rest on hue alone for a color-blind reader. ⚪ and ⬜ map to gray, not white:
+  white on a white page is an invisible glyph, which is worse than what it replaced.
+
+  Opt-in, because it is a WeasyPrint workaround — a Paged.js consumer renders in Chromium,
+  which draws the real color font. Visible in the next export of
+  [the Gloo Mesh Enterprise manual](https://github.com/solo-io/docs-pdfs/releases/tag/gloo-mesh-enterprise-enterprise-latest),
+  whose content uses 582 ✅, 148 ❌, 26 🟡, 25 🟢 and one 🔴.
+
+  **Verified** by rendering each font configuration in the container and reading back both
+  the embedded `/BaseFont` and the rasterized page, then by a full-pipeline run: 5 emoji
+  tinted, correct colors on the page. Plus 9 unit tests, one of which caught a real bug —
+  the pass was not idempotent, and a second run nested every span inside itself.
+
+- **Nested ordered lists count 1 / a / i (`print-book.css`).** Every level printed as
+  decimals, so a procedure with sub-steps read as "1. 2. 3." inside "1. 2. 3." and the only
+  cue was the indent — which a page break can put on the far side of the page from the list
+  it belongs to. The website's own stylesheet already does this; the print document just
+  never loads it. Verified in the container: `1.` → `a.` → `i.` on a three-deep list.
+
+- **The page number matched neither of the two labels it sits between
+  (`print-book.css`).** `@bottom-center` set no font-size and no color, so it inherited 11pt
+  near-black body text while `@bottom-left` (the date) and `@bottom-right` (the product
+  name) were 9pt `#666`. The number sat louder in the footer than the labels it belongs
+  with. Now the same 9pt `#666`.
+
+- **Nine rendering defects found by reading a finished 6,485-page book.** Each was
+  reproduced in isolation before being fixed, and two turned out not to be what they
+  looked like. Visible on any page of
+  [the Gloo Mesh Enterprise docs](https://docs.solo.io/gloo-mesh-enterprise/latest/)
+  once exported.
+
+  - **Tab groups printed every option stacked, unlabelled.** `utils/unhide-tabs.html`
+    matched `role="tab"`, `role="tablist"` and `hextra-tabs-panel` — **none of which exist**
+    in current Hextra markup — so it was a silent no-op, leaving a dead button bar above two
+    indistinguishable code blocks. Rewritten against `hextra-tab-panel` + `data-tab-name`,
+    which carries the visible name directly and removes the need for the old id→name map.
+    **This also fixes the `markdown` output format**, which calls the same partial.
+
+    Two follow-ups, both from reading the output rather than the diff:
+
+    - The first rewrite anchored on `class="hextra-tab-panel"`, but only the *active* panel
+      of a group carries that class alone; every other one is `hextra-tab-panel hx:hidden`.
+      So it labelled the first option of each group and silently skipped the rest, which
+      still printed, because the utility class that would hide them is not loaded in this
+      document. `[^"]*` in place of the closing quote takes it from 150 labels to **449**,
+      with 0 panels left unconverted on
+      [the enterprise install guide](https://docs.solo.io/gloo-mesh-enterprise/latest/setup/install/enterprise_installation/)
+      and everywhere else.
+    - Stripping the button bar removes the only thing on the page that said "these are
+      alternatives", leaving several `Option:` blocks that read as one long sequence of
+      steps. The bar is now replaced by the sentence **"You can choose from the following
+      options."** — once per tab group, not per panel — and each option gets a rule down
+      its left edge (`.pdf-tab-option`). Measured on the gloo-mesh-enterprise book: 150 tab
+      groups, 150 lead-in sentences, 449 `Option:` labels, 0 button bars left and 0
+      unconverted panels.
+  - **"Copy as Markdown" kept its own copy of the tab-flattening regexes, the copies
+    drifted, and they drifted in BOTH directions.** This is the root cause of the bug above
+    and of a second one nobody had hit yet.
+
+    One way: `copy-markdown.html` had a near-identical but separately-maintained pair of
+    patterns, so the button people actually click kept working while
+    `utils/unhide-tabs.html` quietly did nothing for months.
+
+    The other way, and the more serious one: **stock Hextra tab markup was handled ONLY in
+    `copy-markdown.html`.** The `data-tab-name` markup that `unhide-tabs.html` was written
+    against does not come from Hextra at all — it comes from solo-io/docs's own
+    `layouts/_shortcodes/tabs.html` override. A consumer without that override (this
+    module's own fixture, and every OSS site) emits `[role="tablist"]` +
+    `.hextra-tabs-panel[aria-labelledby]`, which `unhide-tabs.html` did not match. Such a
+    site would have got labelled options in "Copy as Markdown" and **unlabelled, stacked
+    ones in its PDF and `markdown` output** — latent until someone enables a book for an OSS
+    site, which is the next thing on the list. Both markups now live in the shared partial,
+    and `copy-markdown.html` calls it and nothing else.
+
+  - **Test coverage for the flattening, which had none** (`tests/tab-flatten.spec.ts`, in
+    the `static` project's `testMatch` allowlist). Three tab bugs in a row were found by a
+    human reading finished output, so the spec asserts a *counting* invariant rather than
+    the presence of any one string: every tab group in the rendered page contributes exactly
+    one lead-in sentence, and every panel contributes exactly one `Option:` label. A pattern
+    that matches only each group's first panel fails it, and so does one that matches
+    nothing. **Verified in both directions** — 6 fixture pages pass, and re-anchoring the
+    panel pattern the way the original bug did turns that into `Expected: 11, Received: 0`.
+    The fixture exercises stock Hextra; the override markup is covered when the suite runs
+    against a consumer that has it.
+  - **Comparison tables looked empty.** `fonts-noto-color-emoji` is a CBDT *bitmap* font
+    and WeasyPrint scales its glyphs wrongly, so ✅/❌ printed ~2 mm tall, some outside
+    their own cell. The renderer needs the monochrome outline font instead. ✅ and ❌ alone
+    appear 108 times in this one book, across 20 distinct pictographic characters.
+    Trade-off: 🟡 and 🟢 lose their colour and differ only by shading.
+
+    **Consumer action, and the first version of this advice was wrong:** it is not enough
+    to install Noto Emoji and stop installing Noto Color Emoji. A hosted GitHub runner
+    image *already ships* the colour font, and Pango keeps choosing it — so the first fix
+    changed nothing and a colour-emoji book was published under it. The colour font has to
+    be actively rejected:
+
+    ```xml
+    <!-- /etc/fonts/conf.d/99-no-colour-emoji.conf -->
+    <fontconfig><selectfont><rejectfont><pattern>
+      <patelt name="family"><string>Noto Color Emoji</string></patelt>
+    </pattern></rejectfont></selectfont></fontconfig>
+    ```
+
+    Verify by rendering, not by asking fontconfig: `fc-match "sans-serif:charset=2705"`
+    answers `Noto Emoji` even in the configuration that ships colour glyphs, because Pango
+    resolves emoji fallback by script tag rather than by that query. Render `&#x2705;` and
+    read back the embedded `/BaseFont` — measured on a matching container, that is
+    `Noto-Color-Emoji` without the reject rule and `Noto-Emoji` with it, and the published
+    [gloo-mesh-enterprise PDF](https://github.com/solo-io/docs-pdfs/releases) carried
+    `DZLENL+Noto-Color-Emoji`.
+  - **Diagram legends printed as overlapping words.** Not the Excalidraw fonts, despite the
+    `Virgil` warnings — installing Virgil and Cascadia under corrected family names changed
+    nothing, because the text uses `font-family="Helvetica, Segoe UI Emoji"` and those
+    `@font-face` rules are vestigial. WeasyPrint resolves the **space character** through
+    the non-existent second family and gives it a wildly wrong advance, so `Gloo Mesh` set
+    from a single space renders as `Gloo    Mesh`. New `prepare_book.py --fix-svg-fonts DIR`
+    strips the fallback from *built* SVGs only (154 of them), never the sources.
+  - **Long identifiers ran off the right margin in reference tables.** WeasyPrint honours
+    neither `overflow-wrap: break-word` nor `overflow-wrap: anywhere` for an unbroken token
+    in a `table-layout: fixed` cell — both were rendered side by side and both overflowed.
+    Only `word-break: break-all` wraps, now scoped to code inside cells.
+  - **Callout icons printed black and jammed against their titles.** WeasyPrint does not
+    carry the inherited `color` into an inline SVG, so `stroke="currentColor"` resolved to
+    black, and CSS `stroke` is ignored because the presentation attribute wins. An explicit
+    `color: inherit` on the svg is honoured, and stays correct for every alert type
+    including consumer-defined ones. Spacing came from a Tailwind `hx:mr-2` this stylesheet
+    never loads.
+  - **Embedded videos printed as a thin black bar.** An `<iframe>` has no meaning in a PDF.
+    `prepare_book.py` now replaces each with a link to the watch URL.
+  - **The cover carried the company logo, not the product's.** It used `params.navbar.logo`;
+    it now prefers `params.sidebar.logo`, falling back for sites that set none.
+  - **Part-divider pages started halfway down.** `.pdf-divider` carried `padding-top: 10cm`.
+  - **A diagram vanished entirely from the PDF.** One `<path>` in an Excalidraw export
+    carried literal `NaN` coordinates; WeasyPrint raises on it and discards the **whole**
+    image, where a browser skips just the bad path. Fixed in the source asset, and the
+    renderer now fails the build on `ERROR:` rather than shipping a manual with a hole in
+    it.
+
+- **`.pdf-chapter-cont` suppresses the page break on a continuation slice.** `.pdf-chapter`
+  sets `break-before: page`, which is right for a real chapter and wrong for the remainder
+  of one that the splitter had to cut. Without this the split would be visible in the
+  finished PDF as a break in the middle of a page such as
+  [the CVE scan reference](https://docs.solo.io/gloo-mesh-enterprise/latest/reference/security_updates/).
+  Verified by rendering the two pages either side of a slice boundary and comparing them.
+
+Both take effect for a consumer that bumps its extras pin **and** passes the new flag; the
+`docs` hub's `pdf-export.yml` does both.
+
+- **A `callout`/`alert` in a book printed as plain prose with the word "info" floating above
+  it** (`assets/css/print-book.css`, `tests/book-document.spec.ts`). Two rules were missing,
+  both instances of the same root cause the GitHub-alert rules in this file already document:
+  a book document links only `print-book.css`, so anything styled in
+  `docs-theme-extras.css` arrives unstyled. First, `.solo-alert` had no box at all, so an
+  admonition read as ordinary body text on paper — the one thing a callout exists to prevent.
+  Second, `callout.html` renders its icon as a Material Icons **ligature**
+  (`<i class="material-icons">info</i>`) rather than the inline `<svg>` the GitHub alerts use,
+  and with no font, no `font-style: normal` and no `display` rule the ligature NAME printed as
+  literal italic text above the note. `i.section-card-icon` has been hidden against exactly
+  this trap since the pipeline was written; callout icons were simply never given the rule.
+
+  The box now matches `[data-alert-type]` byte for byte, so a manual does not carry two
+  different-looking admonition styles depending on whether the author wrote a `> [!NOTE]`
+  blockquote or a callout shortcode. The ligature is replaced by a text label — Note, Warning,
+  Tip, Caution — rather than only hidden, because in grayscale the per-type tints all reduce
+  to the same pale gray and the label is then the only thing separating a caution from a note.
+  Labels use the GitHub callout vocabulary, so `alert-danger` prints as "Caution".
+
+  Visible on page 11 of
+  [the Istio 1.30.x manual](https://github.com/solo-io/docs-pdfs/releases/tag/istio-enterprise-1.30.x),
+  against the operator note on
+  [Single cluster](https://docs.solo.io/istio/1.30.x/quickstart/single/) — that page renders
+  the box correctly on the web, which is what makes the PDF-only failure easy to miss. Every
+  published PDF was affected, not only Istio: ~950 `callout`/`alert` calls across the hub's
+  content, 105 in the Istio 1.30.x tree alone.
+
+  Verified by rebuilding both fixture brands and asserting against the executed stylesheet,
+  then break-tested: removing the hide rule, the `alert-warning` box or the `alert-danger`
+  label each fails its own assertion and nothing else. **Not** verified in a real WeasyPrint
+  render — this machine has no WeasyPrint — so the geometry rests on matching the
+  `[data-alert-type]` values, which were rendered when they landed.
+
+- **A glossary tooltip dumped its whole definition into the middle of the sentence, and
+  printed the term twice** (`assets/css/print-book.css`, `tests/book-document.spec.ts`,
+  `tests/auto-cards.spec.ts`, `tests/helpers/gate-containment.json`, new
+  `fixture/data/glossary.yaml`, new `fixture/content/en/test/v2/glossary-term.md`,
+  `hugo-enterprise.toml`, `hugo-oss.toml`). Third instance of the root cause the two entries
+  above share, and the most damaging of the three, because it corrupts prose rather than only
+  its presentation. `gloss` emits the definition as a nested `<span class="tooltip-content">`
+  that `glossary.css` hides with `.glossary-term > span { display: none }` — and a book
+  document links only `print-book.css`. So in a PDF the tooltip was ordinary inline content:
+  measured in the fixture, "routed through MCP" printed as "routed through MCPMCP Model
+  Context Protocol, a standard for exposing tools to a model." The term duplicates because
+  the shortcode repeats it inside the tooltip as a `<strong>` heading.
+
+  Tooltips are now **dropped** from a book, not restyled. A footnote apparatus was the
+  obvious alternative and was rejected: numbering, per-page collection and back-references is
+  real machinery for content that is, by construction, a one-line gloss the surrounding prose
+  already reads without — anything load-bearing does not belong in a tooltip to begin with.
+  If a manual ever needs the definitions, the right shape is a generated glossary appendix
+  chapter, not a note per mention. The term itself survives as plain text and needs no rule:
+  the dotted underline that signals hoverability is also in `glossary.css`, so it already
+  prints as ordinary text, which is the correct print treatment — a dotted underline on paper
+  invites a hover that cannot happen.
+
+  Affects every consumer that uses the shortcode, so both OSS trees the hub mounts:
+  [kgateway](https://kgateway.dev/docs/envoy/latest/ai/about/) and agentgateway, whose
+  `data/glossary.yaml` files carry ~20 terms between them. Inspect a dotted term on that page,
+  then search the same tree's PDF for the definition text.
+
+  `gloss` had **no fixture coverage at all** before this, which is why the leak survived the
+  suite; the new fixture page covers all three paths (known key, custom display text, unknown
+  key). Verified by rebuilding both brands: the pre-fix book contains the definition inline,
+  the post-fix book does not, and the term survives in both. Break-tested by deleting the
+  rule, which fails one assertion and no others. The updated
+  `gate-containment.json` snapshot is a bonus guard — it now pins the
+  `span.glossary-term > span.tooltip-content > span` chain the print selector depends on, so
+  restructuring the shortcode's markup fails a test instead of silently un-stripping PDFs.
+  Same WeasyPrint caveat as above: `display: none` is not in doubt, but nothing here was
+  confirmed against a real render.
+
+### Test harness — the new book assertions were consumer-config-dependent (`tests/book-document.spec.ts`)
+
+`tests/book-document.spec.ts` runs against **any** consumer's built output, not only the
+bundled fixture: solo-io/docs' `framework-test-static` job points it at that repo's own `test`
+product, which mounts the fixture CONTENT but keeps its own Hugo config. Six of this release's
+new assertions depend on fixture CONFIG — `releaseVersion` on `v1`, the `[params.pdfDownload]`
+table, the product and distribution baked into a download URL — or on fixture content a
+consumer need not mount, since the hub mounts only `fixture/tabs-demo/v3/_index.md` and not the
+tab subtree beneath it. All six passed locally on both brands and went red in the hub.
+
+The tell in the failure output was the running footer reading `Docs framework test fixture v1`
+without the `(enterprise brand)` suffix the fixture's own config sets — the suite was reading a
+different site's build. Note `target.brand` could not have caught this: the hub's test product
+is *also* the enterprise brand, so the two targets are indistinguishable by brand and only
+`target.name` separates them.
+
+Gated on `target.name.startsWith("docs-theme-extras-fixture")`, the same gate and the same
+reason as `tests/section-nested-versions.spec.ts`. The brand-agnostic assertions — the book
+builds, it is the book template, chapter ids are unique, the `tr` break rule is present, each
+book links its own executed stylesheet — deliberately stay ungated so a consumer still gets
+real coverage. Verified by running the suite against the hub's `.docs-test.toml` with its `test`
+product built (14 passed, 10 skipped) and against both fixture brands unchanged (2,231 and
+2,229 passed).
+
+### Test harness — the PDF pipeline had no tests at all
+
+Every PDF bug in this release was found by a human opening the finished file. That was the
+only way to find one, because **nothing in the suite executed any of it.**
+
+- **The fixture now builds a book** (`outputs: ["html", "book"]` on `fixture/.../v2/_index.md`,
+  plus `[outputFormats.book]` in the four configs that build that content). Until this,
+  `docs/list.book.html`, `docs/single.book.html`, `_partials/docs/book-document.html` and
+  `print-book.css` were never *run*. Hugo parses every template, so a **syntax** error did
+  fail the build — nothing semantic did. Measured, not assumed: a deliberate
+  `{{ .ThisMethodDoesNotExist.AtAll }}` in `book-document.html` built green across the whole
+  suite, and after this change the identical edit fails with
+  `can't evaluate field ThisMethodDoesNotExist in type *hugolib.pageState`.
+
+  `v2` is the opted-in section because it is the deep one — nested subsections give the book
+  a multi-level contents tree and chapter walk, and `everything.md` drags tabs, callouts,
+  tables and code fences through the same render. The format has to be declared in **every**
+  config that builds the content, including both `-local` variants, or the build fails
+  outright with `OutputFormat with key "book" not found`; the fixture now demonstrates the
+  trap the docs warn about.
+
+- **`tests/book-document.spec.ts`** asserts structure, not appearance — there is no renderer
+  here, so what it can prove is that the document handed to one has the shape the rest of the
+  pipeline assumes. The load-bearing one is that **every contents entry points at a chapter
+  that exists**, since that is exactly what `number_toc.py` resolves against; break the
+  anchor on either side and every printed page number silently disappears. Also: the page
+  slots are present and *empty* (a pre-filled slot means someone hardcoded a number), chapter
+  ids are unique before `prepare_book.py` de-duplicates, one breadcrumb source per chapter,
+  the contents nests, and no site chrome — which is what a PDF of the *website* looks like.
+
+  It also re-checks tab flattening, because the book is a **second** caller of
+  `utils/unhide-tabs.html` and this release's tab bug was in that path and not the other.
+  The book cannot be its own reference — flattening removes the button bar, so counting tab
+  groups in the book finds zero however broken the partial is. (The first version of this
+  test did exactly that and skipped itself.) The reference is the ordinary rendered pages,
+  reached through each chapter's `data-source-path`.
+
+- **`scripts/tests/` — 93 unit tests over the ~1,060 lines of Python** in `prepare_book.py`,
+  `merge_book.py` and `number_toc.py`, which had none. All pure functions over an lxml tree
+  or a synthetic pypdf document: no Hugo, no WeasyPrint, no fonts, no network, 0.8s. They
+  cover the failures that cannot be seen without opening the PDF and clicking things — a
+  link that lands on the wrong chapter, one page's duplicate ids merging into one
+  destination, a slice boundary cutting a table in half, a relative link resolved against
+  `book.html` instead of its own page, the percent-encoded destination, and the fixed-width
+  contents invariant.
+
+  **Verified to fail, not just to pass.** Re-introducing two real regressions — dropping
+  `unquote()` from the destination lookup, and re-anchoring `find_toc_part` on
+  `class="pdf-toc"` so `--minify` defeats it — turns exactly those two tests red and leaves
+  the rest green. The emoji tests earned their place the same way, by catching a real bug
+  during review rather than after: the tinting pass was not idempotent, and a second run
+  nested every span inside itself.
+
+- **A `python-scripts` CI job**, added to the `test-all` required check so it can actually
+  block. Its own job rather than a step in the brand matrix: it needs no Hugo, Node, browser
+  or fixture build, so it reports in seconds instead of riding a 15-minute leg, and it would
+  otherwise run twice.
+
+Consumer-neutral: no layout, asset or shortcode changes here. Verified with the full suite on
+both brands.
+
+### Test harness — the browser suite was paying for Google Fonts on every navigation
+
+**Why.** `framework-test-browser` in solo-io/docs kept flaking on
+`contrast.spec.ts › accent text contrast … dark mode`, and the cause was not the assertion:
+the test **timed out**. It had been sitting at 29.5–30.1s against a 30s ceiling for days
+(passing by fractions of a second on 2026-08-29 and 08-30, failing on 08-31), while the same
+test takes **3.0s locally**. The whole browser suite ran ~9x slower on CI than here.
+
+Every fixture page links two `fonts.googleapis.com` stylesheets, which pull four
+`fonts.gstatic.com` files — **six blocking requests per navigation**. Playwright gives each
+test a fresh `BrowserContext`, so none of it is cached between tests: every navigation in the
+suite pays the full cost again, warm locally and cold on a runner.
+
+This was already half-known. `cross-browser.spec.ts` carries a comment explaining that
+`networkidle` had to be dropped because "firefox counts in-flight Google Fonts + Material
+Symbols + Mermaid CDN requests in its idle calculation, which on CI runners can leave the
+network busy past 15s" — the same cost, worked around one spec at a time.
+
+**Fix.** `launchOptions.args` blackholes both hosts with Chromium's
+`--host-resolver-rules=… ~NOTFOUND`, which fails resolution immediately rather than waiting on
+a network that has nothing to give a fixture. What is lost is the webfont *face*; the theme's
+own CSS is served locally and is untouched.
+
+**Chromium projects only** (`browser`, `cross-browser-chromium`, `browser-crawl`), spread per
+project rather than set once in the top-level `use`. That flag is Chromium's: Firefox ignores
+an argument it does not know, but WebKit refuses to start on one —
+
+```
+Cannot parse arguments: Unknown option --host-resolver-rules=...
+browserType.launch: Target page, context or browser has been closed
+```
+
+Setting it globally therefore failed **all 12 `cross-browser-webkit` tests on both brands**,
+deterministically, and only in CI: the macOS WebKit build tolerates the flag, so a full local
+`make test-all` stayed green while every CI run went red. Firefox and WebKit still fetch the
+fonts. They run only `cross-browser.spec.ts`, and the flake this entry is about was in the
+chromium `browser` project, so the saving is kept where it was needed.
+
+Two consequences worth stating:
+
+- **The three console-error collectors had to agree with each other.** A blackholed request
+  logs `net::ERR_NAME_NOT_RESOLVED`, and `browser.spec.ts` / `cross-browser.spec.ts` reported
+  it as a page defect. This is not a new judgement call — `console-errors.spec.ts` has
+  suppressed these two hosts in `BUILTIN_NOISE` all along, commented "may time out on
+  restricted CI runners with no external network access"; the other two were simply
+  inconsistent with it. Now shared via `tests/helpers/blocked-hosts.ts`, matched **only**
+  against those hosts, so a theme error or a 404 on a local asset still fails.
+- Matching them meant reading `msg.location().url`: a browser-generated
+  `Failed to load resource: …` carries **no URL in `.text()`**, which is exactly the trap
+  `console-errors.spec.ts` documents. Both collectors now append it, which also makes their
+  failure reports say *which* resource failed.
+
+`--host-resolver-rules` is Chromium-only, so the Firefox and WebKit legs still pay the cost.
+They run 11 tests each, so it is not worth solving twice; both were verified to ignore the
+unknown flag rather than choke on it.
+
+**Verified**: the browser project goes from **49.8s to 21.8s** locally with **identical**
+results (140 passed, 14 skipped, no assertion changed — including the layout, overflow and
+table-width specs that a missing webfont could plausibly have shifted), and the full suite
+from 57.4s to **34.4s** (oss) and 57.5s to **38.6s** (enterprise), at 2193 passed on both.
+Firefox and WebKit were run separately and ignore the flag rather than choke on it. The local
+numbers are all with warm DNS and TLS; the CI effect should be larger, which is the point.
+
 ## [0.3.5] — 2026-08-28
 
 **Scope of this release.** One new optional config key (`params.versions[].sectionBanners`),

@@ -26,7 +26,7 @@ Read in [`assets/css/print-book.css`](https://github.com/solo-io/docs-theme-extr
 
 Selects the brand CSS layer loaded on top of the component baseline: `oss` loads `brand-oss.css`, `enterprise` loads `brand-enterprise.css`. Omit it entirely to get the neutral defaults with no brand layer. This is the only key most consumers set.
 
-Read in [`assets/css/docs-theme-extras.css`](https://github.com/solo-io/docs-theme-extras/blob/main/assets/css/docs-theme-extras.css), [`layouts/_partials/breadcrumb.html`](https://github.com/solo-io/docs-theme-extras/blob/main/layouts/_partials/breadcrumb.html), [`layouts/partials/themeExtras/head-end.html`](https://github.com/solo-io/docs-theme-extras/blob/main/layouts/partials/themeExtras/head-end.html).
+Read in [`assets/css/docs-theme-extras.css`](https://github.com/solo-io/docs-theme-extras/blob/main/assets/css/docs-theme-extras.css), [`layouts/_partials/breadcrumb.html`](https://github.com/solo-io/docs-theme-extras/blob/main/layouts/_partials/breadcrumb.html), [`layouts/_partials/docs/book-document.html`](https://github.com/solo-io/docs-theme-extras/blob/main/layouts/_partials/docs/book-document.html), [`layouts/partials/themeExtras/head-end.html`](https://github.com/solo-io/docs-theme-extras/blob/main/layouts/partials/themeExtras/head-end.html).
 
 ## `themeExtras.logo`
 

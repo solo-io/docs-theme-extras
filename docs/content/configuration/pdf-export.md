@@ -13,12 +13,13 @@ The consumer provides the Node half that paginates it and prints it.
 
 > [!IMPORTANT]
 > This pipeline is proven on a flat site (ambientmesh.io, one book) and on a
-> versioned one (kgateway.dev, 14 chunks merged into a 1,828-page PDF). On a
-> versioned site, opt **one version tree in at a time**. A book stitches
-> whichever page opts in plus that page's own subtree, so version scoping falls
-> out of where the opt-in lives rather than needing any version logic of its
-> own. The one piece that is still not version-aware is the version string
-> printed on the cover and in the running footer. See
+> versioned one (kgateway.dev, 14 chunks merged into a 1,828-page PDF). A book
+> stitches whichever page opts in plus that page's own subtree, so version
+> scoping falls out of where the opt-in lives rather than needing any version
+> logic of its own, and the version printed on the cover and in the running
+> footer is read from that same tree. Several version trees of one product can
+> opt in, each producing its own book. The constraint that remains is on the
+> **download link**, not on the books: see
 > [Known limitations](#known-limitations).
 
 ## How the pieces split
@@ -30,14 +31,15 @@ importing the module did not give you a PDF.
 | --- | --- | --- |
 | `docs/list.book.html`, `docs/single.book.html`, `_partials/docs/book-document.html` | **This module** | Ordinary layouts, so `module.mounts` carries them |
 | `assets/css/print-book.css` | **This module** | Ordinary asset, linked by the book document itself |
-| The `outputFormats` block | **Your repo** | Hugo does **not** merge top-level `outputFormats` config from an imported module |
-| `outputs: ["html", "book"]` front matter | **Your repo** | Per-page opt-in |
-| `scripts/render-pdf.mjs` | Fetched from this repo | See [Fetching the renderer](#fetching-the-renderer) |
+| The `outputFormats.book` block | **This module** | Hugo merges a module's top-level `outputFormats` into the importing project |
+| `book` in a page's `outputs` front matter | **Your repo** | Per-page opt-in. List the whole set — `outputs` replaces the defaults |
+| `HUGO_PARAMS_BUILDBOOK=true` | **Your repo's PDF workflow** | Per-*build* opt-in. Front matter cannot say "only when a PDF is being made" |
+| `scripts/render-pdf.mjs` | Fetched from this repo | See [Fetching the renderer](#5-fetching-the-renderer) |
 | `playwright`, `pdf-lib` | **Your repo's** `package.json` | Node resolves `node_modules` relative to the invoking project, not to wherever the script was downloaded |
 
-## 1. Define the output format
+## 1. The output format
 
-In your own Hugo config. Three keys is the whole requirement:
+Nothing to do. The module declares it, in its consumer-facing `hugo.toml`:
 
 ```toml
 [outputFormats.book]
@@ -46,25 +48,67 @@ In your own Hugo config. Three keys is the whole requirement:
   isHTML    = true
 ```
 
-```yaml
-# hugo.yaml
-outputFormats:
-  book:
-    mediaType: text/html
-    baseName: book
-    isHTML: true
-```
+Hugo merges a module's top-level `outputFormats` into the importing project, the
+same way it merges the module's `[module]` block, so importing this module is
+enough. `baseName` is what produces `book.html` next to the section's
+`index.html`.
 
-`baseName` is what produces `book.html` next to the section's `index.html`.
+It is inert until a page asks for it: defining an output format renders nothing
+on its own, and no `[outputs]` default includes `book`. A consumer that publishes
+no PDF is unaffected.
+
+> [!NOTE]
+> **This page used to say the opposite** — that Hugo does not merge a module's
+> `outputFormats`, so the block had to be repeated in every consumer config. That
+> was wrong, and expensive: solo-io/docs carried 25 identical copies (three
+> configs for each of eight products, plus the all-products preview), and
+> forgetting one did not fail the PDF, it failed the **entire** build, because the
+> `outputs` front matter that selects the format is a property of the page and so
+> applies to every config that builds that content:
+>
+> ```
+> ERROR error building site: assemble: failed to create page from pageMetaSource
+> /latest: failed to resolve output formats [html book]:
+> OutputFormat with key "book" not found
+> ```
+>
+> Verified on Hugo 0.160.1 by deleting the block from one consumer config and
+> building: the site builds and `book.html` renders. Control: deleting it from the
+> module config as well reproduces the error above. If you are on an older Hugo
+> and see that error with no block in your own config, declare it yourself — a
+> project-level block wins over the module's.
+
+Declaring it in your own config is still required in one case: a **project** build
+that passes `--config`, which replaces Hugo's default config lookup so the
+module's `hugo.toml` is not read. That is why this repo's own
+`hugo-{oss,enterprise}*.toml` fixture configs keep a copy.
 
 ## 2. Opt a page in
 
 ```yaml
 ---
 title: Documentation
-outputs: ["html", "book"]
+outputs: ["html", "rss", "markdown", "llms", "book"]
 ---
 ```
+
+> [!WARNING]
+> **List every output the page should have, not just `html` and `book`.** Hugo's
+> `outputs` front matter **replaces** a page's default outputs rather than adding
+> to them, so `outputs: ["html", "book"]` silently drops that page's `.md`, RSS
+> and `llms.txt`. Copy `[outputs] section` out of your config and append `book`.
+>
+> Nothing fails, and the damage is narrow enough to survive review: only the
+> **version root** loses them, while every page below it keeps its `.md`, so what
+> breaks is Copy-as-Markdown and llms discovery on exactly one page per product.
+> Check it directly on the built output:
+>
+> ```sh
+> ls public/<product>/<version>/index.md public/<product>/<version>/llms.txt
+> ```
+>
+> Compare against a version tree that did **not** opt in — that is the control
+> that makes the missing files obvious.
 
 A section page (one with its own `_index.md`) renders through
 `list.book.html`; a leaf page renders through `single.book.html`. Both exist
@@ -76,7 +120,40 @@ because Hugo resolves an output format's template per page **kind**.
 > `book.html` that looks plausible and is not a book document at all. The tell is
 > a missing `paged.polyfill.js` script tag — see [Verifying](#verifying-the-output).
 
-## 3. Add the dependencies
+## 3. Ask the build for a book
+
+Front matter selects the output format, but it cannot say *when*. It is static, so
+an opt-in applies to **every** build of that page, and a book is the whole version
+tree stitched into one file. Books are therefore off by default, and a build that
+wants one says so:
+
+```sh
+HUGO_PARAMS_BUILDBOOK=true hugo --config=hugo-<product>.toml
+```
+
+Set it in the PDF workflow, not in a site config. Setting it in the config is the
+same as not having the switch at all.
+
+The cost of not having it, measured on solo-io/docs: 12 book documents and 92 MB on
+top of a 4.3 GB site, about 7% of the build time on the largest product, and 12
+publicly reachable URLs each carrying a complete unstyled duplicate of a manual
+with no `noindex` and no canonical, because a book document deliberately skips
+`baseof.html` and all the normal head chrome. It also forces the link checker to
+exclude `book.html`, whose relative links do not resolve from its own location
+until `prepare_book.py` rewrites them.
+
+Two ways to read the switch, since Hugo lowercases every config key: the
+environment variable `HUGO_PARAMS_BUILDBOOK` and a TOML `buildBook = true` both
+land as `params.buildbook`, which is what the theme reads.
+
+> [!NOTE]
+> Forgetting it does not produce a broken PDF, which is the failure mode worth
+> knowing. The book document still renders — cover, table of contents, and no
+> chapters — and WeasyPrint paginates that perfectly happily and exits 0.
+> `prepare_book.py` fails on a zero-chapter book for exactly this reason, and its
+> error names this variable.
+
+## 4. Add the dependencies
 
 ```sh
 npm install --save-dev playwright pdf-lib
@@ -95,7 +172,7 @@ is easy to miss locally and then fail in CI.
 Paged.js is loaded from a CDN by the book document itself, so it is **not** an
 npm dependency. A `pagedjs` entry in `package.json` is unused weight.
 
-## 4. Fetching the renderer
+## 5. Fetching the renderer
 
 `scripts/render-pdf.mjs` is **not** a module mount. `module.mounts` covers only
 `layouts`, `assets` and `data`, so the file rides along in this repo purely as
@@ -120,9 +197,12 @@ pdf:
 The version is part of the cached filename, so a pin bump fetches a new copy
 instead of reusing a stale one.
 
-## 5. Run it
+## 6. Run it
 
 Build the site first — the script serves the built `public/` directory itself.
+Most repos wrap what follows in a `make pdf` target; see
+[Generating a PDF locally](#generating-a-pdf-locally) for that and for the
+WeasyPrint equivalent.
 
 | Variable | Required | Default | What it does |
 | --- | --- | --- | --- |
@@ -240,7 +320,7 @@ Above that size, generate one book per top-level section and merge. Each chunk
 root sets `bookChunkRoot: true` in addition to opting in:
 
 ```yaml
-outputs: ["html", "book"]
+outputs: ["html", "rss", "markdown", "llms", "book"]
 bookChunkRoot: true
 ```
 
@@ -274,7 +354,7 @@ fast path that skips the merge entirely.
 > cascade:
 >   - target:
 >       path: "/docs/envoy/latest/*"
->     outputs: ["html", "book"]
+>     outputs: ["html", "rss", "markdown", "llms", "book"]
 >     params:
 >       bookChunkRoot: true
 > ```
@@ -300,8 +380,13 @@ against `docs-theme-extras` v0.3.3. Two chunks were used as the benchmark:
 `reference` (584 KB of stitched HTML, 246 tables) and `traffic-management`
 (2.8 MB, 77 chapters).
 
-| | Paged.js + Chromium (current) | WeasyPrint 69.0 | Pandoc 3.10.2 + TeX Live |
+**Two of these three are in production and the third was never enabled.** Read
+the status row first — the rest of the table is a comparison of capabilities, not
+a menu of supported options.
+
+| | Paged.js + Chromium | WeasyPrint 69.0 | Pandoc 3.10.2 + TeX Live |
 | --- | --- | --- | --- |
+| **Status** | **Shipping.** Drives `render-pdf.mjs`; kgateway.dev publishes with it (`make pdf`) | **Shipping.** Drives the split/merge pipeline; solo-io/docs publishes every product PDF with it | **Never enabled.** Evaluated once, in the spike above, and abandoned. No supported path uses it and none is planned |
 | `print-book.css` | Used as authored | Used as authored, **zero** unsupported-property warnings | Discarded; CSS has no role in a LaTeX pipeline |
 | `string-set` running headers, `@bottom-*` boxes, `counter(page)` | Yes | Yes | Reimplement in a LaTeX template |
 | Repeats `<thead>` when a table splits | **No** | **Yes** | Yes, via `longtable` |
@@ -310,6 +395,21 @@ against `docs-theme-extras` v0.3.3. Two chunks were used as the benchmark:
 | Whole tree as ONE document (7.1 MB, 227 chapters) | Never completes (inherited claim, not re-measured here) | 1,879 pages, **~90s** | Not reached |
 | Extra runtime dependency | Chromium | Pango, GLib | TeX Live, `rsvg-convert` |
 | Client-side JS, for example mermaid | Renders it | Needs a pre-render step | Needs a pre-render step |
+
+> [!WARNING]
+> **Pandoc is not a supported engine, and the row above is the whole story.**
+> Every attempt in the spike ended without a PDF, so there are no page counts or
+> timings to compare against — the two "No PDF produced" cells are not gaps in
+> the measurements, they are the result. See
+> [Pandoc did not produce a PDF](#pandoc-did-not-produce-a-pdf-from-this-content-at-all)
+> below for the five configurations that were tried and where each one stopped.
+> Choosing it is a project, not a configuration change.
+
+**Which of the two shipping engines applies to you** depends on which pipeline
+your site is wired into, not on a preference: an OSS site that curls
+`render-pdf.mjs` from a `make pdf` target is on Paged.js, and a product built by
+solo-io/docs's `pdf-export.yml` is on WeasyPrint. Nothing selects between them at
+runtime, and there is no engine setting to change.
 
 **WeasyPrint is the closest substitute, and it is the only one that removes the
 chunking requirement.** It consumed `print-book.css` without a single
@@ -343,7 +443,276 @@ jumps.
 Its one quality win independent of chunking is repeating table headers across
 page breaks.
 
-**Pandoc did not produce a PDF from this content at all.** Five configurations
+### Memory, and why a big book is still split
+
+One document does not mean one render. Peak memory tracks **output pages**, not
+input bytes, at a steady ~1.6 MB per page measured across cuts of the
+gloo-mesh-enterprise book from 347 pages up to 3,481. That book is ~6,500 pages,
+so a single render needs ~11 GB and a 16 GB GitHub runner is torn down
+mid-render. The failure is unhelpful: the runner dies, so the job reports only
+`The runner has received a shutdown signal` and exit 143, with no traceback and
+no partial output.
+
+So `prepare_book.py --max-part-bytes` (default 2 MB) cuts the prepared document
+into parts, the caller renders them one at a time, and `merge_book.py`
+reassembles the result. Input size is only a proxy for pages, and a leaky one:
+
+| Content | Pages per MB | 2 MB part |
+| --- | --- | --- |
+| Ordinary prose | ~250 | ~500 pages, ~0.8 GB |
+| Table-dense reference | ~620 | ~1,240 pages, ~2.0 GB |
+
+The default is set for the table-dense case, since that is what actually
+constrains it.
+
+**Splitting is unconditional, and that is deliberate.** A small book yields one
+part and a merge that is effectively a copy, so its output is unchanged. A
+conditional split would mean two code paths, with the rarely-exercised one
+belonging to the largest, slowest, least-frequently-run build.
+
+Nothing is lost in the split, because WeasyPrint writes internal links as jumps
+to **named** destinations and emits one for every element id, whether or not
+anything links to it. Since the ids are already unique document-wide, the merged
+file has one global namespace. The single gap is that WeasyPrint *drops*
+`<a href="#x">` when `x` is not in the part being rendered, logging
+`No anchor #x for internal URI reference`, so every jump is rewritten to a
+`pdfjump:` URI that survives as an ordinary link annotation and becomes a real
+jump again at merge time.
+
+Two consequences worth knowing:
+
+- **Parts must render sequentially.** Page numbers are baked in during layout,
+  so each part needs the previous part's page count, supplied as
+  `@page :first { counter-reset: page N }`. A bare `@page` resets the counter on
+  *every* page, and `counter-reset` on `html` or `body` is ignored.
+- **A chapter larger than the target is cut between its direct children**, never
+  inside a table or `details`. Continuation slices are marked
+  `pdf-chapter-cont` so they do not start a new page.
+
+On the gloo-mesh-enterprise book this took peak memory from >15 GB to 2,134 MB
+and total render time from 32+ minutes, never finishing, to 5m20s across 10
+parts.
+
+### Page numbers in the table of contents
+
+Splitting costs one more thing than links, and it is not obvious: the printed
+contents page.
+
+CSS Paged Media has an answer — `target-counter(attr(href url), page)` on a TOC
+link prints the page its target landed on, and WeasyPrint implements it. It
+works only while the book is **one document**, and a book long enough to want a
+printed contents page is exactly the book that had to be cut up. After the cut,
+every chapter the TOC points at lives in a different document from the TOC, and
+`target-counter` has nothing to count.
+
+So the numbers come from the finished article instead:
+
+1. Render every part and merge, with `merge_book.py --page-map pages.json`. The
+   merged file is the first moment any destination's page is knowable.
+2. `number_toc.py pages.json --manifest book.parts.txt` finds the part holding
+   the TOC, writes the numbers into its empty `.pdf-toc-page` spans, and prints
+   that part's path.
+3. Re-render **only** that part, at the same page offset it had before.
+4. Merge again.
+
+The second render cannot invalidate the numbers it is printing, because
+`.pdf-toc-page` is `flex: 0 0 3em` — a fixed-width column, so an empty box and a
+`1234` box take identical space. No title rewraps, the TOC keeps its length, and
+every chapter after it stays where it was. That invariant is the whole design, so
+`number_toc.py --expect-pages/--assert-pages` checks it rather than assuming it,
+and fails the build if the count moved.
+
+Reading destinations back is two linear passes. pypdf's `get_page_number()`
+scans the page list per call, which on this book would be ~2,900 destinations
+against ~6,500 pages, or roughly 19 million comparisons.
+
+#### Numbering starts at the contents page
+
+The cover is unnumbered, which is the usual convention for a manual and also
+means the number a reader reads off the footer is the number the contents page
+printed against that chapter. Two settings have to agree for that:
+
+- `print-book.css` blanks all four margin boxes on `@page pdf-cover`, a **named
+  page** that only the cover element uses. `@page :first` cannot do this job —
+  it means the first page of the document being rendered, and the book is
+  rendered as one document per part, so it would blank a footer somewhere in the
+  middle of the book for every part after the first.
+- The caller renders the first part with `counter-reset: page 0` rather than `1`,
+  and passes `merge_book.py --page-map` the matching `--first-page 0`. Without
+  the second half, the page map holds physical positions while the footers hold
+  printed ones, and every line of the contents page is one out.
+
+### The bookmark tree has to be rebuilt after a split
+
+WeasyPrint derives the PDF bookmark tree from heading levels, **per document**.
+Each part is its own document, so each part's tree is nested against the
+shallowest heading that part happens to contain rather than against the book.
+Concatenate those trees and the bookmark panel is correct until the first part
+boundary and flat afterwards. In the gloo-mesh-enterprise manual that meant
+"Get started", "About" and "Setup" nested properly and then 56 more entries at
+the top level, most of them third- and fourth-level headings whose parents were
+in an earlier part.
+
+The part HTML still knows the real answer, because the levels there are
+absolute: the book layout emits a chapter at h2 plus its depth, and
+`utils/shift-headings.html` pushes each page's own headings down to match. So
+`merge_book.py --outline-from book.parts.txt` drops the imported per-part trees,
+reads the headings back out of the HTML, and builds one tree over the merged
+file.
+
+Two things this depends on, both easy to break by accident:
+
+- **A heading's id is almost never on the `<h*>` element.** Hextra's heading
+  render hook emits it on an empty offset anchor span *inside* the heading:
+
+  ```html
+  <h5>Before you begin<span class="hx:absolute hx:-mt-20" id="…"></span>
+    <a href="#…" class="subheading-anchor"></a></h5>
+  ```
+
+  So a descendant id is used when the element has none. Reading only the
+  element's own id finds 459 headings in the gloo-mesh-enterprise book — one per
+  chapter and not one inside a page — which produces a plausible-looking panel
+  missing 84% of its entries. A chapter's title heading comes from the layout
+  rather than from Goldmark and has neither, so it borrows its `<section>`'s id;
+  the contents heading is not in a chapter at all, which is why the layout gives
+  it `id="pdf-contents"` explicitly.
+- Pass `--outline-from` to **both** merges. The second merge (after the contents
+  page is re-rendered with its numbers) rewrites the same file, so leaving it off
+  puts the flat trees straight back into the artifact people download.
+
+One limit carries over rather than being introduced here: heading levels stop at
+`h6`, so a chapter nested five or more deep and the body headings inside it all
+land at `h6` and become siblings in the panel. `utils/shift-headings.html` caps
+there because HTML has nothing deeper, and WeasyPrint's own tree had the same
+ceiling.
+
+### Fonts the renderer needs
+
+Beyond `fonts-dejavu-core` and `fonts-liberation` (diagram SVGs ask for
+Helvetica, and Liberation Sans is the metric-compatible stand-in), the emoji
+font matters more than it sounds like it should. Comparison tables in this
+content use ✅ and ❌, and under WeasyPrint they came out unreadable.
+
+**WeasyPrint cannot draw a color font.** Not badly — at all. Rendered side by
+side in the container below, all three kinds embed into the PDF and all three
+leave the glyph box blank:
+
+| Font | Technology | What WeasyPrint 69 draws |
+| ---- | ---------- | ------------------------ |
+| Noto Color Emoji | CBDT (bitmap) | nothing; the advance is reserved and no ink is placed |
+| Noto COLRv1 | COLRv1 (vector) | nothing |
+| Twemoji Mozilla | COLRv0 (vector) | nothing |
+| Noto Emoji | `glyf` (outline) | the glyph, in the inherited text color |
+
+So install the monochrome outline font,
+[Noto Emoji](https://github.com/google/fonts/tree/main/ofl/notoemoji), and get
+the color back a different way — see
+[Color emoji](#color-emoji-come-from-the-html-not-the-font) below.
+
+Installing it is not sufficient on its own. A hosted GitHub runner image already
+ships the color font, and Pango keeps choosing it, so the color font has to be
+rejected outright:
+
+```xml
+<!-- /etc/fonts/conf.d/99-no-color-emoji.conf -->
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <selectfont>
+    <rejectfont>
+      <pattern>
+        <patelt name="family"><string>Noto Color Emoji</string></patelt>
+      </pattern>
+    </rejectfont>
+  </selectfont>
+</fontconfig>
+```
+
+> [!WARNING]
+> Do not verify this with `fc-match`. `fc-match "sans-serif:charset=2705"`
+> answers `Noto Emoji` even in the configuration that ships color glyphs,
+> because Pango resolves emoji fallback by script tag rather than by that query.
+> Render the characters and read back the embedded font instead:
+>
+> ```sh
+> printf '%s' '<meta charset="utf-8"><p>&#x2705;</p>' > probe.html
+> weasyprint probe.html probe.pdf
+> python3 -c "from pypdf import PdfReader; print([str(f.get_object()['/BaseFont']) for f in PdfReader('probe.pdf').pages[0]['/Resources']['/Font'].values()])"
+> ```
+
+### Color emoji come from the HTML, not the font
+
+Because no color font renders, the color is reapplied to the **characters**
+instead, before the renderer sees them. `prepare_book.py --color-emoji` wraps
+each emoji it knows a meaning-bearing color for in
+`<span class="pdf-emoji" style="color:…">`. An outline glyph honors `color`; a
+bitmap one does not, which is the reason the monochrome font is the one
+installed rather than a workaround around it.
+
+The map lives in `EMOJI_COLOURS` in that script and covers the colored circles
+and squares (🔴 🟠 🟡 🟢 🔵 🟣 🟤 ⚫ ⚪ and the square set) plus the status
+marks (✅ ✔ ❌ ❎ ✖ ❗ ⛔ 🚫 ⚠ ❓ ℹ). Values are GitHub Primer colors, so a
+table of status dots in the PDF reads the way the same table reads on the
+website. Anything outside the map is left to the monochrome font.
+
+Three details worth knowing before you change it:
+
+- **Tinting, not substituting.** The character stays in the PDF's text layer, so
+  it still copies, searches and reads out. A CSS shape in its place would look
+  cleaner and lose all three.
+- **Noto Emoji's hatching survives**, and that is a feature: 🟡 is dotted, 🟢 is
+  diagonally hatched and 🔴 is vertically striped, so the distinction does not
+  rest on hue alone for a color-blind reader.
+- **⚪ and ⬜ are gray, not white.** White on a white page is an invisible glyph,
+  which is worse than the monochrome one it replaced.
+
+The flag is opt-in because it is a WeasyPrint workaround. A Paged.js consumer
+renders in Chromium, which draws the real color font, and there the tint would
+repaint emoji that are already correct.
+
+### Diagram SVGs need two fixes, and neither one reports an error
+
+`prepare_book.py --fix-svgs public` rewrites the **built** SVGs under `public/`
+(never the sources under `assets/`) to work around two WeasyPrint bugs. Both are
+specific to Excalidraw exports, and neither is anything wrong with the drawings:
+every one of these files is correct in a browser.
+
+| Symptom in the PDF | Cause |
+| --- | --- |
+| `Gloo Mesh resources` prints as `Gloo    Mesh    resources`, legends overlap | Excalidraw writes `font-family="Helvetica, Segoe UI Emoji"`. That second family does not exist on Linux, and WeasyPrint resolves the SPACE character through it, giving the space a wildly wrong advance |
+| Connectors and most labels are simply **gone**, leaving loose badges and a few clipped words | `<mask>`. Excalidraw punches a hole in a connector where its label sits, with a two-rect luminance mask applied as `<g mask="url(#mask-…)">`. WeasyPrint 69 renders that group as very nearly nothing |
+
+The mask fix removes the mask *reference* and leaves the `<mask>` element in
+place, inert. The only thing lost is the hole, so a connector draws through its
+own label instead of stopping short of it — legible, and what an unmasked
+Excalidraw export looks like anyway. It is guarded on the `svg-source:excalidraw`
+marker comment, because a hand-authored mask is usually load-bearing and
+revealing content an author meant to hide is a worse failure than the one being
+fixed.
+
+> [!WARNING]
+> **WeasyPrint logs nothing for either of these.** The render step's `^ERROR:`
+> check catches an image it cannot load at all; it cannot catch one it renders
+> incorrectly. A published manual can ship a gutted diagram with the job green,
+> which is why this runs unconditionally rather than waiting for an upstream
+> release. When a diagram looks wrong, render the single SVG on its own and
+> compare — a one-page probe is far faster than re-rendering the book:
+>
+> ```sh
+> printf '%s' '<meta charset="utf-8"><img src="arch.svg">' > probe.html
+> weasyprint probe.html probe.pdf
+> ```
+
+`--fix-svg-fonts` is the flag's former name and still works, which matters for a
+historical build that fetches an older `prepare_book.py`. It now does both fixes.
+
+### Pandoc did not produce a PDF from this content at all
+
+This is why the status row above says **never enabled**, and why the Pandoc
+column has no page counts to compare: there was never an output to count.
+
+Five configurations
 were tried, and each fix surfaced the next failure: a missing `rsvg-convert`, then
 emoji that `pdflatex` cannot typeset, then LaTeX's nested-list depth limit
 ("Too deeply nested"), then the `svg` package wanting `-shell-escape`, then a
@@ -361,6 +730,259 @@ throwing `print-book.css` away.
 > unloaded machine; a CI runner deserves its own measurement before anyone
 > promises a number. The structural results (page counts, link counts, duplicate
 > ids, which CSS is honored) are stable and repeatable; the clock is not.
+
+## Generating a PDF locally
+
+Which command you run depends on which engine your site is wired into — see the
+status row in [Choosing a rendering engine](#choosing-a-rendering-engine).
+
+### Paged.js sites (kgateway.dev)
+
+There is a `make` target, because the renderer is a Node script the repo already
+curls:
+
+```sh
+make pdf     # Hugo first, then render-pdf.mjs over the built public/
+```
+
+`make serve` runs the same thing with `PDF_OUTPUT` redirected into `static/`, so
+the download link resolves during local preview instead of 404ing — see
+[The dev server never sees it](#the-dev-server-never-sees-it).
+
+### WeasyPrint sites (solo-io/docs)
+
+**There is no `make` target for this one.** The pipeline lives in
+`.github/workflows/pdf-export.yml`, and that workflow is the source of truth —
+the steps below reproduce it rather than replace it, so check them against the
+workflow if the two ever disagree.
+
+Run it in a container. Not for isolation, but because **the fonts are part of
+the output**: the renderer picks up whatever emoji font the host provides, and
+the wrong one silently prints ✅/❌ as invisible specks (see
+[Fonts the renderer needs](#fonts-the-renderer-needs)). A container that matches
+CI is the only way to see locally what will actually publish.
+
+```dockerfile
+FROM ubuntu:24.04
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
+      libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b \
+      fonts-dejavu-core fonts-liberation \
+      fontconfig curl ca-certificates python3-pip poppler-utils
+RUN pip install --quiet --break-system-packages weasyprint lxml cssselect pypdf
+RUN curl -fsSL -o /usr/local/share/fonts/NotoEmoji.ttf \
+      "https://github.com/google/fonts/raw/main/ofl/notoemoji/NotoEmoji%5Bwght%5D.ttf"
+COPY 99-no-colour-emoji.conf /etc/fonts/conf.d/
+RUN fc-cache -f
+```
+
+#### The quick check: does this page look right?
+
+This is the question you actually have most of the time, and it needs none of the
+splitting or numbering machinery:
+
+```sh
+HUGO_PARAMS_BUILDBOOK=true hugo --config=hugo-<product>.toml
+python3 -m http.server 8000 --bind 127.0.0.1 --directory public &
+weasyprint "http://127.0.0.1:8000/<product>/<version>/book.html" out.pdf
+```
+
+Without `HUGO_PARAMS_BUILDBOOK=true` there is no `book.html` to serve at all — see
+[Ask the build for a book](#3-ask-the-build-for-a-book).
+
+Serve the tree rather than opening the file directly — WeasyPrint has no notion
+of a site root, so root-relative image and stylesheet URLs only resolve over
+HTTP.
+
+Two things will look wrong, and both are expected here: **the table of contents
+has no page numbers**, and on a large book this either takes many minutes or
+exhausts memory, because nothing has split it. Neither is a bug in your page.
+
+#### The full pipeline
+
+Reproduce the published artifact — split, continuous page numbers, working
+cross-references, numbered contents — with the four stages the workflow runs, in
+order:
+
+```sh
+# 1. Prepare: unique ids, deferred jumps, emoji color, SVG fixes, split.
+python3 prepare_book.py public/<product>/<version>/book.html \
+        public/<product>/<version>/book.html https://docs.solo.io \
+        --strict --color-emoji --fix-svgs public
+
+# 2. Render each part IN ORDER, telling each one where its page numbers start.
+#    Sequential is not an optimization choice — a part cannot know its first
+#    page number until every earlier part has been rendered and counted.
+#    The FIRST part starts at 0, because the cover is unnumbered.
+echo "@page :first { counter-reset: page $NEXT; }" > offset.css
+weasyprint -s offset.css "http://127.0.0.1:8000/<product>/<version>/$NAME.html" "$PDF"
+
+# 3. Merge: record where every destination landed, and rebuild the bookmark
+#    tree from the part HTML. --first-page must match the first part's offset.
+python3 merge_book.py out.pdf pdf-parts/*.pdf --page-map pages.json \
+        --first-page 0 --outline-from public/<product>/<version>/book.parts.txt
+
+# 4. Number the contents, re-render only that part, merge again.
+python3 number_toc.py pages.json --manifest public/<product>/<version>/book.parts.txt
+#    ...re-render the part it names, then merge once more.
+```
+
+Stage 2's loop over `book.parts.txt` and stage 4's re-render are the fiddly
+parts; copy them out of the workflow's `Render PDF` step rather than retyping
+them.
+
+### Checking what you produced
+
+The failures worth catching do not announce themselves — a diagram that vanished,
+emoji that rendered blank, a contents page of blanks, a bookmark panel that goes
+flat halfway down. These read the finished file:
+
+```sh
+# Emoji resolved to the outline font, not a color one.
+python3 -c "from pypdf import PdfReader; print([str(f.get_object()['/BaseFont']) \
+  for f in PdfReader('out.pdf').pages[0]['/Resources']['/Font'].values()])"
+
+# Bookmark nesting. Every top-level entry should be a top-level SECTION; a run
+# of deep headings here is the per-part flattening described above.
+python3 -c "
+from pypdf import PdfReader
+r = PdfReader('out.pdf')
+print([i.title for i in r.outline if not isinstance(i, list)])"
+
+# Look at a page instead of guessing.
+pdftoppm -png -r 100 -f 12 -l 12 out.pdf page
+```
+
+`merge_book.py` already fails on any cross-reference that resolves to nothing,
+and `number_toc.py` fails on any contents entry with no page — so a clean run of
+the full pipeline is itself a check. A WeasyPrint `ERROR:` line, though, does
+**not** stop it: the renderer logs an unrenderable image and exits 0, which is
+how a diagram goes missing from a green build. The workflow greps its own log for
+`^ERROR:` and fails; do the same locally.
+
+## Naming the version on the cover
+
+The cover and the running footer print the version of the tree the book walked,
+resolved by `utils/book-version.html` from that tree's own `params.versions`
+entry. Most products need no configuration at all — the entry's `version` already
+holds a real number:
+
+```toml
+[[params.versions]]
+  version = "2.13.x"      # printed: "Version 2.13.x"
+  linkVersion = "latest"  # served at /latest/
+```
+
+A product that instead puts the URL segment in `version` has nothing printable,
+and its book comes out labelled **"Version latest"**:
+
+```toml
+[[params.versions]]
+  version = "latest"                # printed: "Version latest"  ← useless on paper
+  dropdown = "2026.8.0 (latest)"    # the real number, but this is a UI label
+  linkVersion = "latest"
+```
+
+Add `releaseVersion`, which wins over `version` and is read by nothing else:
+
+```toml
+[[params.versions]]
+  version = "latest"
+  releaseVersion = "2026.8.0"       # printed: "Version 2026.8.0"
+  dropdown = "2026.8.0 (latest)"
+  linkVersion = "latest"
+```
+
+> [!WARNING]
+> **Do not fix this by correcting `version` instead.** That field is not
+> display-only. `assemble-assets.py` in solo-io/docs names asset directories
+> `assets/<product>/<version>`, and `reuse.html` locates them by matching each
+> URL segment against `.version` — so on a tree served at `/latest/`, renaming
+> the field breaks the match, the resolved version comes back empty, and every
+> `{{</* reuse */>}}` snippet silently falls back to the unversioned asset path.
+> `reuse.html` and `rebase.html` also substitute `.version` into content for the
+> OSS→enterprise version remap. None of it fails loudly.
+
+`releaseVersion` is deliberately not parsed out of `dropdown`. That string is a
+UI label: it carries a `(latest)` suffix, and a hidden entry sets it to a single
+space.
+
+**It changes the print label only, not the download URL.** The link in the
+Copy-as-Markdown menu resolves `{version}` from the URL segment, because it has
+to match the release asset the PDF workflow publishes — and that asset is named
+from the version directory. So a tree at `/latest/` keeps a stable
+`…-latest.pdf` URL while its cover names the actual release. Those two
+coordinates answer different questions and are meant to differ.
+
+## Linking to the published PDF
+
+Set `params.pdfDownload` and the Copy-as-Markdown menu on every docs page gains a
+**Download all docs (PDF)** item, next to Print. For a site publishing to
+`solo-io/docs-pdfs`, one line is the whole configuration:
+
+```toml
+[params.pdfDownload]
+  distribution = "enterprise"
+```
+
+The release-asset URL shape is supplied by the partial, so it is not repeated per
+consumer. Setting `distribution` is what turns the item on. Override the shape
+only if you publish somewhere else:
+
+```toml
+[params.pdfDownload]
+  urlTemplate = "/downloads/docs.pdf"
+```
+
+`{product}` comes from `params.pdfDownload.product`, falling back to
+`params.currentProduct` and then `params.folder`. `{version}` is the version
+segment of the current URL. With neither `distribution` nor `urlTemplate` the
+item does not render at all, so a site that publishes no PDFs needs no change —
+and that is deliberate rather than incidental. A site that renders its PDF into
+its own `static/` (kgateway.dev, ambientmesh.io) builds a book and still wants no
+item, so defaulting the URL for every consumer would give those sites a link to a
+release that does not exist.
+
+> [!WARNING]
+> `[params.pdfDownload]` is a fully-qualified TOML table header, so **every bare
+> `key = value` line after it belongs to it** until the next header. Dropped in
+> above the loose keys of a `[params]` block, it silently swallows
+> `currentProduct`, `folder` and everything else that follows — and the symptom is
+> not a build error, it is a download URL with a product name like
+> `Docs%20framework%20test%20fixture` in it, because `{product}` fell through to
+> the next candidate. Put it after the loose keys, immediately before the next
+> table header.
+
+**The item appears only for a version that builds a book**, because it asks the
+version root for its output formats rather than reading a separate flag:
+
+```go-html-template
+{{ $vr := partial "utils/version-root.html" . }}
+{{ with $vr.docsSection }}{{ if .OutputFormats.Get "book" }}…{{ end }}{{ end }}
+```
+
+That is the same `book` output-format opt-in that makes a PDF publishable
+in the first place, so the menu follows the build and there is nothing to keep
+in sync.
+
+> [!WARNING]
+> Set `params.pdfDownload` in **every** config that builds the product, not just
+> the production one. This is now the only part of the pipeline with that
+> requirement — the `book` output format moved into the module — and it is the
+> worse of the two to get wrong: a missing block does not fail the build, the item
+> just silently disappears from preview and local builds.
+
+> [!NOTE]
+> The build knows the book is produced; it cannot know the PDF has been
+> uploaded. A version enabled between two nightly runs shows a link that 404s
+> until the next one, so dispatch the PDF workflow when you enable a version
+> rather than waiting for the schedule.
+
+A build-time existence check was prototyped and rejected. `resources.GetRemote`
+with `method: head` does work, returning nil on a 404 without downloading the
+file, but it requires `[security.http] methods` to be widened to permit HEAD in
+every consumer, and `caches.getresource` defaults to `maxage = -1`, so a cached
+"missing" answer would never expire.
 
 ## Verifying the output
 
@@ -382,15 +1004,30 @@ from `<!DOCTYPE html>` down. So a quick check on the built `book.html`:
 
 ## Known limitations
 
-**The printed version string is not version-aware.** Content scoping on a
-versioned site works, because a book only ever walks the subtree of the page
-that opted in. The version printed on the cover and in the running footer does
-not: `utils/resolve-latest-version.html` returns whichever `params.versions`
-entry carries `linkVersion: "latest"`, regardless of which version tree the book
-actually walked. On kgateway.dev that happens to be right, since `latest` is
-also the only tree that opts in. Opting an older or a `main` tree in as well
-gives that book a cover labeled with the `latest` version instead of its own.
-Until per-page version-root scoping is done, keep one version tree opted in.
+**The download link cannot tell two trees apart that share a version segment.**
+`copy-markdown.html` fills `{version}` from `utils/version-root.html`'s
+`currentVersion`, which is the version **segment** of the URL and nothing above
+it. A product whose version trees nest under a section — agentgateway's
+`/agentgateway/kubernetes/latest/` and `/agentgateway/standalone/latest/` — has
+two trees whose segment is `latest`, so both resolve to the same download URL.
+Opting both in publishes two books and links only one of them. Until the
+template grows a `{section}` of its own, opt in **one tree per version
+segment**.
+
+**A tree served at `/latest/` needs `releaseVersion` to print a real number.**
+The cover and footer read `releaseVersion` off the tree's own `params.versions`
+entry, falling back to `version`. Most products need nothing: their `version`
+already holds the real number, so gloo-mesh-enterprise's `latest` tree prints
+"Version 2.13.x" with no extra configuration. But agentregistry, kagent and
+agentgateway set `version = "latest"` literally and keep the number only in
+`dropdown`, so without `releaseVersion` their covers read "Version latest" — see
+[Naming the version on the cover](#naming-the-version-on-the-cover).
+
+**A tree with no `params.versions` entry falls back to its URL segment.**
+`utils/version-root.html` treats a segment matching `X.Y.x`, `X.Y.Z`, `latest`
+or `main` as a version even with nothing configured for it, so an unregistered
+tree prints the segment itself rather than nothing. Correct, but it is the raw
+segment: a `main` tree's cover reads "Version main".
 
 **The Paged.js page ceiling** is a property of the renderer, not of this module.
 Chunking is the workaround, not a fix.

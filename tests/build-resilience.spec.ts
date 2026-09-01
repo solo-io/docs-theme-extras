@@ -5,6 +5,7 @@ import {
   blankHugoComments,
   getRemoteCalls,
   findUncappedGetRemote,
+  findUndefaultedTimeoutVar,
   findUnguardedDocContent,
 } from "./helpers/remote-fetch";
 
@@ -94,6 +95,33 @@ test.describe("GetRemote timeout scanner", () => {
   });
 });
 
+test.describe("variable-timeout scanner", () => {
+  test("passes a literal timeout (nothing to check)", () => {
+    const src = `{{ resources.GetRemote $url (dict "timeout" "15s") }}`;
+    expect(findUndefaultedTimeoutVar(src, "x.html")).toEqual([]);
+  });
+
+  test("passes a variable timeout that is assigned through default", () => {
+    const src = `{{ $t := default "15s" (.Get "timeout") }}\n{{ resources.GetRemote $url (dict "timeout" $t) }}`;
+    expect(findUndefaultedTimeoutVar(src, "x.html")).toEqual([]);
+  });
+
+  test("flags a variable timeout taken straight from .Get", () => {
+    const src = `{{ $t := .Get "timeout" }}\n{{ resources.GetRemote $url (dict "timeout" $t) }}`;
+    expect(findUndefaultedTimeoutVar(src, "x.html")).toHaveLength(1);
+  });
+
+  test("flags a variable timeout that is never assigned at all", () => {
+    const src = `{{ resources.GetRemote $url (dict "timeout" $t) }}`;
+    expect(findUndefaultedTimeoutVar(src, "x.html")).toHaveLength(1);
+  });
+
+  test("does not confuse a similarly named variable for the real one", () => {
+    const src = `{{ $timeoutLabel := default "15s" "x" }}\n{{ resources.GetRemote $url (dict "timeout" $timeout) }}`;
+    expect(findUndefaultedTimeoutVar(src, "x.html")).toHaveLength(1);
+  });
+});
+
 test.describe("rebase $doc.Content guard scanner", () => {
   test("flags an unguarded $doc.Content deref", () => {
     expect(findUnguardedDocContent(`{{ $c := $doc.Content }}`)).toEqual([1]);
@@ -121,6 +149,16 @@ test.describe("theme templates: no uncapped build-time remote fetch", () => {
       uncapped,
       `uncapped GetRemote(s): ${uncapped.map((c) => `${c.file}:${c.line}`).join(", ")}`,
     ).toEqual([]);
+  });
+
+  test("every variable timeout has a literal default", () => {
+    const offenders = files.flatMap((f) =>
+      findUndefaultedTimeoutVar(
+        fs.readFileSync(f, "utf8"),
+        path.relative(LAYOUTS_DIR, f),
+      ),
+    );
+    expect(offenders, offenders.join("\n")).toEqual([]);
   });
 
   test("the scan actually found the known build-time fetches", () => {

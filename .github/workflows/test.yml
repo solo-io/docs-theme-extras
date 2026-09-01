@@ -167,6 +167,33 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  # The PDF pipeline's Python: prepare_book.py, merge_book.py, number_toc.py —
+  # ~940 lines that rewrite every id and every link in a book before it is
+  # rendered, and reassemble it afterwards. Its own job rather than a step in
+  # the brand matrix: it needs no Hugo, no Node, no browsers and no fixture
+  # build, so it reports in seconds instead of waiting on a 15-minute leg, and
+  # it would otherwise run twice for no reason.
+  #
+  # No WeasyPrint here on purpose. Every fixture is either an lxml tree or a
+  # synthetic pypdf document, so this stays a fast unit suite; rendering is
+  # covered by actually publishing a book.
+  python-scripts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install --quiet pytest lxml cssselect pypdf
+
+      - name: Run script unit tests
+        run: python -m pytest scripts/tests -q
+
   # Single stable status context for branch protection. The matrix above reports
   # as "brand (oss)" / "brand (enterprise)", so requiring those directly would
   # mean re-pointing branch protection every time the matrix changes shape. This
@@ -177,11 +204,13 @@ jobs:
   # asserts the aggregate result, and `cancelled`/`skipped` fail too (only a
   # literal success passes).
   test-all:
-    needs: [brand]
+    needs: [brand, python-scripts]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Assert every brand leg succeeded
         run: |
-          echo "brand result: ${{ needs.brand.result }}"
+          echo "brand result:          ${{ needs.brand.result }}"
+          echo "python-scripts result: ${{ needs.python-scripts.result }}"
           [ "${{ needs.brand.result }}" = "success" ]
+          [ "${{ needs.python-scripts.result }}" = "success" ]

@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { target } from "./helpers/target";
+import { isBlockedHostNoise } from "./helpers/blocked-hosts";
 
 // Browser-only checks: anything that requires real DOM, JS execution, or
 // user interaction. Runs in chromium and is currently configured as an
@@ -245,7 +246,13 @@ test.describe("no console errors during page load", () => {
       page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
       page.on("console", (msg) => {
         if (msg.type() === "error") {
-          errors.push(`console.error: ${msg.text()}`);
+          // A browser-generated "Failed to load resource: …" carries NO URL
+          // in .text() — the failing resource is in .location().url. Append
+          // it so the host filter can see it, and so the failure report says
+          // WHICH resource failed. Same reasoning as console-errors.spec.ts.
+          const url = msg.location()?.url ?? "";
+          const txt = `console.error: ${msg.text()}${url ? ` (${url})` : ""}`;
+          if (!isBlockedHostNoise(txt)) errors.push(txt);
         }
       });
       await page.goto(url);

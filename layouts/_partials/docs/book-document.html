@@ -11,10 +11,8 @@
   in-page TOC) entirely — this document is a print artifact, not a browsable
   page, so it's a self-contained HTML file from <!DOCTYPE html> down.
 
-  Only reachable at all when a consumer's own hugo.yaml defines the `book`
-  output format (Hugo doesn't merge top-level outputFormats config from an
-  imported module) and a page opts in via `outputs: ["html", "book"]` front
-  matter — both stay in the consumer, this partial (and its two thin
+  Only reachable at all when a page opts in via `outputs` front matter — that
+  stays in the consumer, this partial (and its two thin
   callers, layouts/docs/list.book.html and layouts/docs/single.book.html)
   is the only shared part. Both callers exist because Hugo resolves output
   format templates per page KIND — a section/list page (has its own
@@ -26,10 +24,14 @@
   src=".../paged.polyfill.js">, since it never rendered from this partial
   at all).
 
-  Proven on ambientmesh.io, a flat/unversioned site with a single fixed docs
-  root. Adapting this to a VERSIONED site (per-version book generation,
-  version-root scoping) is real work not yet done — see the version-related
-  comments below for the one place that already anticipates it.
+  First proven on ambientmesh.io, a flat/unversioned site with a single fixed
+  docs root, then extended to VERSIONED sites: solo-io/docs opts in one
+  `_index.md` per version root and gets one book per version tree, with the
+  cover labelled from that tree's own `params.versions` entry (see
+  utils/book-version.html) rather than from the site's newest version, and
+  from its `params.sections` entry where a product nests trees under a
+  section (utils/book-section.html). An unversioned consumer is unaffected:
+  both partials fall through to the flat behavior.
 
   `bookChunkRoot: true` front matter (opt-in, defaults unset/false — no
   behavior change for a consumer that never sets it, e.g. ambientmesh.io)
@@ -54,6 +56,16 @@
   currently parsing together, so this works the same inside a partial as it
   did inside a plain layout file.
 */ -}}
+{{- /* Resolved HERE, above the document, because two places downstream need the
+       same answer: the cover section far below, and print-book.css, which is
+       executed as a template from inside <head>. Computing it once and handing
+       it to both is what keeps them from disagreeing.
+
+       Sites with no site.Params.versions at all (ambientmesh.io) resolve this to
+       "", and the cover line and the footer suffix then simply don't render.
+       See utils/book-version.html for why this is NOT the site-wide
+       resolve-latest-version.html lookup it used to be. */ -}}
+{{- $productVersion := partial "utils/book-version.html" . -}}
 <!DOCTYPE html>
 <html lang="{{ site.Language.Lang }}">
 <head>
@@ -62,32 +74,81 @@
   {{- /* ExecuteAsTemplate lets print-book.css use the current build date in
          its footer (@bottom-left) — plain resources.Get would emit that
          Hugo template syntax as literal, invalid CSS text instead of
-         evaluating it. */ -}}
+         evaluating it.
+
+         THE TARGET NAME CARRIES THE VERSION, and that is load-bearing rather
+         than cosmetic. Hugo caches an executed resource under its target path,
+         so a fixed name means the FIRST book rendered in a build wins and every
+         later book links the same file. That was harmless while the footer's
+         version came from a site-wide lookup (every book got the same string
+         anyway), and became a real defect the moment it came from the page: two
+         version trees opting into `book` in one build would print the first
+         one's version in the second one's footer. Keyed per version, each book
+         gets its own stylesheet and Hugo still executes the template only once
+         per distinct version.
+
+         The context is a dict, not the Page, because the version is the only
+         thing the stylesheet needs from it and passing the resolved string
+         keeps the lookup in ONE place. Everything else print-book.css
+         interpolates (`now`, `site.Title`) is a global. */ -}}
   {{- with resources.Get "css/print-book.css" }}
-  {{- $css := . | resources.ExecuteAsTemplate "css/print-book.css" $ }}
+  {{- $slug := $productVersion | default "unversioned" | replaceRE `[^A-Za-z0-9._-]+` "-" }}
+  {{- $css := . | resources.ExecuteAsTemplate (printf "css/print-book-%s.css" $slug) (dict "version" $productVersion) }}
   <link rel="stylesheet" href="{{ $css.RelPermalink }}">
   {{- end }}
 </head>
 <body>
-  {{- /* Conditional: sites with no site.Params.versions at all (ambientmesh.io,
-         the only site this has run on so far) always resolve $productVersion
-         to "" here, so the version line/footer suffix below simply don't
-         render — but a versioned site (agw, kgw, the docs hub) should show
-         one. See utils/resolve-latest-version.html, shared with the
-         identical need in print-book.css, for how the version is picked. */ -}}
-  {{- $productVersion := partial "utils/resolve-latest-version.html" . -}}
+  {{- /* $productVersion is resolved once at the top of this file, above
+         <!DOCTYPE html>, because print-book.css needs the same answer. */ -}}
   {{- $isChunkRoot := .Params.bookChunkRoot | default false -}}
   <section class="pdf-cover">
-    {{- with site.Params.navbar.logo.path }}
+    {{- /* Prefer the SIDEBAR logo: that is the PRODUCT mark (logo-gloo-mesh.svg),
+           while the navbar logo is the company one (solo-light.svg). A cover
+           page naming one product should carry that product's logo, and the
+           company name is already in the running footer on every page. Falls
+           back to the navbar logo for a site that sets no sidebar logo. */ -}}
+    {{- $logo := site.Params.sidebar.logo.path | default site.Params.navbar.logo.path }}
+    {{- with $logo }}
     <img src="{{ . | relURL }}" alt="{{ site.Title }}" class="pdf-cover-logo">
     {{- end }}
-    <p class="pdf-cover-subtitle">Documentation</p>
+    {{- /* The SECTION this book covers, when the product has parallel sections
+           (agentgateway's Kubernetes and standalone modes), replacing the
+           generic subtitle rather than sitting beside it — the configured label
+           already reads as one ("Kubernetes docs"), so both would be redundant.
+           A product with no sections resolves this to "" and keeps
+           "Documentation" exactly as before.
+
+           Without it, a product's two manuals have identical covers: same
+           product logo, same subtitle, same version, distinguishable only by
+           filename. See utils/book-section.html. */ -}}
+    <p class="pdf-cover-subtitle">{{ partial "utils/book-section.html" . | default "Documentation" }}</p>
     {{- with $productVersion }}<p class="pdf-cover-version">Version {{ . }}</p>{{ end }}
     <p class="pdf-cover-date">{{ now.Format "January 2, 2006" }}</p>
+    {{- /* Company mark at the foot of an ENTERPRISE cover only. The product
+           logo above says what the manual is; this says who publishes it,
+           which is a claim an OSS site should not make — kgateway.dev and
+           agentgateway.dev document upstream projects, not a Solo product.
+           Gated on the same `themeExtras.brand` the breadcrumb already uses,
+           so there is no second switch to keep in sync, and skipped when the
+           navbar logo IS the cover logo (a site with no separate product
+           mark), which would otherwise print the same image twice. */ -}}
+    {{- if eq (site.Params.themeExtras.brand | default "") "enterprise" }}
+      {{- with site.Params.navbar.logo.path }}
+        {{- if ne . $logo }}
+    <img src="{{ . | relURL }}" alt="{{ site.Params.footer.company | default "Solo.io" }}" class="pdf-cover-brand">
+        {{- end }}
+      {{- end }}
+    {{- end }}
   </section>
 
+  {{- /* The id is load-bearing, not decoration: merge_book.py --outline-from
+         rebuilds the PDF bookmark tree from the headings in this document, and
+         it can only bookmark a heading it can point at. Every chapter heading
+         borrows its enclosing section's id; this one sits in a <nav>, so
+         without an id of its own the manual would open with no bookmark for
+         its own table of contents. */ -}}
   <nav class="pdf-toc">
-    <h2>Contents</h2>
+    <h2 id="pdf-contents">Contents</h2>
     {{- template "book-toc-tree" (dict "page" . "depth" 0 "self" $isChunkRoot) -}}
   </nav>
 
@@ -109,13 +170,31 @@
        anchor links instead of content. `self` (only ever set on the initial
        call from <body>, never on a recursive one) wraps the whole tree in
        one extra <li> for the root page's own title — see bookChunkRoot in
-       this file's header comment. */ -}}
+       this file's header comment.
+
+       Each entry is a three-part flex row: title, dot leader, page number.
+       The page number is left EMPTY here and filled in afterwards by
+       scripts/number_toc.py, because nothing at Hugo time — and nothing at
+       render time either — knows what page a chapter lands on. CSS
+       `target-counter(attr(href url), page)` would do it in one pass on an
+       unsplit document, but a book big enough to need a printed TOC is
+       exactly the book that prepare_book.py has to split into parts, and
+       every one of these targets then lives in a DIFFERENT part than the
+       TOC. So the numbers are resolved from the merged PDF instead, and the
+       part holding the TOC is re-rendered once with them written in.
+
+       The number span is sized in CSS and NOT auto-width, which is what makes
+       that second render safe: an empty 3em box and a full one occupy the
+       same space, so filling the numbers in cannot reflow the TOC, cannot
+       change how many pages it takes, and therefore cannot invalidate the
+       very numbers being written. number_toc.py asserts that page count
+       anyway. */ -}}
 {{- define "book-toc-tree" -}}
   {{- $page := .page -}}
   {{- if .self -}}
     <ul>
       <li>
-        <a href="#{{ $page.RelPermalink | anchorize }}">{{ $page.LinkTitle | default $page.Title }}</a>
+        {{- template "book-toc-entry" (dict "anchor" ($page.RelPermalink | anchorize) "title" ($page.LinkTitle | default $page.Title)) -}}
         {{- template "book-toc-tree" (dict "page" $page) -}}
       </li>
     </ul>
@@ -124,13 +203,17 @@
       <ul>
         {{- range . -}}
           <li>
-            <a href="#{{ .RelPermalink | anchorize }}">{{ .LinkTitle | default .Title }}</a>
+            {{- template "book-toc-entry" (dict "anchor" (.RelPermalink | anchorize) "title" (.LinkTitle | default .Title)) -}}
             {{- template "book-toc-tree" (dict "page" .) -}}
           </li>
         {{- end -}}
       </ul>
     {{- end -}}
   {{- end -}}
+{{- end -}}
+
+{{- define "book-toc-entry" -}}
+  <a href="#{{ .anchor }}"><span class="pdf-toc-title">{{ .title }}</span><span class="pdf-toc-dots"></span><span class="pdf-toc-page"></span></a>
 {{- end -}}
 
 {{- /* Chapter walk: depth-first, one <section> per page. Heading level is

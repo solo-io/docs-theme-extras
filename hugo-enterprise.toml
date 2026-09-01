@@ -12,6 +12,26 @@ contentDir = "fixture/content/en/test"
 publishDir = "public-enterprise/test"
 enableInlineShortcodes = true
 
+
+# The `book` output format, so the fixture actually BUILDS a book document.
+#
+# Without this the book layouts (docs/list.book.html, docs/single.book.html,
+# _partials/docs/book-document.html) and assets/css/print-book.css are never
+# executed by any test. Hugo parses every template, so a SYNTAX error in them
+# still fails the build — but nothing semantic does. A deliberate
+# `{{ .ThisMethodDoesNotExist }}` in book-document.html built green across the
+# whole suite before this was added.
+#
+# It has to be in EVERY config that builds fixture/content/en/test, not just
+# this one: `outputs` is a property of the PAGE, so a config missing the format
+# fails the entire build with `OutputFormat with key "book" not found`. That is
+# hugo-oss, hugo-enterprise, and both -local variants. The section-title and
+# section-current builds are comma-joined overlays on this file and inherit it.
+[outputFormats.book]
+  mediaType = "text/html"
+  baseName  = "book"
+  isHTML    = true
+
 [module]
   [[module.imports]]
     path = "github.com/imfing/hextra"
@@ -70,6 +90,14 @@ enableInlineShortcodes = true
     source = "data"
     target = "data"
 
+  # Fixture-only glossary terms, unioned onto the target above. Kept out of the
+  # shipped data/ for the reason fixture/data/glossary.yaml explains: a module
+  # ships its whole data tree, so a test glossary at the repo root would reach
+  # every consumer.
+  [[module.mounts]]
+    source = "fixture/data"
+    target = "data"
+
 [build]
   writeStats = true
   [[build.cachebusters]]
@@ -99,6 +127,15 @@ versionBanner = false
 versionBannerText = ""
 versionSpecificBanner = true
 
+# The fixture is the only site that builds books as part of an ORDINARY build,
+# because tests/book-document.spec.ts asserts against the built book.html. Every
+# real consumer leaves this unset and passes HUGO_PARAMS_BUILDBOOK=true from its
+# PDF workflow instead — see layouts/_partials/utils/build-book.html for why the
+# default is off. Set as a plain param, not under [params.themeExtras], so the
+# one spelling works both here and as the environment variable: Hugo lowercases
+# every config key, so this and HUGO_PARAMS_BUILDBOOK both land as `buildbook`.
+buildBook = true
+
 # This module's page-context partial dispatches on this flag. The fixture was
 # authored against the docs convention (Site.Params.folder / currentProduct).
 # Other consumers that follow the /docs/<section>/<version>/... URL shape can
@@ -106,6 +143,21 @@ versionSpecificBanner = true
 pageContextMode = "siteParams"
 
 # Brand layer selector for head-end.html. Loads brand-enterprise.css.
+# ENTERPRISE BRAND ONLY, and the asymmetry is the test. copy-markdown.html's
+# "Download all docs (PDF)" item had no coverage at all, and it now defaults its
+# release URL rather than requiring `urlTemplate` in every consumer config —
+# which is only safe because the default is gated on `distribution`. hugo-oss.toml
+# deliberately sets NO pdfDownload table, standing in for the consumers that
+# publish a PDF to their own pages (kgateway.dev, ambientmesh.io): they must keep
+# rendering no item at all. tests/book-document.spec.ts asserts both halves
+# against target.brand.
+#
+# No `urlTemplate` here on purpose either — supplying one would test the explicit
+# path and leave the default, which is what every product in solo-io/docs now
+# relies on, unexercised.
+[params.pdfDownload]
+  distribution = "enterprise"
+
 [params.themeExtras]
   brand = "enterprise"
   # No custom alertTypes here: solo is built into the theme
@@ -228,6 +280,19 @@ pageContextMode = "siteParams"
 
 [[params.versions]]
   version = "v1"
+  # The PRINT label for this tree's book, read only by
+  # utils/book-version.html. Set here and nowhere else in this fixture, so the
+  # two books test the two branches of that resolution: v2 has no
+  # releaseVersion and falls back to `.version` ("v2"), while v1 proves an
+  # explicit releaseVersion WINS over its `.version` ("v1").
+  #
+  # It stands in for agentregistry/kagent/agentgateway in solo-io/docs, whose
+  # current tree sets `version = "latest"` because that field also names
+  # assemble-assets.py's asset directories and is what reuse.html matches URL
+  # segments against — so the real release number cannot live there. The value
+  # here is deliberately a string that appears nowhere else, and in particular
+  # is NOT "v1", so an assertion cannot pass by accident.
+  releaseVersion = "1.9.3"
   sections = ["demo", "nested"]
   # Second ossVersion mapping, used only by the keepVersion collision probe in
   # conrefs/test/version-remap.md: it makes the token `v3` — which is also a

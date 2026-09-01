@@ -12,6 +12,26 @@ contentDir = "fixture/content/en/test"
 publishDir = "public-enterprise-local"
 enableInlineShortcodes = true
 
+
+# The `book` output format, so the fixture actually BUILDS a book document.
+#
+# Without this the book layouts (docs/list.book.html, docs/single.book.html,
+# _partials/docs/book-document.html) and assets/css/print-book.css are never
+# executed by any test. Hugo parses every template, so a SYNTAX error in them
+# still fails the build — but nothing semantic does. A deliberate
+# `{{ .ThisMethodDoesNotExist }}` in book-document.html built green across the
+# whole suite before this was added.
+#
+# It has to be in EVERY config that builds fixture/content/en/test, not just
+# this one: `outputs` is a property of the PAGE, so a config missing the format
+# fails the entire build with `OutputFormat with key "book" not found`. That is
+# hugo-oss, hugo-enterprise, and both -local variants. The section-title and
+# section-current builds are comma-joined overlays on this file and inherit it.
+[outputFormats.book]
+  mediaType = "text/html"
+  baseName  = "book"
+  isHTML    = true
+
 [module]
   [[module.imports]]
     path = "github.com/imfing/hextra"

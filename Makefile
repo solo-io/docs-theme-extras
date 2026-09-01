@@ -10,7 +10,7 @@ CONFIG  ?=
         clear-cache \
         server-oss server-enterprise server-docs \
         build-oss build-enterprise build-flat build-nosections build-docs \
-        build-section-title build-section-current \
+        build-section-title build-section-current build-nobook \
         test-oss test-enterprise test-all \
         test clean help
 
@@ -137,6 +137,13 @@ build-nosections:
 build-section-title:
 	$(HUGO) --config hugo-oss.toml,hugo-section-title.toml --gc 2> .build-section-title.log
 
+# THE BOOK GATE, OFF. Same content and same `outputs` front matter as
+# build-enterprise, with `buildBook = false` — so a book.html appearing under
+# public-nobook/ means the gate stopped working. See hugo-nobook.toml for why
+# that is worth a build of its own.
+build-nobook:
+	$(HUGO) --config hugo-enterprise.toml,hugo-nobook.toml --gc 2> .build-nobook.log
+
 # SECTION SELECTOR THAT NAMES THE CURRENT SECTION, on the same versioned base.
 # A third build rather than a key on the overlay above, because the two modes
 # COMPOSE (current section where there is one, the configured title where there
@@ -151,10 +158,10 @@ build-section-current:
 # something to read. It is brand-independent (the version-less code paths do not
 # touch the brand layer), so both brand runs assert against the same output —
 # cheap, and it keeps `make test-oss` self-contained.
-test-oss: build-oss build-flat build-nosections build-section-title build-section-current
+test-oss: build-oss build-flat build-nosections build-section-title build-section-current build-nobook
 	DOCS_TEST_CONFIG=$(abspath ./fixture/.docs-test-oss.toml) npx playwright test
 
-test-enterprise: build-enterprise build-flat build-nosections build-section-title build-section-current
+test-enterprise: build-enterprise build-flat build-nosections build-section-title build-section-current build-nobook
 	DOCS_TEST_CONFIG=$(abspath ./fixture/.docs-test-enterprise.toml) npx playwright test
 
 # Run both brand variants. CI default — surfaces brand-specific regressions
