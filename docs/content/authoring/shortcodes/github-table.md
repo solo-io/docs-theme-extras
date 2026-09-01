@@ -18,6 +18,7 @@ Either call form works, and both produce identical HTML.
 | `url` | url | yes | — | The remote URL of the Markdown file to fetch. |
 | `section` | string | yes | — | The heading name of the section to extract. |
 | `exclude` | string | no | — | A regex matching lines to remove from the extracted section. |
+| `timeout` | string | no | `15s` | A Go duration capping how long the fetch may take before it is abandoned. Raise it only for a genuinely large remote file. |
 
 ## Example
 
@@ -41,6 +42,16 @@ percent-form splice-back semantics breaks on a rebased page.
 fallback. This is the "cel.md GetRemote stall": a cold CI build fetches
 `schema/cel.md` from raw.githubusercontent.com, and without a cap a
 throttled runner connection hangs the entire build.
+
+The 15s default suits the schema files this shortcode was built for, which
+are tens of kilobytes. A few remotes are far larger — agentgateway's
+`schema/config.md` passed 16 MB in August 2026 and grows with every commit —
+and 15s is not enough to pull one over a throttled CI connection, so the
+fetch fails and the docs-hub warnings test goes red. The `timeout` parameter
+exists for those pages. Treat it as a pressure valve rather than a fix: a
+page that needs a raised timeout is downloading megabytes to render a few
+rows on every build of every consumer, and the durable answer is a smaller
+remote or a checked-in table.
 
 Three outcomes, deliberately different. A transient fetch error or timeout
 is recoverable — warn, emit a fallback link, build stays green, with the

@@ -946,6 +946,10 @@
   "v2/gate-transparency": {
     "MARKER_SHAPE15_HEADING_AFTER_TABS": "div.hextra-max-page-width > article > main > div.content > p"
   },
+  "v2/glossary-term": {
+    "MARKER_GLOSS_DEF": "div.hextra-max-page-width > article > main > div.content > p > span.glossary-term > span.tooltip-content > span",
+    "MARKER_GLOSS_DEF_TWO": "div.hextra-max-page-width > article > main > div.content > p > span.glossary-term > span.tooltip-content > span"
+  },
   "v2/nav-group/child": {
     "MARKER_NAVGROUP_CHILD": "div.hextra-max-page-width > article > main > div.content > p"
   },

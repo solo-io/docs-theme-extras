@@ -100,6 +100,44 @@ bumping the pin if that is no longer true for you.
 
 ### Add
 
+- **`github-table` takes an optional `timeout=`, because 15s is no longer enough for
+  every remote the shortcode is pointed at** (`layouts/_shortcodes/github-table.html`,
+  `tests/helpers/remote-fetch.ts`, `tests/build-resilience.spec.ts`,
+  `fixture/assets/conrefs/test/everything.md`,
+  `docs/content/authoring/shortcodes/github-table.md`). The 15s cap added in v0.1.20 was
+  sized for the schema files this shortcode was written for, which are tens of kilobytes:
+  `schema/cel.md` is 15 KB, `schema/cel-functions.md` 14 KB. One remote has since outgrown
+  that by three orders of magnitude. agentgateway's `schema/config.md` passed **16.2 MB** in
+  August 2026 and grows with every commit to the upstream repo (15.3 MB on Aug 19 → 16.2 MB
+  on Aug 24), and a throttled CI runner cannot pull it inside 15s. The fetch then fails, the
+  page publishes the "Unable to load table" fallback, and the docs-hub `hugo-warnings` test
+  escalates the `warnf` to a red build — which is exactly what it is meant to do, and exactly
+  what [solo-io/docs run 33428115057](https://github.com/solo-io/docs/actions/runs/33428115057/job/99610680180)
+  did on the `agentgateway` content job.
+
+  Raising the shared default was the wrong lever: it would slow the failure of every other
+  fetch to suit one page. The cap is now `default "15s" (.Get "timeout")`, so the value lives
+  on the call that needs it — agentgateway's static-configuration page passes
+  `timeout="120s"`, and the CEL reference keeps the 15s default. The parameter is a pressure
+  valve, not a fix. The page it exists for downloads 16 MB to render **105 of the file's
+  82,699 table rows** (its `exclude=` regex drops the rest), on every build of every
+  consumer, and the durable answer is a smaller remote or a checked-in table.
+
+  A variable cap can fail in a way a literal cannot: `(dict "timeout" $timeout)` still
+  contains the word `timeout`, so the existing source scan would keep calling it capped even
+  if `$timeout` resolved to `""` — an uncapped fetch wearing the shape of a capped one, which
+  is the ~20-minute build hang the cap was added to prevent. So `findUndefaultedTimeoutVar`
+  now requires any variable timeout to be assigned through `default "<literal>"` in the same
+  file, and the theme-source scan runs it over all of `layouts/`. Verified non-vacuous by
+  rewriting the assignment to a bare `.Get "timeout"` and watching the scan go red. Observable
+  in production on
+  [agentgateway — Static configuration](https://agentgateway.dev/docs/standalone/latest/configuration/static-configuration/),
+  whose schema table is the 16 MB fetch: before the fix a slow build published "Unable to load
+  table from …" in place of the table. Both fixture brands build warning-free with a
+  `timeout=` on the call (`build exit=0`, no `github-table` WARN), and `make test-oss` /
+  `make test-enterprise` pass at 2247 / 2249. Takes effect when a consumer bumps its extras
+  pin; until then `timeout=` is inert and the 15s cap applies.
+
 - **`prepare_book.py --max-part-bytes` splits a book into renderable parts, and
   `merge_book.py` puts the rendered PDFs back together.** A single-document render of
   gloo-mesh-enterprise was killed on a 16 GB GitHub runner with no diagnosis at all — the
@@ -742,6 +780,45 @@ Both take effect for a consumer that bumps its extras pin **and** passes the new
   label each fails its own assertion and nothing else. **Not** verified in a real WeasyPrint
   render — this machine has no WeasyPrint — so the geometry rests on matching the
   `[data-alert-type]` values, which were rendered when they landed.
+
+- **A glossary tooltip dumped its whole definition into the middle of the sentence, and
+  printed the term twice** (`assets/css/print-book.css`, `tests/book-document.spec.ts`,
+  `tests/auto-cards.spec.ts`, `tests/helpers/gate-containment.json`, new
+  `fixture/data/glossary.yaml`, new `fixture/content/en/test/v2/glossary-term.md`,
+  `hugo-enterprise.toml`, `hugo-oss.toml`). Third instance of the root cause the two entries
+  above share, and the most damaging of the three, because it corrupts prose rather than only
+  its presentation. `gloss` emits the definition as a nested `<span class="tooltip-content">`
+  that `glossary.css` hides with `.glossary-term > span { display: none }` — and a book
+  document links only `print-book.css`. So in a PDF the tooltip was ordinary inline content:
+  measured in the fixture, "routed through MCP" printed as "routed through MCPMCP Model
+  Context Protocol, a standard for exposing tools to a model." The term duplicates because
+  the shortcode repeats it inside the tooltip as a `<strong>` heading.
+
+  Tooltips are now **dropped** from a book, not restyled. A footnote apparatus was the
+  obvious alternative and was rejected: numbering, per-page collection and back-references is
+  real machinery for content that is, by construction, a one-line gloss the surrounding prose
+  already reads without — anything load-bearing does not belong in a tooltip to begin with.
+  If a manual ever needs the definitions, the right shape is a generated glossary appendix
+  chapter, not a note per mention. The term itself survives as plain text and needs no rule:
+  the dotted underline that signals hoverability is also in `glossary.css`, so it already
+  prints as ordinary text, which is the correct print treatment — a dotted underline on paper
+  invites a hover that cannot happen.
+
+  Affects every consumer that uses the shortcode, so both OSS trees the hub mounts:
+  [kgateway](https://kgateway.dev/docs/envoy/latest/ai/about/) and agentgateway, whose
+  `data/glossary.yaml` files carry ~20 terms between them. Inspect a dotted term on that page,
+  then search the same tree's PDF for the definition text.
+
+  `gloss` had **no fixture coverage at all** before this, which is why the leak survived the
+  suite; the new fixture page covers all three paths (known key, custom display text, unknown
+  key). Verified by rebuilding both brands: the pre-fix book contains the definition inline,
+  the post-fix book does not, and the term survives in both. Break-tested by deleting the
+  rule, which fails one assertion and no others. The updated
+  `gate-containment.json` snapshot is a bonus guard — it now pins the
+  `span.glossary-term > span.tooltip-content > span` chain the print selector depends on, so
+  restructuring the shortcode's markup fails a test instead of silently un-stripping PDFs.
+  Same WeasyPrint caveat as above: `display: none` is not in doubt, but nothing here was
+  confirmed against a real render.
 
 ### Test harness — the new book assertions were consumer-config-dependent (`tests/book-document.spec.ts`)
 

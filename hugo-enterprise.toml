@@ -90,6 +90,14 @@ enableInlineShortcodes = true
     source = "data"
     target = "data"
 
+  # Fixture-only glossary terms, unioned onto the target above. Kept out of the
+  # shipped data/ for the reason fixture/data/glossary.yaml explains: a module
+  # ships its whole data tree, so a test glossary at the repo root would reach
+  # every consumer.
+  [[module.mounts]]
+    source = "fixture/data"
+    target = "data"
+
 [build]
   writeStats = true
   [[build.cachebusters]]

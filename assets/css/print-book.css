@@ -515,6 +515,40 @@ h6 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.03em; }
   margin-bottom: 0;
 }
 
+/* Glossary tooltips (the `gloss` shortcode) are DROPPED from a book, not
+   restyled. Third instance of the same root cause as the two blocks above: the
+   tooltip is hidden on the live site by `.glossary-term > span { display:none }`
+   in glossary.css, a stylesheet this document does not load, so left alone the
+   whole definition was dumped inline into the middle of the sentence — and the
+   term itself printed TWICE, because the shortcode repeats it inside the
+   tooltip as a `<strong>` heading. A sentence reading "routed through MCPMCP
+   Model Context Protocol, a standard for exposing tools to a model. before it
+   reaches the model" is strictly worse than one reading "routed through MCP".
+
+   Dropped rather than converted to a footnote, which was the obvious
+   alternative: a tooltip is a hover affordance for a reader who does not
+   recognise a term, and on paper the equivalent would be a footnote apparatus
+   with numbering, per-page collection and back-references — real machinery for
+   content that is, by construction, a one-line gloss the surrounding prose
+   already works without. Anything genuinely load-bearing does not belong in a
+   tooltip in the first place. If a manual ever does need the definitions, the
+   right shape is a generated glossary appendix chapter, not per-mention notes.
+
+   The TERM survives as plain text with no marker, which needs no rule: the
+   dotted `border-bottom` that signals hoverability also lives in glossary.css,
+   so `.glossary-term` already renders as ordinary inline text here. That is
+   the correct print treatment — a dotted underline on paper invites a hover
+   that cannot happen.
+
+   Keyed on `.tooltip-content` rather than the `> span` the web rule uses, so a
+   term whose display text contains its own inline markup cannot have that
+   markup swallowed. Visible on any page using the shortcode, e.g.
+   https://kgateway.dev/docs/envoy/latest/ai/about/ — inspect a dotted term
+   there, then look for the same definition text in that tree's PDF. */
+.pdf-chapter .glossary-term > .tooltip-content {
+  display: none;
+}
+
 /* Auto-generated child cards (partials/auto-section-cards.html), e.g. the
    "## Guides" links under a docs section landing page. Rendered as a plain
    bordered-box list rather than mirroring the live site's card grid — a

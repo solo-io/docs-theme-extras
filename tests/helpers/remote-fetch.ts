@@ -61,6 +61,39 @@ export function findUncappedGetRemote(
   return getRemoteCalls(src, file).filter((c) => !c.capped);
 }
 
+// Companion to the cap scan, for the case where the timeout is not a literal.
+// `github-table` takes an author-supplied `timeout=` so a page fetching a very
+// large remote can raise it, which means its cap reads `(dict "timeout"
+// $timeout)`. The cap scan above only looks for the word `timeout`, so it would
+// keep passing if that variable resolved to "" — an empty timeout is an
+// UNCAPPED fetch wearing the shape of a capped one, exactly the hang the cap
+// exists to prevent. So: whenever a GetRemote's timeout value is a template
+// variable, that variable must be assigned through `default` in the same file,
+// which is what pins the fallback when the parameter is absent.
+//
+// Returns a message per offending call; empty means every variable timeout has
+// a literal fallback.
+export function findUndefaultedTimeoutVar(src: string, file: string): string[] {
+  const cleaned = blankHugoComments(src);
+  const out: string[] = [];
+  for (const call of getRemoteCalls(src, file)) {
+    const m = /"timeout"\s+(\$[A-Za-z0-9_]+)/.exec(call.action);
+    if (!m) continue;
+    const varName = m[1];
+    // `{{- $timeout := default "15s" (.Get "timeout") -}}` — the assignment must
+    // both bind this variable and route through `default` with a literal.
+    const assigned = new RegExp(
+      `\\${varName}\\s*:?=\\s*default\\s+"[^"]+"`,
+    ).test(cleaned);
+    if (!assigned) {
+      out.push(
+        `${call.file}:${call.line}: timeout is ${varName}, but ${varName} is never assigned via \`default "<literal>"\` — an absent parameter would make the fetch uncapped`,
+      );
+    }
+  }
+  return out;
+}
+
 // Guards the rebase missing-resource fix: rebase.html must not dereference
 // `$doc.Content` unguarded (the pre-fix form crashed with a confusing
 // "nil pointer evaluating resource.Resource.Content" that masked the real

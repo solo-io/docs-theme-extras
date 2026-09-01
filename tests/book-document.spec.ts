@@ -290,6 +290,58 @@ test.describe("book document", () => {
     });
   });
 
+  // Glossary tooltips in a book. Unlike the callout assertions above, these are
+  // not stylesheet-only: the leak is visible in the BOOK HTML, so the fixture
+  // can prove both halves — the term survives, the definition does not reach
+  // the page. fixture/data/glossary.yaml puts a MARKER_GLOSS_DEF sentinel in
+  // the definition text for exactly that reason.
+  test.describe("glossary definitions are stripped from a book", () => {
+    // Every assertion below is about content only the bundled fixture mounts
+    // (fixture/data/glossary.yaml + v2/glossary-term.md). A consumer running
+    // this spec against its own build has its own glossary, or none.
+    test.skip(!IS_FIXTURE_TARGET, "asserts the bundled fixture's glossary");
+
+    test("the fixture book actually contains a glossary term", () => {
+      // Same anti-vacuity guard as the callout block: if the gloss call stops
+      // reaching the book, "no definition in the book" passes for free.
+      expect(book(), "the fixture book emits no glossary term to strip")
+        .toMatch(/class="glossary-term"/);
+    });
+
+    test("the term text survives", () => {
+      // The point of stripping rather than hiding the whole element. The word
+      // the sentence is built around has to stay, or the prose loses a noun.
+      const h = book();
+      expect(h, "the glossary term itself is gone from the book")
+        .toMatch(/data-glossary-term="MCP"/);
+      expect(h, "the custom display text is gone from the book")
+        .toContain("proxy layer");
+    });
+
+    test("the definition does not reach the page", () => {
+      const href = stylesheetHref(book());
+      const css = fs.readFileSync(path.join(target.builtRoot, href.replace(/^\/+/, "")), "utf8");
+      expect(css, "the tooltip strip rule is gone — every definition prints inline mid-sentence")
+        .toMatch(/\.pdf-chapter \.glossary-term > \.tooltip-content\s*\{[^}]*display:\s*none/);
+    });
+
+    // The failure this whole block exists to prevent, asserted on the web page
+    // rather than the book: glossary.css is what hides the tooltip there, so if
+    // its selector and print-book.css's ever disagree, one of the two outputs
+    // silently starts leaking. Cheap cross-check, since both read the same
+    // markup.
+    test("the web page hides the same element the book strips", () => {
+      const page = fs.readFileSync(
+        path.join(TEST_PRODUCT_ROOT, "v2", "glossary-term", "index.html"), "utf8");
+      expect(page, "the fixture page did not render a tooltip")
+        .toMatch(/class="tooltip-content"/);
+      const glossaryCss = fs.readFileSync(
+        path.join(__dirname, "..", "assets", "css", "glossary.css"), "utf8");
+      expect(glossaryCss, "glossary.css no longer hides the tooltip by default")
+        .toMatch(/\.glossary-term > span\s*\{[^}]*display:\s*none/);
+    });
+  });
+
   // The invariant the whole numbering pass rests on: scripts/number_toc.py
   // resolves each TOC link against the named destination WeasyPrint emits for
   // the matching chapter id. If either side's anchorize changes, or a chapter
