@@ -710,6 +710,39 @@ bumping the pin if that is no longer true for you.
 Both take effect for a consumer that bumps its extras pin **and** passes the new flag; the
 `docs` hub's `pdf-export.yml` does both.
 
+- **A `callout`/`alert` in a book printed as plain prose with the word "info" floating above
+  it** (`assets/css/print-book.css`, `tests/book-document.spec.ts`). Two rules were missing,
+  both instances of the same root cause the GitHub-alert rules in this file already document:
+  a book document links only `print-book.css`, so anything styled in
+  `docs-theme-extras.css` arrives unstyled. First, `.solo-alert` had no box at all, so an
+  admonition read as ordinary body text on paper — the one thing a callout exists to prevent.
+  Second, `callout.html` renders its icon as a Material Icons **ligature**
+  (`<i class="material-icons">info</i>`) rather than the inline `<svg>` the GitHub alerts use,
+  and with no font, no `font-style: normal` and no `display` rule the ligature NAME printed as
+  literal italic text above the note. `i.section-card-icon` has been hidden against exactly
+  this trap since the pipeline was written; callout icons were simply never given the rule.
+
+  The box now matches `[data-alert-type]` byte for byte, so a manual does not carry two
+  different-looking admonition styles depending on whether the author wrote a `> [!NOTE]`
+  blockquote or a callout shortcode. The ligature is replaced by a text label — Note, Warning,
+  Tip, Caution — rather than only hidden, because in grayscale the per-type tints all reduce
+  to the same pale gray and the label is then the only thing separating a caution from a note.
+  Labels use the GitHub callout vocabulary, so `alert-danger` prints as "Caution".
+
+  Visible on page 11 of
+  [the Istio 1.30.x manual](https://github.com/solo-io/docs-pdfs/releases/tag/istio-enterprise-1.30.x),
+  against the operator note on
+  [Single cluster](https://docs.solo.io/istio/1.30.x/quickstart/single/) — that page renders
+  the box correctly on the web, which is what makes the PDF-only failure easy to miss. Every
+  published PDF was affected, not only Istio: ~950 `callout`/`alert` calls across the hub's
+  content, 105 in the Istio 1.30.x tree alone.
+
+  Verified by rebuilding both fixture brands and asserting against the executed stylesheet,
+  then break-tested: removing the hide rule, the `alert-warning` box or the `alert-danger`
+  label each fails its own assertion and nothing else. **Not** verified in a real WeasyPrint
+  render — this machine has no WeasyPrint — so the geometry rests on matching the
+  `[data-alert-type]` values, which were rendered when they landed.
+
 ### Test harness — the new book assertions were consumer-config-dependent (`tests/book-document.spec.ts`)
 
 `tests/book-document.spec.ts` runs against **any** consumer's built output, not only the

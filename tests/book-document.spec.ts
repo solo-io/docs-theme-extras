@@ -226,6 +226,70 @@ test.describe("book document", () => {
     });
   });
 
+  // Callout/alert shortcodes in a book. Deletion guards, like the tr rule
+  // above: this harness has no renderer, so the only thing it can check is
+  // that the stylesheet the book links still carries the rules. Worth the
+  // coverage because the failure was silent for the life of the pipeline —
+  // every callout in every published PDF printed as unset-off body text with
+  // the word "info" or "warning" floating above it, and nothing failed.
+  // Symptom of record: page 11 of istio-enterprise-1.30.x.pdf.
+  test.describe("callouts keep their box and lose their ligature", () => {
+    const bookCss = () => {
+      const href = stylesheetHref(book());
+      const f = path.join(target.builtRoot, href.replace(/^\/+/, ""));
+      expect(fs.existsSync(f), `executed stylesheet not found at ${f}`).toBe(true);
+      return fs.readFileSync(f, "utf8");
+    };
+
+    // Guards the assertions below against passing for the wrong reason. If the
+    // fixture stops emitting callouts into the book, every rule check becomes
+    // vacuous while still going green.
+    test("the fixture book actually contains callouts", () => {
+      const types = new Set(
+        [...book().matchAll(/solo-alert alert-([a-z]+)/g)].map((m) => m[1]),
+      );
+      expect([...types].sort(), "the fixture book emits no callouts to style")
+        .toEqual(["danger", "info", "success", "warning"]);
+    });
+
+    test("every callout type in the book has a box rule", () => {
+      const css = bookCss();
+      expect(css, "the .solo-alert base box is gone — callouts print as plain prose")
+        .toMatch(/\.pdf-chapter \.solo-alert\s*\{[^}]*background:/);
+      for (const type of ["info", "warning", "danger"]) {
+        expect(css, `no per-type rule for alert-${type} — it falls back to the success box`)
+          .toMatch(new RegExp(`\\.pdf-chapter \\.solo-alert\\.alert-${type}\\b`));
+      }
+    });
+
+    // The stray-word bug itself. callout.html renders the icon as a Material
+    // Icons ligature, and this document loads no such font, so without the
+    // hide rule the ligature NAME prints as literal italic text.
+    test("the Material Icons ligature is hidden", () => {
+      // The bug is only reachable while callout.html still emits a ligature;
+      // if it ever moves to inline <svg> like the GitHub alerts, this test
+      // should be deleted rather than kept passing on a dead rule.
+      expect(book(), "callout.html no longer emits a material-icons ligature")
+        .toMatch(/class="material-icons"/);
+      expect(bookCss(), "the ligature hide rule is gone — 'info' prints as text next to the note")
+        .toMatch(/\.pdf-chapter \.solo-alert-icon i\.material-icons\s*\{[^}]*display:\s*none/);
+    });
+
+    // The replacement for the hidden icon, and the reason hiding it is not the
+    // whole fix: printed in grayscale the per-type tints all reduce to the
+    // same pale gray, so the label is the only thing left distinguishing a
+    // caution from a note.
+    test("each callout type prints a text label instead", () => {
+      const css = bookCss();
+      const labelFor = (sel: string) =>
+        css.match(new RegExp(`${sel}\\s*\\.solo-alert-icon::before\\s*\\{\\s*content:\\s*"([^"]*)"`))?.[1];
+      expect(labelFor("\\.pdf-chapter"), "no default callout label").toBe("Note");
+      expect(labelFor("\\.pdf-chapter \\.alert-warning")).toBe("Warning");
+      expect(labelFor("\\.pdf-chapter \\.alert-success")).toBe("Tip");
+      expect(labelFor("\\.pdf-chapter \\.alert-danger")).toBe("Caution");
+    });
+  });
+
   // The invariant the whole numbering pass rests on: scripts/number_toc.py
   // resolves each TOC link against the named destination WeasyPrint emits for
   // the matching chapter id. If either side's anchorize changes, or a chapter
