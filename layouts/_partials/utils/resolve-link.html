@@ -261,8 +261,22 @@
 {{- $finalURL = printf "%s%s/%s%s" .Site.BaseURL $versionRoot $ver $path -}}
 {{- end -}}
 
-{{- /* Append a slash if the link is not a fragment */ -}}
-{{- if not (strings.Contains $finalURL "#") -}}
+{{- /* Append a slash if the link is not a fragment, and not a static file.
+
+       A path whose last segment is a real published file — `setup-ldap.sh`,
+       a `.xml` feed, `redocly.html` — is served at that exact name, so the
+       slash turns a working URL into a 404. Lychee reports it as
+       "Not a directory (os error 20)" rather than a plain 404, because the
+       parent IS a file on disk. Measured 2026-08-31: 15 errors across
+       gme, gmg, and gateway from one call site linking a sample LDAP script.
+
+       Matched against an explicit extension list, NOT a generic "last segment
+       contains a dot" test: version segments are dotted (`2.10.x`), and a
+       `{{< link path="/" >}}` call resolves to a URL ending in the bare
+       version, so the generic test would strip the slash from every such
+       link. Extend the list rather than loosening the pattern. */ -}}
+{{- $isStaticFile := findRE `\.(sh|html?|xml|json|ya?ml|txt|csv|sql|pdf|zip|tar|gz|tgz)$` $finalURL -}}
+{{- if and (not (strings.Contains $finalURL "#")) (not $isStaticFile) -}}
   {{- $finalURL = printf "%s/" $finalURL -}}
 {{- end -}}
 
