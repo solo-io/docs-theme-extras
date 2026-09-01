@@ -22,7 +22,7 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
-## [0.3.6] — 2026-08-31
+## [0.3.6] — 2026-09-01
 
 **Scope of this release.** Mostly the PDF pipeline: two new scripts (`scripts/merge_book.py`,
 `scripts/number_toc.py`), three new flags on `scripts/prepare_book.py` and `merge_book.py`,
