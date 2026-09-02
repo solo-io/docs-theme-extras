@@ -81,10 +81,12 @@ server-docs: clear-cache
 # own built-in 404 page and the spec tests nothing.
 build-oss:
 	$(HUGO) --config hugo-oss.toml --gc 2> .build-oss.log
+	rm -rf public-oss/images && cp -r fixture/static/images public-oss/images
 	cp public-oss/test/404.html public-oss/404.html
 
 build-enterprise:
 	$(HUGO) --config hugo-enterprise.toml --gc 2> .build-enterprise.log
+	rm -rf public-enterprise/images && cp -r fixture/static/images public-enterprise/images
 	cp public-enterprise/test/404.html public-enterprise/404.html
 
 # VERSION-LESS fixture (hugo-flat.toml): parallel doc sets registered under
