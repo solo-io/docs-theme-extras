@@ -9,7 +9,7 @@
   was the last thing keeping its `docs/single.html` a fork after the chrome
   slots covered everything else.
 
-  POSITION CHANGED IN 0.4.0. Until then this slot rendered AFTER the
+  POSITION CHANGED IN 0.3.8. Until then this slot rendered AFTER the
   description, which is not what its name says and not where the agentgateway
   fork had put the badge (`<h1>` -> badge -> description). The mismatch was
   invisible from the slot's own file, so the one consumer using it silently got
@@ -28,7 +28,7 @@
   from sprouting a badge they never had. If a list-page equivalent is ever
   needed, add a separate slot rather than widening this one — silently changing
   where an existing slot renders is the kind of surprise these slots exist to
-  prevent, and 0.4.0 is what that surprise costs.
+  prevent, and 0.3.8 is what that surprise costs.
 
   TO OVERRIDE: create `layouts/partials/docs/after-title.html` in the consumer.
   Note `partials/`, not `_partials/`.

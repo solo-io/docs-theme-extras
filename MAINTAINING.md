@@ -337,7 +337,7 @@ the docs hub.
 Three things to get right:
 
 - **`after-title` renders after the TITLE; `after-description` after the
-  DESCRIPTION.** Until 0.4.0 there was one slot, called `after-title`, that
+  DESCRIPTION.** Until 0.3.8 there was one slot, called `after-title`, that
   rendered after the description — so the one consumer using it got a page order
   it never asked for and nothing failed. If you add another prose-column slot,
   name it for the thing it follows, and pin the position in

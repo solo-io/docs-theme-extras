@@ -12,7 +12,7 @@ import { target } from "./helpers/target";
 // between the `<h1>` and the description. So adopting the slot silently moved
 // the badge down a line. Nothing failed: the slot's own file said "after the
 // page title and description", the build was green, and the only way to notice
-// was to look at a rendered page and remember what it used to look like. 0.4.0
+// was to look at a rendered page and remember what it used to look like. 0.3.8
 // moves the behavior to meet the name and adds `after-description.html` at the
 // old position.
 //
@@ -95,7 +95,7 @@ test.describe("docs/single.html prose-column slot order", () => {
       sorted,
       "the prose-column slots are out of order. `after-title` must render " +
         "between the title block and the description, `after-description` " +
-        "between the description and the body — that is what 0.4.0 was for. " +
+        "between the description and the body — that is what 0.3.8 was for. " +
         "Putting `after-title` back below the description reintroduces the " +
         "exact bug: agentgateway.dev's doc-test badge silently drops a line, " +
         "with no test failing and no build warning.",
@@ -122,7 +122,7 @@ test.describe("docs/single.html prose-column slot order", () => {
       "a slot call is no longer glued to the tag before it. Moving one onto " +
         "its own line injects whitespace into every page and breaks the " +
         "byte-identity guarantee single.html's header comment makes. " +
-        "Verified for 0.4.0 by building both brands before and after: all 107 " +
+        "Verified for 0.3.8 by building both brands before and after: all 107 " +
         "fixture pages identical, only the llms.txt build timestamp differed.",
     ).toEqual([]);
   });

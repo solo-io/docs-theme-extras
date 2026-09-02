@@ -22,19 +22,24 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
-## [0.4.0] — 2026-09-02
+## [0.3.8] — 2026-09-02
 
 **Scope of this release.** One breaking change — a prose-column extension slot
 moves to where its name says it renders — plus the PDF download fix and the
 fixture and spec that keep it covered.
 
-The minor bump is deliberate and so is calling the slot move BREAKING even
-though **no consumer has to edit a file**. Nothing in this repo's versioning
-rules covers "changes rendered output for anyone overriding a slot, but requires
-no consumer edit", and the honest reading is that a slot's position IS its
-contract. A consumer that adopted the slot on the old contract gets different
-output from the same override, and the only way to notice is to look at a page.
-That deserves a heading, not a footnote in a patch release.
+**Why a patch bump carries a Breaking heading.** The rule at the top of this
+file reserves Major for "any change that requires content edits in consumer
+repos", and this requires **none** — the one consumer overriding the slot keeps
+its file exactly where it is and its content simply moves up on the pin bump. By
+that rule this is a patch, and it ships as one.
+
+The Breaking heading stays anyway, because the rule is about consumer *edits*
+and this change is about consumer *output*. A slot's position is part of its
+contract: anyone overriding `after-title` gets different rendered output from an
+unchanged override, and the only way to notice is to look at a page. Nothing in
+the versioning rules covers that case, so it gets the loudest heading available
+inside a patch rather than being left to a reader who skims section titles.
 
 ### Breaking — `docs/after-title.html` rendered after the DESCRIPTION, not after the title (`layouts/docs/single.html`, `layouts/partials/docs/after-title.html`, `layouts/partials/docs/after-description.html`, `tests/slot-order.spec.ts`, `tests/helpers/scan-overrides.ts`, `playwright.config.ts`, `MAINTAINING.md`, `OVERRIDES.md`)
 
