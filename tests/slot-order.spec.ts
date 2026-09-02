@@ -57,9 +57,14 @@ test.describe("docs/single.html prose-column slot order", () => {
   test("slots are called in the order their names describe", () => {
     const src = stripComments(fs.readFileSync(SINGLE, "utf8"));
 
-    // Five landmarks, in the order a reader of the page meets them.
+    // Six landmarks, in the order a reader of the page meets them.
     const LANDMARKS: [string, RegExp][] = [
       ["the <h1> itself", /<h1 class="hx:mb-0">/],
+      ["the release badges", /<div class="page-badges">/],
+      [
+        "docs/under-heading.html",
+        /\{\{ partial "docs\/under-heading\.html" \. \}\}/,
+      ],
       ["docs/after-title.html", /\{\{ partial "docs\/after-title\.html" \. \}\}/],
       ["the page description", /<p class="page-description">/],
       [
@@ -105,6 +110,7 @@ test.describe("docs/single.html prose-column slot order", () => {
     // entirely by the whitespace: a slot call moved onto its own line injects
     // a newline plus indentation into every rendered page. Pin the exact glue.
     const GLUED = [
+      `{{- end }}{{ partial "docs/under-heading.html" . }}`,
       `{{ end }}{{ partial "docs/after-title.html" . }}`,
       `{{- end }}{{ partial "docs/after-description.html" . }}`,
     ];
@@ -121,8 +127,12 @@ test.describe("docs/single.html prose-column slot order", () => {
     ).toEqual([]);
   });
 
-  test("both slots are empty by default", () => {
-    for (const name of ["after-title.html", "after-description.html"]) {
+  test("all three slots are empty by default", () => {
+    for (const name of [
+      "after-title.html",
+      "after-description.html",
+      "under-heading.html",
+    ]) {
       const file = path.join(SLOT_DIR, name);
       expect(fs.existsSync(file), `${name} is missing from layouts/partials/docs/`).toBe(
         true,

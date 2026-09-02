@@ -1,7 +1,7 @@
 {{- /*
   Docs detail page.
 
-  EXTENSION SLOTS. Six partials in `partials/docs/` are override points, so a
+  EXTENSION SLOTS. Seven partials in `partials/docs/` are override points, so a
   consumer that needs to inject its own navbar, chatbot or page width does NOT
   have to fork this file:
 
@@ -12,16 +12,24 @@
     docs/width-class.html      wrapper max-width class (default:
                                `hextra-max-page-width`)
     docs/content-class.html    <main> width + padding classes
+    docs/under-heading.html    INSIDE the heading column, below the <h1> and
+                               the release badges (default: nothing)
     docs/after-title.html      between the <h1> block and the page description
                                (default: nothing)
     docs/after-description.html  between the page description and `.Content`
                                (default: nothing)
 
-  The two prose-column slots are ordered as their names read: `after-title`
-  fires after the title block, `after-description` after the description. They
-  were one slot until 0.4.0, named `after-title` but rendering after the
-  description — see the CHANGELOG entry for why that was worth a breaking
-  change. If you add a third, name it for the thing it follows.
+  The prose-column slots are ordered as their names read: `after-title` fires
+  after the title block, `after-description` after the description. They were
+  one slot until 0.4.0, named `after-title` but rendering after the description
+  — see the CHANGELOG entry for why that was worth a breaking change. If you add
+  another, name it for the thing it follows.
+
+  `under-heading` is the odd one out and deliberately so: it renders INSIDE the
+  heading column rather than after the title container. That is the only way to
+  put something under the <h1> and still keep it ABOVE the copy/context buttons
+  when the container stacks on a narrow viewport. It is also the only slot that
+  requires `.Title` to be set, since it lives inside that branch.
 
   Why they exist: both OSS consumers forked this entire layout for the sake of
   two or three injected lines, and a forked layout silently misses every feature
@@ -59,7 +67,7 @@
                 {{- if .Params.oss }}<span class="section-card-badge badge-oss">Open Source</span>{{ end -}}
                 {{- if .Params.experimental }}<span class="section-card-badge badge-tag">Experimental</span>{{ end -}}
               </div>
-              {{- end }}
+              {{- end }}{{ partial "docs/under-heading.html" . }}
             </div>
             <div class="hx:flex hx:items-center hx:gap-2">
               {{ partial "copy-markdown.html" . }}

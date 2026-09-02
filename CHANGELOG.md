@@ -72,6 +72,10 @@ relying on the old position, rename your file to `after-description.html` and
 you are back to byte-identical output. Check with `npm run scan:overrides`,
 which now reports both slots as sanctioned.
 
+For the badge specifically, `after-title` turned out not to be the right home
+either — see the `under-heading` entry below, which is where agentgateway.dev's
+override actually ended up.
+
 **Byte-identity preserved, and measured rather than assumed.** Both slots default
 to empty, and `single.html`'s header promises an empty slot produces output
 identical to the pre-slot layout. Verified by building both brands before and
@@ -96,6 +100,48 @@ clean build. Making the fixture win means letting it shadow any module partial,
 a much larger hole than this test is worth. Per `tests/HAZARDS.md` the tests are
 mutation-checked rather than assumed correct: reverting `single.html` to the old
 order reds exactly the two ordering tests and leaves the other two green.
+
+### Add — `docs/under-heading.html`, a slot INSIDE the heading column (`layouts/docs/single.html`, `layouts/partials/docs/under-heading.html`, `tests/slot-order.spec.ts`, `tests/helpers/scan-overrides.ts`, `MAINTAINING.md`, `OVERRIDES.md`)
+
+Purely additive; no consumer has to do anything.
+
+**Why a third slot rather than reusing `after-title`.** Moving the badge above
+the description fixed the wide-viewport order but not the narrow one. The title
+area is a flex container — heading column left, copy/context buttons right — and
+below Hextra's `sm` breakpoint it is `flex-col`, so the buttons stack under the
+heading. `after-title` renders after that whole container closes, so on a phone
+the order was **heading → Copy as Markdown → badge → description**: the badge
+had jumped the description but was still stranded below a button it should sit
+above. Measured on the real agentgateway build at 390px before the fix — heading
+bottom 299, button 327–358, badge 382–405.
+
+CSS cannot fix that. The badge and the title container are siblings, so no
+`order` value reaches across them, and the only shared parent is `.content`,
+which holds the entire page body. The badge has to be rendered inside the
+heading column, and that needs a slot there.
+
+**It also deletes a magic number.** From `after-title` the badge sat below a flex
+row whose height is set by the buttons, so pulling it up under the heading took
+`margin-top: -1.25rem` calibrated against the button height and scoped to
+`>=640px` — wrong the day that control changes size. From `under-heading` the
+badge is a normal block in the heading column and its spacing is its own
+margins. agentgateway.dev moved its override to the new slot and dropped the
+negative margin and the media query with it. Measured after, at 390px:
+**heading → badge → button → description**, with the whitespace before the
+description falling after the button rather than stranding it.
+
+**Two behaviors to know before using it.** At `sm` and up the container is
+`items-center`, so content added here makes the left column taller and the
+buttons re-centre against it — `after-title` cannot move the buttons, this slot
+can. And this is the only slot of the three that sits inside the `if .Title`
+branch, so it does not render on a page with no title; there is no heading
+column to render into.
+
+Byte-identity holds on the same measurement as the breaking change above: with
+the slot empty, both brands build byte-identical to the pre-slot tree across all
+**107** fixture pages, timestamp line excluded. `tests/slot-order.spec.ts` grew
+the slot into its landmark ordering, its glue assertion and its empty-default
+check; still 4 tests, all green.
 
 ### Fix — the download item was unreachable on a site with no versions (`layouts/partials/copy-markdown.html`, `hugo-flat.toml`, `tests/pdf-download-flat.spec.ts`, `playwright.config.ts`)
 

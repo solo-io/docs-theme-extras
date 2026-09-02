@@ -320,7 +320,7 @@ silently been missing, plus `components/page-context-menu`, the
 `displayPagination` config guard, `version-banner` and the `page-badges`
 contract. Nothing was broken; the features simply never arrived.
 
-Six partials exist purely so you do not have to fork. Each one defaults to
+Seven partials exist purely so you do not have to fork. Each one defaults to
 today's exact output, so adding them changed **0 of 770** built HTML pages on
 the docs hub.
 
@@ -330,6 +330,7 @@ the docs hub.
 | `partials/docs/chrome-bottom.html` | very bottom, after the content wrapper closes | nothing |
 | `partials/docs/width-class.html` | max-width class on the page wrapper | `hextra-max-page-width` (100%) |
 | `partials/docs/content-class.html` | width + padding classes on `<main id="content">` | `hextra-max-content-width hx:px-6 hx:pt-6 hx:md:px-12` |
+| `partials/docs/under-heading.html` | **inside** the heading column, below the `<h1>` and the release badges | nothing — **detail pages only**, and only when `.Title` is set |
 | `partials/docs/after-title.html` | inside `.content`, after the title block and **before** the page description | nothing — **detail pages only**, not section indexes |
 | `partials/docs/after-description.html` | inside `.content`, after the page description and before the body | nothing — **detail pages only**, not section indexes |
 
