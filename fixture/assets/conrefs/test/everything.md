@@ -1288,7 +1288,7 @@ The card shortcode takes an optional `image` named argument. An author can write
 {{< cards >}}
 {{< card link="../rebased/" title="MARKER_CARD_IMAGE_ASSET Asset-relative with prefix" subtitle="image written as assets/img/test/light.svg; must resolve through the pipeline." image="assets/img/test/light.svg" >}}
 {{< card link="../rebased/" title="MARKER_CARD_IMAGE_NOPREFIX Asset-relative no prefix" subtitle="image written as img/test/light.svg; resources.Get is already assets-relative." image="img/test/light.svg" >}}
-{{< card link="../rebased/" title="MARKER_CARD_IMAGE_ROOTED Root-absolute static" subtitle="image is a published static path; passed through verbatim, so it must not gain a second baseURL segment." image="/test/images/logos/logo-oss-test.svg" >}}
+{{< card link="../rebased/" title="MARKER_CARD_IMAGE_ROOTED Root-absolute static" subtitle="image is a published static path; passed through verbatim." image="/images/logos/logo-oss-test.svg" >}}
 {{< card link="../rebased/" title="MARKER_CARD_IMAGE_HTTP External URL" subtitle="image is an absolute external URL; passed through verbatim." image="https://avatars.githubusercontent.com/u/26319377?v=4" >}}
 {{< /cards >}}
 
