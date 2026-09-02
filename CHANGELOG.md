@@ -33,7 +33,7 @@ risks nothing by taking it. A consumer that does run the harness needs it before
 
 `tests/book-document.spec.ts` shipped in 0.3.6 and reads the bundled fixture's book at
 `<productRoot>/v2/book.html`. That path resolves for exactly two targets: the fixture's own
-build, and solo-io/docs, whose `test` product mounts the fixture CONTENT while keeping its own
+build, and docs, whose `test` product mounts the fixture CONTENT while keeping its own
 Hugo config. It resolves for nothing else. kgateway.dev mounts no fixture, so `public/v2/` does
 not exist there, and the first consumer to move its pin from 0.3.3 to 0.3.6 collected 18
 `ENOENT` failures in a suite that was otherwise entirely green, not one of them about that
@@ -72,12 +72,6 @@ failed: 344 + 18 = 362, so the 18 failures became skips and nothing else moved. 
 brands are unchanged with the guard and without it, at 30 passed and 3 skipped on OSS and 32
 passed and 1 skipped on enterprise.
 
-**No production page can show this one**, so the entry does not link one. Nothing about rendered
-output changed, and the artifact that demonstrates the bug is the CI run linked above.
-
-**Who else this was waiting for.** agentgateway-oss-website and agentregistry-oss-website both
-run the harness, mount no fixture, and sit on 0.3.5. Each would have hit the same 18 failures on
-the same bump.
 
 ---
 
