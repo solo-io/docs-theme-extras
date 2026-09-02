@@ -22,6 +22,166 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
+## [0.4.0] — 2026-09-02
+
+**Scope of this release.** One breaking change — a prose-column extension slot
+moves to where its name says it renders — plus the PDF download fix and the
+fixture and spec that keep it covered.
+
+The minor bump is deliberate and so is calling the slot move BREAKING even
+though **no consumer has to edit a file**. Nothing in this repo's versioning
+rules covers "changes rendered output for anyone overriding a slot, but requires
+no consumer edit", and the honest reading is that a slot's position IS its
+contract. A consumer that adopted the slot on the old contract gets different
+output from the same override, and the only way to notice is to look at a page.
+That deserves a heading, not a footnote in a patch release.
+
+### Breaking — `docs/after-title.html` rendered after the DESCRIPTION, not after the title (`layouts/docs/single.html`, `layouts/partials/docs/after-title.html`, `layouts/partials/docs/after-description.html`, `tests/slot-order.spec.ts`, `tests/helpers/scan-overrides.ts`, `playwright.config.ts`, `MAINTAINING.md`, `OVERRIDES.md`)
+
+The slot added in 0.2.0-beta.3 to get agentgateway.dev out of forking
+`docs/single.html` was called `after-title` and placed after the page
+description. Its own file said so — "after the page title and description" —
+so the name and the docstring disagreed, and the name is the part anyone reads
+at the call site.
+
+**What that cost.** agentgateway.dev is the only consumer overriding it, for the
+doc-test "Verified" badge. The fork the slot replaced rendered
+`<h1>` → badge → description; adopting the slot silently moved the badge below
+the subtitle. Nothing failed: the build was green, no Hugo warning, no spec
+touched it, and the badge is invisible in a local build from source because it
+is gated on `.Params.test_status`, a field CI injects into front matter
+(`make test-status`) and no committed page carries. The regression was reported
+by a human who remembered what the page used to look like. Live evidence of the
+old order, on production today:
+[`/docs/kubernetes/latest/install/helm/`](https://agentgateway.dev/docs/kubernetes/latest/install/helm/)
+— view-source shows `<p class=page-description>…</p><span class="test-status-badge …">`.
+
+**The behavior moved to meet the name, not the reverse.** Renaming the slot to
+`after-description` was the other option and it is worse: `after-title` is the
+correct name for a slot that follows the title, and burning the good name on the
+wrong position leaves the next person with the same trap. So the slot moved up,
+and the old position became a new empty slot, `docs/after-description.html`, so
+the change takes nothing away — a consumer that genuinely wants furniture below
+the subtitle still has a supported place for it instead of being pushed back into
+forking the layout. No consumer overrides the new slot today; that is expected.
+
+**What a consumer has to do.** Nothing, in the only case that exists. An
+override already living at `layouts/partials/docs/after-title.html` keeps
+working and its content moves up under the `<h1>` on the pin bump. If you were
+relying on the old position, rename your file to `after-description.html` and
+you are back to byte-identical output. Check with `npm run scan:overrides`,
+which now reports both slots as sanctioned.
+
+**Byte-identity preserved, and measured rather than assumed.** Both slots default
+to empty, and `single.html`'s header promises an empty slot produces output
+identical to the pre-slot layout. Verified by building both brands before and
+after the move and diffing the trees: all **107** fixture pages identical in
+each, with the sole difference being the `Generated on …` timestamp in
+`test/llms.txt`, eight seconds apart between the two runs.
+
+**Covered by `tests/slot-order.spec.ts`** (4 tests, registered in the `static`
+project — a spec absent from that allowlist silently never runs). Three are
+source lints over `layouts/docs/single.html`: landmark ordering, the exact
+whitespace glue the byte-identity guarantee depends on, and that both slot
+defaults stay empty. The fourth asserts on the built fixture that nothing sits
+between the title block and the description while both slots are unoverridden.
+
+The position is pinned in SOURCE rather than end-to-end, and that is a real
+limitation stated plainly. Covering it in rendered HTML needs the fixture to
+override a slot, and it structurally cannot: `hugo-oss.toml` mounts `layouts`
+before `fixture/layouts`, so the module's own default wins the filename
+conflict. Confirmed by trying it — a probe partial at
+`fixture/layouts/partials/docs/after-title.html` rendered **zero** times in a
+clean build. Making the fixture win means letting it shadow any module partial,
+a much larger hole than this test is worth. Per `tests/HAZARDS.md` the tests are
+mutation-checked rather than assumed correct: reverting `single.html` to the old
+order reds exactly the two ordering tests and leaves the other two green.
+
+### Fix — the download item was unreachable on a site with no versions (`layouts/partials/copy-markdown.html`, `hugo-flat.toml`, `tests/pdf-download-flat.spec.ts`, `playwright.config.ts`)
+
+`copy-markdown.html` resolves the book root through `utils/version-root.html`,
+which fills `docsSection` **only** when it matched a version segment in the URL.
+A flat site has no such segment, so the field came back empty, the `with` wrapping
+the whole menu item never opened, and no `params.pdfDownload` configuration could
+produce a link. ambientmesh.io is that site: one book for its entire `/docs/`
+tree, no versions anywhere. Setting `distribution = "oss"` and building produced
+the item **zero** times, with the build green, no Hugo warning, and a correctly
+rendered book document — nothing reports a menu item that failed to render.
+
+It also could not have worked even if the gate had opened. `{version}` is
+substituted from `$vr.currentVersion`, empty on a flat site, so the URL would have
+been `ambientmesh-oss-.pdf`.
+
+**Fixed in `copy-markdown.html` alone, deliberately.** The obvious repair is to
+teach `version-root.html` to fill `docsSection` for an unversioned site, and it is
+the wrong one: that field is also read by `sidebar.html` and `docs-tabs.html`,
+which currently take the "no version root" path on a flat site and render
+correctly. Filling it would change what both do on **every** flat consumer, to fix
+a link. The fallback is `.FirstSection`, and it is reached only when
+`version-root.html` found no version — inside a versioned subtree that property
+returns the product rather than the version root, which is the documented reason
+the versioned path does not use it.
+
+**The section prefix survives, and the ordering is the whole of it.** A flat site
+substitutes `latest` for the missing segment, and doing that *after* the section
+prefix is applied overwrites it, so every doc set on the site collapses onto one
+`<product>-<distribution>-latest.pdf`. That is the exact collision the prefix
+exists to prevent, and it is silent, because both URLs are well formed. The flat
+fixture registers four sections so the difference is observable:
+`flatprod-oss-alpha-latest`, not `flatprod-oss-latest`.
+
+**Verification.** `tests/pdf-download-flat.spec.ts` is new, and registered in the
+`static` project's `testMatch` — this repo gates that project on a per-filename
+allowlist, so an unregistered spec silently never runs. Seven assertions: the
+opted-in section root and a leaf page beneath it both carry the item, the section
+prefix is not dropped, three sibling doc sets that publish no book carry nothing,
+the home page carries nothing, opting into `book` does not cost the section its
+`index.xml`, and `hugo-flat-root.toml` — the same content with no `pdfDownload`
+table — still shows no item, so a bug that emitted the link unconditionally on
+flat sites could not pass.
+
+Both bugs were then reintroduced to confirm the spec catches them: removing the
+`.FirstSection` fallback fails 3 of the 7, and moving the `latest` substitution
+after the section prefix fails "the section prefix is not dropped" with that
+message. Full suite 2,269 passed on OSS and 2,271 on enterprise, with one
+unrelated pre-existing failure (`override-parity`, the docs hub carrying
+`reuse-append.html` and `version-banner.html` overrides that are not in the
+baseline). The versioned path was checked against a real consumer rather than only
+the fixture: kgateway.dev still emits
+`kgateway-oss-envoy-latest.pdf` on `/docs/envoy/latest/` and still emits nothing
+on `/docs/envoy/2.3.x/`.
+
+`hugo-flat.toml` also gains an `[outputFormats.book]` block. That is not
+redundant with the module's own declaration: this build passes
+`--config hugo-flat.toml`, which replaces Hugo's default config lookup, and extras
+does not import itself, so there is no module config to merge from — the same copy
+and the same reason as `hugo-{oss,enterprise}.toml`. Without it the build fails
+outright rather than skipping the book:
+
+```
+failed to resolve output formats [html rss book]: OutputFormat with key "book" not found
+```
+
+> [!WARNING]
+> **A root-level `cascade` in a TOML config must sit above every table header.**
+> A bare `key = value` line belongs to whichever table precedes it, so a `cascade`
+> written after `[markup]` becomes `markup.cascade`, and after
+> `[outputFormats.book]` becomes `outputFormats.book.cascade`. Neither is an
+> error. Both parse, build, and do nothing at all — the pages never receive the
+> `outputs` the cascade was supposed to give them. This bit twice while wiring the
+> fixture, in both of those exact positions, and the only symptom was a `book.html`
+> that was never written. It is the same hazard the `[params.pdfDownload]` note
+> further down describes, in the opposite direction.
+
+**Verify on the live site** at [ambientmesh.io/docs/](https://ambientmesh.io/docs/):
+open the Copy-as-Markdown menu at the top of the page. Today it offers Copy and
+Print only; with this release and `params.pdfDownload` set it gains **Download all
+docs (PDF)**, pointing at the `ambientmesh-oss-latest` release asset. There is no
+pre-existing defect page to link, because the item has never rendered anywhere on
+that site.
+
+---
+
 ## [0.3.7] — 2026-09-02
 
 **Scope of this release.** One test-harness fix. No layout, no CSS, no shortcode and no script

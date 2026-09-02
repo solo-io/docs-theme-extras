@@ -34,6 +34,37 @@ contentDir = "fixture/content-flat/en"
 publishDir = "public-flat"
 enableInlineShortcodes = true
 
+# ROOT-LEVEL KEY, so it must sit above the first table header. A bare
+# `key = value` after `[markup]` belongs to markup, and `markup.cascade` is
+# not an error — it parses, builds, and does nothing at all.
+# Opts ONE section into the `book` output format, the way ambientmesh.io opts in
+# its whole /docs/ tree: a config-level cascade on an exact path, no glob. `alpha`
+# rather than all four, so `beta` stays a control proving the item does not leak
+# onto a section that publishes no book.
+#
+# `rss` is listed alongside because this fixture declares no `[outputs]` and so
+# takes Hugo's defaults, which give a section HTML + RSS. `outputs` REPLACES those
+# defaults rather than adding to them, so naming only html and book would silently
+# drop alpha's index.xml.
+cascade = [
+  { target = { path = "/alpha" }, outputs = ["html", "rss", "book"] },
+]
+
+# Declared here, unlike in a CONSUMER config, because this build passes
+# `--config hugo-flat.toml`, which replaces Hugo's default config lookup so this
+# repo's own hugo.toml — the file that declares the format for everyone who
+# IMPORTS this module — is never read. extras does not import itself, so there is
+# no module config to merge from. Same copy, and the same reason, as
+# hugo-{oss,enterprise}.toml. Without it the build does not merely skip the book,
+# it fails outright:
+#   failed to resolve output formats [html rss book]: OutputFormat with key "book" not found
+[outputFormats.book]
+  mediaType = "text/html"
+  baseName  = "book"
+  isHTML    = true
+
+
+
 [module]
   [[module.imports]]
     path = "github.com/imfing/hextra"
@@ -109,3 +140,17 @@ enableInlineShortcodes = true
   [params.navbar]
     displayTitle = true
     displayLogo = false
+
+  # PDF download link on a site with NO versions at all. `copy-markdown.html`
+  # resolves the book root through `version-root.html`, which fills `docsSection`
+  # only when it matched a version segment, so this item was unreachable on a flat
+  # site until it grew a `.FirstSection` fallback. ambientmesh.io is the real
+  # consumer; this fixture is what keeps the path executed.
+  #
+  # A fully-qualified table header, so it goes at the END of [params], after every
+  # loose key. Dropped in above them it would swallow `product` and the rest, and
+  # the symptom is not a build error but a download URL with the wrong product in
+  # it.
+  [params.pdfDownload]
+    distribution = "oss"
+    product = "flatprod"

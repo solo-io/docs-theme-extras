@@ -31,6 +31,28 @@ MARKER_ALERT_LIST_BODY. This alert contains a list:
 - MARKER_ALERT_LIST_ITEM2 second item
 {{% /callout %}}
 
+## Anchor targets
+
+Two other fixture pages link into this body with a `#fragment`, and this body is
+what both the Everything page and the Rebased page render. The ids below are
+declared here, rather than on either page, so that a fragment link resolves on
+whichever of the two it is pointed at, and so that the heading counts the
+`everything`/`rebased` comparison in `tests/versioning.spec.ts` relies on stay
+equal. The headings carry no coverage of their own.
+
+### A heading {#a-heading}
+
+The two fragment shapes on the link-hextra path shapes page both target
+`/everything/#a-heading`; they exist to assert that `link-hextra` does not
+append a trailing slash after a fragment.
+
+### Companion {#companion}
+
+The fragment card on the Card path page targets `/rebased/#companion`, asserting
+that the `card` shortcode's `path=` branch carries a fragment through without
+gaining a trailing slash. "Companion" is what the rest of this page calls the
+Rebased view.
+
 ## Callout
 
 In the local override at `layouts/shortcodes/callout.html`, the `callout` shortcode is implemented identically to `alert` — same context-to-class map, same icon set, same DOM. The two are aliases. The fixture exercises all four canonical types so a regression that drifts one shortcode away from the other surfaces immediately.
@@ -1266,7 +1288,7 @@ The card shortcode takes an optional `image` named argument. An author can write
 {{< cards >}}
 {{< card link="../rebased/" title="MARKER_CARD_IMAGE_ASSET Asset-relative with prefix" subtitle="image written as assets/img/test/light.svg; must resolve through the pipeline." image="assets/img/test/light.svg" >}}
 {{< card link="../rebased/" title="MARKER_CARD_IMAGE_NOPREFIX Asset-relative no prefix" subtitle="image written as img/test/light.svg; resources.Get is already assets-relative." image="img/test/light.svg" >}}
-{{< card link="../rebased/" title="MARKER_CARD_IMAGE_ROOTED Root-absolute static" subtitle="image is a published static path; passed through verbatim." image="/images/logos/logo-oss-test.svg" >}}
+{{< card link="../rebased/" title="MARKER_CARD_IMAGE_ROOTED Root-absolute static" subtitle="image is a published static path; passed through verbatim, so it must not gain a second baseURL segment." image="/test/images/logos/logo-oss-test.svg" >}}
 {{< card link="../rebased/" title="MARKER_CARD_IMAGE_HTTP External URL" subtitle="image is an absolute external URL; passed through verbatim." image="https://avatars.githubusercontent.com/u/26319377?v=4" >}}
 {{< /cards >}}
 
