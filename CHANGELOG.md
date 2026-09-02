@@ -22,6 +22,59 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
+## [0.3.7] — 2026-09-02
+
+**Scope of this release.** One test-harness fix. No layout, no CSS, no shortcode and no script
+changed, so a consumer that does not run the Playwright harness gains nothing from the bump and
+risks nothing by taking it. A consumer that does run the harness needs it before it can move to
+0.3.6.
+
+### Fix — the book assertions failed on every consumer that mounts none of the fixture content (`tests/book-document.spec.ts`)
+
+`tests/book-document.spec.ts` shipped in 0.3.6 and reads the bundled fixture's book at
+`<productRoot>/v2/book.html`. That path resolves for exactly two targets: the fixture's own
+build, and docs, whose `test` product mounts the fixture CONTENT while keeping its own
+Hugo config. It resolves for nothing else. kgateway.dev mounts no fixture, so `public/v2/` does
+not exist there, and the first consumer to move its pin from 0.3.3 to 0.3.6 collected 18
+`ENOENT` failures in a suite that was otherwise entirely green, not one of them about that
+repo's own content
+([failing run](https://github.com/kgateway-dev/kgateway.dev/actions/runs/33632027119/job/100253548967)).
+
+0.3.6 gated the assertions that depend on fixture CONFIG on
+`target.name.startsWith("docs-theme-extras-fixture")` and deliberately left the rest ungated, so
+that a consumer would still get real coverage. That reasoning is right for a consumer that
+mounts the fixture content and wrong for one that mounts none, and it is a distinction
+`target.name` cannot draw: solo-io/docs is not the fixture target and has to keep running those
+assertions.
+
+The suite now skips when the fixture version tree is absent:
+
+```ts
+const HAS_FIXTURE_CONTENT = fs.existsSync(path.join(TEST_PRODUCT_ROOT, "v2"));
+
+test.describe("book document", () => {
+  test.skip(!HAS_FIXTURE_CONTENT,
+    "consumer mounts none of the fixture content, so there is no book to assert against");
+```
+
+**Keyed on the version DIRECTORY, not on `book.html`.** Skipping on a missing book would defeat
+the suite's first assertion, whose whole job is to fail when the fixture stops producing one.
+This file exists because a deliberate `{{ .ThisMethodDoesNotExist.AtAll }}` inside
+`book-document.html` once built green across the entire suite. The directory answers a different
+question, which is whether the fixture content is present at all: where it is, a missing book
+stays a failure; where it is not, there is nothing to assert.
+
+**Verified** at the 0.3.6 tag with this one file patched, against kgateway.dev's own build.
+`book-document.spec.ts` alone went from 18 failed and 15 skipped to 33 skipped and none failed,
+and the full `static` plus `content` run came back 1,392 passed, 362 skipped, none failed. Those
+numbers line up exactly with the failing CI run, which reported 1,392 passed, 344 skipped and 18
+failed: 344 + 18 = 362, so the 18 failures became skips and nothing else moved. Both fixture
+brands are unchanged with the guard and without it, at 30 passed and 3 skipped on OSS and 32
+passed and 1 skipped on enterprise.
+
+
+---
+
 ## [0.3.6] — 2026-09-01
 
 **Scope of this release.** Mostly the PDF pipeline: two new scripts (`scripts/merge_book.py`,

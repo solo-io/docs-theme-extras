@@ -48,6 +48,23 @@ const BOOK_TABS = path.join(TEST_PRODUCT_ROOT, "v3/book.html");
 // assertions went green locally and red in the hub.
 const IS_FIXTURE_TARGET = target.name.startsWith("docs-theme-extras-fixture");
 
+// ...and a consumer may mount NONE of the fixture content, which the gate above
+// cannot express. solo-io/docs is not the fixture target but does mount the
+// fixture's version trees, so the ungated assertions below are meaningful there;
+// kgateway.dev mounts nothing, so `<productRoot>/v2/` does not exist and every
+// one of them died on ENOENT the moment that repo bumped its pin past the
+// release that added this file. Eighteen failures, none of them about the
+// consumer's own content.
+//
+// Keyed on the fixture version DIRECTORY rather than on book.html, deliberately.
+// Skipping when the book is missing would defeat the first test below, whose
+// entire job is to fail when the fixture stops producing one — this file exists
+// because a `{{ .ThisMethodDoesNotExist.AtAll }}` inside book-document.html once
+// built green across the whole suite. The directory answers a different question:
+// is the fixture content here at all? Where it is, a missing book is still a
+// failure; where it is not, there is nothing to assert.
+const HAS_FIXTURE_CONTENT = fs.existsSync(path.join(TEST_PRODUCT_ROOT, "v2"));
+
 function book(): string {
   return fs.readFileSync(BOOK, "utf8");
 }
@@ -68,6 +85,9 @@ function count(h: string, re: RegExp): number {
 }
 
 test.describe("book document", () => {
+  test.skip(!HAS_FIXTURE_CONTENT,
+    "consumer mounts none of the fixture content, so there is no book to assert against");
+
   test("is built at all", () => {
     // The whole point of the fixture opt-in. If this fails, every other
     // assertion here is meaningless rather than merely failing.
