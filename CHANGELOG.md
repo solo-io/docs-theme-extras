@@ -25,8 +25,9 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 ## [0.3.8] — 2026-09-02
 
 **Scope of this release.** One breaking change — a prose-column extension slot
-moves to where its name says it renders — plus the PDF download fix and the
-fixture and spec that keep it covered.
+moves to where its name says it renders — plus the PDF download fix, a table
+column-sizing fix for backticked tokens, and the fixtures and specs that keep
+both covered.
 
 **Why a patch bump carries a Breaking heading.** The rule at the top of this
 file reserves Major for "any change that requires content edits in consumer
@@ -230,6 +231,66 @@ Print only; with this release and `params.pdfDownload` set it gains **Download a
 docs (PDF)**, pointing at the `ambientmesh-oss-latest` release asset. There is no
 pre-existing defect page to link, because the item has never rendered anywhere on
 that site.
+
+### Fix — a backticked token in a table cell pinned its column open, starving the rest of the row (`assets/css/docs-theme-extras.css`, `fixture/assets/conrefs/test/everything.md`, `tests/table-display.spec.ts`, `tests/helpers/gate-containment.json`)
+
+Reference tables put long dotted identifiers in the first column, in code spans.
+Where that token has no break opportunity, the column was sized to the whole
+token and every other column got what was left. On kgateway 2.3.x response
+header sanitization at a 1280px viewport, the first column measured **627px of a
+645px row, leaving 38px** for Description, which folded that sentence to **44
+lines**. The table also overflowed its wrapper, so the row read as one tall
+column of text beside a sliver.
+
+**The cell rule for this already existed and had never applied to real content.**
+`.table-wrapper th, td` has carried `overflow-wrap: anywhere` for exactly this
+purpose, with a comment explaining that `anywhere` rather than `break-word` is
+what feeds the table algorithm's intrinsic-width calculation. It was correct and
+unreachable: Hextra's prose styling declares
+`.content :where(code):not(:where(.hextra-code-block code, …)) { overflow-wrap: break-word }`
+**directly on inline code**, and a direct declaration always outranks an
+inherited one. So the fold reached bare text in a cell and never reached a code
+span — and a code span is how every real docs table writes a field path. Both
+rules now carry a `th code, td code` arm.
+
+**Two columns, no cap, so nothing else bounded it.** `render-table.html` tags
+only 3+ column tables `.table-capped`, which is what `max-width: 24rem` hangs
+off. A 2-column table has neither the fold nor the cap, which is why this shape
+degrades furthest. Capped tables had the same unreachable fold, bounded to a
+smaller effect: extending the rule moved a Description column from 222px to
+274px on one fixture table and 256px to 270px on another, at 1280px.
+
+**The phone-width guard is deliberately asymmetric, and that is pinned.**
+`.table-capped` drops to `break-word` under 767px so its capped columns keep a
+collapse floor and cannot fold one character per line. Uncapped tables stay on
+`anywhere` at every width: their floor comes from having no cap squeezing the
+column, and reverting them at phone width was measured to reinstate the
+627px/38px split. Both halves are asserted.
+
+**Why the suite missed it.** Both existing capped fixtures put their long token
+in **bare text**, where the cell rule works. A scan of the fixture corpus found
+exactly one table cell with a backticked token of 30+ characters, and it is
+exactly 30 — too short to pin a column. The new fixture section, *Uncapped table
+long unbreakable code token*, is the first to test the code-span path.
+
+**Live evidence of the bug** on production today:
+[`/gateway/1.23.x/traffic-management/redirect/path/`](https://docs.solo.io/gateway/1.23.x/traffic-management/redirect/path/)
+— both `Setting | Description` tables on that page hold
+`spec.rules.filters.requestRedirect.path.replacePrefixPath` (57 chars) in the
+first column, verified in the served HTML. Measure the two columns at a 1280px
+viewport: the Setting column takes nearly the whole row before this release. A
+repo-wide scan of
+`solo-io/docs` found **76** such cells in 2-column tables; the 349 in 3+ column
+tables were already bounded by the cap.
+
+**Verified** by measuring in-browser rather than by inspection. New assertions
+in `table-display.spec.ts` fail against the previous CSS with the computed value
+reported as `break-word`, and pass after. Both brand suites run clean —
+2275 passed (OSS) and 2277 passed (enterprise), with one pre-existing
+`override-parity` failure for unrelated `docs` shadows (`reuse-append.html`,
+`version-banner.html`) that reproduces on an unmodified tree. The separate
+`code` rule carries only `overflow-wrap`, so a cell's padding and border are
+not inherited onto the code span.
 
 ---
 

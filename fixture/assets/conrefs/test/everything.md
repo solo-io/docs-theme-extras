@@ -736,6 +736,14 @@ Reproduces the agentgateway airgap `kgateway-image-versions.md` pattern: a 3+ co
 | --- | --- | --- |
 | MARKER_TABLE_CAPPED_MOBILE | us-docker.pkg.dev/solo-public/enterprise-agentgateway | agentgateway-enterprise |
 
+### Uncapped table long unbreakable code token
+
+The case the two capped fixtures above miss, and the reason the cell-level `overflow-wrap: anywhere` rule went years without doing anything for real content. Both fixtures above put their long token in **bare text**, where the rule on `th, td` applies and the fold works. Every real docs table backticks its field paths instead, and Hextra's prose styling sets `overflow-wrap: break-word` DIRECTLY on inline code in `.content`; a direct declaration beats an inherited one, so the cell rule never reached the code span. A 2-column table gets no `.table-capped` cap either, so the token's min-content width pinned the first column open and squeezed the second to nothing. Measured on the production page for this shape at 1280px: first column 627px, Description 38px, and the Description cell folded to 44 lines. `docs-theme-extras.css` now carries a `th code, td code` arm on both the unconditional fold and the phone-width capped guard. `table-display.spec.ts` probes this at 1280px and 375px.
+
+| Counter | Description |
+| --- | --- |
+| `MARKER_TABLE_UNCAPPED_CODE.solo.io.http.header_sanitization.responses_sanitized` | The number of responses that had at least one header removed. A response is counted once even when several stages remove headers from it. |
+
 ### Capped table prose description column
 
 The counterpart to the table above, and the reason the mobile rule must not use `white-space: nowrap`. This is the ordinary `Field | Type | Default | Description` reference shape that `.table-capped` is applied to en masse — across kgateway-oss, 25% of capped-table cells exceed 60 characters and the longest runs ~2750. Those Description cells must keep wrapping at phone width; forcing them onto one line turns a routine reference table into a multi-thousand-pixel horizontal scroll. `table-display.spec.ts` asserts at 375px that these cells still wrap and that the table stays within a sane multiple of the viewport.

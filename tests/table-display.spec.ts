@@ -275,6 +275,22 @@ async function probeWrapper(
       cellLines = tops.size;
     }
     const chars = cell ? (cell.textContent || "").trim().length : 0;
+    // Widths of the first row's cells. A cell-level fold is only observable as
+    // column sizing, so the uncapped-code-span block below asserts on these:
+    // an unfolded token pins its column at the token's min-content width and
+    // starves the rest of the row.
+    const firstRow = wrapper.querySelector("tbody tr");
+    const colWidths = firstRow
+      ? [...firstRow.children].map((c) =>
+          Math.round(c.getBoundingClientRect().width),
+        )
+      : [];
+    // Computed `overflow-wrap` on the inline code INSIDE the cell, which is a
+    // different value from the cell's own: Hextra declares it directly on
+    // `.content code`, so it does not inherit the cell's. This field is what
+    // distinguishes "the cell rule is right but never reaches the token" from
+    // "the fold is actually applied".
+    const code = cell ? cell.querySelector("code") : null;
     return {
       className: wrapper.className,
       clientW: wrapper.clientWidth,
@@ -282,6 +298,8 @@ async function probeWrapper(
       overflowX: getComputedStyle(wrapper).overflowX,
       cellWhiteSpace: cs ? cs.whiteSpace : null,
       cellOverflowWrap: cs ? cs.overflowWrap : null,
+      cellCodeOverflowWrap: code ? getComputedStyle(code).overflowWrap : null,
+      colWidths,
       cellLines,
       // Characters per rendered line. The single number that distinguishes the
       // two failure modes this file guards: a char-per-line fold drives it
@@ -371,5 +389,104 @@ test.describe("capped reference table at phone width: prose description", () => 
       ratio,
       `capped prose table is ${ratio.toFixed(1)}x the viewport at 375px — prose is not wrapping`,
     ).toBeLessThan(MAX_VIEWPORT_MULTIPLE);
+  });
+});
+
+// Uncapped (2-column) markdown table whose first column holds a long,
+// break-free token inside a CODE SPAN. This is the shape that the two capped
+// blocks above do not reach, and the gap that let the cell-level fold sit inert
+// against real content: both capped fixtures put their token in bare text,
+// where `.table-wrapper th, td { overflow-wrap: anywhere }` applies and the
+// fold works. Hextra's prose styling declares
+// `.content :where(code):not(…) { overflow-wrap: break-word }` DIRECTLY on
+// inline code, and a direct declaration outranks an inherited one, so the cell
+// rule never reached a backticked token — which is how every real docs table
+// writes its field paths.
+//
+// render-table.html tags only 3+ column tables `.table-capped`, so a 2-column
+// table has no `max-width` bound either: the token's min-content width pinned
+// column 1 open and starved column 2. Measured on kgateway 2.3.x response
+// header sanitization at 1280px, 627px/38px with the Description cell folded
+// to 44 lines; 253px/391px and 4 lines after. Production page showing the same
+// shape:
+// https://docs.solo.io/gateway/1.23.x/traffic-management/redirect/path/
+//
+// Asserted at both widths because the fix is deliberately ASYMMETRIC with the
+// capped rule above: capped tables drop to `break-word` under 767px to keep a
+// collapse floor against their `max-width`, while uncapped tables stay on
+// `anywhere` at every width. Reverting uncapped tables at phone width was
+// measured to reinstate the 627px/38px split, so this block pins that the
+// phone-width guard does NOT apply here.
+const UNCAPPED_ID = "uncapped-table-long-unbreakable-code-token";
+// Column 1 holds the token. Before the fix it took 97% of the row (627/645).
+const MAX_TOKEN_COL_SHARE = 0.55;
+// Column 2 holds the prose. Before the fix it got 6% (38/645).
+const MIN_PROSE_COL_SHARE = 0.35;
+
+test.describe("uncapped reference table: long code token folds", () => {
+  test.skip(!IS_FIXTURE_TARGET, "fixture-only content");
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("code span folds, so neither column starves", async ({ page }) => {
+    await page.goto(PAGE);
+    const r = await probeWrapper(page, UNCAPPED_ID, 1);
+    expect(r, ".table-wrapper for the uncapped code-token table not found").not.toBeNull();
+    // Guards the premise: if render-table.html ever caps 2-column tables, this
+    // block is measuring something else and the shares below stop meaning what
+    // their names say.
+    expect(
+      r!.className,
+      "2-column table is flagged .table-capped — this block assumes it is NOT capped",
+    ).not.toContain("table-capped");
+    // The mechanism, not just the symptom. A regression here almost certainly
+    // means Hextra's `.content code` rule out-specified the theme's again.
+    expect(
+      r!.cellCodeOverflowWrap,
+      "inline code in the cell is not on `overflow-wrap: anywhere` — Hextra's `.content code` rule is winning, so the token cannot fold",
+    ).toBe("anywhere");
+    const total = r!.colWidths.reduce((a, b) => a + b, 0);
+    expect(total, "no column widths measured").toBeGreaterThan(0);
+    const tokenShare = r!.colWidths[0] / total;
+    const proseShare = r!.colWidths[1] / total;
+    expect(
+      tokenShare,
+      `token column took ${(tokenShare * 100).toFixed(0)}% of the row (${r!.colWidths.join("/")}px) — the token is pinning the column open`,
+    ).toBeLessThan(MAX_TOKEN_COL_SHARE);
+    expect(
+      proseShare,
+      `description column got ${(proseShare * 100).toFixed(0)}% of the row (${r!.colWidths.join("/")}px) — it is being starved`,
+    ).toBeGreaterThan(MIN_PROSE_COL_SHARE);
+    expect(
+      r!.scrollW,
+      `uncapped table scrolls at 1280px (${r!.scrollW} > ${r!.clientW}) — it should fit the content width`,
+    ).toBeLessThanOrEqual(r!.clientW + 1);
+  });
+});
+
+test.describe("uncapped reference table at phone width", () => {
+  test.skip(!IS_FIXTURE_TARGET, "fixture-only content");
+  test.use({ viewport: { width: 375, height: 800 } });
+
+  test("stays folded at 375px and does not fold one char per line", async ({ page }) => {
+    await page.goto(PAGE);
+    const r = await probeWrapper(page, UNCAPPED_ID, 1);
+    expect(r, ".table-wrapper for the uncapped code-token table not found").not.toBeNull();
+    // The asymmetry with `.table-capped`, pinned deliberately: the phone-width
+    // `break-word` guard must not extend to uncapped tables.
+    expect(
+      r!.cellCodeOverflowWrap,
+      "uncapped table dropped to `break-word` at phone width — that reinstates the pinned-open column this release fixes",
+    ).toBe("anywhere");
+    expect(
+      r!.scrollW,
+      `uncapped table scrolls at 375px (${r!.scrollW} > ${r!.clientW})`,
+    ).toBeLessThanOrEqual(r!.clientW + 1);
+    // Without a `max-width` cap squeezing the column there is no char-per-line
+    // risk here (measured 122/177px over 7 lines at 375px), but assert it so a
+    // future cap on 2-column tables cannot land silently.
+    expect(
+      r!.cellCharsPerLine,
+      `token cell rendered at ${r!.cellCharsPerLine} chars/line over ${r!.cellLines} lines at 375px — that is the char-per-line fold`,
+    ).toBeGreaterThanOrEqual(MIN_CHARS_PER_LINE);
   });
 });
