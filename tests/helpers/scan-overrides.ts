@@ -246,6 +246,8 @@ const SLOT_OVERRIDES = new Set([
   "layouts/partials/docs/width-class.html",
   "layouts/partials/docs/content-class.html",
   "layouts/partials/docs/after-title.html",
+  "layouts/partials/docs/after-description.html",
+  "layouts/partials/docs/under-heading.html",
 ]);
 
 export function isSlotOverride(file: string): boolean {

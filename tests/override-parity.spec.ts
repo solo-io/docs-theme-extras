@@ -32,12 +32,32 @@ import { target } from "./helpers/target";
 // it does NOT run in CI — it is a pre-release check for a developer machine
 // (OVERRIDES.md step 1). The unit tests below DO run everywhere, because the
 // scanner's own correctness is the thing everything else rests on.
+//
+// That scope had a hole worth more than the scope note. With no clones present,
+// `scan()` was never called, `report` was `[]`, and the ratchet loop generated
+// ZERO tests — so in CI this was not a skipped check, it was an absent one.
+// Nothing in a green run said the most important assertion in the file had not
+// been evaluated, which is the same "a thing that did not run looks exactly
+// like a thing that passed" failure the spec exists to catch in CSS.
+//
+// The fix is the `cross-repo coverage` block at the bottom: one test that is
+// always generated on the fixture target and names every consumer that was not
+// scanned. It skips with those names on a developer machine that happens not to
+// have them all cloned, and FAILS when REQUIRE_CONSUMER_CLONES=1 — which the
+// release checklist sets, so a release cannot be cut on a run where this file
+// quietly checked nothing.
 
 const IS_FIXTURE_TARGET = target.name.startsWith("docs-theme-extras-fixture");
 const PARENT = path.resolve(process.cwd(), "..");
 const CLONES_PRESENT = CONSUMERS.filter((c) =>
   fs.existsSync(path.join(PARENT, c.dir)),
 ).map((c) => c.name);
+const CLONES_MISSING = CONSUMERS.filter(
+  (c) => !fs.existsSync(path.join(PARENT, c.dir)),
+).map((c) => c.name);
+// Set by the release checklist. Turns "these consumers were not scanned" from a
+// silent condition into a failing test.
+const REQUIRE_CLONES = process.env.REQUIRE_CONSUMER_CLONES === "1";
 
 type Entry = { samePath: string[]; duplicatedSelectors: string[] };
 const BASE = baseline.consumers as Record<string, Entry>;
@@ -279,6 +299,50 @@ test.describe("OVERRIDES.md matches the baseline", () => {
       "these overrides are frozen in the baseline but described nowhere. " +
         "A reader cannot tell whether they are deliberate or forgotten.",
     ).toEqual([]);
+  });
+});
+
+// ── Did the cross-repo half actually run? ───────────────────────────────────
+// The one test in this file that is generated whether or not any consumer is
+// cloned. Everything above is derived from `report`, which is empty when the
+// clones are absent, so without this block an empty run and a clean run are
+// indistinguishable.
+test.describe("cross-repo coverage", () => {
+  test.skip(!IS_FIXTURE_TARGET, "cross-repo check runs from the extras repo");
+
+  test("every consumer in the inventory was actually scanned", () => {
+    // On an ordinary developer run this skips, but it skips BY NAME: the reason
+    // string lists what went unchecked, so the gap appears in the report
+    // instead of being inferable only from a test count nobody counts.
+    test.skip(
+      !REQUIRE_CLONES && CLONES_MISSING.length > 0,
+      `not a release run — ${CLONES_MISSING.length} of ${CONSUMERS.length} consumer clones absent ` +
+        `(${CLONES_MISSING.join(", ")}), so the same-path and duplicated-selector ratchets ` +
+        `were NOT evaluated for them. Clone them next to docs-theme-extras, or set ` +
+        `REQUIRE_CONSUMER_CLONES=1 to make this a failure.`,
+    );
+    expect(
+      CLONES_MISSING,
+      `REQUIRE_CONSUMER_CLONES=1 is set, so every consumer must be present and ` +
+        `these are not: ${CLONES_MISSING.join(", ")}. A release cannot be cut on a ` +
+        `run where the cross-repo ratchet silently evaluated nothing — that is how ` +
+        `the hub's reuse-append.html and version-banner.html follow-ups were lost ` +
+        `for three releases. Clone the missing consumers as siblings of ` +
+        `docs-theme-extras and re-run.`,
+    ).toEqual([]);
+    // Non-vacuity. With every clone present the assertion above is trivially
+    // true, so assert the scan produced findings for each of them — a scanner
+    // that returned `missing` for a directory that exists would otherwise pass
+    // here and contribute nothing above.
+    const scanned = (IS_FIXTURE_TARGET && CLONES_PRESENT.length ? scan() : [])
+      .filter((c: { missing?: boolean }) => !c.missing)
+      .map((c: { name: string }) => c.name)
+      .sort();
+    expect(
+      scanned,
+      "the scanner reported no usable result for a consumer whose directory exists — " +
+        "its layouts/assets tree probably moved, and its ratchet is now inert",
+    ).toEqual([...CLONES_PRESENT].sort());
   });
 });
 

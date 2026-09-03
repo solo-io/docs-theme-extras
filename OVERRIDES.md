@@ -34,7 +34,7 @@ which is mechanism 2.
 
 ## Snapshot
 
-Current, 2026-08-07. "Duplicated selectors" counts REAL conflicts only — the consumer and
+Current, 2026-09-02. "Duplicated selectors" counts REAL conflicts only — the consumer and
 extras set at least one property in common. A selector they merely share the NAME of is not
 duplication and is not counted; see the note under kagent/ambientmesh for why that
 distinction mattered.
@@ -46,7 +46,7 @@ layouts, which is the opposite of the signal this table is for.
 
 | consumer | same-path shadows | slot overrides (OK) | duplicated selectors | of which divergent | contract divergences |
 |---|---|---|---|---|---|
-| docs | 2 | 0 | 0 | 0 | 1 |
+| docs | 4 | 0 | 0 | 0 | 1 |
 | kgateway-oss | 2 | 2 | 0 | 0 | 1 |
 | agentgateway-oss-website | 4 | 5 | 0 | 0 | 2 |
 | agentregistry-oss-website | 0 | 0 | 0 | 0 | 0 |
@@ -55,7 +55,7 @@ layouts, which is the opposite of the signal this table is for.
 
 ## Extension slots
 
-`layouts/partials/docs/{chrome-top,chrome-bottom,width-class,content-class,after-title}.html`
+`layouts/partials/docs/{chrome-top,chrome-bottom,width-class,content-class,under-heading,after-title,after-description}.html`
 are OVERRIDE POINTS. A consumer replacing one is using the module correctly; a consumer
 replacing `layouts/docs/single.html` is not. The distinction is the whole reason the slots
 were added — a forked layout silently stops receiving new module features, which cost
@@ -63,9 +63,10 @@ kgateway.dev a visible page subtitle on 856 pages. Full contract in [`MAINTAININ
 
 For history, the counts before this round of cleanup were: docs 8 shadows / 169 duplicated
 selectors, kgateway-oss 4 / 1, agentgateway-oss 9 / 12, agentregistry 1 / 0, kagent 0 / 13,
-ambientmesh 0 / 3. Unsanctioned template shadows are now **5 across all six consumers**,
-down from 22: 2 on docs, 1 on kgateway-oss, 2 on agentgateway-oss, 0 elsewhere. Every one
-that remains has a measured verdict saying why it stays. **CSS duplication is now zero everywhere except one deliberate brand
+ambientmesh 0 / 3. Unsanctioned template shadows are now **7 across all six consumers**,
+down from 22: 4 on docs, 1 on kgateway-oss, 2 on agentgateway-oss, 0 elsewhere. Every one
+that remains has a measured verdict saying why it stays — or, for two of the four on docs,
+a measured verdict saying it should go and has not yet. **CSS duplication is now zero everywhere except one deliberate brand
 font.** What remains is same-path template shadows, which are a separate and harder problem
 — several are load-bearing, not stale.
 
@@ -102,6 +103,17 @@ deleted in v0.2.0-beta.3 — see below.)
 |---|---|
 | `layouts/_shortcodes/card.html` | **KEEP — deleting BREAKS THE BUILD.** Its own header comment says why: "Hextra's card uses utils/icon.html (SVG lookup) but docs uses Material Icons font." The hub passes Material Icons names (`open_in_new`, `rocket`) and renders `<i class="material-icons">`; extras looks the name up in `site.Data.icons` and `errorf`s when absent. The hub's `data/icons.yaml` has **2 entries**, both product logos. Deleting produced `ERROR icon "open_in_new" not found` and a failed build. Same shape as the `link-hextra` forks: an adaptation to a different convention, not a stale copy |
 | `layouts/_shortcodes/cards.html` | **KEEP.** Pairs with `card.html`; same icon contract |
+| `layouts/_shortcodes/reuse-append.html` | **DELETE — verdict measured, action outstanding.** Extras adopted this shortcode in 0.3.3 and fixed its asset lookup for an assembled assets tree in 0.3.5, which is the only thing the hub's copy was doing differently. The deletion was verified on a real hub build at the time: with the hub's file removed and the module resolving, `agentgateway` builds exit 0 (2759 EN + 829 JA pages), and all 6 call sites on `standalone/latest/llm/providers/azure/` render a single joined `<table>` with zero stray pipe rows. The negative control was run first — deleting the file while pinned to 0.3.4 aborts the build — so the pin floor is real. The hub is pinned to **0.3.6**, above that floor, so this is actionable now. Extras' copy is also strictly more correct here: it resolves the version through `utils/version-root.html`, which distinguishes `version` from `linkVersion`, and those differ on two hub products |
+| `layouts/partials/version-banner.html` | **DELETE, BUT NOT ALONE — the deletion needs a config move in the same commit.** Extras added section-scoped banners in 0.3.5, so the file's own instruction ("DELETE THIS FILE once docs-theme-extras supports a section-scoped banner") is satisfied. The two implementations read **different config keys**, which is the trap: the hub's reads `[params.sections.standalone]`, extras' reads `[params.versions.sectionBanners.standalone]` on the matched version entry. Delete the file without moving the keys and the standalone preview banner silently disappears, and the version banner it was suppressing returns in its place — the same class of failure the override was written to fix, only inverted. The keys are duplicated in **three** config files (`hugo-agentgateway.toml`, `hugo-local-agentgateway.toml`, `hugo-preview-agentgateway.toml`), so all three need the move |
+
+**Why those last two are listed rather than left red.** Both were recorded as follow-ups in
+the 0.3.5 release notes — "both are deleted once this tag lands and the hub's pin is bumped."
+The tag landed, the pin went to 0.3.6, and the deletions did not happen. Nothing tracked them,
+because the one mechanism designed to track exactly this was left failing instead of
+baselined, and a spec that is always red is a spec everyone learns to scroll past. Entering
+them here reverses that: the suite goes green, and the ratchet's `stale` arm now fails the
+moment the hub deletes either file, forcing this inventory to be edited rather than quietly
+drifting. **They are accepted, not settled.** The verdict for both is delete.
 
 **Resolved (v0.2.0-beta.3):**
 
@@ -262,7 +274,7 @@ carries a measured verdict instead of a byte count.
 | `layouts/partials/docs/chrome-bottom.html` | **SLOT OVERRIDE — sanctioned.** `chatbot.html` |
 | `layouts/partials/docs/width-class.html` | **SLOT OVERRIDE — sanctioned.** `utils/page-width` plus the `agw-docs-topgap` hook class |
 | `layouts/partials/docs/content-class.html` | **SLOT OVERRIDE — sanctioned.** `hx:pt-2` rather than the default `hx:pt-6` |
-| `layouts/partials/docs/after-title.html` | **SLOT OVERRIDE — sanctioned.** `test-status-badge.html`. Inert today: that partial currently emits nothing on any page |
+| `layouts/partials/docs/under-heading.html` | **SLOT OVERRIDE — sanctioned.** `test-status-badge.html`. **Not inert, despite what this row said before 0.3.8.** The badge is gated on `.Params.test_status`, which no committed page carries — so a local build from source renders it zero times, which is what "inert" was measured against. CI injects the field into front matter (`make test-status` → `scripts/doc_test_inject_status.py`) before the production build, and only for the `latest` and `main` version trees (`TESTED_VERSIONS` in `scripts/doc_test_run.py`), so it is live on the real site: see [`/docs/kubernetes/latest/install/helm/`](https://agentgateway.dev/docs/kubernetes/latest/install/helm/). Moved here from `after-title.html` in 0.3.8 so the badge stays above the copy/context buttons when the title area stacks on a narrow viewport. Do not delete this slot as unused |
 | `layouts/_shortcodes/github-yaml.html` | **TRANSITIONAL — delete on the next pin bump.** Not drift in the usual direction: the module's copy was taken FROM this file, so agw shadowed the module the moment the module gained it. agw pins `v0.2.1`, which has no `github-yaml`, so deleting the fork before the pin moves breaks 22 pages. Delete it in the same PR that bumps the pin, then remove this row and the baseline entry. The module's copy is not byte-identical — it fixes a `path.Dir`-derived `base_url` that emitted `https:/host/…` with one slash, and its dead-URL branch now `errorf`s instead of warning |
 | `layouts/_shortcodes/reuse-append.html` | **TRANSITIONAL — delete on the next pin bump.** Same situation and same deadline as `github-yaml` above. 2 call sites, both in `llm/providers/azure.md`. The module's copy is behaviourally identical; only the doc comment grew |
 | ~~`layouts/_shortcodes/openapi.html`~~ | **DELETED 2026-08-17 — it was emitting invalid HTML.** Affects **7** pages, not the 2 recorded here before. Measured by deleting the fork and diffing the whole build: exactly those 7 pages change out of 2,237, nothing else. The fork emits a complete standalone document *inside* the docs page template, so every one of those pages shipped with **2 `<!doctype>`, 2 `<html>` and 2 `<body>` tags**; extras' version emits a fragment and the page has 1 of each. Browser-checked side by side on `/docs/kubernetes/latest/llm/guardrails/webhook/openapi-spec/`: both render Swagger UI with 2 operations and the same live title ("GuardRail Webhook API 0.1.0 OAS 3.1"), and both carry the same 2 pre-existing `invalid_request` page errors, so nothing regressed. Extras' version is also a strict superset on network resilience (`try` 6 vs 2, `timeout` 5 vs 4, `warnf` 5 vs 3, `GetRemote` 4 vs 1, plus a client-side unpkg fallback) and adds `src=` for a local spec. `make framework-test` after deletion: 2455 passed, 0 failed (4 flaky, all `console-errors` on unrelated pages) |
@@ -416,10 +428,31 @@ together as a **one-way ratchet**:
 siblings. It is a pre-release check for a developer machine. The scanner's own unit tests
 do run everywhere, since a false negative there disarms everything else.
 
+That scope note used to be the whole story, and it hid something worse than a gap in
+coverage. With no clones present the scanner was never called, so the ratchet generated **no
+tests at all** — a CI run reported nothing, not even a skip, and a green suite looked
+identical whether the most important assertion in the file had passed or had never been
+evaluated. `cross-repo coverage › every consumer in the inventory was actually scanned` closes
+that: it is generated on every fixture run, it skips **by name** when a clone is absent, and
+it **fails** when `REQUIRE_CONSUMER_CLONES=1`. Set that variable for any release run.
+
+**Never leave this spec red as a way of tracking work.** A permanently failing check is
+indistinguishable from a broken one, and everybody learns to scroll past both. The hub's
+`reuse-append.html` and `version-banner.html` were tracked that way for three releases and
+their follow-ups were lost. If a shadow should go but has not gone, baseline it and write the
+verdict in the table above — the `stale` arm then fails the day it is finally deleted, which
+is the reminder you actually wanted.
+
 ## How to use this before shipping a theme change
 
-1. Run `npm run scan:overrides` and `npx playwright test --project=static --grep
-   "override-parity"`, and confirm nothing new appeared.
+1. Run `npm run scan:overrides`, then the ratchet with the release flag set:
+
+   ```bash
+   REQUIRE_CONSUMER_CLONES=1 make test-oss
+   ```
+
+   Confirm nothing new appeared, and that `cross-repo coverage` **passed** rather than
+   skipped — a skip means one or more consumers went unchecked and names them.
 2. For every file or selector the change touches, check this inventory for a shadow.
 3. If a shadow exists, the consumer needs a paired change in the same release — a pin bump
    alone will not take effect, and may make things worse (see the ordered-list fix).

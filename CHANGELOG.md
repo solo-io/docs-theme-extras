@@ -5,8 +5,13 @@ All notable changes to `docs-theme-extras` are documented here.
 The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html):
 
-- **Patch** — non-breaking layout, CSS, or shortcode-internal fix.
-- **Minor** — new shortcode, new partial, or a Hextra minor bump.
+- **Patch** — non-breaking layout, CSS, or shortcode-internal fix. Adding an
+  empty extension slot belongs here: a slot that no consumer overrides renders
+  nothing, so the release is byte-identical for everyone who ignores it.
+- **Minor** — new shortcode, a new partial that consumers are expected to
+  *call*, or a Hextra minor bump. The test is whether the addition changes
+  rendered output for a consumer who does nothing. A new empty slot does not
+  (that is Patch); a partial that starts emitting markup does.
 - **Major** — Hextra major bump, or any change that requires content edits
   in consumer repos (renamed shortcodes, removed args, new required params).
 
@@ -19,6 +24,416 @@ mode) so a future reader understands the reason without digging through the diff
 must also link to a production page that shows the bug or the fix (for additive features with
 no single defect page, link a representative page where the new behavior is observable and say
 how to verify it, e.g. view-source or a validator). State how the change was verified.
+
+---
+
+## [0.3.8] — 2026-09-02
+
+**Scope of this release.** Five entries. One breaking change — a prose-column
+extension slot moves to where its name says it renders — plus a new slot inside
+the heading column, which is where the badge that prompted the move actually
+belongs. Then two fixes to shipped behavior: the PDF download item on a
+version-less site, and table column sizing for backticked tokens. Then two
+fixes to the guards themselves, both of the same kind: a check that was not
+running looked identical to a check that passed. The cross-repo override ratchet
+generated zero tests when no consumer was cloned, and the reference-routing
+guard compared href strings without ever asking whether the page on the other
+end exists.
+
+**The one consumer action.** Bumping the pin requires the paired
+agentgateway.dev override rename described in the breaking entry below. The pin
+bump alone leaves the mobile badge order wrong.
+
+**Why a patch bump carries a Breaking heading, and why two new partials do not
+make it a minor.** Both questions are settled by the versioning rules at the top
+of this file, which were clarified in this release to say out loud what they had
+been relied on to mean.
+
+On **Major**: it is reserved for "any change that requires content edits in
+consumer repos". No consumer is *required* to edit anything — an override left at
+`after-title.html` keeps working, keeps rendering, and its content moves up under
+the `<h1>` on the pin bump. The rename described below is how agentgateway.dev
+gets the *better* mobile order, not how it avoids a break. Nothing regresses if
+it is skipped except the narrow-viewport ordering, which was already wrong.
+
+On **Minor**: it covers a new partial "that consumers are expected to *call*",
+and the test is whether the addition changes rendered output for a consumer who
+does nothing. `after-description.html` and `under-heading.html` are both empty
+by default, so a consumer who ignores them builds byte-identically — measured,
+across all 107 fixture pages, not assumed. Two empty slots are a patch.
+
+The Breaking heading stays anyway, because the rules are about consumer *edits*
+and this change is about consumer *output*. A slot's position is part of its
+contract: anyone overriding `after-title` gets different rendered output from an
+unchanged override, and the only way to notice is to look at a page. Nothing in
+the versioning rules covers that case, so it gets the loudest heading available
+inside a patch rather than being left to a reader who skims section titles.
+
+### Breaking — `docs/after-title.html` rendered after the DESCRIPTION, not after the title (`layouts/docs/single.html`, `layouts/partials/docs/after-title.html`, `layouts/partials/docs/after-description.html`, `tests/slot-order.spec.ts`, `tests/helpers/scan-overrides.ts`, `playwright.config.ts`, `MAINTAINING.md`, `OVERRIDES.md`)
+
+The slot added in 0.2.0-beta.3 to get agentgateway.dev out of forking
+`docs/single.html` was called `after-title` and placed after the page
+description. Its own file said so — "after the page title and description" —
+so the name and the docstring disagreed, and the name is the part anyone reads
+at the call site.
+
+**What that cost.** agentgateway.dev is the only consumer overriding it, for the
+doc-test "Verified" badge. The fork the slot replaced rendered
+`<h1>` → badge → description; adopting the slot silently moved the badge below
+the subtitle. Nothing failed: the build was green, no Hugo warning, no spec
+touched it, and the badge is invisible in a local build from source because it
+is gated on `.Params.test_status`, a field CI injects into front matter
+(`make test-status`) and no committed page carries. The regression was reported
+by a human who remembered what the page used to look like. Live evidence of the
+old order, on production today:
+[`/docs/kubernetes/latest/install/helm/`](https://agentgateway.dev/docs/kubernetes/latest/install/helm/)
+— view-source shows `<p class=page-description>…</p><span class="test-status-badge …">`.
+
+**The behavior moved to meet the name, not the reverse.** Renaming the slot to
+`after-description` was the other option and it is worse: `after-title` is the
+correct name for a slot that follows the title, and burning the good name on the
+wrong position leaves the next person with the same trap. So the slot moved up,
+and the old position became a new empty slot, `docs/after-description.html`, so
+the change takes nothing away — a consumer that genuinely wants furniture below
+the subtitle still has a supported place for it instead of being pushed back into
+forking the layout. No consumer overrides the new slot today; that is expected.
+
+**What a consumer has to do.** For the slot move considered alone, nothing: an
+override already living at `layouts/partials/docs/after-title.html` keeps
+working and its content moves up under the `<h1>` on the pin bump. If you were
+relying on the old position, rename your file to `after-description.html` and
+you are back to byte-identical output. Check with `npm run scan:overrides`,
+which now reports both slots as sanctioned.
+
+**But do not read that as "this release needs no consumer change."** It does, in
+the only case that exists. `after-title` turned out not to be the right home for
+the badge either, and the `under-heading` entry below explains why: moving the
+badge above the description fixes the wide-viewport order and leaves the narrow
+one wrong. A consumer that bumps the pin and leaves its override at
+`after-title.html` therefore gets **heading → badge → description** on desktop
+but **heading → Copy as Markdown → badge → description** at 390px — the mobile
+bug the `under-heading` entry claims to fix, still present.
+
+So the pin bump is paired with an override rename, and the two land together:
+agentgateway.dev deletes `layouts/partials/docs/after-title.html`, adds
+`layouts/partials/docs/under-heading.html` calling the same
+`test-status-badge.html`, and drops the `margin-top: -1.25rem` and its
+`>=640px` media query from `assets/css/custom.css` (branch `kkb-badge-fix`).
+Merging the pin bump without that rename is the one way to make this release
+visibly worse than the one before it.
+
+**Byte-identity preserved, and measured rather than assumed.** Both slots default
+to empty, and `single.html`'s header promises an empty slot produces output
+identical to the pre-slot layout. Verified by building both brands before and
+after the move and diffing the trees: all **107** fixture pages identical in
+each, with the sole difference being the `Generated on …` timestamp in
+`test/llms.txt`, eight seconds apart between the two runs.
+
+**Covered by `tests/slot-order.spec.ts`** (4 tests, registered in the `static`
+project — a spec absent from that allowlist silently never runs). Three are
+source lints over `layouts/docs/single.html`: landmark ordering, the exact
+whitespace glue the byte-identity guarantee depends on, and that both slot
+defaults stay empty. The fourth asserts on the built fixture that nothing sits
+between the title block and the description while both slots are unoverridden.
+
+The position is pinned in SOURCE rather than end-to-end, and that is a real
+limitation stated plainly. Covering it in rendered HTML needs the fixture to
+override a slot, and it structurally cannot: `hugo-oss.toml` mounts `layouts`
+before `fixture/layouts`, so the module's own default wins the filename
+conflict. Confirmed by trying it — a probe partial at
+`fixture/layouts/partials/docs/after-title.html` rendered **zero** times in a
+clean build. Making the fixture win means letting it shadow any module partial,
+a much larger hole than this test is worth. Per `tests/HAZARDS.md` the tests are
+mutation-checked rather than assumed correct: reverting `single.html` to the old
+order reds exactly the two ordering tests and leaves the other two green.
+
+### Add — `docs/under-heading.html`, a slot INSIDE the heading column (`layouts/docs/single.html`, `layouts/partials/docs/under-heading.html`, `tests/slot-order.spec.ts`, `tests/helpers/scan-overrides.ts`, `MAINTAINING.md`, `OVERRIDES.md`)
+
+Purely additive; no consumer has to do anything.
+
+**Why a third slot rather than reusing `after-title`.** Moving the badge above
+the description fixed the wide-viewport order but not the narrow one. The title
+area is a flex container — heading column left, copy/context buttons right — and
+below Hextra's `sm` breakpoint it is `flex-col`, so the buttons stack under the
+heading. `after-title` renders after that whole container closes, so on a phone
+the order was **heading → Copy as Markdown → badge → description**: the badge
+had jumped the description but was still stranded below a button it should sit
+above. Measured on the real agentgateway build at 390px before the fix — heading
+bottom 299, button 327–358, badge 382–405.
+
+CSS cannot fix that. The badge and the title container are siblings, so no
+`order` value reaches across them, and the only shared parent is `.content`,
+which holds the entire page body. The badge has to be rendered inside the
+heading column, and that needs a slot there.
+
+**It also deletes a magic number.** From `after-title` the badge sat below a flex
+row whose height is set by the buttons, so pulling it up under the heading took
+`margin-top: -1.25rem` calibrated against the button height and scoped to
+`>=640px` — wrong the day that control changes size. From `under-heading` the
+badge is a normal block in the heading column and its spacing is its own
+margins. agentgateway.dev moved its override to the new slot and dropped the
+negative margin and the media query with it. Measured after, at 390px:
+**heading → badge → button → description**, with the whitespace before the
+description falling after the button rather than stranding it.
+
+**Two behaviors to know before using it.** At `sm` and up the container is
+`items-center`, so content added here makes the left column taller and the
+buttons re-centre against it — `after-title` cannot move the buttons, this slot
+can. And this is the only slot of the three that sits inside the `if .Title`
+branch, so it does not render on a page with no title; there is no heading
+column to render into.
+
+Byte-identity holds on the same measurement as the breaking change above: with
+the slot empty, both brands build byte-identical to the pre-slot tree across all
+**107** fixture pages, timestamp line excluded. `tests/slot-order.spec.ts` grew
+the slot into its landmark ordering, its glue assertion and its empty-default
+check; still 4 tests, all green.
+
+### Fix — the download item was unreachable on a site with no versions (`layouts/partials/copy-markdown.html`, `hugo-flat.toml`, `tests/pdf-download-flat.spec.ts`, `playwright.config.ts`)
+
+`copy-markdown.html` resolves the book root through `utils/version-root.html`,
+which fills `docsSection` **only** when it matched a version segment in the URL.
+A flat site has no such segment, so the field came back empty, the `with` wrapping
+the whole menu item never opened, and no `params.pdfDownload` configuration could
+produce a link. ambientmesh.io is that site: one book for its entire `/docs/`
+tree, no versions anywhere. Setting `distribution = "oss"` and building produced
+the item **zero** times, with the build green, no Hugo warning, and a correctly
+rendered book document — nothing reports a menu item that failed to render.
+
+It also could not have worked even if the gate had opened. `{version}` is
+substituted from `$vr.currentVersion`, empty on a flat site, so the URL would have
+been `ambientmesh-oss-.pdf`.
+
+**Fixed in `copy-markdown.html` alone, deliberately.** The obvious repair is to
+teach `version-root.html` to fill `docsSection` for an unversioned site, and it is
+the wrong one: that field is also read by `sidebar.html` and `docs-tabs.html`,
+which currently take the "no version root" path on a flat site and render
+correctly. Filling it would change what both do on **every** flat consumer, to fix
+a link. The fallback is `.FirstSection`, and it is reached only when
+`version-root.html` found no version — inside a versioned subtree that property
+returns the product rather than the version root, which is the documented reason
+the versioned path does not use it.
+
+**The section prefix survives, and the ordering is the whole of it.** A flat site
+substitutes `latest` for the missing segment, and doing that *after* the section
+prefix is applied overwrites it, so every doc set on the site collapses onto one
+`<product>-<distribution>-latest.pdf`. That is the exact collision the prefix
+exists to prevent, and it is silent, because both URLs are well formed. The flat
+fixture registers four sections so the difference is observable:
+`flatprod-oss-alpha-latest`, not `flatprod-oss-latest`.
+
+**Verification.** `tests/pdf-download-flat.spec.ts` is new, and registered in the
+`static` project's `testMatch` — this repo gates that project on a per-filename
+allowlist, so an unregistered spec silently never runs. Seven assertions: the
+opted-in section root and a leaf page beneath it both carry the item, the section
+prefix is not dropped, three sibling doc sets that publish no book carry nothing,
+the home page carries nothing, opting into `book` does not cost the section its
+`index.xml`, and `hugo-flat-root.toml` — the same content with no `pdfDownload`
+table — still shows no item, so a bug that emitted the link unconditionally on
+flat sites could not pass.
+
+Both bugs were then reintroduced to confirm the spec catches them: removing the
+`.FirstSection` fallback fails 3 of the 7, and moving the `latest` substitution
+after the section prefix fails "the section prefix is not dropped" with that
+message. Full suite green on both brands at the release head — **2288 passed on
+OSS and 2290 on enterprise**, no failures. (Earlier drafts of this entry recorded
+2,269 / 2,271 with one `override-parity` failure outstanding; that failure was
+the missing-baseline bug fixed later in this same release — see the
+`override-baseline.json` entry below — so it no longer reproduces and the counts
+have moved with the specs added since.) The versioned path was checked against a real consumer rather than only
+the fixture: kgateway.dev still emits
+`kgateway-oss-envoy-latest.pdf` on `/docs/envoy/latest/` and still emits nothing
+on `/docs/envoy/2.3.x/`.
+
+`hugo-flat.toml` also gains an `[outputFormats.book]` block. That is not
+redundant with the module's own declaration: this build passes
+`--config hugo-flat.toml`, which replaces Hugo's default config lookup, and extras
+does not import itself, so there is no module config to merge from — the same copy
+and the same reason as `hugo-{oss,enterprise}.toml`. Without it the build fails
+outright rather than skipping the book:
+
+```
+failed to resolve output formats [html rss book]: OutputFormat with key "book" not found
+```
+
+> [!WARNING]
+> **A root-level `cascade` in a TOML config must sit above every table header.**
+> A bare `key = value` line belongs to whichever table precedes it, so a `cascade`
+> written after `[markup]` becomes `markup.cascade`, and after
+> `[outputFormats.book]` becomes `outputFormats.book.cascade`. Neither is an
+> error. Both parse, build, and do nothing at all — the pages never receive the
+> `outputs` the cascade was supposed to give them. This bit twice while wiring the
+> fixture, in both of those exact positions, and the only symptom was a `book.html`
+> that was never written. It is the same hazard the `[params.pdfDownload]` note
+> further down describes, in the opposite direction.
+
+**Verify on the live site** at [ambientmesh.io/docs/](https://ambientmesh.io/docs/):
+open the Copy-as-Markdown menu at the top of the page. Today it offers Copy and
+Print only; with this release and `params.pdfDownload` set it gains **Download all
+docs (PDF)**, pointing at the `ambientmesh-oss-latest` release asset. There is no
+pre-existing defect page to link, because the item has never rendered anywhere on
+that site.
+
+### Fix — a backticked token in a table cell pinned its column open, starving the rest of the row (`assets/css/docs-theme-extras.css`, `fixture/assets/conrefs/test/everything.md`, `tests/table-display.spec.ts`, `tests/helpers/gate-containment.json`)
+
+Reference tables put long dotted identifiers in the first column, in code spans.
+Where that token has no break opportunity, the column was sized to the whole
+token and every other column got what was left. On kgateway 2.3.x response
+header sanitization at a 1280px viewport, the first column measured **627px of a
+645px row, leaving 38px** for Description, which folded that sentence to **44
+lines**. The table also overflowed its wrapper, so the row read as one tall
+column of text beside a sliver.
+
+**The cell rule for this already existed and had never applied to real content.**
+`.table-wrapper th, td` has carried `overflow-wrap: anywhere` for exactly this
+purpose, with a comment explaining that `anywhere` rather than `break-word` is
+what feeds the table algorithm's intrinsic-width calculation. It was correct and
+unreachable: Hextra's prose styling declares
+`.content :where(code):not(:where(.hextra-code-block code, …)) { overflow-wrap: break-word }`
+**directly on inline code**, and a direct declaration always outranks an
+inherited one. So the fold reached bare text in a cell and never reached a code
+span — and a code span is how every real docs table writes a field path. Both
+rules now carry a `th code, td code` arm.
+
+**Two columns, no cap, so nothing else bounded it.** `render-table.html` tags
+only 3+ column tables `.table-capped`, which is what `max-width: 24rem` hangs
+off. A 2-column table has neither the fold nor the cap, which is why this shape
+degrades furthest. Capped tables had the same unreachable fold, bounded to a
+smaller effect: extending the rule moved a Description column from 222px to
+274px on one fixture table and 256px to 270px on another, at 1280px.
+
+**The phone-width guard is deliberately asymmetric, and that is pinned.**
+`.table-capped` drops to `break-word` under 767px so its capped columns keep a
+collapse floor and cannot fold one character per line. Uncapped tables stay on
+`anywhere` at every width: their floor comes from having no cap squeezing the
+column, and reverting them at phone width was measured to reinstate the
+627px/38px split. Both halves are asserted.
+
+**Why the suite missed it.** Both existing capped fixtures put their long token
+in **bare text**, where the cell rule works. A scan of the fixture corpus found
+exactly one table cell with a backticked token of 30+ characters, and it is
+exactly 30 — too short to pin a column. The new fixture section, *Uncapped table
+long unbreakable code token*, is the first to test the code-span path.
+
+**Live evidence of the bug** on production today:
+[`/gateway/1.23.x/traffic-management/redirect/path/`](https://docs.solo.io/gateway/1.23.x/traffic-management/redirect/path/)
+— both `Setting | Description` tables on that page hold
+`spec.rules.filters.requestRedirect.path.replacePrefixPath` (57 chars) in the
+first column, verified in the served HTML. Measure the two columns at a 1280px
+viewport: the Setting column takes nearly the whole row before this release. A
+repo-wide scan of
+`solo-io/docs` found **76** such cells in 2-column tables; the 349 in 3+ column
+tables were already bounded by the cap.
+
+**Verified** by measuring in-browser rather than by inspection. New assertions
+in `table-display.spec.ts` fail against the previous CSS with the computed value
+reported as `break-word`, and pass after. Both brand suites run clean —
+**2288 passed (OSS) and 2290 passed (enterprise), no failures**, re-measured at
+the release head after the `override-baseline.json` fix below removed the
+`override-parity` failure that earlier drafts of this entry reported as
+pre-existing. The separate
+`code` rule carries only `overflow-wrap`, so a cell's padding and border are
+not inherited onto the code span.
+
+### Fix — the cross-repo override ratchet generated ZERO tests when no consumer was cloned (`tests/override-parity.spec.ts`, `tests/helpers/override-baseline.json`, `OVERRIDES.md`, `RELEASE.md`)
+
+`override-parity.spec.ts` is the guard that stops consumer repos from
+re-accumulating the same-path template shadows and duplicated CSS that
+[`OVERRIDES.md`](./OVERRIDES.md) spent several releases clearing out. Its
+cross-repo half derives every assertion from `scan()`, which walks sibling
+consumer clones — and when those clones are absent, `report` is `[]` and the
+generating loop produces **no tests at all**. So in CI the most important
+assertion in the file was not skipped, it was never evaluated, and a green run
+looked exactly like a checked one. That is the same
+"absent reads as passing" failure mode this release's `slot-order` note warns
+about for the `static` allowlist, on a spec that was written to catch drift.
+
+**How it went wrong in practice, which is why this is a Fix and not a chore.**
+Two hub overrides — `layouts/_shortcodes/reuse-append.html` and
+`layouts/partials/version-banner.html` — were recorded as 0.3.5 follow-ups
+("both are deleted once this tag lands and the hub's pin is bumped"). The tag
+landed, the hub's pin went to 0.3.6, and the deletions never happened. Nothing
+caught it, because the mechanism designed to catch exactly this was left
+**failing** rather than baselined, and an always-red spec is one everyone learns
+to scroll past. Both files are still in the hub today; the standalone docs they
+affect are live, e.g.
+[`/agentgateway/standalone/latest/llm/providers/azure/`](https://docs.solo.io/agentgateway/standalone/latest/llm/providers/azure/),
+whose joined `reuse-append` tables are the pages that verified the deletion was
+safe in the first place.
+
+**What changed.** Three things, each closing one arm of the hole:
+
+- Both files are now entered in `override-baseline.json` as **accepted, not
+  settled** — the verdict for both is still *delete*, recorded in `OVERRIDES.md`
+  with the measurement behind it. Listing them is what makes the ratchet's
+  `stale` arm work: the day the hub deletes one, the stale assertion fails and
+  forces this inventory to be edited, so the follow-up cannot be dropped a third
+  time. Leaving them out was the original mistake.
+- A new `cross-repo coverage` block generates **one test that always exists** on
+  the fixture target and names every consumer that went unscanned. On a developer
+  machine missing a clone it skips *by name*, so the gap lands in the report
+  instead of being inferable only from a test count nobody reads.
+- That test **fails** under `REQUIRE_CONSUMER_CLONES=1`, and
+  [`RELEASE.md`](./RELEASE.md) step 1 now sets it. The spec's own comment already
+  claimed "the release checklist sets it" while the checklist never mentioned the
+  variable — so a release could be cut on a run where this file checked nothing.
+  Now it cannot.
+
+**Verified** with all six consumer clones present as siblings: the coverage test
+runs rather than skips, and the same-path and duplicated-selector ratchets are
+evaluated for `docs`, `kgateway-oss`, `agentgateway-oss-website`,
+`agentregistry-oss-website`, `kagent-oss-website` and `ambientmesh.io` —
+2288 passed on OSS, 2290 on enterprise, with `override-parity` green for the
+first time in three releases. Non-vacuity is asserted inside the new test
+itself: with every clone present the "nothing missing" check is trivially true,
+so it additionally requires the scanner to have produced a usable result per
+consumer, which a scanner returning `missing` for an existing directory would
+fail. Break-tested by moving a clone aside (skips, naming it) and by re-running
+with `REQUIRE_CONSUMER_CLONES=1` against the same tree (fails, naming it).
+
+### Fix — the reference-routing guard compared strings to strings and could not tell a well-formed URL from a real page (`tests/link-hextra-apiref.spec.ts`, 15 new `reference/cel` and `reference/api-kubespec` fixture pages across `v1`, `v2` and `main`)
+
+The `link-hextra` fix that stopped `reference/api-*` sibling sections being
+mangled into the single-page `reference/api` — and collapsed agentgateway's
+split `reference/cel/{variables,yaml-and-examples}/` onto the enterprise
+one-pager — shipped earlier and is unchanged here. What ships in 0.3.8 is the
+half that was missing: proof that each rewritten path points at a page that
+**exists**.
+
+**Why string assertions were not enough.** Every assertion in that spec pinned
+an href string, and the production bug it was written for was
+`/reference/api/api-kubespec/policies/` — a URL that is well-formed, looks
+correct in a diff, and exists on no build. A spec comparing a string to a string
+cannot catch that, because both sides are written by the same person at the same
+time from the same wrong idea. The bad path is still live today, reachable from
+the `crossAppAccess` field link on
+[`/agentgateway/2026.7.1/security/backend-authn-cross-app-access/`](https://docs.solo.io/agentgateway/2026.7.1/security/backend-authn-cross-app-access/)
+— [the target itself returns 404](https://docs.solo.io/agentgateway/2026.7.1/reference/api/api-kubespec/policies/)
+(confirmed 404 on 2026-09-03, while
+[`/reference/api/`](https://docs.solo.io/agentgateway/2026.7.1/reference/api/)
+returns 200), and it stays broken on the hub until it bumps its extras pin. The
+CEL side is verifiable the same way: the page the collapse targets,
+[`/agentgateway/latest/reference/cel/`](https://docs.solo.io/agentgateway/latest/reference/cel/),
+publishes the `#functions-policy-all` anchor the rebased OSS pages link to.
+
+**What changed.** A third `describe` block resolves every one of the nine
+markers through `target.fileForUrl()` and asserts (1) Hugo actually built that
+file and (2) the fragment the link carries appears as an `id` on it — matched
+quote-agnostically, because `--minify` strips attribute quotes, and matched
+against explicit `{#…}` attributes rather than Goldmark slugs, since the inbound
+anchors are names like `policy.all` and `TypeA`. The 15 new fixture pages exist
+for exactly this. They are built `build: {list: never, render: always}` so they
+stay out of the sidebar and card listings — and therefore out of every other
+spec's expected page counts — while still being real files with real anchor ids.
+
+**Verified**: `link-hextra-apiref.spec.ts` runs 36 tests across both brands, all
+green. The block is non-vacuous by construction, which was checked rather than
+assumed — without it the nine string assertions pass unchanged if the entire
+fixture subtree is deleted, so the fixture pages carried no test signal at all
+before. The failure messages name the distinction the spec exists to draw: a
+rewrite producing a valid URL for a page that does not exist, and a link that
+resolves while its fragment dangles — neither of which a link checker configured
+for pages alone reports.
 
 ---
 

@@ -1,0 +1,34 @@
+{{- /*
+  EXTENSION SLOT — content injected INSIDE the heading's own column, directly
+  below the `<h1>` and below the release badges (`page-badges`), if any.
+
+  DEFAULT: nothing.
+
+  HOW THIS DIFFERS FROM `after-title.html`, which is the only reason both exist.
+  The title area is a flex container with two children: the heading column on
+  the left, the copy/context buttons on the right. `after-title` renders AFTER
+  that whole container closes; this slot renders INSIDE its left child. On a
+  wide viewport the two look almost the same — both land under the heading —
+  and the difference only shows up in two places:
+
+    - NARROW VIEWPORTS. The container is `flex-col` below Hextra's `sm`
+      breakpoint, so the buttons stack UNDER the heading. Content in
+      `after-title` therefore falls BELOW the buttons; content in this slot
+      stays directly under the heading, above them.
+    - VERTICAL CENTRING. At `sm` and up the container is `items-center`, so
+      anything added here makes the left column taller and the buttons re-centre
+      against it. `after-title` cannot move the buttons.
+
+  Pick this one for a per-page marker that belongs to the TITLE (a status chip,
+  a "verified" badge). Pick `after-title` for something that belongs to the PAGE
+  and should span its full width — that slot is not constrained by the heading
+  column's width.
+
+  RENDERED ON DETAIL PAGES ONLY (`docs/single.html`), and only when the page has
+  a title at all — it sits inside the `if .Title` branch, unlike the other two
+  prose-column slots, which run regardless. A page with no title has no heading
+  column for this to render into.
+
+  TO OVERRIDE: create `layouts/partials/docs/under-heading.html` in the
+  consumer. Note `partials/`, not `_partials/`.
+*/ -}}

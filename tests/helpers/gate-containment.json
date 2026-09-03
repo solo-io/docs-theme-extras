@@ -141,10 +141,12 @@
     "MARKER_TAB_BLANKFENCE_BEFORE": "div.hextra-max-page-width > article > main > div.content > div > div.hextra-tabs-panel > div.hextra-code-block > div > div.highlight > pre > code > span.line > span.cl > span.c1",
     "MARKER_TAB_BLANKFENCE_PROSE": "div.hextra-max-page-width > article > main > div.content > div > div.hextra-tabs-panel > p",
     "MARKER_TAB_YAML": "div.hextra-max-page-width > article > main > div.content > div > div.hextra-tabs-panel > p",
+    "MARKER_TABLE_CAPPED_CODE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td > code",
     "MARKER_TABLE_CAPPED_MOBILE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_CAPPED_PROSE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_ROW1A": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_ROW1B": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
+    "MARKER_TABLE_UNCAPPED_CODE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td > code",
     "MARKER_TABLE_VERSION_ROW_ANGLE_BASELINE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_VERSION_ROW_BASELINE_FEATURE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_VERSION_ROW_KEEPVERSION_BASELINE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
@@ -299,10 +301,12 @@
     "MARKER_TAB_BLANKFENCE_BEFORE": "div.hextra-max-page-width > article > main > div.content > div > div.hextra-tabs-panel > div.hextra-code-block > div > div.highlight > pre > code > span.line > span.cl > span.c1",
     "MARKER_TAB_BLANKFENCE_PROSE": "div.hextra-max-page-width > article > main > div.content > div > div.hextra-tabs-panel > p",
     "MARKER_TAB_YAML": "div.hextra-max-page-width > article > main > div.content > div > div.hextra-tabs-panel > p",
+    "MARKER_TABLE_CAPPED_CODE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td > code",
     "MARKER_TABLE_CAPPED_MOBILE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_CAPPED_PROSE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_ROW1A": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_ROW1B": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
+    "MARKER_TABLE_UNCAPPED_CODE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td > code",
     "MARKER_TABLE_VERSION_ROW_ANGLE_BASELINE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_VERSION_ROW_BASELINE_FEATURE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_VERSION_ROW_KEEPVERSION_BASELINE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
@@ -318,6 +322,10 @@
     "MARKER_VERSION_SEQ_MAIN": "div.hextra-max-page-width > article > main > div.content > p",
     "MARKER_VERSION_WRAPAROUND_": "div.hextra-max-page-width > article > main > div.content > p > code"
   },
+  "main/reference/api-kubespec/policies": {
+    "MARKER_APIREF_PAGE_KUBESPEC": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_APIREF_SIBLING": "div.hextra-max-page-width > article > main > div.content > p"
+  },
   "main/reference/api/api": {
     "MARKER_APIREF_AGW": "div.hextra-max-page-width > article > main > div.content > p",
     "MARKER_APIREF_PAGE_AGW": "div.hextra-max-page-width > article > main > div.content > p"
@@ -330,6 +338,20 @@
     "MARKER_APIREF_ENT": "div.hextra-max-page-width > article > main > div.content > p",
     "MARKER_APIREF_NODOUBLE": "div.hextra-max-page-width > article > main > div.content > p",
     "MARKER_APIREF_PAGE_KGATEWAY": "div.hextra-max-page-width > article > main > div.content > p"
+  },
+  "main/reference/cel": {
+    "MARKER_CELREF_AGW": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_CELREF_AGW_PLAIN": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_CELREF_AGW_YAML": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_CELREF_PAGE_SINGLE": "div.hextra-max-page-width > article > main > div.content > p"
+  },
+  "main/reference/cel/variables": {
+    "MARKER_CELREF_OSS": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_CELREF_PAGE_VARIABLES": "div.hextra-max-page-width > article > main > div.content > p"
+  },
+  "main/reference/cel/yaml-and-examples": {
+    "MARKER_CELREF_AGW_YAML": "div.hextra-max-page-width > article > main > div.content > p > code",
+    "MARKER_CELREF_PAGE_YAML": "div.hextra-max-page-width > article > main > div.content > p"
   },
   "main/reference": {
     "MARKER_APIREF_": "div.hextra-max-page-width > article > main > div.content > p > code"
@@ -495,10 +517,12 @@
     "MARKER_TAB_BLANKFENCE_BEFORE": "div.hextra-max-page-width > article > main > div.content > div > div.hextra-tabs-panel > div.hextra-code-block > div > div.highlight > pre > code > span.line > span.cl > span.c1",
     "MARKER_TAB_BLANKFENCE_PROSE": "div.hextra-max-page-width > article > main > div.content > div > div.hextra-tabs-panel > p",
     "MARKER_TAB_YAML": "div.hextra-max-page-width > article > main > div.content > div > div.hextra-tabs-panel > p",
+    "MARKER_TABLE_CAPPED_CODE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td > code",
     "MARKER_TABLE_CAPPED_MOBILE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_CAPPED_PROSE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_ROW1A": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_ROW1B": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
+    "MARKER_TABLE_UNCAPPED_CODE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td > code",
     "MARKER_TABLE_VERSION_ROW_ANGLE_BASELINE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_VERSION_ROW_BASELINE_FEATURE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_VERSION_ROW_KEEPVERSION_BASELINE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
@@ -659,10 +683,12 @@
     "MARKER_TAB_BLANKFENCE_BEFORE": "div.hextra-max-page-width > article > main > div.content > div > div.hextra-tabs-panel > div.hextra-code-block > div > div.highlight > pre > code > span.line > span.cl > span.c1",
     "MARKER_TAB_BLANKFENCE_PROSE": "div.hextra-max-page-width > article > main > div.content > div > div.hextra-tabs-panel > p",
     "MARKER_TAB_YAML": "div.hextra-max-page-width > article > main > div.content > div > div.hextra-tabs-panel > p",
+    "MARKER_TABLE_CAPPED_CODE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td > code",
     "MARKER_TABLE_CAPPED_MOBILE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_CAPPED_PROSE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_ROW1A": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_ROW1B": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
+    "MARKER_TABLE_UNCAPPED_CODE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td > code",
     "MARKER_TABLE_VERSION_ROW_ANGLE_BASELINE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_VERSION_ROW_BASELINE_FEATURE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_VERSION_ROW_KEEPVERSION_BASELINE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
@@ -679,6 +705,14 @@
     "MARKER_VERSION_SEQ_V1": "div.hextra-max-page-width > article > main > div.content > p",
     "MARKER_VERSION_WRAPAROUND_": "div.hextra-max-page-width > article > main > div.content > p > code"
   },
+  "v1/reference/api-kubespec": {
+    "MARKER_BANNER_ENTRY": "div.hextra-max-page-width > article > main > div.version-banner"
+  },
+  "v1/reference/api-kubespec/policies": {
+    "MARKER_APIREF_PAGE_KUBESPEC": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_APIREF_SIBLING": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_BANNER_ENTRY": "div.hextra-max-page-width > article > main > div.version-banner"
+  },
   "v1/reference/api/api": {
     "MARKER_APIREF_AGW": "div.hextra-max-page-width > article > main > div.content > p",
     "MARKER_APIREF_PAGE_AGW": "div.hextra-max-page-width > article > main > div.content > p",
@@ -694,6 +728,23 @@
     "MARKER_APIREF_NODOUBLE": "div.hextra-max-page-width > article > main > div.content > p",
     "MARKER_APIREF_PAGE_KGATEWAY": "div.hextra-max-page-width > article > main > div.content > p",
     "MARKER_BANNER_ENTRY": "div.hextra-max-page-width > article > main > div.version-banner"
+  },
+  "v1/reference/cel": {
+    "MARKER_BANNER_ENTRY": "div.hextra-max-page-width > article > main > div.version-banner",
+    "MARKER_CELREF_AGW": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_CELREF_AGW_PLAIN": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_CELREF_AGW_YAML": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_CELREF_PAGE_SINGLE": "div.hextra-max-page-width > article > main > div.content > p"
+  },
+  "v1/reference/cel/variables": {
+    "MARKER_BANNER_ENTRY": "div.hextra-max-page-width > article > main > div.version-banner",
+    "MARKER_CELREF_OSS": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_CELREF_PAGE_VARIABLES": "div.hextra-max-page-width > article > main > div.content > p"
+  },
+  "v1/reference/cel/yaml-and-examples": {
+    "MARKER_BANNER_ENTRY": "div.hextra-max-page-width > article > main > div.version-banner",
+    "MARKER_CELREF_AGW_YAML": "div.hextra-max-page-width > article > main > div.content > p > code",
+    "MARKER_CELREF_PAGE_YAML": "div.hextra-max-page-width > article > main > div.content > p"
   },
   "v1/reference": {
     "MARKER_APIREF_": "div.hextra-max-page-width > article > main > div.content > p > code",
@@ -898,10 +949,12 @@
     "MARKER_TAB_BLANKFENCE_BEFORE": "div.hextra-max-page-width > article > main > div.content > div > div.hextra-tabs-panel > div.hextra-code-block > div > div.highlight > pre > code > span.line > span.cl > span.c1",
     "MARKER_TAB_BLANKFENCE_PROSE": "div.hextra-max-page-width > article > main > div.content > div > div.hextra-tabs-panel > p",
     "MARKER_TAB_YAML": "div.hextra-max-page-width > article > main > div.content > div > div.hextra-tabs-panel > p",
+    "MARKER_TABLE_CAPPED_CODE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td > code",
     "MARKER_TABLE_CAPPED_MOBILE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_CAPPED_PROSE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_ROW1A": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_ROW1B": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
+    "MARKER_TABLE_UNCAPPED_CODE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td > code",
     "MARKER_TABLE_VERSION_ROW_ANGLE_BASELINE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_VERSION_ROW_ANGLE_FEATURE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_VERSION_ROW_BASELINE_FEATURE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
@@ -1133,10 +1186,12 @@
     "MARKER_TAB_BLANKFENCE_BEFORE": "div.hextra-max-page-width > article > main > div.content > div > div.hextra-tabs-panel > div.hextra-code-block > div > div.highlight > pre > code > span.line > span.cl > span.c1",
     "MARKER_TAB_BLANKFENCE_PROSE": "div.hextra-max-page-width > article > main > div.content > div > div.hextra-tabs-panel > p",
     "MARKER_TAB_YAML": "div.hextra-max-page-width > article > main > div.content > div > div.hextra-tabs-panel > p",
+    "MARKER_TABLE_CAPPED_CODE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td > code",
     "MARKER_TABLE_CAPPED_MOBILE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_CAPPED_PROSE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_ROW1A": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_ROW1B": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
+    "MARKER_TABLE_UNCAPPED_CODE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td > code",
     "MARKER_TABLE_VERSION_ROW_ANGLE_BASELINE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_VERSION_ROW_ANGLE_FEATURE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_TABLE_VERSION_ROW_BASELINE_FEATURE": "div.hextra-max-page-width > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
@@ -1178,6 +1233,10 @@
     "MARKER_VERSION_WRAPAROUND_COMMENT": "div.hextra-max-page-width > article > main > div.content > div.hextra-code-block > div > div.highlight > pre > code > span.line > span.cl > span.c",
     "MARKER_VERSION_WRAPAROUND_FN": "div.hextra-max-page-width > article > main > div.content > div.hextra-code-block > div > div.highlight > pre > code > span.line > span.cl > span.l"
   },
+  "v2/reference/api-kubespec/policies": {
+    "MARKER_APIREF_PAGE_KUBESPEC": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_APIREF_SIBLING": "div.hextra-max-page-width > article > main > div.content > p"
+  },
   "v2/reference/api/api": {
     "MARKER_APIREF_AGW": "div.hextra-max-page-width > article > main > div.content > p",
     "MARKER_APIREF_PAGE_AGW": "div.hextra-max-page-width > article > main > div.content > p"
@@ -1190,6 +1249,20 @@
     "MARKER_APIREF_ENT": "div.hextra-max-page-width > article > main > div.content > p",
     "MARKER_APIREF_NODOUBLE": "div.hextra-max-page-width > article > main > div.content > p",
     "MARKER_APIREF_PAGE_KGATEWAY": "div.hextra-max-page-width > article > main > div.content > p"
+  },
+  "v2/reference/cel": {
+    "MARKER_CELREF_AGW": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_CELREF_AGW_PLAIN": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_CELREF_AGW_YAML": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_CELREF_PAGE_SINGLE": "div.hextra-max-page-width > article > main > div.content > p"
+  },
+  "v2/reference/cel/variables": {
+    "MARKER_CELREF_OSS": "div.hextra-max-page-width > article > main > div.content > p",
+    "MARKER_CELREF_PAGE_VARIABLES": "div.hextra-max-page-width > article > main > div.content > p"
+  },
+  "v2/reference/cel/yaml-and-examples": {
+    "MARKER_CELREF_AGW_YAML": "div.hextra-max-page-width > article > main > div.content > p > code",
+    "MARKER_CELREF_PAGE_YAML": "div.hextra-max-page-width > article > main > div.content > p"
   },
   "v2/reference": {
     "MARKER_APIREF_": "div.hextra-max-page-width > article > main > div.content > p > code"

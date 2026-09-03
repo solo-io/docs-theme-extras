@@ -1,20 +1,34 @@
 {{- /*
-  EXTENSION SLOT — content injected inside `.content`, after the page title and
-  description and before `.Content` itself.
+  EXTENSION SLOT — content injected inside `.content`, after the page title
+  block and BEFORE the page description.
 
   DEFAULT: nothing.
 
-  Exists for per-page status furniture that has to sit above the body but inside
-  the prose column. agentgateway.dev uses it for `test-status-badge.html`, which
+  Exists for per-page status furniture that belongs with the title rather than
+  with the body. agentgateway.dev uses it for `test-status-badge.html`, which
   was the last thing keeping its `docs/single.html` a fork after the chrome
   slots covered everything else.
+
+  POSITION CHANGED IN 0.3.8. Until then this slot rendered AFTER the
+  description, which is not what its name says and not where the agentgateway
+  fork had put the badge (`<h1>` -> badge -> description). The mismatch was
+  invisible from the slot's own file, so the one consumer using it silently got
+  a different page order than the fork it replaced. Renaming the slot to match
+  its behavior was the other option and it is the worse one: the name
+  `after-title` is the correct name for a slot that follows the title, so the
+  behavior moved to meet the name and the old position became
+  `after-description.html`.
+
+  Deliberately placed OUTSIDE the flex row that holds the `<h1>` and the
+  copy/context buttons. Inside it, injected content becomes a third flex item
+  and lands beside the buttons instead of below the heading.
 
   RENDERED ON DETAIL PAGES ONLY (`docs/single.html`), not on section indexes.
   That matches where the one real consumer wants it, and keeps section landings
   from sprouting a badge they never had. If a list-page equivalent is ever
   needed, add a separate slot rather than widening this one — silently changing
   where an existing slot renders is the kind of surprise these slots exist to
-  prevent.
+  prevent, and 0.3.8 is what that surprise costs.
 
   TO OVERRIDE: create `layouts/partials/docs/after-title.html` in the consumer.
   Note `partials/`, not `_partials/`.

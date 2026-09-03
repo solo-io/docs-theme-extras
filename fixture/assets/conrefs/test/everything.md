@@ -31,6 +31,28 @@ MARKER_ALERT_LIST_BODY. This alert contains a list:
 - MARKER_ALERT_LIST_ITEM2 second item
 {{% /callout %}}
 
+## Anchor targets
+
+Two other fixture pages link into this body with a `#fragment`, and this body is
+what both the Everything page and the Rebased page render. The ids below are
+declared here, rather than on either page, so that a fragment link resolves on
+whichever of the two it is pointed at, and so that the heading counts the
+`everything`/`rebased` comparison in `tests/versioning.spec.ts` relies on stay
+equal. The headings carry no coverage of their own.
+
+### A heading {#a-heading}
+
+The two fragment shapes on the link-hextra path shapes page both target
+`/everything/#a-heading`; they exist to assert that `link-hextra` does not
+append a trailing slash after a fragment.
+
+### Companion {#companion}
+
+The fragment card on the Card path page targets `/rebased/#companion`, asserting
+that the `card` shortcode's `path=` branch carries a fragment through without
+gaining a trailing slash. "Companion" is what the rest of this page calls the
+Rebased view.
+
 ## Callout
 
 In the local override at `layouts/shortcodes/callout.html`, the `callout` shortcode is implemented identically to `alert` — same context-to-class map, same icon set, same DOM. The two are aliases. The fixture exercises all four canonical types so a regression that drifts one shortcode away from the other surfaces immediately.
@@ -713,6 +735,22 @@ Reproduces the agentgateway airgap `kgateway-image-versions.md` pattern: a 3+ co
 | Component | Registry | Repository |
 | --- | --- | --- |
 | MARKER_TABLE_CAPPED_MOBILE | us-docker.pkg.dev/solo-public/enterprise-agentgateway | agentgateway-enterprise |
+
+### Capped table long unbreakable code token
+
+The capped counterpart of the uncapped code-span table below, and the shape the fixture corpus was missing when the `code` arms were added to `docs-theme-extras.css`: the section above puts its long token in **bare text**, so it exercises the cell rule and never the code rule, and no other capped fixture table carried a backticked token longer than 30 characters (`gatewayParameters.image.digest`, which fits inside the 24rem cap and renders identically under either keyword). That left both `code` arms on capped tables asserting nothing. This is the ordinary Helm-values and CRD shape the cap was written for, with the dotted key backticked the way every generated reference table writes it. Two things have to hold at once here, and they pull against each other: above 767px the unconditional `th code, td code` arm must fold the key so it cannot push the Description column off the right edge, and at or below 767px the capped arm must switch it to `break-word` so the 24rem cap cannot squeeze it into a one-character-per-line vertical strip. `table-display.spec.ts` probes this at 1280px and 375px.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `MARKER_TABLE_CAPPED_CODE.collector.containerSecurityContext.allowPrivilegeEscalation` | boolean | Whether the collector container may gain more privileges than its parent process. Leave this disabled unless a sidecar in the same pod needs to escalate, because the setting applies to the whole container and cannot be narrowed to one syscall. |
+
+### Uncapped table long unbreakable code token
+
+The case the two capped fixtures above miss, and the reason the cell-level `overflow-wrap: anywhere` rule went years without doing anything for real content. Both fixtures above put their long token in **bare text**, where the rule on `th, td` applies and the fold works. Every real docs table backticks its field paths instead, and Hextra's prose styling sets `overflow-wrap: break-word` DIRECTLY on inline code in `.content`; a direct declaration beats an inherited one, so the cell rule never reached the code span. A 2-column table gets no `.table-capped` cap either, so the token's min-content width pinned the first column open and squeezed the second to nothing. Measured on the production page for this shape at 1280px: first column 627px, Description 38px, and the Description cell folded to 44 lines. `docs-theme-extras.css` now carries a `th code, td code` arm on both the unconditional fold and the phone-width capped guard. `table-display.spec.ts` probes this at 1280px and 375px.
+
+| Counter | Description |
+| --- | --- |
+| `MARKER_TABLE_UNCAPPED_CODE.solo.io.http.header_sanitization.responses_sanitized` | The number of responses that had at least one header removed. A response is counted once even when several stages remove headers from it. |
 
 ### Capped table prose description column
 

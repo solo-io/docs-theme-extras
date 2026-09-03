@@ -1,0 +1,23 @@
+{{- /*
+  EXTENSION SLOT — content injected inside `.content`, after the page
+  description and before `.Content` itself.
+
+  DEFAULT: nothing.
+
+  This is the position `docs/after-title.html` occupied before 0.3.8. It is kept
+  as its own slot so the reposition takes nothing away: a consumer that actually
+  wants furniture below the subtitle still has a supported place to put it,
+  rather than being pushed back into forking `docs/single.html` — which is the
+  failure mode every slot in this directory exists to prevent.
+
+  No consumer overrides it today. That is fine and expected; it is the
+  non-lossy half of a breaking change, not a feature anyone asked for. If it is
+  still unused several releases from now, deleting it is reasonable — but delete
+  it deliberately, and check `scan-overrides` first rather than assuming.
+
+  RENDERED ON DETAIL PAGES ONLY (`docs/single.html`), not on section indexes,
+  matching `after-title.html`.
+
+  TO OVERRIDE: create `layouts/partials/docs/after-description.html` in the
+  consumer. Note `partials/`, not `_partials/`.
+*/ -}}

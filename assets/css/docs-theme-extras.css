@@ -1170,6 +1170,29 @@ hr.footnotes-sep,
      calculation, so the fold actually influences column sizing. */
   overflow-wrap: anywhere;
 }
+/* Re-apply the fold to inline code INSIDE a cell. This is not redundant with
+   the rule above, and it must stay a separate rule so the cell's padding and
+   border are not inherited onto a code span.
+
+   `overflow-wrap` inherits, but Hextra's prose styling sets it DIRECTLY on
+   inline code in the content area:
+   `.content :where(code):not(:where(.hextra-code-block code, …))
+   { overflow-wrap: break-word }`. A direct declaration always beats an
+   inherited one, so the cell rule above never reaches a code span — and a code
+   span is exactly what carries the unbreakable tokens in a reference table
+   (`spec.rules.filters.requestRedirect.path.replacePrefixPath`,
+   `dynamicmodulescustom.solo.io.http.header_sanitization.responses_sanitized`).
+
+   Measured on kgateway 2.3.x response header sanitization at 1280px, first
+   column / Description: 627px / 38px before, 253px / 391px after, and the
+   Description cell folded from 44 lines to 4. The cell rule above looked
+   correct for as long as it did because the fixtures used BARE TEXT tokens;
+   every real docs table backticks them. `tests/table-display.spec.ts` now
+   pins the code-span path too. */
+.table-wrapper th code,
+.table-wrapper td code {
+  overflow-wrap: anywhere;
+}
 /* Cap how wide any single column may grow, then let content wrap inside that
    cap. Applied ONLY to generated multi-column reference tables (Helm values,
    CRD fields: `Key | Type | Default | Description`), which render-table.html
@@ -1217,7 +1240,17 @@ hr.footnotes-sep,
    both halves. Breakpoint matches main.css. */
 @media (max-width: 767px) {
   .table-wrapper.table-capped th,
-  .table-wrapper.table-capped td {
+  .table-wrapper.table-capped td,
+  /* Same reason the unconditional rule needs a `code` arm: Hextra's direct
+     declaration on inline code outranks anything inherited from the cell, so
+     without these a backticked token in a capped table keeps `anywhere` at
+     phone width and folds one character per line — the exact failure this
+     media query exists to prevent. Uncapped tables are deliberately left on
+     `anywhere` at every width: their floor comes from having no `max-width`
+     cap squeezing the column, and reverting them to `break-word` here
+     reinstates the 627px/38px split this release fixes (measured). */
+  .table-wrapper.table-capped th code,
+  .table-wrapper.table-capped td code {
     overflow-wrap: break-word;
   }
 }

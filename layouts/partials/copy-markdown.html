@@ -58,7 +58,35 @@
 {{- with $pd.urlTemplate | default $default -}}
   {{- $tmpl := . -}}
   {{- $vr := partial "utils/version-root.html" $ -}}
-  {{- with $vr.docsSection -}}
+  {{- /* THE BOOK ROOT, on a versioned site and on a flat one.
+
+         `version-root.html` fills `docsSection` only when it matched a version
+         segment, so on a site with no versions at all it is empty and this whole
+         item was unreachable. ambientmesh.io is that site: it publishes one book
+         for its whole `/docs/` section, opted in by a config `cascade`, and no
+         amount of `pdfDownload` configuration produced a link.
+
+         Resolved HERE rather than by teaching `version-root.html` to fill
+         `docsSection` for an unversioned site. That field is also read by
+         `sidebar.html` and `docs-tabs.html`, which currently take the
+         "no version root" path on a flat site and render correctly; filling it
+         would change what they do on every flat consumer, to fix a link. The
+         narrow fix stays inside the feature that needs it.
+
+         `.FirstSection` is the top-level section the page belongs to, which on a
+         flat site IS the book root, and on the book root itself is that page. It
+         is the wrong answer inside a VERSIONED subtree, where it returns the
+         product rather than the version root — which is why it is reached only
+         when `version-root.html` found no version. Non-docs sections resolve to
+         themselves and carry no `book` output format, so the `if` below still
+         keeps the item off /blog/ and the marketing pages. */ -}}
+  {{- $bookRoot := $vr.docsSection -}}
+  {{- $isFlat := false -}}
+  {{- if and (not $bookRoot) (not $vr.isVersioned) -}}
+    {{- $bookRoot = $.FirstSection -}}
+    {{- $isFlat = true -}}
+  {{- end -}}
+  {{- with $bookRoot -}}
     {{- if .OutputFormats.Get "book" -}}
       {{- $product := $pd.product | default site.Params.currentProduct | default site.Params.folder | default "" -}}
       {{- $dist := $pd.distribution | default "" -}}
@@ -87,10 +115,32 @@
              The workflow that publishes these assets derives its release tag
              from the version PATH the same way (`kubernetes/latest` becomes
              `kubernetes-latest`), so the two agree by construction. */ -}}
-      {{- $versionKey := $vr.currentVersion -}}
+      {{- /* A flat site has no version segment to substitute, and leaving it
+             empty would build `<product>-<distribution>-.pdf`, a URL that can
+             never resolve. `latest` stands in, because an unversioned docs set is
+             by definition the current one, and because the asset this has to
+             match is named by the publishing workflow rather than by this
+             template: solo-io/docs' pdf-export.yml labels such an entry `latest`
+             for the same reason, so link and asset agree by construction the way
+             they do for a versioned tree.
+
+             Set BEFORE the section prefix below, not after, so a flat site that
+             registers `params.sections` still gets `<section>-latest` and two
+             parallel doc sets cannot resolve to one URL. Setting it afterwards
+             would overwrite the prefix and reintroduce exactly the collision the
+             prefix exists to prevent — which is what the flat fixture, whose four
+             sections are registered, is there to catch.
+
+             A consumer that wants a different name writes `urlTemplate` with no
+             `{version}` placeholder in it, which this leaves untouched. */ -}}
+      {{- $baseVersion := $vr.currentVersion -}}
+      {{- if $isFlat -}}
+        {{- $baseVersion = "latest" -}}
+      {{- end -}}
+      {{- $versionKey := $baseVersion -}}
       {{- $sec := partial "utils/section-segment.html" $ -}}
       {{- with $sec.segment -}}
-        {{- $versionKey = printf "%s-%s" . $vr.currentVersion -}}
+        {{- $versionKey = printf "%s-%s" . $baseVersion -}}
       {{- end -}}
       {{- $u := replace $tmpl "{product}" $product -}}
       {{- $u = replace $u "{distribution}" $dist -}}
