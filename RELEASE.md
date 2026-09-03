@@ -12,13 +12,25 @@ Build both brand variants and run the full harness against the bundled
 fixture:
 
 ```sh
-make test-all
+REQUIRE_CONSUMER_CLONES=1 make test-all
 ```
 
 `test-all` runs `test-oss` and `test-enterprise`; each builds its brand
 (`build-oss` / `build-enterprise`) and runs `npx playwright test` with no
 `--project` filter, so this covers every project — including the
 `cross-browser-*` suites and the `browser-crawl` console/4xx crawl.
+
+> [!IMPORTANT]
+> Set `REQUIRE_CONSUMER_CLONES=1` for the release run. `override-parity.spec.ts`
+> derives its cross-repo assertions from sibling consumer clones, so a clone that
+> is absent is not a skipped check — it is an *absent* one, and a green run then
+> proves nothing about consumer drift. With the variable set, a missing clone
+> **fails** and names itself instead of passing silently. Every consumer in
+> `tests/helpers/scan-overrides.ts` must be cloned as a sibling of
+> `docs-theme-extras`: `docs`, `kgateway-oss`, `agentgateway-oss-website`,
+> `agentregistry-oss-website`, `kagent-oss-website/docs-site`, `ambientmesh.io`.
+> Without the variable, run `npx playwright test override-parity` and confirm the
+> `cross-repo coverage` test did not skip before you accept the suite as green.
 
 Also confirm the bare baseline (no brand layer) builds clean:
 
