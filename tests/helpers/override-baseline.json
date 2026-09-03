@@ -13,13 +13,22 @@
   "extras' `.hextra-toc { display: none }` versus a Tailwind `font-family` on the",
   "same class \u2014 is not duplication and is no longer listed. Confusing the two is",
   "what made 'four of six consumers override .hextra-toc' look like a real",
-  "backlog item when nobody overrides it."
+  "backlog item when nobody overrides it.",
+  "",
+  "An entry here is an ACCEPTED shadow, NOT necessarily a permanent one. Two of",
+  "the docs entries are pending removals whose verdict is already measured (see",
+  "OVERRIDES.md). Listing them is what makes the ratchet's second arm work: the",
+  "day the hub deletes one, the 'stale' assertion fails and forces this file to",
+  "be edited, so the follow-up cannot be forgotten a second time. Leaving them",
+  "OUT was the mistake \u2014 an always-red spec is a spec everyone learns to skip."
  ],
  "consumers": {
   "docs": {
    "samePath": [
     "layouts/_shortcodes/card.html",
-    "layouts/_shortcodes/cards.html"
+    "layouts/_shortcodes/cards.html",
+    "layouts/_shortcodes/reuse-append.html",
+    "layouts/partials/version-banner.html"
    ],
    "duplicatedSelectors": []
   },

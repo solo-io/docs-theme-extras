@@ -392,6 +392,109 @@ test.describe("capped reference table at phone width: prose description", () => 
   });
 });
 
+// A CODE SPAN in a CAPPED table — the combination neither block above reaches.
+// The two capped fixtures put their long content in bare text, so they exercise
+// the cell rules and never the `th code, td code` arms; and the uncapped block
+// below is 2-column, so it never meets the 24rem cap. Nothing in the corpus
+// distinguished `anywhere` from `break-word` on a capped code span: the longest
+// backticked token in any 3+ column fixture table was 30 characters
+// (`gatewayParameters.image.digest`), which fits inside the cap and renders
+// identically either way. Both `code` arms therefore shipped as untested
+// claims. These two tests are the claims.
+//
+// The arms are asymmetric across the breakpoint, and each width fails
+// differently if its arm is dropped:
+//
+//   1280px — without the unconditional `th code, td code { anywhere }` arm the
+//            key cannot fold, so its min-content width pins column 1 at the
+//            full token and pushes Description toward nothing. Same mechanism
+//            as the uncapped bug, bounded at 24rem instead of unbounded.
+//   375px  — without the capped `th code, td code { break-word }` arm the key
+//            keeps `anywhere` under a 24rem cap that the phone viewport has
+//            already squeezed, and folds one character per line. This is the
+//            exact failure the media query exists to prevent, reintroduced
+//            through the one selector it did not cover.
+const CAPPED_CODE_ID = "capped-table-long-unbreakable-code-token";
+// A 3-column table at the fixture's ~645px content width has ~215px per column
+// if evenly divided. The unfolded token measures well past the 24rem cap, so it
+// takes the cap and leaves the other two to share the remainder.
+const MAX_CAPPED_KEY_COL_SHARE = 0.6;
+const MIN_CAPPED_PROSE_COL_SHARE = 0.25;
+// The shared MIN_CHARS_PER_LINE floor of 4 does NOT separate the two states
+// here, and the measurement is the reason this constant exists rather than
+// reusing it. With the arm: 21 chars/line over 4 lines, key column at the full
+// 384px cap. Without it: 4 chars/line over 20 lines, key column squeezed to
+// 102px. So the degraded state lands exactly ON the shared floor and passes it.
+// A code span in a capped cell degrades to a narrow ribbon rather than the
+// literal one-glyph strip the bare-text cells fold to, because `anywhere` still
+// breaks at the dots in a dotted key — which makes it less visibly broken and
+// no less unreadable.
+const MIN_CAPPED_CODE_CHARS_PER_LINE = 10;
+
+test.describe("capped reference table: long code token folds at desktop width", () => {
+  test.skip(!IS_FIXTURE_TARGET, "fixture-only content");
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("a backticked dotted key folds instead of pinning its column", async ({
+    page,
+  }) => {
+    await page.goto(PAGE);
+    const r = await probeWrapper(page, CAPPED_CODE_ID, 1);
+    expect(r, ".table-wrapper for the capped code-token table not found").not.toBeNull();
+    // Guards the premise: 3 columns, so render-table.html must have capped it.
+    // If it has not, this block is measuring an uncapped table and the shares
+    // below stop meaning what their names say.
+    expect(
+      r!.className,
+      "3-column table is not flagged .table-capped — render-table.html's column-count threshold changed",
+    ).toContain("table-capped");
+    expect(
+      r!.cellCodeOverflowWrap,
+      "inline code in the capped cell is not on `overflow-wrap: anywhere` — Hextra's `.content code` rule is winning, so the key cannot fold",
+    ).toBe("anywhere");
+    const total = r!.colWidths.reduce((a, b) => a + b, 0);
+    expect(total, "no column widths measured").toBeGreaterThan(0);
+    const keyShare = r!.colWidths[0] / total;
+    const proseShare = r!.colWidths[2] / total;
+    expect(
+      keyShare,
+      `key column took ${(keyShare * 100).toFixed(0)}% of the row (${r!.colWidths.join("/")}px) — the token is pinning the column open`,
+    ).toBeLessThan(MAX_CAPPED_KEY_COL_SHARE);
+    expect(
+      proseShare,
+      `description column got ${(proseShare * 100).toFixed(0)}% of the row (${r!.colWidths.join("/")}px) — it is being starved`,
+    ).toBeGreaterThan(MIN_CAPPED_PROSE_COL_SHARE);
+  });
+});
+
+test.describe("capped reference table at phone width: code token", () => {
+  test.skip(!IS_FIXTURE_TARGET, "fixture-only content");
+  test.use({ viewport: { width: 375, height: 800 } });
+
+  test("the code arm of the phone-width guard keeps a collapse floor", async ({
+    page,
+  }) => {
+    await page.goto(PAGE);
+    const r = await probeWrapper(page, CAPPED_CODE_ID, 1);
+    expect(r, ".table-wrapper for the capped code-token table not found").not.toBeNull();
+    expect(
+      r!.className,
+      "3-column table is not flagged .table-capped — render-table.html's column-count threshold changed",
+    ).toContain("table-capped");
+    // The mechanism. Asserted separately from the symptom below because the
+    // two can drift apart: a future Hextra rule could win the cascade again
+    // while some other change happens to keep the column wide enough.
+    expect(
+      r!.cellCodeOverflowWrap,
+      "inline code in the capped cell kept `overflow-wrap: anywhere` at phone width — the `code` arm of the @media guard is not reaching it, and the token will fold one character per line",
+    ).toBe("break-word");
+    expect(
+      r!.cellCharsPerLine,
+      `capped key cell rendered at ${r!.cellCharsPerLine} chars/line over ${r!.cellLines} lines at 375px (columns ${r!.colWidths.join("/")}px) — dropping the code arm of the @media guard measured 4 chars/line over 20 lines here`,
+    ).toBeGreaterThanOrEqual(MIN_CAPPED_CODE_CHARS_PER_LINE);
+  });
+});
+
 // Uncapped (2-column) markdown table whose first column holds a long,
 // break-free token inside a CODE SPAN. This is the shape that the two capped
 // blocks above do not reach, and the gap that let the cell-level fold sit inert

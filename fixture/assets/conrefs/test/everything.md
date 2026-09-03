@@ -736,6 +736,14 @@ Reproduces the agentgateway airgap `kgateway-image-versions.md` pattern: a 3+ co
 | --- | --- | --- |
 | MARKER_TABLE_CAPPED_MOBILE | us-docker.pkg.dev/solo-public/enterprise-agentgateway | agentgateway-enterprise |
 
+### Capped table long unbreakable code token
+
+The capped counterpart of the uncapped code-span table below, and the shape the fixture corpus was missing when the `code` arms were added to `docs-theme-extras.css`: the section above puts its long token in **bare text**, so it exercises the cell rule and never the code rule, and no other capped fixture table carried a backticked token longer than 30 characters (`gatewayParameters.image.digest`, which fits inside the 24rem cap and renders identically under either keyword). That left both `code` arms on capped tables asserting nothing. This is the ordinary Helm-values and CRD shape the cap was written for, with the dotted key backticked the way every generated reference table writes it. Two things have to hold at once here, and they pull against each other: above 767px the unconditional `th code, td code` arm must fold the key so it cannot push the Description column off the right edge, and at or below 767px the capped arm must switch it to `break-word` so the 24rem cap cannot squeeze it into a one-character-per-line vertical strip. `table-display.spec.ts` probes this at 1280px and 375px.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `MARKER_TABLE_CAPPED_CODE.collector.containerSecurityContext.allowPrivilegeEscalation` | boolean | Whether the collector container may gain more privileges than its parent process. Leave this disabled unless a sidecar in the same pod needs to escalate, because the setting applies to the whole container and cannot be narrowed to one syscall. |
+
 ### Uncapped table long unbreakable code token
 
 The case the two capped fixtures above miss, and the reason the cell-level `overflow-wrap: anywhere` rule went years without doing anything for real content. Both fixtures above put their long token in **bare text**, where the rule on `th, td` applies and the fold works. Every real docs table backticks its field paths instead, and Hextra's prose styling sets `overflow-wrap: break-word` DIRECTLY on inline code in `.content`; a direct declaration beats an inherited one, so the cell rule never reached the code span. A 2-column table gets no `.table-capped` cap either, so the token's min-content width pinned the first column open and squeezed the second to nothing. Measured on the production page for this shape at 1280px: first column 627px, Description 38px, and the Description cell folded to 44 lines. `docs-theme-extras.css` now carries a `th code, td code` arm on both the unconditional fold and the phone-width capped guard. `table-display.spec.ts` probes this at 1280px and 375px.

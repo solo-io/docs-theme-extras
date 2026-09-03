@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
+import fs from "node:fs";
 import { TEST_PAGES, readFixture } from "./helpers/fixture";
+import { target } from "./helpers/target";
 
 // Regression guard for link-hextra's reference/api enterprise routing
 // (v0.1.20). The OSS site serves one `/reference/api/` page, so its
@@ -145,4 +147,59 @@ test.describe("link-hextra reference/cel routing (reuse page)", () => {
       "/test/v2/reference/cel/variables/#functions-policy-all",
     );
   });
+});
+
+// Every assertion above pins the href STRING. That is necessary and it is not
+// sufficient, and the gap is the shape of the production bug this spec was
+// written for: `/reference/api/api-kubespec/policies/` was a well-formed URL,
+// correct-looking in the diff, and existed on no build. A spec that compares
+// strings to strings cannot tell the difference, because both sides of the
+// comparison are written by the same person at the same time from the same
+// wrong idea.
+//
+// So this block asserts the other half — that each rewritten path resolves to a
+// page Hugo actually built, and that the fragment it carries exists on that
+// page. The `reference/cel/*` and `reference/api-kubespec/*` fixture pages
+// (mirrored into v1, v2 and main) exist for exactly this: they are built with
+// `build: {list: never, render: always}` so they stay out of the sidebar and the
+// card listings — and therefore out of every other spec's expected counts —
+// while still being real files with real anchor ids. Without this block those
+// pages carry no test signal at all, and the string assertions above pass
+// unchanged if the whole subtree is deleted.
+test.describe("link-hextra reference routing: every rewritten target exists", () => {
+  const page = reusePage();
+  test.skip(!page, `${REUSE_PAGE} not in this build (consumer target)`);
+  if (!page) return;
+
+  const MARKERS = [OSS, ENT, AGW, NODOUBLE, SIBLING, CEL_AGW, CEL_AGW_YAML, CEL_AGW_PLAIN, CEL_OSS];
+
+  for (const marker of MARKERS) {
+    test(`${marker} lands on a built page whose anchor exists`, () => {
+      const href = hrefForMarker(visibleHtml(page.filePath), marker);
+      expect(href, `${marker} rendered no href`).not.toBeNull();
+      const [urlPath, fragment] = href!.split("#");
+      const file = target.fileForUrl(urlPath);
+      expect(
+        fs.existsSync(file),
+        `${marker} points at ${href}, which Hugo did not build (looked for ${file}). ` +
+          `A rewrite that produces a well-formed URL for a page that does not ` +
+          `exist is the exact production failure this spec exists to catch — ` +
+          `either the rewrite is wrong, or the fixture page it targets is missing.`,
+      ).toBe(true);
+      // Anchor ids are explicit `{#…}` attributes on the fixture pages, not
+      // Goldmark slugs: the inbound links carry names like `policy.all` and
+      // `TypeA`, which slugify to something else. Match the attribute in either
+      // quoting style — `--minify` strips the quotes.
+      const html = fs.readFileSync(file, "utf8");
+      const idPattern = new RegExp(
+        `id=["']?${fragment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'\\s>]`,
+      );
+      expect(
+        idPattern.test(html),
+        `${marker} points at #${fragment} on ${urlPath}, and no element on that ` +
+          `page carries that id. The link resolves and the fragment dangles, ` +
+          `which no link checker configured for pages alone will report.`,
+      ).toBe(true);
+    });
+  }
 });
