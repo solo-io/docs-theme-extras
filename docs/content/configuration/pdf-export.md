@@ -935,13 +935,29 @@ only if you publish somewhere else:
 ```
 
 `{product}` comes from `params.pdfDownload.product`, falling back to
-`params.currentProduct` and then `params.folder`. `{version}` is the version
-segment of the current URL. With neither `distribution` nor `urlTemplate` the
-item does not render at all, so a site that publishes no PDFs needs no change —
-and that is deliberate rather than incidental. A site that renders its PDF into
-its own `static/` (kgateway.dev, ambientmesh.io) builds a book and still wants no
-item, so defaulting the URL for every consumer would give those sites a link to a
-release that does not exist.
+`params.currentProduct` and then `params.folder`.
+
+`{version}` depends on whether the site has versions at all:
+
+- **A versioned tree** substitutes the version segment of the current URL.
+- **An unversioned (flat) site** has no segment to read, so `latest` stands in.
+  An unversioned docs set is by definition the current one, and the publishing
+  workflow labels such an asset `latest` for the same reason, so the link and the
+  asset agree by construction rather than by convention.
+- **Either kind, with `params.sections` registered**, prefixes the section:
+  `<section>-latest`. Two parallel doc sets therefore cannot collapse onto one
+  URL.
+- **A consumer that wants none of this** writes a `urlTemplate` with no
+  `{version}` placeholder in it, which is left untouched.
+
+With neither `distribution` nor `urlTemplate` the item does not render at all, so
+a site that publishes no PDFs needs no change — and that is deliberate rather
+than incidental. A site can build a book and still want no link: the book is what
+makes a PDF *publishable* and says nothing about whether one was published, so
+defaulting the URL for every consumer would hand such a site a link to a release
+asset that does not exist. Read that as the reason the default stays off rather
+than as a description of anyone's setup — all six consumers configure
+`pdfDownload` today.
 
 > [!WARNING]
 > `[params.pdfDownload]` is a fully-qualified TOML table header, so **every bare
@@ -953,17 +969,31 @@ release that does not exist.
 > the next candidate. Put it after the loose keys, immediately before the next
 > table header.
 
-**The item appears only for a version that builds a book**, because it asks the
-version root for its output formats rather than reading a separate flag:
+**The item follows the `book` output format, not the version.** It asks the book
+root for its output formats rather than reading a separate flag, which is the
+same opt-in that makes a PDF publishable in the first place — so the menu follows
+the build and there is nothing to keep in sync:
 
 ```go-html-template
 {{ $vr := partial "utils/version-root.html" . }}
-{{ with $vr.docsSection }}{{ if .OutputFormats.Get "book" }}…{{ end }}{{ end }}
+{{ $bookRoot := $vr.docsSection }}
+{{ if and (not $bookRoot) (not $vr.isVersioned) }}
+  {{ $bookRoot = .FirstSection }}
+{{ end }}
+{{ with $bookRoot }}{{ if .OutputFormats.Get "book" }}…{{ end }}{{ end }}
 ```
 
-That is the same `book` output-format opt-in that makes a PDF publishable
-in the first place, so the menu follows the build and there is nothing to keep
-in sync.
+On a **versioned** site the book root is the version root, so the item appears
+for a version that builds a book. On an **unversioned** site
+`version-root.html` matches no version segment and leaves `docsSection` empty,
+so the root falls back to `.FirstSection` — the page's top-level section, which
+on a flat site *is* the book root. Before 0.3.8 there was no fallback, and the
+item was unreachable on such a site no matter how `pdfDownload` was configured.
+
+The fallback is reached only when no version was found, because inside a
+versioned subtree `.FirstSection` returns the product rather than the version
+root. Non-docs sections resolve to themselves and carry no `book` output format,
+so the `if` still keeps the item off `/blog/` and the marketing pages.
 
 > [!WARNING]
 > Set `params.pdfDownload` in **every** config that builds the product, not just
@@ -1004,15 +1034,16 @@ from `<!DOCTYPE html>` down. So a quick check on the built `book.html`:
 
 ## Known limitations
 
-**The download link cannot tell two trees apart that share a version segment.**
+**Two trees sharing a version segment need `params.sections` to stay apart.**
 `copy-markdown.html` fills `{version}` from `utils/version-root.html`'s
 `currentVersion`, which is the version **segment** of the URL and nothing above
 it. A product whose version trees nest under a section — agentgateway's
 `/agentgateway/kubernetes/latest/` and `/agentgateway/standalone/latest/` — has
-two trees whose segment is `latest`, so both resolve to the same download URL.
-Opting both in publishes two books and links only one of them. Until the
-template grows a `{section}` of its own, opt in **one tree per version
-segment**.
+two trees whose segment is `latest`. A registered `params.sections` prefixes the
+segment (`kubernetes-latest`, `standalone-latest`) and the collision goes away.
+Without one, both trees still resolve to the same download URL, and opting both
+in publishes two books while linking only one of them. So register the sections,
+or opt in **one tree per version segment**.
 
 **A tree served at `/latest/` needs `releaseVersion` to print a real number.**
 The cover and footer read `releaseVersion` off the tree's own `params.versions`
