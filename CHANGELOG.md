@@ -27,6 +27,57 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
+## [Unreleased]
+
+### Fix — the retired-version 404 claimed to know why a topic was missing, and offered the same destination twice (`layouts/404.html`, `tests/not-found.spec.ts`, `tests/retired-version-notice.spec.ts`)
+
+Reported from the live page. Opening
+<https://docs.solo.io/agentgateway/2.1.x/install/ui/setup/> redirects to
+`/agentgateway/kubernetes/latest/install/ui/setup/?fromversion=2.1.x`, which
+404s, and the reader was shown this:
+
+> The documentation for version 2.1.x is no longer published, so you were sent
+> to latest. This topic does not exist in latest — it was renamed or removed.
+>
+> **Try instead**
+> /agentgateway/kubernetes/latest/
+> The latest version of the documentation.
+>
+> Go to the Solo Enterprise for agentgateway documentation
+
+Two problems, both reader-facing.
+
+**The page asserted a cause it cannot know.** "It was renamed or removed" is
+presented as fact, but the only evidence the script has is a HEAD probe that
+came back non-OK. A page could equally be gone because the feature was dropped,
+because it merged into another guide, or because the probe was blocked. The
+sentence now stops at what is actually established: the topic is not available
+at the same address in the destination version. Wording follows
+`partials/docs/retired-version-notice.html`, which describes the same event on
+the success path, so the two do not use different words for one thing.
+
+**The reader was offered "the documentation" twice in three lines.** When every
+ranked candidate misses, the floor candidate is a version root, and the footer
+escape-hatch link is the site root. Different URLs, but both read as "go home",
+and the first was labelled with a raw path that a reader cannot evaluate. The
+floor is now labelled after the product, and it hides the footer line when it
+wins. A topic or ancestor hit is a different kind of destination, so the footer
+link stays under those, and it is still rendered server-side for readers with no
+JavaScript.
+
+**Verified** with `make test-oss` and `make test-enterprise` (2286 passing,
+brand-independent as expected). `tests/retired-version-notice.spec.ts` now
+asserts the absence of "renamed or removed" so the claim cannot return;
+`tests/not-found.spec.ts` covers both the labelled floor and the footer link
+surviving a section hit. The JA table in `solo-io/docs` (`i18n/ja.yaml`) is
+updated in step, including the new `not_found_home_label` key — a missing key
+falls back to English silently, so it would not have failed a build.
+
+**Consumer action.** None beyond the pin bump. `solo-io/docs` is on `v0.3.6`
+and needs the bump to pick this up.
+
+---
+
 ## [0.3.8] — 2026-09-02
 
 **Scope of this release.** Five entries. One breaking change — a prose-column

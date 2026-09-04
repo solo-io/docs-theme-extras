@@ -145,7 +145,13 @@ test.describe("404 states the topic is gone", () => {
     const lede = (await page.locator("#pnf-lede").textContent())!;
     expect(lede).toContain(OLD);
     expect(lede).toContain("no longer published");
-    expect(lede).toContain("does not exist in v2");
+    expect(lede).toContain("sent to v2 instead");
+    expect(lede).toContain("not available in v2");
+
+    // The sentence used to end "— it was renamed or removed", which this page
+    // has no way to know: all it has is a failed HEAD probe. Asserted as an
+    // absence so the claim cannot come back.
+    expect(lede).not.toContain("renamed or removed");
   });
 
   test("the 404 strips the marker too", async ({ page }) => {

@@ -49,6 +49,7 @@ async function suggestion(page: import("@playwright/test").Page) {
   const link = box.locator("li a").first();
   return {
     href: await link.getAttribute("href"),
+    text: await link.textContent(),
     note: await box.locator("li .pnf-note").first().textContent(),
   };
 }
@@ -155,12 +156,21 @@ test.describe("version-aware 404", () => {
     await expect(page.locator("#pnf-status")).toBeHidden();
   });
 
-  test("the documentation home link is always present and resolves", async ({
+  // The retired-version lede (`?fromversion=`) is covered in
+  // retired-version-notice.spec.ts, alongside the success-path partial that
+  // reads the same marker. Kept together on purpose: the two describe one
+  // event and their wording has to stay in step.
+
+  test("the documentation home link stays under a topic suggestion", async ({
     page,
   }) => {
-    // The unconditional escape hatch, and the only route out of the page when
-    // JavaScript is unavailable or every probe misses.
-    await page.goto(`${target.baseURL}/v1/nowhere-at-all/`);
+    // The escape hatch, and the only route out of the page when JavaScript is
+    // unavailable. A section hit is a different KIND of destination from the
+    // site root, so offering both is not a duplicate and the link stays.
+    await page.goto(`${target.baseURL}/v1/${SHARED_SECTION}/no-such-child/`);
+
+    const s = await suggestion(page);
+    expect(s.href).toBe(`${target.baseURL}/v1/${SHARED_SECTION}/`);
 
     const home = page.locator("#pnf-home");
     await expect(home).toBeVisible();
@@ -168,6 +178,25 @@ test.describe("version-aware 404", () => {
     const href = await home.getAttribute("href");
     const res = await page.goto(href!);
     expect(res?.status(), `home link ${href} is broken`).toBe(200);
+  });
+
+  test("a version-root fallback is named, and replaces the home link", async ({
+    page,
+  }) => {
+    // The reported complaint. When every ranked candidate misses, the floor is
+    // a documentation home — and leaving the footer link in place put two
+    // links a line apart that both read as "the documentation", one of them
+    // labelled with a raw URL the reader cannot evaluate.
+    await page.goto(`${target.baseURL}/v1/nowhere-at-all/`);
+
+    const s = await suggestion(page);
+    expect(s.href).toBe(`${target.baseURL}/${LATEST}/`);
+
+    // Named after the product rather than printed as a path.
+    expect(s.text).toBe("Docs framework test fixture documentation");
+    expect(s.href).not.toBe(s.text);
+
+    await expect(page.locator("#pnf-home-line")).toBeHidden();
   });
 
   test("no uncaught errors while probing", async ({ page }) => {
