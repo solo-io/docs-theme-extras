@@ -27,43 +27,52 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
-## [Unreleased]
+## [0.3.9] — 2026-09-08
 
-### Fixed
+### Fix — a glossary tooltip printed inside the markdown outputs, dropped mid sentence (`layouts/_partials/page-to-markdown.html`, `layouts/partials/copy-markdown.html`, `tests/helpers/copy-md.ts`, `tests/copy-md-fidelity.spec.ts`, `fixture/data/glossary.yaml`)
 
-- **A glossary tooltip no longer prints inside the markdown outputs.** `gloss`
-  nests the tooltip *inside* the term it annotates, and the two outputs that
-  have a stylesheet hide it there: `glossary.css` on the web page, and
-  `print-book.css` for the book (`.pdf-chapter .glossary-term >
-  .tooltip-content { display: none }`). The `markdown` output format and "Copy
-  as Markdown" have no stylesheet, and nothing stripped the tooltip before
-  `transform.HTMLToMarkdown` ran, so every layer was flattened into the
-  sentence: a bolded duplicate of the key, then the whole definition, dropped
-  mid clause. Live on
-  [kgateway.dev/docs/envoy/2.1.x/ai/about.md](https://kgateway.dev/docs/envoy/2.1.x/ai/about.md),
-  which currently reads "A Large Language Model (LLM)**Large Language Model
-  (LLM)**Pre-trained language models used for natural language tasks." Every
-  consumer that calls `gloss` ships this in its `.md` URLs, its `llms.txt`, and
-  its copy-as-markdown payload.
+`gloss` nests the tooltip *inside* the term it annotates, and the two outputs
+that have a stylesheet hide it there: `glossary.css` on the web page, and
+`print-book.css` for the book (`.pdf-chapter .glossary-term >
+.tooltip-content { display: none }`). The `markdown` output format and "Copy as
+Markdown" have no stylesheet, and nothing stripped the tooltip before
+`transform.HTMLToMarkdown` ran, so every layer was flattened into the sentence:
+a bolded duplicate of the key, then the whole definition, dropped mid clause.
+Live on
+[kgateway.dev/docs/envoy/2.1.x/ai/about.md](https://kgateway.dev/docs/envoy/2.1.x/ai/about.md),
+which currently reads "A Large Language Model (LLM)**Large Language Model
+(LLM)**Pre-trained language models used for natural language tasks."
 
-  `page-to-markdown.html` and `copy-markdown.html` now strip the tooltip and
-  unwrap the term before the conversion, keeping the display text. That matches
-  what the book already does, and what `book-document.spec.ts` already asserts
-  is correct behavior — the term survives, the definition does not reach the
-  page. Stripped in two steps rather than one, so a future change to the tooltip
-  markup fails to match and regresses to the old output instead of mangling the
-  HTML. Rendered
-  HTML is untouched: the tooltip is still in the page, still hidden by CSS.
+`page-to-markdown.html` and `copy-markdown.html` now strip the tooltip and
+unwrap the term before the conversion, keeping the display text. That matches
+what the book already does, and what `book-document.spec.ts` already asserts is
+correct behavior — the term survives, the definition does not reach the page.
+Stripped in two passes rather than one: pass 2 is not gated on pass 1, so if the
+tooltip markup ever drifts out of pass 1's shape the result is a regression to
+the old inlined text rather than a mangled page. Rendered HTML is untouched —
+the tooltip is still in the page, still hidden by CSS.
 
-  Verified on the bundled fixture (`v2/glossary-term.md`, all three forms —
-  known key, custom display text, unknown key) and on a kagent 1.x build, where
-  the flattened-tooltip fingerprint fell from 222 occurrences across `.md`,
-  `.html` and `llms.txt` to zero, while all 26 affected pages kept their
-  `glossary-term` and `tooltip-content` markup unchanged. Guarded by a new
-  `glossary-tooltip-inlined` defect kind in `tests/helpers/copy-md.ts`, which
-  the whole-site scan in `copy-md-fidelity.spec.ts` applies to every built page.
-  Reverting the two template passes fails that scan on both fixture terms, so
-  the guard is not vacuous.
+**Scope.** This fixes the two outputs built from `.Content`: the `.md` URLs and
+the copy-as-markdown payload. It does **not** fix `llms.txt`, whose per-page
+blurbs come from `.Summary | plainify` and therefore bypass both partials — a
+term falling inside a page's summary window still leaks there, in a form that
+carries no `**` and that the guard below cannot detect. Hextra's
+`search-data.json` has the same plainify-shaped leak. Both are separate fixes.
+
+Verified on the bundled fixture (`v2/glossary-term.md`, which covers a known key
+with no display text, a custom display text whose entry also carries a "Learn
+more" link, and a key with no glossary entry) and on a kagent 1.x build, where
+111 leaks across 14 pages fell to zero. Each leak reached readers twice — once
+in the `.md` output, once in the embedded copy-as-markdown payload — and every
+affected page kept its `glossary-term` and `tooltip-content` markup unchanged.
+Guarded by a new `glossary-tooltip-inlined` defect kind in
+`tests/helpers/copy-md.ts`, which the whole-site scan in
+`copy-md-fidelity.spec.ts` applies to both the `.md` output and the embedded
+payload — one pass per partial, since the two keep their cleanup passes in sync
+by hand. Reverting either template pass fails that scan, so the guard is not
+vacuous.
+
+Takes effect when a consumer bumps its extras pin.
 
 ---
 

@@ -13,8 +13,16 @@
 # body carries, so a test can tell "the definition is in the document" from
 # "the term is in the document" — the whole point of the PDF assertion, where
 # the term must survive and the definition must not.
+#
+# `Data Plane` also carries a `link`, so the OPTIONAL "Learn more" anchor is
+# present in at least one built tooltip. Both markdown pipelines strip the
+# tooltip with `(?:<a[^>]*>.*?</a>)?` for that anchor; with no fixture entry
+# exercising it, that branch of the regex was covered only by a synthetic unit
+# test, and a build could not catch it breaking. example.com is deliberate —
+# IANA reserves it for documentation, so nothing here depends on a live site.
 MCP:
   short: "MARKER_GLOSS_DEF Model Context Protocol, a standard for exposing tools to a model."
 
 Data Plane:
   short: "MARKER_GLOSS_DEF_TWO Proxies that process live network traffic."
+  link: "https://example.com/data-plane"

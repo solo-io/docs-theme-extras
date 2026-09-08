@@ -157,6 +157,7 @@
 {{- $fn := partial "utils/md-footnote-split.html" $html -}}
 {{- $html = $fn.html -}}
 {{- $fnHTML := $fn.footnote -}}
+
 {{- /* Glossary terms: keep the display text, drop the tooltip payload.
        The `gloss` shortcode emits
          <span class="glossary-term" ...>DISPLAY<span class="tooltip-content">
@@ -167,17 +168,25 @@
           provided by Agent Substrate, that runs an AgentInstance's conversation
           loop. Every AgentInstance is backed by one. that runs the agent..."
        The whole definition, plus a bolded duplicate of the term, inlined mid
-       sentence. Every consumer that uses `gloss` ships this in its .md URLs,
-       its llms.txt, and its "Copy as Markdown" payload.
+       sentence. Every consumer that uses `gloss` ships this in its .md URLs
+       and its "Copy as Markdown" payload. (llms.txt is a separate path —
+       `.Summary | plainify` — and is not fixed here.)
 
        Stripped in two steps rather than one. Pass 1 removes the tooltip by
        its own known shape, which leaves a plain
        <span class="glossary-term">DISPLAY</span> for pass 2 to unwrap
        lazily. A single regex would instead have to count the three closing
        </span> tags that end the nest, and would mangle the markup if the
-       tooltip ever gains a wrapper element. Split this way, pass 1 simply
-       fails to match and the output regresses to the old flattened text
-       instead. DISPLAY is `.Inner` or the key, neither of which can contain
+       tooltip ever gains a wrapper element.
+
+       Pass 2 is NOT gated on pass 1. If the tooltip markup ever drifts far
+       enough that pass 1 stops matching (say <strong> becomes <b>), pass 2
+       still fires: it unwraps the term and consumes the nest's FIRST
+       </span>, which leaves the tooltip spans behind still balanced, for
+       HTMLToMarkdown to flatten as it does today. So the failure mode is a
+       regression to the old inlined text rather than a mangled page — the
+       whole-site `glossary-tooltip-inlined` scan is what catches it.
+       DISPLAY is `.Inner` or the key, neither of which can contain
        a <span>. */ -}}
 {{- $html = $html | replaceRE `(?s)<span class="tooltip-content"><strong>[^<]*</strong><span>.*?</span>(?:<a[^>]*>.*?</a>)?</span>` "" -}}
 {{- $html = $html | replaceRE `(?s)<span class="glossary-term"[^>]*>(.*?)</span>` "$1" -}}

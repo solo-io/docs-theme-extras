@@ -16,7 +16,7 @@
 //                       table cell — i.e. copy-markdown.html's lntable strip did
 //                       not match, so the whole code block became a two-column
 //                       table row instead of a fence.
-////   - glossary-tooltip-inlined
+//   - glossary-tooltip-inlined
 //                       HTML has a `gloss` term but the markdown carries its
 //                       tooltip payload inline — the bolded duplicate of the key
 //                       plus the whole definition, dropped mid sentence.
@@ -177,10 +177,24 @@ export function glossaryTerms(html: string): GlossaryTerm[] {
  * compute, provided by Agent Substrate, ..."). Matching on the definition
  * would flag that page for writing about its own subject. Nothing writes
  * `Actor**Actor**` on purpose.
+ *
+ * Abutting on EITHER side counts, because Hugo does not trim `.Inner`: a call
+ * written `{{< gloss "Data Plane" >}}proxy layer {{< /gloss >}}` carries the
+ * author's trailing space into the display text and leaks as
+ * "the proxy layer **Data Plane**Proxies that process ..." — separated before
+ * the bold, abutting after it. The trailing test therefore excludes
+ * punctuation as well as whitespace, so authored prose that ends a bolded
+ * term with a colon or a comma ("**Actor**:", "**Actor**,") is still not a
+ * leak. A definition that itself opens on punctuation ("**Key**(Deprecated)
+ * ...") is missed by this half, and caught by the first half in the common
+ * case where the display text has no trailing space.
  */
 export function mdInlinesTooltip(md: string, key: string): boolean {
   const k = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`\\S\\*\\*${k}\\*\\*`).test(md);
+  return new RegExp(
+    `\\S\\*\\*${k}\\*\\*|\\*\\*${k}\\*\\*[^\\s\\p{P}]`,
+    "u",
+  ).test(md);
 }
 
 // ── Cross-reference ─────────────────────────────────────────────────────
