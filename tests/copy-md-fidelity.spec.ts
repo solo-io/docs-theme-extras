@@ -11,6 +11,8 @@ import {
   mdHasMermaidFence,
   htmlHasLnTable,
   mdLnTableGutterRows,
+  glossaryTerms,
+  mdInlinesTooltip,
 } from "./helpers/copy-md";
 import { target } from "./helpers/target";
 
@@ -18,8 +20,9 @@ import { target } from "./helpers/target";
 // `markdown` output format + the "Copy as Markdown" button). Catches the class
 // of bug where transform.HTMLToMarkdown silently degrades a construct: tables
 // flattened to pipe-less text (github-table schema tables), mermaid diagrams
-// stripped of their ```mermaid fence, cards collapsed to bare title text, and
-// linenos=table code blocks turned into a two-column markdown table.
+// stripped of their ```mermaid fence, cards collapsed to bare title text,
+// linenos=table code blocks turned into a two-column markdown table, and a
+// `gloss` tooltip flattened into the prose it annotates.
 //
 // Two layers:
 //   1. Unit tests on the detector helpers (deterministic synthetic input).
@@ -148,6 +151,71 @@ test.describe("copy-md fidelity helpers", () => {
     );
     // Stripped correctly — the block is a fence, so no defect.
     expect(findCopyMdDefects(html, "```json\n{}\n```")).toEqual([]);
+  });
+
+
+  // The `gloss` shortcode nests the tooltip INSIDE the term span, so with no
+  // strip pass transform.HTMLToMarkdown emits the definition — and a bolded
+  // duplicate of the key — in the middle of the sentence the term sits in.
+  // Measured on kagent 1.x before the fix: 111 occurrences across 14 pages,
+  // reaching readers through the .md URLs, llms.txt, and copy-as-markdown.
+  const GLOSS_HTML =
+    `<p>the controller and the <span class="glossary-term" tabindex="0" ` +
+    `data-glossary-term="Actor">Actor<span class="tooltip-content">` +
+    `<strong>Actor</strong><span>The sandboxed unit of compute that runs an ` +
+    `AgentInstance's conversation loop.</span></span></span> that runs it.</p>`;
+
+  test("glossaryTerms extracts each term's key and definition", () => {
+    expect(glossaryTerms(GLOSS_HTML)).toEqual([
+      {
+        key: "Actor",
+        short:
+          "The sandboxed unit of compute that runs an AgentInstance's conversation loop.",
+      },
+    ]);
+    expect(glossaryTerms("<p>no glossary here</p>")).toEqual([]);
+    // A term inside a draft comment is never rendered, so it is not a term.
+    expect(glossaryTerms(`<!--${GLOSS_HTML}-->`)).toEqual([]);
+  });
+
+  test("glossaryTerms reads a term that carries a Learn more link", () => {
+    const withLink = GLOSS_HTML.replace(
+      "</span></span></span>",
+      `</span><a href="https://example.com" class="tooltip-link" ` +
+        `target="_blank">Learn more</a></span></span>`,
+    );
+    expect(glossaryTerms(withLink).map((t) => t.key)).toEqual(["Actor"]);
+  });
+
+  test("mdInlinesTooltip keys on the abutting bold, not on the definition", () => {
+    // The leak: <strong>KEY</strong> lands flush against the display text.
+    expect(mdInlinesTooltip("the controller and the Actor**Actor**The sandboxed", "Actor")).toBe(
+      true,
+    );
+    // Authored bold in prose is separated by a space, and is not a defect. A
+    // concept page defining its own terms must not be flagged for it.
+    expect(
+      mdInlinesTooltip("An **Actor** is the sandboxed unit of compute.", "Actor"),
+    ).toBe(false);
+    // Nor is the term appearing as plain text.
+    expect(mdInlinesTooltip("the controller and the Actor that runs it", "Actor")).toBe(
+      false,
+    );
+    // A key with regex metacharacters is matched literally.
+    expect(mdInlinesTooltip("x**C++**y", "C++")).toBe(true);
+  });
+
+  test("glossary-tooltip-inlined fires on the leak and not on the fix", () => {
+    const leaked =
+      "the controller and the Actor**Actor**The sandboxed unit of compute that " +
+      "runs an AgentInstance's conversation loop. that runs it.";
+    expect(findCopyMdDefects(GLOSS_HTML, leaked).map((d) => d.kind)).toContain(
+      "glossary-tooltip-inlined",
+    );
+    // Stripped correctly — display text alone, tooltip gone.
+    expect(
+      findCopyMdDefects(GLOSS_HTML, "the controller and the Actor that runs it."),
+    ).toEqual([]);
   });
 
   test("clean page produces no defects", () => {

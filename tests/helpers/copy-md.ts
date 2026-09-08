@@ -16,6 +16,10 @@
 //                       table cell — i.e. copy-markdown.html's lntable strip did
 //                       not match, so the whole code block became a two-column
 //                       table row instead of a fence.
+////   - glossary-tooltip-inlined
+//                       HTML has a `gloss` term but the markdown carries its
+//                       tooltip payload inline — the bolded duplicate of the key
+//                       plus the whole definition, dropped mid sentence.
 //
 // Signal-first, like markdown-leaks: each check only fires when the HTML proves
 // the construct existed, so a positive is almost always a real degradation.
@@ -24,7 +28,8 @@ export type CopyMdDefectKind =
   | "mangled-table"
   | "mermaid-fence-lost"
   | "card-collapsed"
-  | "lntable-mangled";
+  | "lntable-mangled"
+  | "glossary-tooltip-inlined";
 
 export type CopyMdDefect = {
   kind: CopyMdDefectKind;
@@ -131,6 +136,53 @@ export function mdLnTableGutterRows(md: string): string[] {
   return md.match(LNTABLE_GUTTER_ROW) ?? [];
 }
 
+// The `gloss` shortcode emits a term as nested spans:
+//
+//   <span class="glossary-term" data-glossary-term="KEY">DISPLAY
+//     <span class="tooltip-content"><strong>KEY</strong><span>SHORT</span>
+//       [<a>Learn more</a>]</span></span>
+//
+// transform.HTMLToMarkdown has no reason to treat the tooltip as chrome, so
+// without a strip pass it flattens every layer into the sentence:
+//
+//   ...the controller and the Actor**Actor**The sandboxed unit of compute,
+//   provided by Agent Substrate, that runs an AgentInstance's conversation
+//   loop. Every AgentInstance is backed by one. that runs the agent...
+//
+// Return each term so the markdown can be checked for that leak.
+export type GlossaryTerm = { key: string; short: string };
+
+export function glossaryTerms(html: string): GlossaryTerm[] {
+  const out: GlossaryTerm[] = [];
+  const re =
+    /<span class="tooltip-content"><strong>([^<]*)<\/strong><span>([\s\S]*?)<\/span>/gi;
+  const src = stripHtmlComments(html);
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src)) !== null) {
+    out.push({ key: norm(m[1]), short: norm(m[2]) });
+  }
+  return out;
+}
+
+/**
+ * Did the tooltip leak into the markdown for this term?
+ *
+ * Keyed on the bolded duplicate ABUTTING the display text — `Actor**Actor**`,
+ * no separator — rather than on the definition text. That distinction is
+ * load-bearing: a concept page legitimately defines the same terms in its own
+ * prose, often in wording near-identical to the glossary entry (kagent's
+ * core-concepts.md writes "An **Actor** is the sandboxed unit of compute,
+ * provided by Agent Substrate, that runs an AgentInstance's conversation
+ * loop", against a glossary `short` that opens "The sandboxed unit of
+ * compute, provided by Agent Substrate, ..."). Matching on the definition
+ * would flag that page for writing about its own subject. Nothing writes
+ * `Actor**Actor**` on purpose.
+ */
+export function mdInlinesTooltip(md: string, key: string): boolean {
+  const k = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\S\\*\\*${k}\\*\\*`).test(md);
+}
+
 // ── Cross-reference ─────────────────────────────────────────────────────
 
 export function findCopyMdDefects(html: string, md: string): CopyMdDefect[] {
@@ -156,6 +208,17 @@ export function findCopyMdDefects(html: string, md: string): CopyMdDefect[] {
         detail:
           `${rows.length} linenos=table code block(s) became a GFM table row ` +
           `instead of a fence, e.g. ${rows[0].trim().slice(0, 80)}`,
+      });
+    }
+  }
+  for (const term of glossaryTerms(html)) {
+    if (mdInlinesTooltip(md, term.key)) {
+      defects.push({
+        kind: "glossary-tooltip-inlined",
+        detail:
+          `glossary tooltip for "${term.key}" was flattened into the prose ` +
+          `(expected the display text alone, got a bolded duplicate of the key ` +
+          `followed by "${term.short.slice(0, 60)}...")`,
       });
     }
   }

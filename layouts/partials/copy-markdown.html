@@ -157,6 +157,31 @@
 {{- $fn := partial "utils/md-footnote-split.html" $html -}}
 {{- $html = $fn.html -}}
 {{- $fnHTML := $fn.footnote -}}
+{{- /* Glossary terms: keep the display text, drop the tooltip payload.
+       The `gloss` shortcode emits
+         <span class="glossary-term" ...>DISPLAY<span class="tooltip-content">
+           <strong>KEY</strong><span>SHORT</span>[<a>Learn more</a>]</span></span>
+       and transform.HTMLToMarkdown has no reason to treat the tooltip as
+       chrome, so it flattens every layer into the sentence:
+         "...the controller and the Actor**Actor**The sandboxed unit of compute,
+          provided by Agent Substrate, that runs an AgentInstance's conversation
+          loop. Every AgentInstance is backed by one. that runs the agent..."
+       The whole definition, plus a bolded duplicate of the term, inlined mid
+       sentence. Every consumer that uses `gloss` ships this in its .md URLs,
+       its llms.txt, and its "Copy as Markdown" payload.
+
+       Stripped in two steps rather than one. Pass 1 removes the tooltip by
+       its own known shape, which leaves a plain
+       <span class="glossary-term">DISPLAY</span> for pass 2 to unwrap
+       lazily. A single regex would instead have to count the three closing
+       </span> tags that end the nest, and would mangle the markup if the
+       tooltip ever gains a wrapper element. Split this way, pass 1 simply
+       fails to match and the output regresses to the old flattened text
+       instead. DISPLAY is `.Inner` or the key, neither of which can contain
+       a <span>. */ -}}
+{{- $html = $html | replaceRE `(?s)<span class="tooltip-content"><strong>[^<]*</strong><span>.*?</span>(?:<a[^>]*>.*?</a>)?</span>` "" -}}
+{{- $html = $html | replaceRE `(?s)<span class="glossary-term"[^>]*>(.*?)</span>` "$1" -}}
+
 {{- /* Convert Hextra card links to simple <p><a> links before markdown conversion,
        otherwise transform.HTMLToMarkdown drops them entirely.
        Matches: <a class="hextra-card..."><span class="card-title">Title</span></a>
