@@ -142,13 +142,20 @@
       {{- $context.Store.Set "docTabs" (dict "enabled" $enabled "active" $activeTab "activeId" $activeId "hideSidebar" $hideSidebar "tabs" $tabs) -}}
 
       {{- if $enabled -}}
-        {{- /* The full-bleed band centers its tabs inside the SAME page-width
-               container the content column uses (utils/page-width), so the tab
-               row's left edge lines up with the sidebar/content instead of the
-               viewport edge. Using the shared partial keeps them aligned for
-               every page.width (wide / full / default). */ -}}
+        {{- /* The full-bleed band centers its tabs inside the SAME wrapper
+               class the content column uses (docs/width-class.html, not
+               utils/page-width directly), so the tab row's left edge lines up
+               with the sidebar/content instead of the viewport edge. single.html
+               and list.html source their wrapper's max-width from this same
+               slot; calling utils/page-width here instead used to disagree with
+               it whenever a consumer overrode docs/width-class.html (the
+               module's default ignores page.width on purpose, see that
+               partial's comment), producing a visible offset above ~1440px on
+               sites that DID honor page.width. Consumers whose
+               docs/width-class.html override also carries non-width hook
+               classes need those rules scoped to exclude .docs-tabs-inner. */ -}}
         <div class="docs-tabs-band hx:print:hidden">
-          <div class="docs-tabs-inner hx:mx-auto {{ partial "utils/page-width" $context }}">
+          <div class="docs-tabs-inner hx:mx-auto {{ partial "docs/width-class.html" $context }}">
             <nav class="docs-tabs" aria-label="{{ (T "sectionTabs") | default "Section navigation" }}">
               {{- range $tabs -}}
                 {{- $isActive := eq .name $activeTab -}}

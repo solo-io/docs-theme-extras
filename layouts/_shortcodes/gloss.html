@@ -24,6 +24,27 @@
     loaded by `themeExtras/head-end.html`, so a consumer that wires the module
     bootstrap gets them with no extra configuration.
 */ -}}
+{{- /* KEEP THE TERM MARKUP BELOW ON ONE LINE, with no whitespace between its
+       tags. This is not a formatting preference — two separate things depend
+       on the adjacency, and reformatting breaks both in the same edit,
+       silently:
+
+         - `utils/md-strip-glossary.html` matches
+           `<span class="tooltip-content"><strong>` and `</strong><span>` as
+           LITERAL adjacencies, so indented markup stops being stripped and
+           the whole definition reappears inline in every `.md` URL and
+           Copy-as-Markdown payload — the bug that partial exists to fix.
+         - the `glossary-tooltip-inlined` scan in copy-md-fidelity.spec.ts,
+           which guards that partial, keys on the bolded key ABUTTING the
+           display text. Indented markup flattens to
+           `Actor **Actor** The sandboxed …` — separated — so the scan goes
+           blind at exactly the moment the strip stops working.
+
+       This markup WAS indented, from 2026-05-22 (e0d2b0c) until 2026-05-26
+       (ab0b2c8, "Trailing space fix") collapsed it. The markdown leak predates
+       both; the indented form is just the one no test can see. Deliberately
+       kept out of the doc header above: authors calling `gloss` do not need
+       this, and the doc header is published to the authoring docs. */ -}}
 {{- $key := .Get 0 -}}
 {{- $entry := index site.Data.glossary $key -}}
 {{- if $entry -}}
