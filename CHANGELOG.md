@@ -140,6 +140,49 @@ to honor `page.width` — both rows already agreed there before this fix, and
 still do after, confirming the change is a no-op for sites whose override
 already routed through `utils/page-width`.
 
+### Fix — `docs/width-class.html`'s default silently ignored `page.width`, even for consumers who set it and never overrode the slot (`layouts/partials/docs/width-class.html`, `tests/helpers/gate-containment.json`)
+
+The default hardcoded `hextra-max-page-width` (100%, full-bleed) regardless of
+`page.width`, and the fix above for docTabs only routes the band through
+*whatever this slot returns* — it doesn't make the slot itself honor
+`page.width`. A consumer that sets `page.width: wide` but never adds the
+one-line override this slot's own comment prescribes still gets full-bleed
+docs pages with no upper bound, which is exactly the state the `docs` hub was
+in until its override was added by hand. Live before this fix on
+[agentgateway.dev/docs/kubernetes/documentation](https://agentgateway.dev/docs/kubernetes/documentation):
+content kept expanding edge-to-edge past 1440px instead of capping and
+centering the way OSS sites (which already carry the override) do.
+
+The default now checks whether a consumer set `.Params.width` (per-page) or
+`site.Params.page.width`, and only then delegates to `utils/page-width` —
+falling back to the historic `hextra-max-page-width` when neither is set, so a
+consumer that never touches `page.width` (kagent.dev) is unaffected. This
+removes the override as boilerplate for a consumer that only wants
+`page.width` honored: `kgateway.dev`'s and the `docs` hub's
+`docs/width-class.html` overrides are now pure duplicates of the default and
+can be deleted next time either repo bumps this pin. Keep the override, but
+simplify it to a call through this default, only if it also carries something
+else the slot doesn't own by itself — `agentgateway.dev`'s stays, since it
+also injects the `agw-docs-topgap` hook class.
+
+**Consumer note.** Delete a redundant override in the SAME change that bumps
+the pin to this version, not before — removing the override first (older pin,
+old hardcoded default) is a real regression window, briefly reverting the docs
+wrapper to full-bleed until the bump lands.
+
+Verified with local `hugo160` builds of the `docs` hub for `agentgateway` and
+`kgateway` (both `page.width: wide`, neither honored before): the content
+wrapper's class went from `hextra-max-page-width` to `hx:max-w-[90rem]`,
+matching the docTabs band. Full `test-oss`/`test-enterprise` suites pass
+(2293/2295); `tests/helpers/gate-containment.json` needed regenerating via
+`UPDATE_CONTAINMENT_SNAPSHOT=1` — its ancestor-path labels deliberately skip
+`hx:`-prefixed classes "so paths don't churn when the CSS pipeline changes"
+(`tests/helpers/ancestor-path.ts`), and the new class is entirely
+`hx:`-prefixed, so the docs wrapper's `div` lost its distinguishing label in
+1204 entries, uniformly, with nothing else moved — reviewed the full diff to
+confirm no marker actually changed container.
+
+Takes effect when a consumer bumps its extras pin.
 
 ---
 
