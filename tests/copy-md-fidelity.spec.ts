@@ -11,6 +11,8 @@ import {
   mdHasMermaidFence,
   htmlHasLnTable,
   mdLnTableGutterRows,
+  glossaryTerms,
+  mdInlinesTooltip,
 } from "./helpers/copy-md";
 import { target } from "./helpers/target";
 
@@ -18,8 +20,9 @@ import { target } from "./helpers/target";
 // `markdown` output format + the "Copy as Markdown" button). Catches the class
 // of bug where transform.HTMLToMarkdown silently degrades a construct: tables
 // flattened to pipe-less text (github-table schema tables), mermaid diagrams
-// stripped of their ```mermaid fence, cards collapsed to bare title text, and
-// linenos=table code blocks turned into a two-column markdown table.
+// stripped of their ```mermaid fence, cards collapsed to bare title text,
+// linenos=table code blocks turned into a two-column markdown table, and a
+// `gloss` tooltip flattened into the prose it annotates.
 //
 // Two layers:
 //   1. Unit tests on the detector helpers (deterministic synthetic input).
@@ -150,6 +153,100 @@ test.describe("copy-md fidelity helpers", () => {
     expect(findCopyMdDefects(html, "```json\n{}\n```")).toEqual([]);
   });
 
+  // The `gloss` shortcode nests the tooltip INSIDE the term span, so with no
+  // strip pass transform.HTMLToMarkdown emits the definition — and a bolded
+  // duplicate of the key — in the middle of the sentence the term sits in.
+  // Measured on kagent 1.x before the fix: 111 leaks across 14 pages, each
+  // reaching readers twice — once in the .md output, once in the embedded
+  // copy-as-markdown payload. (llms.txt is NOT on this path: its blurbs come
+  // from `.Summary | plainify`, which leaks the same tooltip in a form with no
+  // `**` for mdInlinesTooltip to key on. Separate fix.)
+  const GLOSS_HTML =
+    `<p>the controller and the <span class="glossary-term" tabindex="0" ` +
+    `data-glossary-term="Actor">Actor<span class="tooltip-content">` +
+    `<strong>Actor</strong><span>The sandboxed unit of compute that runs an ` +
+    `AgentInstance's conversation loop.</span></span></span> that runs it.</p>`;
+
+  test("glossaryTerms extracts each term's key and definition", () => {
+    expect(glossaryTerms(GLOSS_HTML)).toEqual([
+      {
+        key: "Actor",
+        short:
+          "The sandboxed unit of compute that runs an AgentInstance's conversation loop.",
+      },
+    ]);
+    expect(glossaryTerms("<p>no glossary here</p>")).toEqual([]);
+    // A term inside a draft comment is never rendered, so it is not a term.
+    expect(glossaryTerms(`<!--${GLOSS_HTML}-->`)).toEqual([]);
+  });
+
+  test("glossaryTerms reads a term that carries a Learn more link", () => {
+    const withLink = GLOSS_HTML.replace(
+      "</span></span></span>",
+      `</span><a href="https://example.com" class="tooltip-link" ` +
+        `target="_blank">Learn more</a></span></span>`,
+    );
+    expect(glossaryTerms(withLink).map((t) => t.key)).toEqual(["Actor"]);
+  });
+
+  test("mdInlinesTooltip keys on the abutting bold, not on the definition", () => {
+    // The leak: <strong>KEY</strong> lands flush against the display text.
+    expect(mdInlinesTooltip("the controller and the Actor**Actor**The sandboxed", "Actor")).toBe(
+      true,
+    );
+    // Authored bold in prose is separated by a space, and is not a defect. A
+    // concept page defining its own terms must not be flagged for it.
+    expect(
+      mdInlinesTooltip("An **Actor** is the sandboxed unit of compute.", "Actor"),
+    ).toBe(false);
+    // Nor is the term appearing as plain text.
+    expect(mdInlinesTooltip("the controller and the Actor that runs it", "Actor")).toBe(
+      false,
+    );
+    // A key with regex metacharacters is matched literally.
+    expect(mdInlinesTooltip("x**C++**y", "C++")).toBe(true);
+    // Hugo does not trim `.Inner`, so a call written
+    // {{< gloss "Data Plane" >}}proxy layer {{< /gloss >}} puts a space before
+    // the bold and none after it. Still a leak.
+    expect(
+      mdInlinesTooltip("the proxy layer **Data Plane**Proxies that process", "Data Plane"),
+    ).toBe(true);
+    // But authored prose that ends a bolded term on punctuation is not, or
+    // every glossary/definition list on the site would be flagged.
+    expect(mdInlinesTooltip("**Actor**: the sandboxed unit of compute.", "Actor")).toBe(
+      false,
+    );
+    expect(mdInlinesTooltip("An **Actor**, once scheduled, runs.", "Actor")).toBe(false);
+    // Punctuation flush against the LEADING side is authored markdown too, and
+    // is excluded for the same reason. Each of these fired as a false positive
+    // while the leading half accepted any non-space character; this scan gates
+    // a whole-site build, so each one would have failed a consumer's CI over
+    // prose that is entirely correct.
+    expect(mdInlinesTooltip("An ***Actor*** is the unit.", "Actor")).toBe(false);
+    expect(mdInlinesTooltip("An _**Actor**_ is the unit.", "Actor")).toBe(false);
+    expect(mdInlinesTooltip("the sandbox (**Actor**) runs it.", "Actor")).toBe(false);
+    expect(mdInlinesTooltip('see "**Actor**" above', "Actor")).toBe(false);
+    expect(mdInlinesTooltip("the unit—**Actor**—runs it", "Actor")).toBe(false);
+    // Already passing before the leading half excluded punctuation, kept as
+    // regression cover for the markdown constructs that open a line.
+    expect(mdInlinesTooltip("- **Actor** is the unit", "Actor")).toBe(false);
+    expect(mdInlinesTooltip("| **Actor** | the unit |", "Actor")).toBe(false);
+    expect(mdInlinesTooltip("## **Actor**", "Actor")).toBe(false);
+  });
+
+  test("glossary-tooltip-inlined fires on the leak and not on the fix", () => {
+    const leaked =
+      "the controller and the Actor**Actor**The sandboxed unit of compute that " +
+      "runs an AgentInstance's conversation loop. that runs it.";
+    expect(findCopyMdDefects(GLOSS_HTML, leaked).map((d) => d.kind)).toContain(
+      "glossary-tooltip-inlined",
+    );
+    // Stripped correctly — display text alone, tooltip gone.
+    expect(
+      findCopyMdDefects(GLOSS_HTML, "the controller and the Actor that runs it."),
+    ).toEqual([]);
+  });
+
   test("clean page produces no defects", () => {
     const html = "<p>Just prose.</p>";
     expect(findCopyMdDefects(html, "Just prose.")).toEqual([]);
@@ -169,6 +266,19 @@ function htmlFor(mdPath: string): string | null {
     if (fs.existsSync(cand)) return cand;
   }
   return null;
+}
+
+// The Copy button's payload, embedded in the page by
+// partials/copy-markdown.html — a SEPARATE pipeline from the `markdown` output
+// format, kept in sync with it by hand. Same extraction as
+// custom-alert.spec.ts and tab-flatten.spec.ts; copy-markdown.html escapes
+// only `<`, so that is the only entity to undo. Quote-tolerant like
+// tab-flatten.spec.ts, since `hugo --minify` drops attribute quotes.
+function copyMdPayload(htmlPath: string): string | null {
+  const m = fs
+    .readFileSync(htmlPath, "utf8")
+    .match(/<script[^>]*class=["']?copy-md-source["']?[^>]*>([\s\S]*?)<\/script>/);
+  return m ? m[1].replace(/&lt;/g, "<") : null;
 }
 
 function mdHtmlPairs(root: string): { md: string; html: string }[] {
@@ -244,5 +354,57 @@ test.describe("copy-md fidelity: built markdown vs rendered HTML", () => {
         `Found ${offenders.length} page-to-markdown fidelity defect(s):${lines.join("\n")}`,
       ).toEqual([]);
     }
+  });
+
+  // The scan above reads the `.md` output, so it exercises
+  // _partials/page-to-markdown.html alone. Every cleanup pass is duplicated by
+  // hand into partials/copy-markdown.html, which feeds the Copy button — so
+  // without this, editing one partial and not the other leaves copy-as-markdown
+  // broken while the suite stays green.
+  //
+  // Scoped to glossary-tooltip-inlined rather than re-running every defect
+  // kind: the payload legitimately differs from the `.md` output elsewhere (no
+  // leading .md intro line, no section child-link list), so a full cross-check
+  // of the two pipelines is a larger change than this guard.
+  test("the embedded copy-as-markdown payload strips glossary tooltips too", () => {
+    const scanRoot = target.builtScanRoot;
+    const pairs = mdHtmlPairs(scanRoot);
+
+    type Offender = { file: string; detail: string };
+    const offenders: Offender[] = [];
+    let pagesWithTerms = 0;
+
+    for (const { md, html } of pairs) {
+      const pageHTML = fs.readFileSync(html, "utf8");
+      if (glossaryTerms(pageHTML).length === 0) continue;
+      const payload = copyMdPayload(html);
+      if (payload === null) continue;
+      pagesWithTerms++;
+      for (const d of findCopyMdDefects(pageHTML, payload)) {
+        if (d.kind !== "glossary-tooltip-inlined") continue;
+        offenders.push({ file: path.relative(scanRoot, md), detail: d.detail });
+      }
+    }
+
+    // Consumer-independent: a site that mounts none of the fixture content and
+    // calls `gloss` nowhere has nothing to assert on. Skipping beats asserting
+    // against an empty set, which would let the guard rot into a no-op.
+    test.skip(
+      pagesWithTerms === 0,
+      `no built page under ${scanRoot} calls the gloss shortcode`,
+    );
+
+    const lines = offenders
+      .slice(0, 20)
+      .flatMap((o) => [`  ${o.file}`, `    ${o.detail}`]);
+    if (offenders.length > 20) {
+      lines.push(`  ... and ${offenders.length - 20} more.`);
+    }
+    expect(
+      offenders,
+      `Found ${offenders.length} glossary tooltip(s) inlined into the ` +
+        `copy-as-markdown payload on ${pagesWithTerms} page(s) that use ` +
+        `\`gloss\`:\n${lines.join("\n")}`,
+    ).toEqual([]);
   });
 });

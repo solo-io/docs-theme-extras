@@ -157,6 +157,13 @@
 {{- $fn := partial "utils/md-footnote-split.html" $html -}}
 {{- $html = $fn.html -}}
 {{- $fnHTML := $fn.footnote -}}
+
+{{- /* Glossary terms: keep the display text, drop the tooltip payload, which
+       HTMLToMarkdown would otherwise flatten into the sentence the term sits
+       in. Shared with page-to-markdown.html — see the partial for the markup
+       and why it takes two passes. */ -}}
+{{- $html = partial "utils/md-strip-glossary.html" $html -}}
+
 {{- /* Convert Hextra card links to simple <p><a> links before markdown conversion,
        otherwise transform.HTMLToMarkdown drops them entirely.
        Matches: <a class="hextra-card..."><span class="card-title">Title</span></a>

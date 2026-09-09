@@ -808,8 +808,9 @@ pre.mermaid:not([data-processed]) {
   border-bottom-color: rgba(255, 255, 255, 0.06);
 }
 /* The band's page-width container (.docs-tabs-inner, added in docs-tabs.html)
-   matches the content column's max-width + centering, so the tab row aligns
-   with the sidebar/content rather than the viewport edge. */
+   sources its max-width class from docs/width-class.html, the same slot
+   single.html/list.html use for the sidebar/content row, so the tab row
+   aligns with the sidebar/content rather than the viewport edge. */
 .docs-tabs {
   display: flex;
   align-items: stretch;

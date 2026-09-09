@@ -1,0 +1,70 @@
+{{- /* Strips the `gloss` tooltip out of HTML that is about to be converted to
+       markdown, keeping the term's display text.
+
+       The `gloss` shortcode nests the tooltip INSIDE the term it annotates:
+         <span class="glossary-term" ...>DISPLAY<span class="tooltip-content">
+           <strong>KEY</strong><span>SHORT</span>[<a>Learn more</a>]</span></span>
+       Three outputs consume that markup, and the two that have a stylesheet
+       hide the tooltip there: glossary.css on the web page, and print-book.css
+       for the book (`.pdf-chapter .glossary-term > .tooltip-content
+       { display: none }`). The `markdown` output format and "Copy as Markdown"
+       have no stylesheet, and transform.HTMLToMarkdown has no reason to treat
+       the tooltip as chrome, so every layer gets flattened into the sentence:
+         "...the controller and the Actor**Actor**The sandboxed unit of compute,
+          provided by Agent Substrate, that runs an AgentInstance's conversation
+          loop. Every AgentInstance is backed by one. that runs the agent..."
+       The whole definition, plus a bolded duplicate of the term, inlined mid
+       clause. Every consumer that calls `gloss` shipped this in its .md URLs
+       and its "Copy as Markdown" payload.
+
+       BOTH markdown consumers call this partial — page-to-markdown.html (the
+       `markdown` output format) and partials/copy-markdown.html (the Copy
+       button). Add a pattern here, not there. See utils/unhide-tabs.html for
+       what happens when these two keep their own copies of a pass: they drift,
+       and the drift is invisible until a reader hits the wrong output. The
+       book does NOT call this — it hides the tooltip in print-book.css, and
+       book-document.spec.ts asserts that behavior (the term survives, the
+       definition does not reach the page), which is the behavior this partial
+       reproduces for markdown.
+
+       NOT called by the llms.txt layouts. Their per-page blurbs come from
+       `.Summary | plainify`, which never reaches either markdown partial, so a
+       term falling inside a page's summary window still leaks there — in a
+       form carrying no `**`, which the `glossary-tooltip-inlined` scan cannot
+       detect either. Hextra's search-data.json has the same plainify-shaped
+       leak. Both are separate fixes.
+
+       Usage: {{ $html = partial "utils/md-strip-glossary.html" $html }}
+       Input/output is HTML as a string (or template.HTML); the caller marks
+       the result safeHTML again if re-emitting as markup. */ -}}
+{{- $html := . -}}
+
+{{- /* Stripped in two steps rather than one. Pass 1 removes the tooltip by its
+       own known shape, which leaves a plain
+       <span class="glossary-term">DISPLAY</span> for pass 2 to unwrap lazily.
+       A single regex would instead have to count the three closing </span>
+       tags that end the nest, and would mangle the markup if the tooltip ever
+       gains a wrapper element.
+
+       Pass 2 is NOT gated on pass 1. If the tooltip markup ever drifts far
+       enough that pass 1 stops matching (say <strong> becomes <b>), pass 2
+       still fires: it unwraps the term and consumes the nest's FIRST </span>,
+       which removes one open and one close and so leaves the tooltip spans
+       behind still balanced, for HTMLToMarkdown to flatten as it does today.
+       So the failure mode is a regression to the old inlined text rather than
+       a mangled page — the whole-site `glossary-tooltip-inlined` scan in
+       copy-md-fidelity.spec.ts is what catches it.
+
+       DISPLAY is `.Inner` or the key. A `<span>` in `.Inner` (possible via a
+       nested shortcode) survives anyway, for the same one-open-one-close
+       reason: pass 2 consumes the inner span's closing tag and drops the
+       glossary-term wrapper's, leaving `.Inner` intact.
+
+       BOTH passes require the tooltip markup to stay on ONE LINE with no
+       whitespace between its tags, which is how gloss.html emits it. See the
+       warning in that file: reformatting it breaks these regexes AND blinds
+       the scan that guards them, in the same edit. */ -}}
+{{- $html = $html | replaceRE `(?s)<span class="tooltip-content"><strong>[^<]*</strong><span>.*?</span>(?:<a[^>]*>.*?</a>)?</span>` "" -}}
+{{- $html = $html | replaceRE `(?s)<span class="glossary-term"[^>]*>(.*?)</span>` "$1" -}}
+
+{{- return $html -}}
