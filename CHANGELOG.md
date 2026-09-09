@@ -26,6 +26,20 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ## [Unreleased]
 
+### Fix — `navbar.width` was read and then discarded, so the navbar never matched the page's own width setting (`layouts/_partials/navbar.html`)
+
+Reported by comparing two live sites. On agentgateway-oss-website the navbar's logo lines up with the sidebar and content gutters below it; on the `docs` hub's agentgateway pages (for example <https://docs.solo.io/agentgateway/kubernetes/latest/>), the navbar stretches full-bleed to the browser edges while the content it sits above stops at a max width, so the logo drifts out of line with the left sidebar as the window gets wider.
+
+The partial already computed `$navWidth` from `Site.Params.navbar.width` (`"normal"` → `hx:max-w-screen-xl`, `"full"` → `max-w-full`, otherwise the `hx:max-w-[90rem]` default), but the `<nav>` element never referenced it — it hardcoded the class `hextra-max-navbar-width` instead, whose CSS variable this module pins to `100%` at `:root` (`assets/css/docs-theme-extras.css`) for every consumer that doesn't override it. So `navbar.width` was dead configuration: the `docs` hub sets `navbar.width = "wide"` in `hugo-agentgateway.toml` expecting the same treatment as its `page.width = "wide"`, and it had no effect. agentgateway-oss-website never hit this because it ships its own hand-rolled navbar and skips this partial entirely.
+
+Fix is one line: the `<nav>` now uses `{{ $navWidth }}` instead of the hardcoded class, the same pattern `docs/width-class.html` already uses for the content wrapper.
+
+**Verified** with `make test-all` (2300 passing, 19 skipped, brand-independent as expected — no fixture asserts navbar width today) and by building the `docs` hub's agentgateway product locally against this working tree (`replace` in `go.mod`, reverted after): the rendered `<nav>` picked up `hx:max-w-[90rem]`, matching the page content wrapper's own width class and aligning the logo with the sidebar.
+
+**Consumer action.** None beyond the pin bump for any site that sets `navbar.width` expecting it to take effect (currently just the `docs` hub). Sites that never set `navbar.width` keep the same `hx:max-w-[90rem]` default as before.
+
+---
+
 ### Fix — the retired-version 404 claimed to know why a topic was missing, and offered the same destination twice (`layouts/404.html`, `tests/not-found.spec.ts`, `tests/retired-version-notice.spec.ts`)
 
 Reported from the live page. Opening <https://docs.solo.io/agentgateway/2.1.x/install/ui/setup/> redirects to `/agentgateway/kubernetes/latest/install/ui/setup/?fromversion=2.1.x`, which 404s, and the reader was shown this:
