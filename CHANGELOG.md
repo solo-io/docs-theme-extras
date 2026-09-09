@@ -102,6 +102,46 @@ that it would find no terms on a minified site and skip rather than fail.
 
 Takes effect when a consumer bumps its extras pin.
 
+### Fix — the docTabs band drifted from the sidebar/content column above the 90rem breakpoint on sites that honor `page.width` (`layouts/_partials/docs-tabs.html`, `assets/css/docs-theme-extras.css`)
+
+`docs-tabs.html` centered its band's `.docs-tabs-inner` container using
+`utils/page-width` directly, while `single.html`/`list.html` center the
+sidebar/content row using the `docs/width-class.html` extension slot — a
+different partial whose module default deliberately ignores
+`site.Params.page.width` (see that partial's own comment). The two agree by
+coincidence below 1440px, where both resolve to the viewport width, but
+diverge above it on any consumer that overrides `docs/width-class.html` to
+honor `page.width: wide` — but the `docs` hub, whose `hugo-agentgateway.toml`
+sets `page.width: wide` without overriding `docs/width-class.html`, does not:
+the tab band centers at a max-width of 90rem while the content row underneath
+stays full-bleed, so the tab row's left edge sits visibly right of the
+sidebar. Reported live on
+[agentgateway.dev/docs/kubernetes/documentation](https://agentgateway.dev/docs/kubernetes/documentation)
+on a viewport wider than 1440px.
+
+`docs-tabs.html` now calls `docs/width-class.html` for `.docs-tabs-inner`
+instead, the same slot the content row already uses, so the two rows can no
+longer disagree regardless of what a consumer's override returns.
+
+**Consumer note.** If your `docs/width-class.html` override also carries
+presentational hook classes unrelated to width (`agentgateway-oss-website`'s
+adds `agw-docs-topgap`, a fixed-navbar clearance class), those classes now
+land on `.docs-tabs-inner` too. Scope their CSS rules to exclude it, e.g.
+`.your-hook-class:not(.docs-tabs-inner)` — applied in that repo's
+`assets/css/custom.css` alongside this pin bump.
+
+Verified with local `hugo160` builds of the `docs` hub (`make build
+PRODUCT=agentgateway`, `go.mod` replace pointed at this working tree,
+reverted after): before the fix, `.docs-tabs-inner` carried
+`hx:max-w-[90rem]` while the content row carried `hextra-max-page-width`;
+after, both carry `hextra-max-page-width`. Also rebuilt
+`agentgateway-oss-website`, which already overrides `docs/width-class.html`
+to honor `page.width` — both rows already agreed there before this fix, and
+still do after, confirming the change is a no-op for sites whose override
+already routed through `utils/page-width`.
+
+Takes effect when a consumer bumps its extras pin.
+
 ---
 
 ## [0.3.8] — 2026-09-02
