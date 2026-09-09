@@ -124,12 +124,13 @@
       "try_instead"          "Try instead"
       "home"                 "Go to the {productName} documentation"
       "noscript"             "If you followed a link to an older version of the documentation, that version may no longer be published. Try the same page under /{latest}/."
-      "lede_retired"         "The documentation for version {from} is no longer published, so you were sent to {current}. This topic does not exist in {current} — it was renamed or removed."
+      "lede_retired"         "The documentation for version {from} is no longer published, so you were sent to {current} instead. This topic is not available in {current} at the same address."
+      "home_label"           "{productName} documentation"
       "note_latest"          "This page is not in {current}, but it exists in the latest version."
       "note_ancestor_current" "The closest section still in {current}."
       "note_ancestor_latest"  "The closest section in the latest version."
-      "note_home_current"     "The documentation home for this version."
-      "note_home_latest"      "The latest version of the documentation."
+      "note_home_current"     "The documentation home for {current}."
+      "note_home_latest"      "The documentation home for {latest}."
 -}}
 {{- $t := dict -}}
 {{- range $k, $v := $strings -}}
@@ -265,7 +266,12 @@
         <ul id="pnf-suggestion-list"></ul>
       </section>
 
-      <p>
+      {{- /* The site-root fallback, always rendered so a reader with no JS (or
+             a failed probe) still has somewhere to go. The script REMOVES it
+             when the suggestion box has already offered a documentation home,
+             because two links a line apart that both read "the documentation"
+             is the doubled-home complaint this page was reported for. */ -}}
+      <p id="pnf-home-line">
         <a id="pnf-home" href="{{ $cfg.home }}">{{ replace $t.home "{productName}" $cfg.productName }}</a>
       </p>
 
@@ -307,6 +313,7 @@
           var listEl = document.getElementById("pnf-suggestion-list");
           var boxEl = document.getElementById("pnf-suggestions");
           var statusEl = document.getElementById("pnf-status");
+          var homeLineEl = document.getElementById("pnf-home-line");
 
           function isVersion(seg) {
             return CFG.versions.indexOf(seg) !== -1 || VERSION_SHAPE.test(seg);
@@ -529,18 +536,33 @@
           //    they are in, which is still the right floor, and gating it
           //    left a shallow path on latest (/agentgateway/latest/gone/) with
           //    no candidates at all.
+          //
+          //    LABELLED, unlike the candidates above. For a topic or an
+          //    ancestor the URL IS the useful text — it tells the reader which
+          //    section survived. A version root does not: "/agentgateway/
+          //    kubernetes/latest/" is a path the reader cannot evaluate, so it
+          //    is named after the product instead. `isHome` marks it as the
+          //    entry that makes the footer link redundant.
           candidates = candidates.slice(0, MAX_PROBES - 1);
           candidates.push({
             url: underVersion(CFG.latest, []),
-            note:
+            label: fill(T.home_label, { productName: CFG.productName }),
+            isHome: true,
+            note: fill(
               current === CFG.latest ? T.note_home_current : T.note_home_latest,
+              { current: current, latest: CFG.latest }
+            ),
           });
 
           statusEl.hidden = false;
           firstThatExists(candidates).then(function (hit) {
             statusEl.hidden = true;
             if (!hit) return;
-            addSuggestion(hit.url, hit.url, hit.note);
+            addSuggestion(hit.url, hit.label || hit.url, hit.note);
+            // Only when a documentation home actually won. A topic or ancestor
+            // hit is a different kind of destination, so the site-root link
+            // still earns its place under it.
+            if (hit.isHome && homeLineEl) homeLineEl.hidden = true;
           });
         })();
       </script>

@@ -18,12 +18,50 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html):
 Consumer repos bump the module pin (`hugo mod get github.com/solo-io/docs-theme-extras@vX.Y.Z`)
 deliberately, one PR at a time. Never use floating refs in production hugo configs.
 
-**Writing entries.** Each entry must answer **why** the change was made, not just what
-changed — lead with the problem or motivation (the bug, the missing behavior, the failure
-mode) so a future reader understands the reason without digging through the diff. Each entry
-must also link to a production page that shows the bug or the fix (for additive features with
-no single defect page, link a representative page where the new behavior is observable and say
-how to verify it, e.g. view-source or a validator). State how the change was verified.
+**Writing entries.** Each entry must answer **why** the change was made, not just what changed — lead with the problem or motivation (the bug, the missing behavior, the failure mode) so a future reader understands the reason without digging through the diff. Each entry must also link to a production page that shows the bug or the fix (for additive features with no single defect page, link a representative page where the new behavior is observable and say how to verify it, e.g. view-source or a validator). State how the change was verified.
+
+**No manual line wrapping.** Write each paragraph as one line, however long. A version's entries get copied verbatim into its GitHub Release description, and Releases render like issue/PR comments — a single line break becomes a visible `<br>`, unlike a repo file view (or strict CommonMark), which collapses it into a space. Hard-wrapped source looks fine as a file and choppy as a release. Headings, code fences, and blockquotes are unaffected — wrap those however reads best.
+
+---
+
+## [Unreleased]
+
+### Fix — `navbar.width` was read and then discarded, so the navbar never matched the page's own width setting (`layouts/_partials/navbar.html`)
+
+Reported by comparing two live sites. On agentgateway-oss-website the navbar's logo lines up with the sidebar and content gutters below it; on the `docs` hub's agentgateway pages (for example <https://docs.solo.io/agentgateway/kubernetes/latest/>), the navbar stretches full-bleed to the browser edges while the content it sits above stops at a max width, so the logo drifts out of line with the left sidebar as the window gets wider.
+
+The partial already computed `$navWidth` from `Site.Params.navbar.width` (`"normal"` → `hx:max-w-screen-xl`, `"full"` → `max-w-full`, otherwise the `hx:max-w-[90rem]` default), but the `<nav>` element never referenced it — it hardcoded the class `hextra-max-navbar-width` instead, whose CSS variable this module pins to `100%` at `:root` (`assets/css/docs-theme-extras.css`) for every consumer that doesn't override it. So `navbar.width` was dead configuration: the `docs` hub sets `navbar.width = "wide"` in `hugo-agentgateway.toml` expecting the same treatment as its `page.width = "wide"`, and it had no effect. agentgateway-oss-website never hit this because it ships its own hand-rolled navbar and skips this partial entirely.
+
+Fix is one line: the `<nav>` now uses `{{ $navWidth }}` instead of the hardcoded class, the same pattern `docs/width-class.html` already uses for the content wrapper.
+
+**Verified** with `make test-all` (2300 passing, 19 skipped, brand-independent as expected — no fixture asserts navbar width today) and by building the `docs` hub's agentgateway product locally against this working tree (`replace` in `go.mod`, reverted after): the rendered `<nav>` picked up `hx:max-w-[90rem]`, matching the page content wrapper's own width class and aligning the logo with the sidebar.
+
+**Consumer action.** None beyond the pin bump for any site that sets `navbar.width` expecting it to take effect (currently just the `docs` hub). Sites that never set `navbar.width` keep the same `hx:max-w-[90rem]` default as before.
+
+---
+
+### Fix — the retired-version 404 claimed to know why a topic was missing, and offered the same destination twice (`layouts/404.html`, `tests/not-found.spec.ts`, `tests/retired-version-notice.spec.ts`)
+
+Reported from the live page. Opening <https://docs.solo.io/agentgateway/2.1.x/install/ui/setup/> redirects to `/agentgateway/kubernetes/latest/install/ui/setup/?fromversion=2.1.x`, which 404s, and the reader was shown this:
+
+> The documentation for version 2.1.x is no longer published, so you were sent
+> to latest. This topic does not exist in latest — it was renamed or removed.
+>
+> **Try instead**
+> /agentgateway/kubernetes/latest/
+> The latest version of the documentation.
+>
+> Go to the Solo Enterprise for agentgateway documentation
+
+Two problems, both reader-facing.
+
+**The page asserted a cause it cannot know.** "It was renamed or removed" is presented as fact, but the only evidence the script has is a HEAD probe that came back non-OK. A page could equally be gone because the feature was dropped, because it merged into another guide, or because the probe was blocked. The sentence now stops at what is actually established: the topic is not available at the same address in the destination version. `partials/docs/retired-version-notice.html`, which describes the same event on the success path, already stuck to this stance — it never asserted a cause either — so the two pages now agree on what is known, even though their phrasing isn't identical.
+
+**The reader was offered "the documentation" twice in three lines.** When every ranked candidate misses, the floor candidate is a version root, and the footer escape-hatch link is the site root. Different URLs, but both read as "go home", and the first was labelled with a raw path that a reader cannot evaluate. The floor is now labelled after the product, and it hides the footer line when it wins. A topic or ancestor hit is a different kind of destination, so the footer link stays under those, and it is still rendered server-side for readers with no JavaScript.
+
+**Verified** with `make test-oss` and `make test-enterprise` (2286 passing, brand-independent as expected). `tests/retired-version-notice.spec.ts` now asserts the absence of "renamed or removed" so the claim cannot return; `tests/not-found.spec.ts` covers both the labelled floor and the footer link surviving a section hit. The JA table in `solo-io/docs` (`i18n/ja.yaml`) is updated in step, including the new `not_found_home_label` key — a missing key falls back to English silently, so it would not have failed a build.
+
+**Consumer action.** None beyond the pin bump. `solo-io/docs` is on `v0.3.6` and needs the bump to pick this up.
 
 ---
 
@@ -207,7 +245,7 @@ the same two builds also prove the per-page `.Params.width` branch resolves
 independently of the site-wide setting, with a sibling page (no override)
 proving the fallback still holds in the same tree.
 
-Takes effect when a consumer bumps its extras pin.
+
 
 ---
 

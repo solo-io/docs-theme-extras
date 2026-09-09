@@ -15,6 +15,7 @@ Preview it from a clone with `make server-docs`.
 | Version banners, including per-section | [Version banners](https://solo-io.github.io/docs-theme-extras/configuration/version-banners/) |
 | Section tabs (`docTabs`) | [Section tabs](https://solo-io.github.io/docs-theme-extras/configuration/section-tabs/) |
 | Logo slots and the mobile drawer | [Logo placement](https://solo-io.github.io/docs-theme-extras/configuration/logo/) |
+| Sidebar/content/TOC/navbar widths and breakpoints | [Layout widths](https://solo-io.github.io/docs-theme-extras/configuration/layout-widths/) |
 | `themeExtras.*` config keys | [Parameter reference](https://solo-io.github.io/docs-theme-extras/configuration/params/) |
 | Pinning the module, `.docs-test.toml`, CI | [Consuming the module](https://solo-io.github.io/docs-theme-extras/consuming/) |
 | Running the harness | [Testing](https://solo-io.github.io/docs-theme-extras/testing/) |

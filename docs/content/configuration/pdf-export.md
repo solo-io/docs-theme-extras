@@ -1014,6 +1014,61 @@ file, but it requires `[security.http] methods` to be widened to permit HEAD in
 every consumer, and `caches.getresource` defaults to `maxage = -1`, so a cached
 "missing" answer would never expire.
 
+## Cutting a new version
+
+Copying the current tree to a numbered directory carries the `book` opt-in with
+it, so the frozen version keeps its download link and the rolling tree keeps
+publishing under the same tag. One edit in the publishing workflow's own registry
+finishes the job. For solo-io/docs that registry is `.github/products.yaml`, and
+the field is `pdf.versions` on the product:
+
+```yaml
+- name: gloo-mesh-enterprise
+  pdf:
+    versions: [latest, 2.13.x]   # 2.13.x added by the cut
+```
+
+That list, not the front matter, is what the workflow renders. It builds its
+matrix from these entries and never scans content for the opt-in, so a frozen
+tree that has every other piece of the plumbing still produces no PDF until it
+appears here.
+
+For a product served at `/latest/`:
+
+1. Copy `latest` to the numbered directory, which the release does anyway.
+2. Add that number to `pdf.versions`.
+3. Dispatch the workflow, so the frozen tree's link works before the next
+   scheduled run.
+
+The old `latest` asset is overwritten with the new version's content, and that is
+the intent. The tag comes from the version *path*, so `/latest/` always holds the
+current manual and the frozen copy is where the old one gets archived.
+
+A product whose directories are all numbered needs two changes instead of one:
+step 2 replaces its entry rather than adding one, and the promoted tree needs
+`book` added to its `outputs` by hand. The opt-in lives on whichever tree is
+current, so a development directory created by copying an older one does not
+inherit it.
+
+When a version retires, remove its entry and leave the release alone. Removing an
+entry stops future renders and deletes nothing, so an archived PDF stays
+downloadable after its content directory is gone. That is also how to stop paying
+for an archive you want to keep: each listed version costs a Hugo build per run,
+since the render gate can only compare the stitched book once the site is built.
+
+> [!WARNING]
+> Do not leave the opt-in on a frozen tree you never list. The download link
+> renders from the output format, so the page advertises an asset that was never
+> published, and the workflow cannot catch it — it checks links against assets
+> only for the versions in its matrix. Either list the version or delete `book`
+> from the copied tree's `outputs`.
+
+> [!NOTE]
+> A frozen numbered tree needs no `releaseVersion` and no `params.versions` entry
+> to print a correct cover. `utils/version-root.html` accepts a segment shaped
+> like `X.Y.x` as a version on its own, so a `2.13.x` tree prints "Version
+> 2.13.x" from the path alone.
+
 ## Verifying the output
 
 The book document deliberately skips `baseof.html` and all normal docs chrome —
