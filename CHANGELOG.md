@@ -29,7 +29,7 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ## [0.3.9] — 2026-09-08
 
-### Fix — a glossary tooltip printed inside the markdown outputs, dropped mid sentence (`layouts/_partials/page-to-markdown.html`, `layouts/partials/copy-markdown.html`, `tests/helpers/copy-md.ts`, `tests/copy-md-fidelity.spec.ts`, `fixture/data/glossary.yaml`)
+### Fix — a glossary tooltip printed inside the markdown outputs, dropped mid sentence (`layouts/_partials/utils/md-strip-glossary.html`, `layouts/_partials/page-to-markdown.html`, `layouts/partials/copy-markdown.html`, `layouts/_shortcodes/gloss.html`, `tests/helpers/copy-md.ts`, `tests/copy-md-fidelity.spec.ts`, `fixture/data/glossary.yaml`)
 
 `gloss` nests the tooltip *inside* the term it annotates, and the two outputs
 that have a stylesheet hide it there: `glossary.css` on the web page, and
@@ -43,14 +43,28 @@ Live on
 which currently reads "A Large Language Model (LLM)**Large Language Model
 (LLM)**Pre-trained language models used for natural language tasks."
 
-`page-to-markdown.html` and `copy-markdown.html` now strip the tooltip and
-unwrap the term before the conversion, keeping the display text. That matches
-what the book already does, and what `book-document.spec.ts` already asserts is
-correct behavior — the term survives, the definition does not reach the page.
-Stripped in two passes rather than one: pass 2 is not gated on pass 1, so if the
-tooltip markup ever drifts out of pass 1's shape the result is a regression to
-the old inlined text rather than a mangled page. Rendered HTML is untouched —
-the tooltip is still in the page, still hidden by CSS.
+A new `utils/md-strip-glossary.html` strips the tooltip and unwraps the term
+before the conversion, keeping the display text. Both markdown consumers call
+it — `page-to-markdown.html` for the `.md` URLs and `copy-markdown.html` for the
+Copy button — rather than each keeping its own copy, which is how
+`utils/unhide-tabs.html` and `utils/md-footnote-split.html` already handle a
+pass these two share. That partial's own header records what happens otherwise:
+`copy-markdown.html` used to keep private copies of the tab patterns and the
+copies drifted, so two consumers got different output from the same page. The
+book does not call the new partial; it hides the tooltip in `print-book.css`,
+which is the behavior `book-document.spec.ts` already asserts is correct — the
+term survives, the definition does not reach the page — and which this partial
+reproduces for markdown. Stripped in two passes rather than one: pass 2 is not
+gated on pass 1, so if the tooltip markup ever drifts out of pass 1's shape the
+result is a regression to the old inlined text rather than a mangled page.
+Rendered HTML is untouched — the tooltip is still in the page, still hidden by
+CSS.
+
+Both passes need the tooltip markup to stay on one line with no whitespace
+between its tags, and so does the scan that guards them, so reformatting
+`gloss.html` would break the fix and blind its test in the same edit.
+`gloss.html` now carries that warning where someone reformatting it would read
+it.
 
 **Scope.** This fixes the two outputs built from `.Content`: the `.md` URLs and
 the copy-as-markdown payload. It does **not** fix `llms.txt`, whose per-page
@@ -68,9 +82,23 @@ affected page kept its `glossary-term` and `tooltip-content` markup unchanged.
 Guarded by a new `glossary-tooltip-inlined` defect kind in
 `tests/helpers/copy-md.ts`, which the whole-site scan in
 `copy-md-fidelity.spec.ts` applies to both the `.md` output and the embedded
-payload — one pass per partial, since the two keep their cleanup passes in sync
-by hand. Reverting either template pass fails that scan, so the guard is not
+payload — one scan per output, so a consumer that reads only one of them is
+still covered. Reverting the strip fails both scans, so the guard is not
 vacuous.
+
+The detector keys on the bolded key *abutting* the display text rather than on
+the definition text, because a concept page legitimately defines its own terms
+in near-identical wording and matching the definition would flag it for writing
+about its subject. Both sides of that test exclude punctuation as well as
+whitespace: authored markdown puts punctuation flush against a bolded term
+routinely (`***Actor***`, `_**Actor**_`, `(**Actor**)`, `"**Actor**"`,
+`**Actor**:`), and this scan gates a whole-site build, so a false positive
+there would fail a consumer's CI over correct prose. A real leak's neighbours
+are the last character of the display text and the first character of the
+definition, letters or digits in every realistic case. The scan's markup
+matching is also quote-tolerant, since `hugo --minify` drops attribute quotes
+and the harness can be pointed at a consumer's pre-built `public/`; without
+that it would find no terms on a minified site and skip rather than fail.
 
 Takes effect when a consumer bumps its extras pin.
 

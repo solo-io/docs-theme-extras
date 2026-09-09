@@ -154,3 +154,23 @@ ancestor's `scrollWidth`/`scrollLeft`, not just the one you expect to be the
 scroller. And prefer a ground-truth measure that does not depend on guessing:
 `max(cell.getBoundingClientRect().right) - table.getBoundingClientRect().right`
 says whether content paints outside its box regardless of who scrolls.
+
+## 12. A fix and its guard can share a dependency, and both fail silently
+
+`utils/md-strip-glossary.html` strips the `gloss` tooltip before
+`transform.HTMLToMarkdown` sees it, and the `glossary-tooltip-inlined` scan in
+`copy-md-fidelity.spec.ts` proves it worked. Both depend on the same thing:
+`gloss.html` emitting its term markup on ONE LINE with no whitespace between
+tags.
+
+The strip matches `<span class="tooltip-content"><strong>` as a literal
+adjacency, so indented markup stops being stripped. The scan keys on the bolded
+key *abutting* the display text, so indented markup flattens to
+`Actor **Actor** The sandboxed …` — separated — and stops being detected. One
+edit to an unrelated-looking template turns the fix off and blinds the test
+that would have caught it, in the same commit. `gloss.html` carries a warning
+at the markup itself for that reason.
+
+When a guard and the thing it guards read the same bytes, ask what single change
+defeats both. If the answer is "reformatting a template nobody thinks of as
+load-bearing", the warning belongs in that template, not only in the test.

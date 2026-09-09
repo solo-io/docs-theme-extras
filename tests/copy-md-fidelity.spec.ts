@@ -217,6 +217,21 @@ test.describe("copy-md fidelity helpers", () => {
       false,
     );
     expect(mdInlinesTooltip("An **Actor**, once scheduled, runs.", "Actor")).toBe(false);
+    // Punctuation flush against the LEADING side is authored markdown too, and
+    // is excluded for the same reason. Each of these fired as a false positive
+    // while the leading half accepted any non-space character; this scan gates
+    // a whole-site build, so each one would have failed a consumer's CI over
+    // prose that is entirely correct.
+    expect(mdInlinesTooltip("An ***Actor*** is the unit.", "Actor")).toBe(false);
+    expect(mdInlinesTooltip("An _**Actor**_ is the unit.", "Actor")).toBe(false);
+    expect(mdInlinesTooltip("the sandbox (**Actor**) runs it.", "Actor")).toBe(false);
+    expect(mdInlinesTooltip('see "**Actor**" above', "Actor")).toBe(false);
+    expect(mdInlinesTooltip("the unit—**Actor**—runs it", "Actor")).toBe(false);
+    // Already passing before the leading half excluded punctuation, kept as
+    // regression cover for the markdown constructs that open a line.
+    expect(mdInlinesTooltip("- **Actor** is the unit", "Actor")).toBe(false);
+    expect(mdInlinesTooltip("| **Actor** | the unit |", "Actor")).toBe(false);
+    expect(mdInlinesTooltip("## **Actor**", "Actor")).toBe(false);
   });
 
   test("glossary-tooltip-inlined fires on the leak and not on the fix", () => {
@@ -257,11 +272,12 @@ function htmlFor(mdPath: string): string | null {
 // partials/copy-markdown.html — a SEPARATE pipeline from the `markdown` output
 // format, kept in sync with it by hand. Same extraction as
 // custom-alert.spec.ts and tab-flatten.spec.ts; copy-markdown.html escapes
-// only `<`, so that is the only entity to undo.
+// only `<`, so that is the only entity to undo. Quote-tolerant like
+// tab-flatten.spec.ts, since `hugo --minify` drops attribute quotes.
 function copyMdPayload(htmlPath: string): string | null {
   const m = fs
     .readFileSync(htmlPath, "utf8")
-    .match(/<script[^>]*class="copy-md-source"[^>]*>([\s\S]*?)<\/script>/);
+    .match(/<script[^>]*class=["']?copy-md-source["']?[^>]*>([\s\S]*?)<\/script>/);
   return m ? m[1].replace(/&lt;/g, "<") : null;
 }
 

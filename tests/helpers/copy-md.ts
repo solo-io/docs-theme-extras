@@ -154,8 +154,12 @@ export type GlossaryTerm = { key: string; short: string };
 
 export function glossaryTerms(html: string): GlossaryTerm[] {
   const out: GlossaryTerm[] = [];
+  // Quote-tolerant, like tab-flatten.spec.ts: `hugo --minify` strips attribute
+  // quotes, and the harness can be pointed at a consumer's pre-built public/.
+  // Without this the scan finds no terms on a minified site and SKIPS rather
+  // than failing, so the guard would rot silently. See tests/HAZARDS.md.
   const re =
-    /<span class="tooltip-content"><strong>([^<]*)<\/strong><span>([\s\S]*?)<\/span>/gi;
+    /<span class=["']?tooltip-content["']?><strong>([^<]*)<\/strong><span>([\s\S]*?)<\/span>/gi;
   const src = stripHtmlComments(html);
   let m: RegExpExecArray | null;
   while ((m = re.exec(src)) !== null) {
@@ -182,17 +186,29 @@ export function glossaryTerms(html: string): GlossaryTerm[] {
  * written `{{< gloss "Data Plane" >}}proxy layer {{< /gloss >}}` carries the
  * author's trailing space into the display text and leaks as
  * "the proxy layer **Data Plane**Proxies that process ..." — separated before
- * the bold, abutting after it. The trailing test therefore excludes
- * punctuation as well as whitespace, so authored prose that ends a bolded
- * term with a colon or a comma ("**Actor**:", "**Actor**,") is still not a
- * leak. A definition that itself opens on punctuation ("**Key**(Deprecated)
- * ...") is missed by this half, and caught by the first half in the common
- * case where the display text has no trailing space.
+ * the bold, abutting after it.
+ *
+ * BOTH sides exclude punctuation as well as whitespace, and the symmetry is
+ * deliberate. Ordinary authored markdown puts punctuation flush against a
+ * bolded term on either side — `***Actor***` (bold-italic), `_**Actor**_`,
+ * `(**Actor**)`, `"**Actor**"`, `the unit—**Actor**—runs`, `**Actor**:`,
+ * `**Actor**,` — and this scan gates a whole-site build, so a false positive
+ * there fails a consumer's CI over prose that is entirely correct. A real
+ * leak's neighbours are the last character of the display text and the first
+ * character of the definition, which are a letter or a digit in every
+ * realistic case, so excluding punctuation costs essentially no detection.
+ *
+ * What it does cost: a leak whose display text ends in punctuation is missed
+ * by the leading half, and one whose definition opens on punctuation
+ * ("**Key**(Deprecated) ...") is missed by the trailing half. Either alone is
+ * still caught by the other half. Only a term that is punctuation-adjacent on
+ * BOTH sides at once escapes, and no glossary entry in any consumer is shaped
+ * that way today.
  */
 export function mdInlinesTooltip(md: string, key: string): boolean {
   const k = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(
-    `\\S\\*\\*${k}\\*\\*|\\*\\*${k}\\*\\*[^\\s\\p{P}]`,
+    `[^\\s\\p{P}]\\*\\*${k}\\*\\*|\\*\\*${k}\\*\\*[^\\s\\p{P}]`,
     "u",
   ).test(md);
 }
