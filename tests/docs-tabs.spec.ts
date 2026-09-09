@@ -89,18 +89,24 @@ test.describe("tab navigation — ENABLED (v3, directory/id tabs)", () => {
     expect(bandTabs(html!)).toEqual(["Documentation", "API Reference", "Changelog"]);
   });
 
-  test("band centers its tabs in the page-width container so they align with the content column", () => {
-    // The full-bleed band wraps the tab row in `.docs-tabs-inner`, which reuses
-    // the same utils/page-width class the content column uses, so the tab row's
-    // left edge lines up with the sidebar/content rather than the viewport edge.
-    // Without the inner wrapper the tabs sit flush against the viewport.
+  test("band centers its tabs in the same wrapper class the content column uses", () => {
+    // .docs-tabs-inner and the content row's wrapper div both source their
+    // max-width class from docs/width-class.html (not utils/page-width
+    // directly), so a consumer override changes them together instead of
+    // letting them drift apart above the 90rem breakpoint. In this fixture,
+    // which doesn't override the slot, that default is `hextra-max-page-width`
+    // — asserting equality (not a literal class name) is what actually proves
+    // alignment, and survives the default changing later.
     const html = readIfExists(docsPage);
     test.skip(html === null, "fixture v3/documentation/getting-started not built");
-    const band = html!.match(/<div class="docs-tabs-band[^>]*>([\s\S]*?<nav class="docs-tabs)/);
-    expect(band, "tab band markup not found").not.toBeNull();
-    expect(band![1], "band does not wrap its tabs in the .docs-tabs-inner page-width container").toMatch(
-      /docs-tabs-inner[^"]*hx:max-w-/,
-    );
+    const tabsInner = html!.match(/<div class="docs-tabs-inner hx:mx-auto ([^"]*)"/);
+    expect(tabsInner, ".docs-tabs-inner markup not found").not.toBeNull();
+    const contentWrapper = html!.match(/<div class='hx:mx-auto hx:flex ([^']*)'/);
+    expect(contentWrapper, "content wrapper markup not found").not.toBeNull();
+    expect(
+      tabsInner![1],
+      "tab band's width-class.html output does not match the content wrapper's — they'll disagree above the 90rem breakpoint",
+    ).toBe(contentWrapper![1]);
   });
 
   test("active tab reflects the directory the page lives in", () => {
