@@ -27,7 +27,17 @@ how to verify it, e.g. view-source or a validator). State how the change was ver
 
 ---
 
-## [0.3.9] — 2026-09-08
+## [0.3.9] — 2026-09-09
+
+**Scope of this release.** Three fixes, unrelated to each other. One: a
+glossary tooltip leaking into markdown outputs. Two and three are the same
+underlying wart in two places — `docTabs`'s band and the docs page wrapper
+disagreeing on (or both silently ignoring) `page.width` — first patched where
+it was reported (the band), then patched at the root (the wrapper's own
+default), which is what let `kgateway.dev`'s and the `docs` hub's identical
+hand-written overrides be deleted as redundant. All three are patches: nothing
+here requires a consumer to edit anything, and a consumer who touches neither
+`gloss`, `docTabs`, nor `page.width` builds byte-identically.
 
 ### Fix — a glossary tooltip printed inside the markdown outputs, dropped mid sentence (`layouts/_partials/utils/md-strip-glossary.html`, `layouts/_partials/page-to-markdown.html`, `layouts/partials/copy-markdown.html`, `layouts/_shortcodes/gloss.html`, `tests/helpers/copy-md.ts`, `tests/copy-md-fidelity.spec.ts`, `fixture/data/glossary.yaml`)
 
@@ -100,8 +110,6 @@ matching is also quote-tolerant, since `hugo --minify` drops attribute quotes
 and the harness can be pointed at a consumer's pre-built `public/`; without
 that it would find no terms on a minified site and skip rather than fail.
 
-
-
 ### Fix — the docTabs band drifted from the sidebar/content column above the 90rem breakpoint on sites that honor `page.width` (`layouts/_partials/docs-tabs.html`, `assets/css/docs-theme-extras.css`)
 
 `docs-tabs.html` centered its band's `.docs-tabs-inner` container using
@@ -173,14 +181,31 @@ wrapper to full-bleed until the bump lands.
 Verified with local `hugo160` builds of the `docs` hub for `agentgateway` and
 `kgateway` (both `page.width: wide`, neither honored before): the content
 wrapper's class went from `hextra-max-page-width` to `hx:max-w-[90rem]`,
-matching the docTabs band. Full `test-oss`/`test-enterprise` suites pass
-(2293/2295); `tests/helpers/gate-containment.json` needed regenerating via
+matching the docTabs band. Also deleted `kgateway-oss`'s and (the just-added)
+`docs` hub override and confirmed byte-identical build output before/after
+removal on both, and confirmed `agentgateway-oss-website` — which keeps its
+override for the unrelated `agw-docs-topgap` hook — regresses on neither.
+
+Full `test-oss`/`test-enterprise` suites pass (2297/2299, up from 2293/2295);
+`tests/helpers/gate-containment.json` needed regenerating via
 `UPDATE_CONTAINMENT_SNAPSHOT=1` — its ancestor-path labels deliberately skip
 `hx:`-prefixed classes "so paths don't churn when the CSS pipeline changes"
 (`tests/helpers/ancestor-path.ts`), and the new class is entirely
 `hx:`-prefixed, so the docs wrapper's `div` lost its distinguishing label in
 1204 entries, uniformly, with nothing else moved — reviewed the full diff to
 confirm no marker actually changed container.
+
+**New test: `tests/width-class-default.spec.ts`.** Every bundled fixture
+config sets `page.width: wide`, so nothing exercised the fallback branch — a
+consumer who never touches `page.width` at all (`kagent.dev`, `ambientmesh.io`)
+had zero coverage proving their build stays on `hextra-max-page-width`. Reads
+`public-nosections`/`public-nosections-bare` directly (the only bundled
+configs with no `[params.page]` block), same pattern as
+`tests/nosections-condition.spec.ts`. `fixture/content-flat/en/gamma/first.md`
+now sets `width: full` in front matter — the only fixture page that does — so
+the same two builds also prove the per-page `.Params.width` branch resolves
+independently of the site-wide setting, with a sibling page (no override)
+proving the fallback still holds in the same tree.
 
 Takes effect when a consumer bumps its extras pin.
 
