@@ -761,16 +761,33 @@ pre.mermaid:not([data-processed]) {
   right: 4.75rem !important;
 }
 
-/* Sticky offset for the side rails (left sidebar + right TOC). It must equal
-   the height of Hextra's sticky `.hextra-nav-container`, which is the navbar
-   PLUS any announcement banner (`--navbar-height` + `--hextra-banner-height`,
-   e.g. 4rem + 2rem = 6rem on the docs hub). Hardcoding `4rem` (navbar only)
-   left both rails 1 banner-height too high, so they drifted up — and slid
-   under the navbar — as the page scrolled, instead of staying pinned. The
-   `0rem` fallback keeps it at the navbar height on any consumer that doesn't
-   define the banner variable. */
+/* Three related offsets, in the order they compose.
+
+   --solo-navbar-bottom is the bottom edge of Hextra's sticky
+   `.hextra-nav-container`, which is the navbar PLUS any announcement banner
+   (`--navbar-height` + `--hextra-banner-height`, e.g. 4rem + 2rem = 6rem on the
+   docs hub). The `0rem` fallback keeps it at the navbar height on any consumer
+   that doesn't define the banner variable. Anything that pins itself directly
+   under the navbar (today: the docTabs band) sticks at THIS offset, not at
+   --solo-rail-top.
+
+   --solo-tabs-height is the height of the sticky docTabs band. Zero by default:
+   most pages have no band, and a site that never opts into [[params.docTabs]]
+   must keep exactly the offsets it had before the band existed. It is
+   overridden on <body> only when a band is actually in the DOM (see the
+   `body:has(.docs-tabs-band)` rule below).
+
+   --solo-rail-top is the sticky offset for the side rails (left sidebar + right
+   TOC) and for heading scroll-margin. It must clear every band pinned above
+   them: the navbar container, plus the docTabs band when one is present.
+   Hardcoding `4rem` (navbar only) left both rails 1 banner-height too high, so
+   they drifted up — and slid under the navbar — as the page scrolled, instead
+   of staying pinned; the same drift happens one band lower once the tabs are
+   sticky, hence the --solo-tabs-height term. */
 :root {
-  --solo-rail-top: calc(var(--navbar-height, 4rem) + var(--hextra-banner-height, 0rem));
+  --solo-navbar-bottom: calc(var(--navbar-height, 4rem) + var(--hextra-banner-height, 0rem));
+  --solo-tabs-height: 0rem;
+  --solo-rail-top: calc(var(--solo-navbar-bottom) + var(--solo-tabs-height));
 }
 
 /* ── Tab navigation band (PROTOTYPE — issue solo-io/docs#3164) ───────────
@@ -782,20 +799,64 @@ pre.mermaid:not([data-processed]) {
    non-empty tabs, so sites/versions without it are visually unchanged. */
 .docs-tabs-band {
   /* Full-bleed band with a hairline under it, like the navbar's own divider.
-     Non-sticky in this prototype: it sits at the top of the content area and
-     scrolls away, so it needs no rail-offset math against the sticky sidebar.
-     (Making it sticky under the navbar is a follow-up: it would require
-     bumping --solo-rail-top by the band height so the sidebar/TOC don't tuck
-     under it.) */
+     STICKY, pinned directly under Hextra's sticky nav container, so the tabs
+     stay reachable however far the reader scrolls — they are top-level
+     navigation, and scrolling them away meant scrolling back to the top to
+     switch section. It is a direct child of <body>, so <body> is its containing
+     block and it stays pinned for the whole page.
+
+     Three things have to agree for that to work:
+       - `top` is --solo-navbar-bottom (navbar + banner), NOT --solo-rail-top:
+         the band pins under the navbar, and --solo-rail-top now already
+         includes the band's own height.
+       - the background must be OPAQUE. It was `transparent` while the band
+         scrolled away with the page; sticky means article content passes
+         underneath it, so it has to paint over that. The colors match Hextra's
+         own navbar blur layer (`hx:bg-white` / `hx:dark:bg-dark`) so the two
+         bands read as one piece of chrome.
+       - z-index sits between the content (unpositioned, so below everything
+         positioned) and Hextra's nav container (z-20), so the band covers the
+         article but still slides under the navbar and its dropdowns. */
+  position: sticky;
+  top: var(--solo-navbar-bottom);
+  z-index: 10;
   width: 100%;
   border-bottom: 1px solid #f0f1f3;
-  background: transparent;
+  background: #fff;
   /* A little room above the tab row so the band isn't jammed against the
      navbar's divider. The space below the tabs is the .docs-tab padding, whose
      bottom edge lands on the band's hairline (the active underline sits on it),
      so vertical breathing room is added here (top) and on .docs-tab (both). */
   padding-top: 0.5rem;
 }
+
+/* Push the side rails (and heading scroll-margin) down by the band's height on
+   pages that actually render a band, so the sidebar and TOC pin under it rather
+   than tucking beneath it. --solo-rail-top is redeclared here rather than only
+   --solo-tabs-height because custom properties substitute at computed-value
+   time: html has already resolved --solo-rail-top to `calc(… + 0rem)` and <body>
+   inherits that RESOLVED value, so overriding the height term alone would have
+   no effect on the inherited result.
+
+   4.25rem (68px) is the band's measured height at the shipped type scale: 8px
+   band padding-top + 40px .docs-tab padding (1.25rem top and bottom) + 18px
+   line box (0.9375rem x 1.2) + 2px active-underline reserve - 1px hairline
+   overlap (.docs-tab's margin-bottom) + 1px band border. If .docs-tab's
+   padding, font-size, line-height, or underline width changes, remeasure and
+   update this number; tests/docs-tabs-sidebar.spec.ts asserts the rails pin to
+   the band's bottom edge, so a stale value fails there rather than silently
+   misaligning.
+
+   Scoped to the desktop-sidebar breakpoint because the band is `display: none`
+   below it (the tabs move into the drawer as a chip row), so below 1280px there
+   is no band to clear and the offsets must stay exactly what they were. */
+@media (min-width: 1280px) {
+  body:has(.docs-tabs-band) {
+    --solo-tabs-height: 4.25rem;
+    --solo-rail-top: calc(var(--solo-navbar-bottom) + var(--solo-tabs-height));
+  }
+}
+
 /* Below the desktop-sidebar breakpoint (xl, 1280px) the persistent sidebar
    becomes the slide-in drawer, so the band is hidden and the tabs render as a
    chip row inside that drawer (.sidebar-mobile-tab-row). */
@@ -806,6 +867,10 @@ pre.mermaid:not([data-processed]) {
 }
 .dark .docs-tabs-band {
   border-bottom-color: rgba(255, 255, 255, 0.06);
+  /* Hextra's own `hx:dark:bg-dark`. The literal fallback is Tailwind's
+     gray-900, which is what that variable resolves to in Hextra's default
+     palette, so a consumer on an older Hextra still gets an opaque band. */
+  background: var(--hx-color-dark, #111827);
 }
 /* The band's page-width container (.docs-tabs-inner, added in docs-tabs.html)
    sources its max-width class from docs/width-class.html, the same slot

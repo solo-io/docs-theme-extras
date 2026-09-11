@@ -9,8 +9,9 @@
 {{- $logoPath := .Site.Params.navbar.logo.path | default "images/logo.svg" -}}
 {{- /* sidebar.logo being set means the navbar carries the Solo corporate mark
        (the product mark lives in the sidebar instead), so its link should go
-       to docs.solo.io rather than this site's own home page. */ -}}
-{{- $defaultLogoLink := cond $hasMobileLogo "https://docs.solo.io" .Site.Home.RelPermalink -}}
+       to the Solo docs hub rather than this site's own home page. docs.solo.io
+       itself 301s to www.solo.io/docs, so link straight to the final URL. */ -}}
+{{- $defaultLogoLink := cond $hasMobileLogo "https://www.solo.io/docs" .Site.Home.RelPermalink -}}
 {{- $logoLink := .Site.Params.navbar.logo.link | default $defaultLogoLink -}}
 {{- $logoWidth := .Site.Params.navbar.logo.width | default "20" -}}
 {{- $logoHeight := .Site.Params.navbar.logo.height | default "20" -}}

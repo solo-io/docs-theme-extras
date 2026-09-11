@@ -26,6 +26,24 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ## [Unreleased]
 
+### Fix — the docTabs band scrolled away with the page, so switching section meant scrolling back to the top (`assets/css/docs-theme-extras.css`, `tests/docs-tabs-sidebar.spec.ts`)
+
+The tab band is top-level navigation — it is how a reader moves between Documentation, Integrations, Reference, and Release notes — but it shipped non-sticky, as the CSS comment admitted it was ("Non-sticky in this prototype … making it sticky under the navbar is a follow-up"). On <https://docs.solo.io/agentgateway/kubernetes/latest/documentation/> and any other page under a tab, scrolling a screen or two put the tabs off-screen, so changing section required scrolling all the way back up first. Every other piece of navigation on the page already stays put: the navbar, the left sidebar, and the right-hand TOC are all pinned. The tabs were the one exception, and they are the highest-level of the four.
+
+The band is now `position: sticky` at `--solo-navbar-bottom` (the navbar plus any announcement banner), pinned directly under Hextra's own sticky nav container with `z-index: 10` — above the article, below the navbar at `z-20` so the navbar's dropdowns and search results still open over it.
+
+Two things had to move with it. **The band's background was `transparent`**, which was harmless while it scrolled with the page and is not harmless once article text passes underneath; it now paints `#fff` in light mode and Hextra's own `--hx-color-dark` in dark, so the band and the navbar read as one piece of chrome. **The side rails had to drop by the band's height** or they would have tucked under it: this module already centralises their sticky offset in `--solo-rail-top`, so that variable now reads `calc(var(--solo-navbar-bottom) + var(--solo-tabs-height))`, and `--solo-tabs-height` is `0rem` everywhere except on a `body:has(.docs-tabs-band)` inside the desktop-sidebar media query. The scoping matters in both directions: a site that never opts into `[[params.docTabs]]` keeps byte-identical offsets, and below 1280px — where the band is `display: none` and the tabs move into the drawer as a chip row — the offset goes back to zero rather than reserving 68px of dead space. Because `--solo-rail-top` also feeds heading `scroll-margin-top` and both rails' `max-height`, anchor links and the rails' scroll regions follow the new offset without further edits.
+
+`--solo-tabs-height` is a hardcoded `4.25rem`, measured from a real build rather than derived (0.5rem band padding + 1.25rem tab padding top and bottom + the 0.9375rem/1.2 line box + the 2px active-underline reserve - the 1px hairline overlap + the 1px band border = 68px). That constant is the one fragile part of the change, so the new tests assert the rails land exactly on the band's measured bottom edge — a stale constant fails there instead of quietly misaligning.
+
+**Verified** with `make test-all` on both brands (2299 passing, 19 skipped; the only failures were the known cross-browser `page.goto` timeouts on the shared port, which pass on a re-run of those two projects alone). `tests/docs-tabs-sidebar.spec.ts` gains five browser tests: the band holds its position under the navbar across a scroll, the sidebar and TOC pin to the band's bottom edge, the background is opaque, a band-less page keeps the pre-band offset, and the hidden band reserves nothing below the breakpoint. All five were confirmed to FAIL against the previous CSS, so they are not vacuous. Light and dark screenshots of a scrolled tab page were checked by eye for text bleeding through the band.
+
+**Consumer action.** None beyond the pin bump. Only sites that set `[[params.docTabs]]` see any change (today the docs hub's agentgateway product and agentgateway-oss-website); every other site's rail offsets are unchanged. Consumers that override `--solo-rail-top` directly should switch to overriding `--solo-navbar-bottom` instead, or their override will drop the band-height term.
+
+---
+
+## [0.3.10] — 2026-09-09
+
 ### Fix — `navbar.width` was read and then discarded, so the navbar never matched the page's own width setting (`layouts/_partials/navbar.html`)
 
 Reported by comparing two live sites. On agentgateway-oss-website the navbar's logo lines up with the sidebar and content gutters below it; on the `docs` hub's agentgateway pages (for example <https://docs.solo.io/agentgateway/kubernetes/latest/>), the navbar stretches full-bleed to the browser edges while the content it sits above stops at a max width, so the logo drifts out of line with the left sidebar as the window gets wider.
@@ -59,9 +77,9 @@ Two problems, both reader-facing.
 
 **The reader was offered "the documentation" twice in three lines.** When every ranked candidate misses, the floor candidate is a version root, and the footer escape-hatch link is the site root. Different URLs, but both read as "go home", and the first was labelled with a raw path that a reader cannot evaluate. The floor is now labelled after the product, and it hides the footer line when it wins. A topic or ancestor hit is a different kind of destination, so the footer link stays under those, and it is still rendered server-side for readers with no JavaScript.
 
-**Verified** with `make test-oss` and `make test-enterprise` (2286 passing, brand-independent as expected). `tests/retired-version-notice.spec.ts` now asserts the absence of "renamed or removed" so the claim cannot return; `tests/not-found.spec.ts` covers both the labelled floor and the footer link surviving a section hit. The JA table in `solo-io/docs` (`i18n/ja.yaml`) is updated in step, including the new `not_found_home_label` key — a missing key falls back to English silently, so it would not have failed a build.
+**Verified** with `make test-oss` and `make test-enterprise` (2286 passing, brand-independent as expected). `tests/retired-version-notice.spec.ts` now asserts the absence of "renamed or removed" so the claim cannot return; `tests/not-found.spec.ts` covers both the labelled floor and the footer link surviving a section hit. The JA table in the docs hub (`i18n/ja.yaml`) is updated in step, including the new `not_found_home_label` key — a missing key falls back to English silently, so it would not have failed a build.
 
-**Consumer action.** None beyond the pin bump. `solo-io/docs` is on `v0.3.6` and needs the bump to pick this up.
+**Consumer action.** None beyond the pin bump. The docs hub is on `v0.3.6` and needs the bump to pick this up.
 
 ---
 
