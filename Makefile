@@ -10,7 +10,7 @@ CONFIG  ?=
         clear-cache \
         server-oss server-enterprise server-docs \
         build-oss build-enterprise build-flat build-nosections build-docs \
-        build-section-title build-section-current build-nobook \
+        build-section-title build-section-current build-nobook build-oss-devpath \
         test-oss test-enterprise test-all \
         test clean help
 
@@ -134,6 +134,11 @@ build-nosections:
 # content and versions and differs only in publishDir and the one param. Read
 # directly by tests/section-dropdown-title.spec.ts; see hugo-section-title.toml
 # for why the key cannot just be set on an existing branded fixture.
+# The dev-server baseURL shape (full URL with a path). Static build, so the
+# spec reads it like any other built output. See hugo-oss-devpath.toml.
+build-oss-devpath:
+	$(HUGO) --config hugo-oss.toml,hugo-oss-devpath.toml --gc 2> .build-oss-devpath.log
+
 build-section-title:
 	$(HUGO) --config hugo-oss.toml,hugo-section-title.toml --gc 2> .build-section-title.log
 
@@ -158,7 +163,7 @@ build-section-current:
 # something to read. It is brand-independent (the version-less code paths do not
 # touch the brand layer), so both brand runs assert against the same output —
 # cheap, and it keeps `make test-oss` self-contained.
-test-oss: build-oss build-flat build-nosections build-section-title build-section-current build-nobook
+test-oss: build-oss build-oss-devpath build-flat build-nosections build-section-title build-section-current build-nobook
 	DOCS_TEST_CONFIG=$(abspath ./fixture/.docs-test-oss.toml) npx playwright test
 
 test-enterprise: build-enterprise build-flat build-nosections build-section-title build-section-current build-nobook

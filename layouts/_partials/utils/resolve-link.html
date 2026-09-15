@@ -255,8 +255,31 @@
        `/docs/<flavor>` prefix the page actually lives under, which is the whole
        point: without it a link from /docs/envoy/2.1.x/foo/ to /quickstart/ came
        out as /2.1.x/quickstart/, a 404. Measured on kgateway.dev, 637 pages. */ -}}
+{{- /* The local branch emits a root-relative URL, so it must still carry the
+       PATH component of baseURL — dropping .Site.BaseURL whole drops that path
+       with it.
+
+       $versionRoot arrived here baseURL-RELATIVE: the strip a hundred lines up
+       removed the baseURL path from it precisely because the assembly below
+       re-supplies it. The else branch does. Emitting $versionRoot bare does
+       not, so a site whose baseURL carries a subpath loses it.
+
+       Only a FULL baseURL with a path is affected, and only in dev, which is
+       why this survived: every config in this repo's matrix is path-only
+       ("/test", "/"), where the path component is either the whole value or
+       empty and the two branches agree. Point a site at
+       https://host/docs/ and run `hugo server` — .Site.BaseURL becomes
+       http://localhost:1313/docs/, this branch fires, and every {{< link >}}
+       renders /<section>/<version>/… instead of /docs/<section>/<version>/….
+       Measured on kagent.dev: 8 dead links on a single page, every one of them
+       correct in the production build, which takes the else branch.
+
+       Recomputed rather than reused: the $baseURLPath above is scoped to the
+       block that strips it. For a "/" or bare-host baseURL this is the empty
+       string and the emitted URL is byte-identical to before. */ -}}
 {{- if or (eq .Site.BaseURL "/") (in .Site.BaseURL "localhost") -}}
-{{- $finalURL = printf "%s/%s%s" $versionRoot $ver $path -}}
+{{- $localBasePath := replaceRE `^https?://[^/]*` "" .Site.BaseURL | strings.TrimSuffix "/" -}}
+{{- $finalURL = printf "%s%s/%s%s" $localBasePath $versionRoot $ver $path -}}
 {{- else -}}
 {{- $finalURL = printf "%s%s/%s%s" .Site.BaseURL $versionRoot $ver $path -}}
 {{- end -}}

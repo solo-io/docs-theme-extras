@@ -24,6 +24,22 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [Unreleased]
+
+### Fix — every `link` shortcode dropped the baseURL path under `hugo server`, so preview links 404'd on content that was correct (`layouts/_partials/utils/resolve-link.html`)
+
+A consumer whose `baseURL` carries a path — kagent.dev sets `https://kagent.dev/docs/` — got working links in production and broken ones in local preview. **There is deliberately no production link below, because this bug cannot appear in production**: it is gated on `.Site.BaseURL` containing `localhost`, which only `hugo server` produces. That is exactly what made it expensive. Found while preparing the kagent 1.0 doc set, where a production build emitted `/docs/kagent/1.x/reference/versions#…` and `hugo server` emitted `/kagent/1.x/reference/versions#…` from the same source — 8 dead links on one page, and every page of that docset affected. The failure mode is worse than the 404: an author sees a dead link in preview on a page whose markup is right, and the natural response is to "fix" correct content. A link checker cannot backstop it either, because the remaps that resolve a subpath site against an on-disk build map both the correct and the truncated form onto the same file, so the truncated one reads as valid. To see it, build the new fixture and read the hrefs: `make build-oss-devpath` then `grep SHAPE_CANONICAL public-oss-devpath/test/v2/link-hextra-shapes/index.html` — `/test/v2/everything/` with this fix, `/v2/everything/` without it.
+
+The assembly step branches on `or (eq .Site.BaseURL "/") (in .Site.BaseURL "localhost")` and emits a root-relative URL on the local branch, which is right. What it emitted was `$versionRoot` alone. `$versionRoot` arrives baseURL-*relative*: the strip about a hundred lines earlier removes the baseURL path from it precisely so the assembly can re-supply it, and the production branch does exactly that by prepending `.Site.BaseURL`. The local branch dropped `.Site.BaseURL` whole, and the path went with it. It now prepends the path component of `.Site.BaseURL` rather than nothing.
+
+This survived because no config in this repo's matrix can reach it. Every one is path-only (`"/test"`, `"/"`), where the baseURL path is either the entire value or empty and the two branches agree; only a full `scheme://host/path/` baseURL separates them, and `hugo server` manufactures exactly that by rewriting the origin and keeping the path. New fixture `hugo-oss-devpath.toml` builds that shape statically (`baseURL = "http://localhost:1313/test/"`), so `tests/dev-subpath-baseurl.spec.ts` is an ordinary built-output assertion needing no dev server.
+
+**Verified** three ways. The new spec fails on `main` (`SHAPE_CANONICAL -> /v2/everything/`) and passes with the fix (`/test/v2/everything/`), with a second case pinning the version segment's position so a double-prepend cannot pass. The full `static` project re-ran green against all six OSS fixture builds — 1853 passed, 6 skipped. And building kagent.dev against this working tree (`replace` in `go.mod`, reverted after) took its preview from 8 broken links on the sample page to 0 across 7 pages, while a production build of the same content produced a **byte-identical** href set to the unpatched build — every `href` in the tree, not a sample.
+
+**Consumer action.** None. The emitted URL is unchanged for any site whose `baseURL` is `"/"`, a bare host, or path-only, and unchanged for every production build; only the dev-server rendering of a subpath baseURL differs.
+
+---
+
 ## [0.3.11] — 2026-09-15
 
 ### Fix — the docTabs band scrolled away with the page, so switching section meant scrolling back to the top (`assets/css/docs-theme-extras.css`, `tests/docs-tabs-sidebar.spec.ts`, `docs/content/configuration/section-tabs.md`)
