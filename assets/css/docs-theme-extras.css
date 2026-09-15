@@ -813,7 +813,11 @@ pre.mermaid:not([data-processed]) {
          scrolled away with the page; sticky means article content passes
          underneath it, so it has to paint over that. The colors match Hextra's
          own navbar blur layer (`hx:bg-white` / `hx:dark:bg-dark`) so the two
-         bands read as one piece of chrome.
+         bands read as one piece of chrome. Both halves are written the same
+         way — Hextra's variable with Hextra's literal as the fallback (see the
+         `.dark` rule below). Do not substitute a Tailwind literal for either:
+         they are not the same colors, and a near-miss shows up as a seam
+         against the navbar, which is the one thing this background prevents.
        - z-index sits between the content (unpositioned, so below everything
          positioned) and Hextra's nav container (z-20), so the band covers the
          article but still slides under the navbar and its dropdowns. */
@@ -822,7 +826,7 @@ pre.mermaid:not([data-processed]) {
   z-index: 10;
   width: 100%;
   border-bottom: 1px solid #f0f1f3;
-  background: #fff;
+  background: var(--hx-color-white, #fff);
   /* A little room above the tab row so the band isn't jammed against the
      navbar's divider. The space below the tabs is the .docs-tab padding, whose
      bottom edge lands on the band's hairline (the active underline sits on it),
@@ -867,10 +871,14 @@ pre.mermaid:not([data-processed]) {
 }
 .dark .docs-tabs-band {
   border-bottom-color: rgba(255, 255, 255, 0.06);
-  /* Hextra's own `hx:dark:bg-dark`. The literal fallback is Tailwind's
-     gray-900, which is what that variable resolves to in Hextra's default
-     palette, so a consumer on an older Hextra still gets an opaque band. */
-  background: var(--hx-color-dark, #111827);
+  /* Hextra's own `hx:dark:bg-dark`. The literal fallback must be Hextra's
+     `dark`, which is #111 — NOT Tailwind's gray-900 (#111827). They are not the
+     same color: gray-900 is blue-tinted and reads as a visible seam against the
+     navbar, which is the one thing this background is here to avoid. Verified
+     in both hextra@v0.12.3 (`--hx-color-dark:#111` in the compiled stylesheet)
+     and hextra@v0.9.7 (`dark: '#111'` in tailwind.config.js), so the fallback
+     matches on the pre-0.12 consumers that never define the variable. */
+  background: var(--hx-color-dark, #111);
 }
 /* The band's page-width container (.docs-tabs-inner, added in docs-tabs.html)
    sources its max-width class from docs/width-class.html, the same slot
