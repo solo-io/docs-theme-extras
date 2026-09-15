@@ -24,7 +24,7 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
-## [Unreleased]
+## [0.3.11] — 2026-09-15
 
 ### Fix — the docTabs band scrolled away with the page, so switching section meant scrolling back to the top (`assets/css/docs-theme-extras.css`, `tests/docs-tabs-sidebar.spec.ts`, `docs/content/configuration/section-tabs.md`)
 
