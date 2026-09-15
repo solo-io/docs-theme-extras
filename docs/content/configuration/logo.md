@@ -25,6 +25,28 @@ enforced by the theme.
   mark, with no `sidebar.logo`.
 - **Product in sidebar, corporate mark in navbar** (older enterprise): set
   `navbar.logo` to the corporate mark and `sidebar.logo` to the product lockup.
+  Note that this arrangement also changes where the navbar logo *links* — see
+  below.
+
+## Where the navbar logo links
+
+`params.navbar.logo.link` sets the destination outright. When it is unset, the
+theme picks one based on whether `sidebar.logo` is set, because that is what
+distinguishes a product mark from a corporate mark:
+
+| `sidebar.logo` | Navbar mark is | Default link |
+|---|---|---|
+| unset | the product mark | `.Site.Home.RelPermalink` — this site's own home page |
+| set | the Solo corporate mark | `https://www.solo.io/docs` — the docs hub |
+
+The reasoning: a corporate mark in the navbar is not a link back to the product
+you are already reading, it is the way out to the wider documentation. A product
+mark is the opposite, so it goes home.
+
+> [!NOTE]
+> The hub URL is hardcoded in the partial. A consumer that wants a different
+> destination, or wants to stop depending on that constant, should set
+> `params.navbar.logo.link` explicitly rather than rely on the default.
 
 ## The mobile slide-out drawer logo
 

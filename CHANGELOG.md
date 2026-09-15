@@ -24,7 +24,59 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
-## [Unreleased]
+## [0.3.11] — 2026-09-15
+
+### Fix — the docTabs band scrolled away with the page, so switching section meant scrolling back to the top (`assets/css/docs-theme-extras.css`, `tests/docs-tabs-sidebar.spec.ts`, `docs/content/configuration/section-tabs.md`)
+
+The tab band is top-level navigation — it is how a reader moves between Documentation, Integrations, Reference, and Release notes — but it shipped non-sticky, as the CSS comment admitted it was ("Non-sticky in this prototype … making it sticky under the navbar is a follow-up"). On <https://docs.solo.io/agentgateway/kubernetes/latest/documentation/> and any other page under a tab, scrolling a screen or two put the tabs off-screen, so changing section required scrolling all the way back up first. Every other piece of navigation on the page already stays put: the navbar, the left sidebar, and the right-hand TOC are all pinned. The tabs were the one exception, and they are the highest-level of the four.
+
+The band is now `position: sticky` at `--solo-navbar-bottom` (the navbar plus any announcement banner), pinned directly under Hextra's own sticky nav container with `z-index: 10` — above the article, below the navbar at `z-20` so the navbar's dropdowns and search results still open over it.
+
+Two things had to move with it. **The band's background was `transparent`**, which was harmless while it scrolled with the page and is not harmless once article text passes underneath; it now paints `var(--hx-color-white, #fff)` in light mode and `var(--hx-color-dark, #111)` in dark, so the band and the navbar read as one piece of chrome. Both halves are Hextra's variable with Hextra's own literal behind it, for consumers on a Hextra old enough not to define it: `#111` is what `dark` resolves to in hextra@v0.12.3 (`--hx-color-dark:#111` in the compiled stylesheet) and in hextra@v0.9.7 (`dark: '#111'` in `tailwind.config.js`). It is deliberately NOT Tailwind's gray-900 `#111827`, which is blue-tinted rather than neutral and would show against the navbar as exactly the seam this background exists to prevent. **The side rails had to drop by the band's height** or they would have tucked under it: this module already centralises their sticky offset in `--solo-rail-top`, so that variable now reads `calc(var(--solo-navbar-bottom) + var(--solo-tabs-height))`, and `--solo-tabs-height` is `0rem` everywhere except on a `body:has(.docs-tabs-band)` inside the desktop-sidebar media query. The scoping matters in both directions: a site that never opts into `[[params.docTabs]]` keeps byte-identical offsets, and below 1280px — where the band is `display: none` and the tabs move into the drawer as a chip row — the offset goes back to zero rather than reserving 68px of dead space. Because `--solo-rail-top` also feeds heading `scroll-margin-top` and both rails' `max-height`, anchor links and the rails' scroll regions follow the new offset without further edits.
+
+`--solo-tabs-height` is a hardcoded `4.25rem`, measured from a real build rather than derived (0.5rem band padding + 1.25rem tab padding top and bottom + the 0.9375rem/1.2 line box + the 2px active-underline reserve - the 1px hairline overlap + the 1px band border = 68px). That constant is the one fragile part of the change, so the new tests assert the rails land exactly on the band's measured bottom edge — a stale constant fails there instead of quietly misaligning.
+
+**Verified** with `make test-all` on both brands (2299 passing, 19 skipped; the only failures were the known cross-browser `page.goto` timeouts on the shared port, which pass on a re-run of those two projects alone). `tests/docs-tabs-sidebar.spec.ts` gains five browser tests: the band holds its position under the navbar across a scroll, the sidebar and TOC pin to the band's bottom edge, the background is opaque, a band-less page keeps the pre-band offset, and the hidden band reserves nothing below the breakpoint. All five were confirmed to FAIL against the previous CSS, so they are not vacuous. Light and dark screenshots of a scrolled tab page were checked by eye for text bleeding through the band.
+
+**Consumer action.** None beyond the pin bump. Only sites that set `[[params.docTabs]]` see any change (today the docs hub's agentgateway product and agentgateway-oss-website); every other site's rail offsets are unchanged. Consumers that override `--solo-rail-top` directly should switch to overriding `--solo-navbar-bottom` instead, or their override will drop the band-height term. The three offset variables and that override rule are now written up under "Sticky offsets" in `docs/content/configuration/section-tabs.md`, whose "Desktop: the tab band" section otherwise still described the band as if it scrolled away.
+
+---
+
+### Fix — the navbar's corporate logo sent the reader through a redirect to reach the docs hub (`layouts/partials/navbar-title.html`, `docs/content/configuration/logo.md`)
+
+On a site that puts the product mark in the sidebar and the Solo corporate mark in the navbar, `navbar-title.html` links that corporate mark off-site rather than to the site's own home page, and the default destination it used was `https://docs.solo.io`. The root of that host does not serve the hub any more — `curl -sI https://docs.solo.io/` answers `301` with `Location: https://www.solo.io/docs` — so clicking the Solo mark on, for example, <https://docs.solo.io/gateway/latest/> spent a round trip on a redirect before landing. Nothing was broken for the reader, which is why it went unnoticed: it is a hardcoded link that quietly became one hop stale when the hub's front door moved.
+
+The default is now the final URL, `https://www.solo.io/docs`. Nothing else about the branch changes: `sidebar.logo` being set is still what decides the mark is corporate and the link is off-site, an unset `sidebar.logo` still links to `.Site.Home.RelPermalink`, and a consumer that sets `params.navbar.logo.link` still overrides both.
+
+**Verified** the redirect directly (`curl -sI https://docs.solo.io/` → `301` → `https://www.solo.io/docs` → `200`), and the blast radius by building the docs hub against `v0.3.11-beta.1` and reading the rendered `<nav>` rather than by grepping its TOMLs — which is the only way to get this right, for a reason worth recording.
+
+**Only 4 of the hub's 8 products actually take this default, and grepping the configs says 7.** Seven of the eight `hugo-<product>.toml` files set `params.sidebar.logo`, and not one of the eight sets `navbar.logo.link`, so a grep concludes all seven fall through to the module's default. They do not. `navbar.logo.link` is *inherited from imported Hugo modules*: `kgateway.dev`'s `hugo.yaml` sets `navbar.logo.link: /`, `ambientmesh.io`'s sets the same, and the hub imports those as content modules, so their params merge into any product that imports them. `gateway` and `kgateway` pick it up from kgateway.dev, `istio` from ambientmesh.io, and on those three the shortcode's `| default` never fires — the Solo mark points at `/`, the true domain root, which on `docs.solo.io` is precisely the URL that 301s. The fix is inert there and the redirect stays. `agentregistry` looks like a fourth such case and is not: its kgateway.dev import is commented out, so nothing overrides it. Confirmed per product with `hugo160 config --config hugo-<product>.toml`, and end-to-end by building `gateway` (renders `href="/"`) and `agentgateway` (no `sidebar.logo`, so it links to its own home).
+
+So this reaches `agentregistry`, `kagent`, `gloo-mesh-enterprise` and `gloo-mesh-gateway` on a pin bump; `gateway`, `kgateway` and `istio` need `navbar.logo.link` set explicitly in their own `hugo-<product>.toml` (project config beats module config) before they stop redirecting. That is a hub-side change, not a module one.
+
+**Not covered by a test, and worth knowing why.** No fixture in this repo sets `params.sidebar.logo` — `hugo-oss.toml` and `hugo-docs.toml` both say in comments that they leave it unset on purpose, and `hugo-enterprise.toml` follows the same arrangement — so `$hasMobileLogo` is `false` in every build the harness produces and this line never executes under test. `make test-oss` passes, including `tests/navbar-title-utility.spec.ts`, but it would pass just as happily with a nonsense URL here. Covering it needs a fixture that sets `sidebar.logo`, which would also be the first coverage of the desktop-only logo classes on the same branch.
+
+This default was also undocumented. `docs/content/configuration/logo.md` listed `link` as a `navbar.logo` key and said nothing about what happens when it is unset, so the off-site jump was discoverable only by reading the partial. It now carries a "Where the navbar logo links" section with the two-row table and the reasoning (a corporate mark is the way out to the wider docs; a product mark goes home), plus a note that the hub URL is a hardcoded constant and a consumer who does not want to depend on it should set `navbar.logo.link` explicitly.
+
+**Consumer action.** None beyond the pin bump for the four hub products listed above. Sites that set `params.navbar.logo.link` are unaffected, and — the part that is easy to miss — that includes sites which never set it themselves but import a Hugo module that does. Sites with no `sidebar.logo` are unaffected either way.
+
+---
+
+### Chore — Dependabot kept opening PRs against a GENERATED file, and one of them merged with no effect (`.github/dependabot.yml`)
+
+`packages/hugoautogen/package.json` is not hand-maintained. `hugo mod npm pack` writes it from the Hugo module graph, and its six devDependencies all come from hextra — `packages/hugoautogen/hugo_packagemeta.json` records `github.com/imfing/hextra` as the `dependencySource` for every one of them. This repo therefore cannot hold a version bump in that file: the value belongs to hextra, and the next regeneration reasserts it.
+
+Dependabot could not see that. The npm config runs on `directory: /`, the root declares `packages/hugoautogen` as a workspace, so the generated file came into scope and got PRs like any other manifest. That already produced a merged no-op: PR #51 bumped `postcss-cli` 11.0.1 → 12.0.0 and merged, then a regeneration on the PR #50 branch (commit `ec35387`) wrote `^11.0.1` back before #50 merged, so `main` reached v0.3.10+ with the bump gone from both the manifest and the lockfile. A merged PR that left no trace is worse than no PR at all — the changelog of record says the bump happened.
+
+The npm config now ignores the six generated names: `@axe-core/playwright`, `@tailwindcss/postcss`, `postcss-cli`, `prettier`, `prettier-plugin-go-template`, `tailwindcss`. `@playwright/test` is deliberately NOT in that list — hextra declares it too, but so does the root `package.json`, so `hugo mod npm pack` leaves it to the root and it stays this repo's to bump. Moving any of the six now means bumping hextra through the existing `gomod` config and rerunning `hugo mod npm pack`, which is the only thing that was ever going to work.
+
+**Verified** that the file is generator-owned rather than merely stale, which is the whole premise: `hugo160 mod npm pack` on the committed tree produces no diff, and after hand-editing `postcss-cli` to `^12.0.0` the same command rewrites it to `^11.0.1` and leaves the tree clean. Cross-checked the upstream source of the value in both `hextra@v0.12.3/package.json` and `hextra@v0.9.7/package.json`. Worth noting the failure was silent: a hand-bumped pin produces no Hugo npm-sync warning at build time, so `tests/hugo-warnings.spec.ts` would not have caught it either.
+
+No production page: this is repo automation, outside the module consumers pin. **Consumer action.** None — nothing shipped in the module changes, and no pin bump is involved.
+
+---
+
+## [0.3.10] — 2026-09-09
 
 ### Fix — `navbar.width` was read and then discarded, so the navbar never matched the page's own width setting (`layouts/_partials/navbar.html`)
 
@@ -59,9 +111,9 @@ Two problems, both reader-facing.
 
 **The reader was offered "the documentation" twice in three lines.** When every ranked candidate misses, the floor candidate is a version root, and the footer escape-hatch link is the site root. Different URLs, but both read as "go home", and the first was labelled with a raw path that a reader cannot evaluate. The floor is now labelled after the product, and it hides the footer line when it wins. A topic or ancestor hit is a different kind of destination, so the footer link stays under those, and it is still rendered server-side for readers with no JavaScript.
 
-**Verified** with `make test-oss` and `make test-enterprise` (2286 passing, brand-independent as expected). `tests/retired-version-notice.spec.ts` now asserts the absence of "renamed or removed" so the claim cannot return; `tests/not-found.spec.ts` covers both the labelled floor and the footer link surviving a section hit. The JA table in `solo-io/docs` (`i18n/ja.yaml`) is updated in step, including the new `not_found_home_label` key — a missing key falls back to English silently, so it would not have failed a build.
+**Verified** with `make test-oss` and `make test-enterprise` (2286 passing, brand-independent as expected). `tests/retired-version-notice.spec.ts` now asserts the absence of "renamed or removed" so the claim cannot return; `tests/not-found.spec.ts` covers both the labelled floor and the footer link surviving a section hit. The JA table in the docs hub (`i18n/ja.yaml`) is updated in step, including the new `not_found_home_label` key — a missing key falls back to English silently, so it would not have failed a build.
 
-**Consumer action.** None beyond the pin bump. `solo-io/docs` is on `v0.3.6` and needs the bump to pick this up.
+**Consumer action.** None beyond the pin bump. The docs hub is on `v0.3.6` and needs the bump to pick this up.
 
 ---
 

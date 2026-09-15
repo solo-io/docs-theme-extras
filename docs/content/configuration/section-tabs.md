@@ -89,6 +89,37 @@ the same page-width container as the content column (`.docs-tabs-inner`), so it
 lines up with the sidebar/content rather than the viewport edge. Clicking a tab
 navigates to that tab's directory landing.
 
+The band is **sticky**. It pins directly under the navbar and stays there
+however far the reader scrolls, so switching section never means scrolling back
+to the top. That matches the rest of the page chrome, which is already pinned:
+the navbar, the left sidebar and the right-hand TOC.
+
+### Sticky offsets
+
+Three CSS custom properties compose the vertical offsets, and a consumer that
+needs to shift them should override the first one rather than the last:
+
+| Property | Value | What it is |
+|---|---|---|
+| `--solo-navbar-bottom` | `calc(var(--navbar-height, 4rem) + var(--hextra-banner-height, 0rem))` | The bottom edge of the sticky navbar container, banner included. The band pins here. |
+| `--solo-tabs-height` | `0rem`, or `4.25rem` on a page that renders a band at `xl` and up | The band's own height. |
+| `--solo-rail-top` | `calc(var(--solo-navbar-bottom) + var(--solo-tabs-height))` | Where the sidebar and TOC pin, and the `scroll-margin-top` for heading anchors. |
+
+Two things follow from that:
+
+- **Override `--solo-navbar-bottom`, not `--solo-rail-top`.** An override of
+  `--solo-rail-top` replaces the whole expression and drops the band-height
+  term, so the rails tuck under the band on tabbed pages.
+- **A site with no `docTabs` is unaffected.** `--solo-tabs-height` is raised
+  only on a `<body>` that actually contains a band, and only inside the
+  `xl` media query. Below `xl` the band is hidden, so the offset returns to zero
+  rather than reserving dead space above the drawer.
+
+`4.25rem` is measured from a real build at the shipped type scale, not derived.
+If you restyle `.docs-tab` padding, font size, line height or the active
+underline, remeasure it — `tests/docs-tabs-sidebar.spec.ts` asserts the rails
+land on the band's bottom edge, so a stale value fails there.
+
 ## Mobile: tabs in the slide-out drawer
 
 Below `xl` the band is hidden and the tabs move into the slide-out sidebar drawer
