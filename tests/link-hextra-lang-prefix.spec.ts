@@ -113,8 +113,19 @@ test.describe("localized-page version inference", () => {
     ).toBeGreaterThan(-1);
 
     // The baseURL path MUST be stripped, or the hub doubles its product segment.
+    //
+    // Matched by SHAPE, not by the exact pattern literal: an origin-stripping
+    // replaceRE over `.Site.BaseURL`, landing in $baseURLPath. Pinning the
+    // literal made this fail when the pattern grew an optional scheme group
+    // (`^(https?:)?//` — `hugo server` reports a protocol-relative base for a
+    // path-only baseURL), which is a change this assertion has no opinion about.
+    // What it does have an opinion about is the strip existing at all, and
+    // existing ONCE: `$baseURLPath` is now computed a single time at the top of
+    // the file and read by both $versionRoot derivations and by the assembly.
     expect(
-      /replaceRE\s+`\^https\?:\/\/\[\^\/\]\*`\s+""\s+\.Site\.BaseURL/.test(src),
+      /\$baseURLPath\s*:?=\s*replaceRE\s+`\^[^`]*\/\/\[\^\/\]\*`\s+""\s+\.Site\.BaseURL/.test(
+        src,
+      ),
       "the baseURL path is no longer derived from `.Site.BaseURL` — " +
         "version-root.html returns a published-URL prefix that already " +
         "contains the product, and the assembly step re-prepends baseURL, so " +

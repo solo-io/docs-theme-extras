@@ -32,6 +32,16 @@ import path from "node:path";
 // Fixture: hugo-oss-devpath.toml, a static build at the dev-server baseURL
 // shape. Reuses the marker page that link-hextra-shapes.spec.ts asserts against,
 // so the shapes stay pinned in one place and this spec only pins the PREFIX.
+//
+// BOTH HALVES OF THE SPLIT. resolve-link.html derives $versionRoot two ways —
+// version-root.html on a versioned site, .Page.FirstSection.RelPermalink on a
+// version-less one — and the assembly re-supplies the baseURL path to whatever
+// it gets. Only the versioned derivation used to strip that path first, so the
+// flat one doubled it: /docs/docs/<section>/…, in production as well as in dev,
+// on any flat site whose baseURL carries a subpath (kagent's shape, and the
+// shape hugo-flat.toml deliberately mirrors). The versioned fixture cannot see
+// that — different branch, different source — so the flat builds below are the
+// other half of this spec, not a nice-to-have.
 
 const BUILT = path.join(
   __dirname,
@@ -42,6 +52,21 @@ const BUILT = path.join(
   "link-hextra-shapes",
   "index.html",
 );
+
+// The version-less builds, both of which carry a subpath baseURL:
+//   public-flat          baseURL "/docs"                    → production branch
+//   public-flat-devpath  baseURL "http://localhost:1313/docs/" → local branch
+// One page, one `link` call (fixture/content-flat/en/alpha/first.md). Listing
+// both is the point: the bug took the local branch, the doubling it exposed
+// took the production one, and a fix to either alone leaves the other wrong.
+const FLAT_BUILDS = [
+  { name: "public-flat (production branch)", dir: "public-flat" },
+  { name: "public-flat-devpath (local branch)", dir: "public-flat-devpath" },
+];
+
+function flatPage(dir: string): string {
+  return path.join(__dirname, "..", dir, "alpha", "first", "index.html");
+}
 
 // Shapes that resolve to a real page. SHAPE_NO_LEADING is deliberately omitted:
 // link-hextra-shapes.spec.ts pins it as broken, and a broken shape says nothing
@@ -101,4 +126,36 @@ test.describe("dev-server baseURL keeps its path", () => {
     expect(href).not.toBeNull();
     expect(href!.replace(/^https?:\/\/[^/]*/, "")).toBe("/test/v2/everything/");
   });
+});
+
+test.describe("version-less site: the baseURL path appears once, not twice", () => {
+  for (const b of FLAT_BUILDS) {
+    test(`${b.name}`, () => {
+      const file = flatPage(b.dir);
+      test.skip(
+        !fs.existsSync(file),
+        `${b.dir} not built — run \`make build-flat build-oss-devpath\` first`,
+      );
+
+      const href = hrefFor(fs.readFileSync(file, "utf8"), "PROBE_FLAT_LINK");
+      expect(href, "PROBE_FLAT_LINK emitted no href").not.toBeNull();
+      const p = href!.replace(/^https?:\/\/[^/]*/, "");
+
+      // Two assertions, because each one alone passes on a different bug. The
+      // first fails when the path is dropped (what the versioned half of this
+      // spec catches); the second fails when it is applied twice, which is what
+      // happens if the assembly re-supplies a path that $versionRoot never had
+      // stripped. Only the prefix is pinned — see the header.
+      expect(p, `${b.dir}: baseURL path missing from ${href}`).toMatch(
+        /^\/docs\//,
+      );
+      expect(
+        p.startsWith("/docs/docs/"),
+        `${b.dir}: baseURL path applied twice — ${href}. The version-less\n` +
+          "branch of resolve-link.html must strip $baseURLPath from\n" +
+          ".Page.FirstSection.RelPermalink, the same way the versioned branch\n" +
+          "strips it from version-root.html's versionBase.",
+      ).toBe(false);
+    });
+  }
 });

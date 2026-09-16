@@ -134,13 +134,21 @@ build-nosections:
 # content and versions and differs only in publishDir and the one param. Read
 # directly by tests/section-dropdown-title.spec.ts; see hugo-section-title.toml
 # for why the key cannot just be set on an existing branded fixture.
-# The dev-server baseURL shape (full URL with a path). Static build, so the
-# spec reads it like any other built output. See hugo-oss-devpath.toml.
-build-oss-devpath:
-	$(HUGO) --config hugo-oss.toml,hugo-oss-devpath.toml --gc 2> .build-oss-devpath.log
-
 build-section-title:
 	$(HUGO) --config hugo-oss.toml,hugo-section-title.toml --gc 2> .build-section-title.log
+
+# THE DEV-SERVER baseURL SHAPE — a FULL baseURL that carries a path, which no
+# other config here builds and which `hugo server` manufactures for every
+# consumer whose site lives under a subpath. Two overlays, because the two code
+# paths that have to re-supply that path are on opposite sides of the
+# versioned / version-less split and a fix to one says nothing about the other:
+#   hugo-oss-devpath.toml   versioned  (hugo-oss.toml base)
+#   hugo-flat-devpath.toml  flat       (hugo-flat.toml base)
+# Static builds, so tests/dev-subpath-baseurl.spec.ts reads them like any other
+# built output — no dev server. See either toml for the shape itself.
+build-oss-devpath:
+	$(HUGO) --config hugo-oss.toml,hugo-oss-devpath.toml --gc 2> .build-oss-devpath.log
+	$(HUGO) --config hugo-flat.toml,hugo-flat-devpath.toml --gc 2> .build-flat-devpath.log
 
 # THE BOOK GATE, OFF. Same content and same `outputs` front matter as
 # build-enterprise, with `buildBook = false` — so a book.html appearing under
@@ -163,10 +171,17 @@ build-section-current:
 # something to read. It is brand-independent (the version-less code paths do not
 # touch the brand layer), so both brand runs assert against the same output —
 # cheap, and it keeps `make test-oss` self-contained.
+#
+# build-oss-devpath is listed in BOTH targets for the same reason, and it is not
+# optional: CI runs the brands as separate matrix jobs (`make test-${brand}`) on
+# separate runners, so a fixture listed under one target does not exist in the
+# other job — and dev-subpath-baseurl.spec.ts, like every spec here, SKIPS on a
+# missing build rather than failing. Dropping it from one target would have cost
+# nothing visible and half the coverage.
 test-oss: build-oss build-oss-devpath build-flat build-nosections build-section-title build-section-current build-nobook
 	DOCS_TEST_CONFIG=$(abspath ./fixture/.docs-test-oss.toml) npx playwright test
 
-test-enterprise: build-enterprise build-flat build-nosections build-section-title build-section-current build-nobook
+test-enterprise: build-enterprise build-oss-devpath build-flat build-nosections build-section-title build-section-current build-nobook
 	DOCS_TEST_CONFIG=$(abspath ./fixture/.docs-test-enterprise.toml) npx playwright test
 
 # Run both brand variants. CI default — surfaces brand-specific regressions
@@ -183,16 +198,26 @@ test:
 	fi
 	DOCS_TEST_CONFIG=$(abspath $(CONFIG)) npx playwright test
 
+# Every publishDir and every build log. A build left out of this list survives
+# `make clean`, and a spec that skips on a missing build will then read a stale
+# tree and pass — which is the same silent-coverage-loss the test targets above
+# guard against. public-nobook and the two public-nosections trees were already
+# missing when the devpath ones were added; listed now rather than leaving a
+# half-swept list to be discovered the same way twice.
 clean:
 	rm -rf public-oss public-enterprise public-oss-local public-enterprise-local \
 	       public-flat public-flat-root public-section-title public-section-current \
+	       public-oss-devpath public-flat-devpath \
+	       public-nobook public-nosections public-nosections-bare \
 	       public-docs \
 	       resources test-results playwright-report \
 	       .build-oss.log .build-enterprise.log \
+	       .build-oss-devpath.log .build-flat-devpath.log \
 	       .build-flat.log .build-flat-root.log \
 	       .build-nosections.log .build-nosections-bare.log \
 	       .build-section-title.log .build-section-current.log \
 	       .build-oss-local.log .build-enterprise-local.log \
+	       .build-nobook.log \
 	       .build-docs.log .build-docs-local.log
 
 help:
@@ -209,6 +234,7 @@ help:
 	@echo "  build-flat           - static builds, VERSION-LESS sections   → public-flat/ + public-flat-root/"
 	@echo "  build-section-title  - static build, configured selector title → public-section-title/"
 	@echo "  build-section-current - static build, selector names current section → public-section-current/"
+	@echo "  build-oss-devpath    - static builds, dev-server baseURL shape → public-oss-devpath/ + public-flat-devpath/"
 	@echo "  build-docs           - static build, the module's own docs site → public-docs/"
 	@echo ""
 	@echo "  test-oss             - build-oss + run harness against the OSS fixture"

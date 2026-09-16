@@ -39,6 +39,18 @@ This survived because no config in this repo's matrix can reach it. Every one is
 
 **Consumer action.** None. The emitted URL is unchanged for any site whose `baseURL` is `"/"`, a bare host, or path-only, and unchanged for every production build; only the dev-server rendering of a subpath baseURL differs.
 
+### Fix — on a version-less site, the same `link` shortcodes wrote the baseURL path TWICE, in production as well as in preview (`layouts/_partials/utils/resolve-link.html`)
+
+Found while reviewing the fix above, and it is the mirror image of it. `resolve-link.html` derives `$versionRoot` two different ways — `utils/version-root.html` on a versioned site, `.Page.FirstSection.RelPermalink` on a version-less one — and the assembly step then re-supplies the baseURL path to whatever it was handed. Only the versioned derivation stripped that path first. `RelPermalink` is a published-URL path, so it already carries it: a flat site at `https://kagent.dev/docs/` emitted `/docs/docs/<section>/…` from every `link` call. Unlike the dev-only bug above, this one reached production — the production branch prepends `.Site.BaseURL`, doubling the path just as thoroughly as the local branch does. No consumer is shipping it today, because both flat consumers have an empty baseURL path (ambientmesh.io is `"/"`, agentregistry a bare host), so this is a fix for the shape `hugo-flat.toml` was written to mirror rather than for a live 404.
+
+It stayed invisible because nothing in the fixture called `link` or `link-hextra` on a version-less build at all — the branch ran on ambientmesh.io and nowhere else. `fixture/content-flat/en/alpha/first.md` now makes one such call, and `hugo-flat-devpath.toml` builds the flat fixture a second time at the dev-server baseURL shape, so `tests/dev-subpath-baseurl.spec.ts` pins both branches of the assembly on both derivations of `$versionRoot`. To see the old behavior: `make build-flat` then `grep PROBE_FLAT_LINK public-flat/alpha/first/index.html` — `/docs/alpha/beta/` with this fix, `/docs/docs/alpha/beta/` without it.
+
+The regex that computes the baseURL path is now written once at the top of the file and read from all three places that need it, instead of being recomputed inside the block that happened to need it first. That duplication is the direct cause of this bug, and of the one above. The pattern also accepts a protocol-relative base (`//host/path/`), which is what `hugo server` reports for a path-only `baseURL`.
+
+**Verified.** Both new cases fail without the strip (`/docs/docs/alpha/beta/` on `public-flat` and on `public-flat-devpath`) and pass with it. Full `static` project, both brands, all fixture builds: green.
+
+**Consumer action.** None, and no rendered output changes for any current consumer: with an empty baseURL path the added strip is a no-op.
+
 
 ### Fix — every sticky-band assertion skipped on real consumers, so v0.3.11 shipped a band that pinned into the navbar on agentgateway-oss-website (`tests/docs-tabs-chrome.spec.ts`, `playwright.config.ts`)
 
