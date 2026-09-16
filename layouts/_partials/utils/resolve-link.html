@@ -67,6 +67,44 @@
        current page, e.g. "/docs/envoy". Empty on the docs hub, where the
        product lives in baseURL instead. See the derivation below. */ -}}
 {{- $versionRoot := "" -}}
+{{- /* baseURL, split into its two halves ONCE and with the same pattern, so the
+       halves are complements by construction: $origin is everything before the
+       path ("https://kagent.dev"), $baseURLPath is the path ("/docs"). Both are
+       "" for a "/" baseURL; $origin alone is "" for a path-only one ("/test").
+
+       Computed up here rather than where each is first needed because FOUR
+       places want an answer and they must not drift: both $versionRoot
+       derivations strip $baseURLPath (so $versionRoot is baseURL-RELATIVE by
+       the time the assembly runs), the assembly re-supplies it, and the
+       assembly's else branch prefixes $origin. $baseURLPath used to be a local
+       variable inside one of those derivations, which is exactly how the
+       version-less branch below came to skip the strip.
+
+       The scheme is optional in the pattern because a path-only baseURL makes
+       `hugo server` report a PROTOCOL-RELATIVE base — //localhost:1313///test/
+       for baseURL = "/test". A scheme-required pattern cannot cut the origin
+       off that, so the whole malformed base came back as $baseURLPath and the
+       TrimPrefix below did nothing.
+
+       THE COLLAPSE ON THE NEXT LINE IS NOT COSMETIC. Cutting the origin off
+       that shape leaves "///test", and $versionRoot — which Hugo normalizes to
+       "/test/v2" on both derivations — does not start with it, so the strip
+       goes back to doing nothing while the assembly re-supplies the path
+       anyway: /test/test/v2/…, every link on the site. Under the old
+       scheme-required pattern the strip ALSO did nothing, but the assembly had
+       nothing to re-supply either, so the two no-ops cancelled and the URL came
+       out right by accident. Matching the shape removes that accident, and the
+       collapse is what replaces it. Test: hugo-oss-protorel.toml and
+       hugo-flat-protorel.toml build this baseURL statically, one per
+       $versionRoot derivation, and tests/dev-subpath-baseurl.spec.ts asserts
+       both. Any leading "///" that still reaches an emitted URL is squashed by
+       the double-slash collapse at the bottom of this file. */ -}}
+{{- $baseURLSplit := `^(https?:)?//[^/]*` -}}
+{{- $baseURLPath := replaceRE $baseURLSplit "" .Site.BaseURL | strings.TrimSuffix "/" | replaceRE `^/+` "/" -}}
+{{- $origin := "" -}}
+{{- with findRE $baseURLSplit .Site.BaseURL 1 -}}
+  {{- $origin = index . 0 -}}
+{{- end -}}
 {{- /* Sites with no `site.Params.versions` at all (ambientmesh.io, and any
        other single-tree site with no per-version URL structure) have no
        version to resolve, full stop — not a missed inference, an absent
@@ -138,6 +176,18 @@
            site, since there's no version/product segment to misidentify it
            as. */ -}}
     {{- $versionRoot = strings.TrimSuffix "/" .Page.FirstSection.RelPermalink -}}
+    {{- /* Same coordinate change as the versioned branch below, and for the
+           same reason: RelPermalink is a PUBLISHED-URL path, so it already
+           carries the baseURL path, while the assembly step re-supplies that
+           path itself. Without this strip a flat site whose baseURL carries a
+           subpath doubles it — https://kagent.dev/docs/ emitted
+           /docs/docs/<section>/… — in production as well as in dev. Invisible
+           on the two flat consumers that exist (ambientmesh.io is "/",
+           agentregistry a bare host), so for them this is a no-op: an empty
+           $baseURLPath makes the TrimPrefix a no-op too. */ -}}
+    {{- with $baseURLPath -}}
+      {{- $versionRoot = strings.TrimPrefix . $versionRoot -}}
+    {{- end -}}
   {{- end -}}
 {{- else -}}
   {{- $root := partial "utils/version-root.html" .Page -}}
@@ -159,7 +209,6 @@
              bare host, so the prefix has to be spelled out). Strip in URL
              order, baseURL path then language. */ -}}
       {{- $versionRoot = $root.versionBase -}}
-      {{- $baseURLPath := replaceRE `^https?://[^/]*` "" .Site.BaseURL | strings.TrimSuffix "/" -}}
       {{- with $baseURLPath -}}
         {{- $versionRoot = strings.TrimPrefix . $versionRoot -}}
       {{- end -}}
@@ -255,10 +304,40 @@
        `/docs/<flavor>` prefix the page actually lives under, which is the whole
        point: without it a link from /docs/envoy/2.1.x/foo/ to /quickstart/ came
        out as /2.1.x/quickstart/, a 404. Measured on kgateway.dev, 637 pages. */ -}}
+{{- /* The PATH is assembled ONCE, into $rel, and is the same string on both
+       sides of the branch below — which now differs only in whether an origin
+       is prefixed. That is load-bearing, not tidying: this file has produced
+       two separate link bugs and both were the two branches disagreeing about
+       the path. With one shared $rel that disagreement is no longer
+       expressible.
+
+       $versionRoot arrives here baseURL-RELATIVE — BOTH derivations above strip
+       $baseURLPath from it — so the path has to be re-supplied at assembly,
+       whichever branch runs. The old code re-supplied it on one side only: the
+       else branch prepended .Site.BaseURL whole, the local branch prepended
+       nothing, so a site whose baseURL carries a subpath lost it in dev. Point
+       a site at https://host/docs/ and run `hugo server` — .Site.BaseURL
+       becomes http://localhost:1313/docs/, the local branch fires, and every
+       {{< link >}} rendered /<section>/<version>/… instead of
+       /docs/<section>/<version>/…. Measured on kagent.dev: 8 dead links on a
+       single page, every one of them correct in the production build.
+
+       WHY THE ELSE BRANCH STILL EMITS AN ABSOLUTE URL rather than collapsing to
+       a bare $rel: docs/book-document.html stitches page .Content into the PDF
+       verbatim, with no href rewriting, so on a consumer whose baseURL carries
+       an origin these are the only clickable internal links in a generated PDF
+       — everything else on the page is RelPermalink-based and already
+       root-relative there. Absolutize in book-document.html first if this
+       branch is ever removed. The .md export does NOT depend on it:
+       page-to-markdown.html re-absolutizes root-relative links itself.
+
+       For a "/" or bare-host baseURL $baseURLPath is "" and the emitted URL is
+       byte-identical to what this file emitted before either fix. */ -}}
+{{- $rel := printf "%s%s/%s%s" $baseURLPath $versionRoot $ver $path -}}
 {{- if or (eq .Site.BaseURL "/") (in .Site.BaseURL "localhost") -}}
-{{- $finalURL = printf "%s/%s%s" $versionRoot $ver $path -}}
+{{- $finalURL = $rel -}}
 {{- else -}}
-{{- $finalURL = printf "%s%s/%s%s" .Site.BaseURL $versionRoot $ver $path -}}
+{{- $finalURL = printf "%s%s" $origin $rel -}}
 {{- end -}}
 
 {{- /* Append a slash if the link is not a fragment, and not a static file.

@@ -1,0 +1,18 @@
+# Overlay on hugo-flat.toml. Comma-joined, later wins:
+#   hugo --config hugo-flat.toml,hugo-flat-devpath.toml
+#
+# The VERSION-LESS half of the dev-server baseURL shape. hugo-oss-devpath.toml
+# covers the versioned half; this one exists because the two halves derive
+# $versionRoot in utils/resolve-link.html from different sources — version-root
+# there, .Page.FirstSection.RelPermalink here — and only one of them used to
+# strip the baseURL path before the assembly re-supplied it. A fix verified on
+# the versioned build alone therefore proves nothing about this one.
+#
+# hugo-flat.toml already carries a subpath ("/docs", kagent's shape), but a
+# PATH-ONLY baseURL takes the production branch of the assembly. Spelling the
+# host out here is what moves the same site onto the local branch, which is the
+# branch `hugo server` actually runs.
+#
+# Backs tests/dev-subpath-baseurl.spec.ts.
+baseURL = "http://localhost:1313/docs/"
+publishDir = "public-flat-devpath"

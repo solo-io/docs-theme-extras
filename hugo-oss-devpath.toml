@@ -1,0 +1,19 @@
+# Overlay on hugo-oss.toml. Comma-joined, later wins:
+#   hugo --config hugo-oss.toml,hugo-oss-devpath.toml
+#
+# Reproduces the one baseURL shape the rest of the matrix never builds: a FULL
+# baseURL that carries a path, as seen by `hugo server`.
+#
+# Every other config here is path-only ("/test" or "/"). Consumers are not:
+# kagent.dev sets baseURL = "https://kagent.dev/docs/", and under `hugo server`
+# Hugo rewrites the origin and leaves the path, so .Site.BaseURL becomes
+# http://localhost:1313/docs/. That value is what utils/resolve-link.html
+# branches on, and it is unreachable from a path-only config — which is why a
+# link shortcode could drop the baseURL path in dev for as long as it did.
+#
+# Spelling the host literally here builds that shape STATICALLY, so the spec is
+# an ordinary built-output assertion and needs no running dev server.
+#
+# Backs tests/dev-subpath-baseurl.spec.ts.
+baseURL = "http://localhost:1313/test/"
+publishDir = "public-oss-devpath/test"

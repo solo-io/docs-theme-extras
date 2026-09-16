@@ -1,0 +1,27 @@
+# Overlay on hugo-oss.toml. Comma-joined, later wins:
+#   hugo --config hugo-oss.toml,hugo-oss-protorel.toml
+#
+# The SECOND dev-server baseURL shape, and the one that is easy to forget
+# exists. hugo-oss-devpath.toml covers a consumer whose baseURL names a host
+# (kagent.dev, "https://kagent.dev/docs/"): under `hugo server` Hugo rewrites
+# the origin and keeps the path, giving http://localhost:1313/docs/. A consumer
+# whose baseURL is PATH-ONLY has no origin to rewrite, and Hugo reports a
+# PROTOCOL-RELATIVE base instead — baseURL = "/test" becomes
+# //localhost:1313///test/, three slashes and all. This repo's own hugo-oss.toml
+# is that shape; `make server-oss` only avoids it because hugo-oss-local.toml
+# overrides baseURL to "/".
+#
+# It is a different shape, not a spelling variant, and it broke differently:
+# utils/resolve-link.html cuts the origin off .Site.BaseURL to get the path it
+# must strip from $versionRoot, and on this base that cut leaves "///test" while
+# $versionRoot carries the normalized "/test". The strip then silently misses
+# and the assembly re-supplies the path anyway — /test/test/v2/…, every link on
+# the site. Static builds of a path-only baseURL never see it (no origin to cut,
+# so the path is the whole value); only the dev server manufactures it.
+#
+# Spelling the malformed base literally here builds that shape STATICALLY, so
+# the spec is an ordinary built-output assertion and needs no running dev server.
+#
+# Backs tests/dev-subpath-baseurl.spec.ts.
+baseURL = "//localhost:1313///test/"
+publishDir = "public-oss-protorel/test"

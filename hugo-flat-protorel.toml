@@ -1,0 +1,17 @@
+# Overlay on hugo-flat.toml. Comma-joined, later wins:
+#   hugo --config hugo-flat.toml,hugo-flat-protorel.toml
+#
+# The VERSION-LESS half of the protocol-relative shape. hugo-oss-protorel.toml
+# covers the versioned half and explains the shape itself; read that one first.
+#
+# This file exists for the same reason hugo-flat-devpath.toml does:
+# utils/resolve-link.html derives $versionRoot from version-root.html on a
+# versioned site and from .Page.FirstSection.RelPermalink on a version-less one,
+# and a fix verified on one derivation proves nothing about the other. Both
+# derivations strip the baseURL path, so both miss when the path cut off
+# .Site.BaseURL comes back as "///docs" instead of "/docs" — but they miss
+# independently, and only building both says so.
+#
+# Backs tests/dev-subpath-baseurl.spec.ts.
+baseURL = "//localhost:1313///docs/"
+publishDir = "public-flat-protorel"

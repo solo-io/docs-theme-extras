@@ -25,3 +25,20 @@ Naming this page's own doc set — renders:
 Naming the other doc set — dropped:
 
 {{% conditional-text include-if="beta" %}}COND_SEC_FLAT_OTHER{{% /conditional-text %}}
+
+## The only `link` call on a version-less site
+
+Until this line, nothing in this fixture called `link` or `link-hextra` at all,
+so the version-less branch of `utils/resolve-link.html` — the one that derives
+`$versionRoot` from `.Page.FirstSection.RelPermalink` — emitted nothing any
+test could read, on any of the four flat builds. That branch was doubling this
+site's `/docs` baseURL path into every href it produced, in production as well
+as in dev, and no build here could show it.
+
+The target is a real page (`alpha/beta/`, the name-collision directory above),
+so this stays a working link. Asserted by `tests/dev-subpath-baseurl.spec.ts`,
+which pins the PREFIX only — that the href starts with the baseURL path once
+and not twice. What sits between that prefix and the target is FirstSection
+semantics and belongs to whatever spec wants to pin it next.
+
+[PROBE_FLAT_LINK]({{< link path="/beta/" >}})
