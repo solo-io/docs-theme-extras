@@ -26,6 +26,7 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ## [Unreleased]
 
+
 ### Fix — every `link` shortcode dropped the baseURL path under `hugo server`, so preview links 404'd on content that was correct (`layouts/_partials/utils/resolve-link.html`)
 
 A consumer whose `baseURL` carries a path — kagent.dev sets `https://kagent.dev/docs/` — got working links in production and broken ones in local preview. **There is deliberately no production link below, because this bug cannot appear in production**: it is gated on `.Site.BaseURL` containing `localhost`, which only `hugo server` produces. That is exactly what made it expensive. Found while preparing the kagent 1.0 doc set, where a production build emitted `/docs/kagent/1.x/reference/versions#…` and `hugo server` emitted `/kagent/1.x/reference/versions#…` from the same source — 8 dead links on one page, and every page of that docset affected. The failure mode is worse than the 404: an author sees a dead link in preview on a page whose markup is right, and the natural response is to "fix" correct content. A link checker cannot backstop it either, because the remaps that resolve a subpath site against an on-disk build map both the correct and the truncated form onto the same file, so the truncated one reads as valid. To see it, build the new fixture and read the hrefs: `make build-oss-devpath` then `grep SHAPE_CANONICAL public-oss-devpath/test/v2/link-hextra-shapes/index.html` — `/test/v2/everything/` with this fix, `/v2/everything/` without it.
@@ -37,6 +38,22 @@ This survived because no config in this repo's matrix can reach it. Every one is
 **Verified** three ways. The new spec fails on `main` (`SHAPE_CANONICAL -> /v2/everything/`) and passes with the fix (`/test/v2/everything/`), with a second case pinning the version segment's position so a double-prepend cannot pass. The full `static` project re-ran green against all six OSS fixture builds — 1853 passed, 6 skipped. And building kagent.dev against this working tree (`replace` in `go.mod`, reverted after) took its preview from 8 broken links on the sample page to 0 across 7 pages, while a production build of the same content produced a **byte-identical** href set to the unpatched build — every `href` in the tree, not a sample.
 
 **Consumer action.** None. The emitted URL is unchanged for any site whose `baseURL` is `"/"`, a bare host, or path-only, and unchanged for every production build; only the dev-server rendering of a subpath baseURL differs.
+
+
+### Fix — every sticky-band assertion skipped on real consumers, so v0.3.11 shipped a band that pinned into the navbar on agentgateway-oss-website (`tests/docs-tabs-chrome.spec.ts`, `playwright.config.ts`)
+
+v0.3.11 made the docTabs band sticky and added five browser tests for it. All five render THIS module's bundled fixture, so on a consumer's own build they `test.skip` — which meant the band's geometry had, in practice, zero coverage anywhere it actually ships. <https://agentgateway.dev/docs/kubernetes/latest/documentation/> is what that cost: the band pins at `--solo-navbar-bottom`, the module derives that from Hextra's navbar (`--navbar-height` + `--hextra-banner-height`), and agentgateway-oss-website hides Hextra's navbar outright and renders its own fixed one. Both variables still resolved — 4rem + 2rem = 96px — against real chrome that ends at 133px, so the band slid 24px up on the first scroll, came to rest 37px underneath the navbar, and had its tab labels clipped off. The suite was green throughout.
+
+`tests/docs-tabs-chrome.spec.ts` closes that hole by testing the band against `target.builtRoot` instead of the fixture, on three pages spread across the crawl. It asserts the two things a reader perceives: the band's viewport `top` is identical across three scroll positions, and `elementFromPoint` at ten points inside its box returns the band or one of its children rather than something painted over it. Neither check names the chrome above the band, deliberately — there is no portable selector for it (`.hextra-nav-container` on one consumer, `nav.navbar` on another), and a spec that guessed would go green by skipping on whichever consumer it guessed wrong for, which is exactly how this shipped.
+
+One harness trap is worth knowing about, because it is not specific to this spec: the webServer is `npx serve`, and `serve` does not resolve `index.html` inside a directory whose name contains a dot. Request `/docs/kubernetes/1.0.x/` and it answers HTTP 200 with its own 5KB directory LISTING — no redirect, no error — while `/docs/kubernetes/1.0.x/documentation/` serves the real page. Every consumer names version directories `1.0.x` / `2.2.x`, so any spec that crawls URLs rather than using the configured `pages` list will hit it and report "element not found" for a page whose HTML on disk plainly contains it. This spec filters those URLs out; specs that navigate to version roots should be read with this in mind.
+
+**Known limitation, not fixed here.** `--solo-navbar-bottom` still assumes Hextra's navbar, so a consumer that replaces it has to override the variable. That is a documented contract rather than a derived value, and deriving it (measuring the real pinned chrome at runtime) would be a behavior change worth its own PR. The new spec at least makes the consequence loud instead of silent.
+
+**Verified** against agentgateway oss' production build: 6 tests pass on the fixed site. Non-vacuity was checked by injecting the pre-fix geometry (`--solo-navbar-bottom: 96px`, `lg:pt-20` clearance) into the same pages at runtime — the position check reports `120 -> 96 -> 96px` and the occlusion check reports 5 of 10 sample points covered by the navbar's logo `<img>`, so both fail on the old geometry and pass on the new. Consumers with no `[[params.docTabs]]` render no band and skip.
+
+**Consumer action.** None. Test-only: no layout, CSS, or partial changed, so a pin bump is not required to stay correct — bump only to pick up the coverage.
+
 
 ---
 
