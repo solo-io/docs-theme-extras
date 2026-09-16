@@ -34,6 +34,10 @@ reader writing the call should not have to know that.
 Prefer `link-hextra` in new content. This name exists so existing call sites
 keep working without a repo-wide sweep.
 
+For when to reach for either name rather than a plain Markdown link, and for
+the call shapes that resolve to a real but wrong page instead of failing,
+see [Resolving links](../../links/).
+
 Implemented as a shared partial call rather than the alert-to-callout trick
 of building a shortcode string and running it through `RenderString`. The
 output is a bare URL string, not Markdown, so there is nothing for
