@@ -27,7 +27,7 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 ## [0.3.13] — 2026-09-16
 
 
-### Fix — a long description cell squeezed its neighbour into a one-character-wide ribbon on 2-column tables (`assets/css/docs-theme-extras.css`, `tests/table-display.spec.ts`, `fixture/assets/conrefs/test/everything.md`)
+### Fix — a long description cell squeezed its neighbor into a one-character-wide ribbon on 2-column tables (`assets/css/docs-theme-extras.css`, `tests/table-display.spec.ts`, `fixture/assets/conrefs/test/everything.md`)
 
 Reported against the docs hub's kgateway 2.3.x WAF IP-filtering guide, [Configure IP-based filtering](https://docs.solo.io/kgateway/2.3.x/security/waf/ip-filtering/), where the `Setting` column of the field table under the ListenerPolicy renders `default.httpSettings.useRemoteAddress: true` stacked three characters to a line down twenty-two lines while the Description column takes 89% of the row. This is the ordinary `Setting | Description` field table that follows a configuration block in every task guide, so the shape is common rather than exotic. What separates it from the two other 2-column tables on the same page, which render fine, is only the ratio between the columns: theirs run from 0.9 to 1.7 characters of description per character of key, this one 7.1 on the first row and 23.3 on the second.
 
