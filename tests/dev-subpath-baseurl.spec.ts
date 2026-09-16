@@ -35,9 +35,11 @@ import path from "node:path";
 // and the truncated form to the same file on disk, so the truncated one reads
 // as valid.
 //
-// Fixture: hugo-oss-devpath.toml, a static build at the dev-server baseURL
-// shape. Reuses the marker page that link-hextra-shapes.spec.ts asserts against,
-// so the shapes stay pinned in one place and this spec only pins the PREFIX.
+// Fixtures: hugo-{oss,flat}-devpath.toml and hugo-{oss,flat}-protorel.toml,
+// static builds at the two baseURL shapes a dev server produces (see
+// VERSIONED_BUILDS below for why there are two). The versioned ones reuse the
+// marker page that link-hextra-shapes.spec.ts asserts against, so the shapes
+// stay pinned in one place and this spec only pins the PREFIX.
 //
 // BOTH HALVES OF THE SPLIT. resolve-link.html derives $versionRoot two ways —
 // version-root.html on a versioned site, .Page.FirstSection.RelPermalink on a
@@ -49,25 +51,62 @@ import path from "node:path";
 // that — different branch, different source — so the flat builds below are the
 // other half of this spec, not a nice-to-have.
 
-const BUILT = path.join(
-  __dirname,
-  "..",
-  "public-oss-devpath",
-  "test",
-  "v2",
-  "link-hextra-shapes",
-  "index.html",
-);
+// TWO DEV-SERVER SHAPES, NOT ONE. `hugo server` does not rewrite every baseURL
+// the same way, and the difference is not cosmetic:
+//
+//   baseURL "https://kagent.dev/docs/"  →  http://localhost:1313/docs/
+//   baseURL "/test"                     →  //localhost:1313///test/
+//
+// It rewrites an origin when there is one and manufactures a PROTOCOL-RELATIVE
+// base when there is not. Both take the local branch of the assembly, and both
+// have to survive the origin cut that yields $baseURLPath — but the second one
+// leaves "///test" where $versionRoot carries Hugo's normalized "/test", so the
+// TrimPrefix misses, the assembly re-supplies the path anyway, and every link
+// comes out /test/test/v2/…. resolve-link.html collapses the repeated slashes
+// for exactly this reason; these builds are what says so.
+//
+// The protocol-relative shape is the one this repo's OWN hugo-oss.toml has
+// (baseURL = "/test"), which is worth sitting with: `make server-oss` misses it
+// only because hugo-oss-local.toml overrides baseURL to "/", and a static build
+// of a path-only baseURL cannot reach it either (no origin to cut, so the path
+// is the whole value and the cut is a no-op). It is reachable only from a dev
+// server, which is why it needs a config that spells it out literally.
+const VERSIONED_BUILDS = [
+  { name: "public-oss-devpath (full base + path)", dir: "public-oss-devpath" },
+  {
+    name: "public-oss-protorel (protocol-relative base)",
+    dir: "public-oss-protorel",
+  },
+];
 
-// The version-less builds, both of which carry a subpath baseURL:
-//   public-flat          baseURL "/docs"                    → production branch
-//   public-flat-devpath  baseURL "http://localhost:1313/docs/" → local branch
+function versionedPage(dir: string): string {
+  return path.join(
+    __dirname,
+    "..",
+    dir,
+    "test",
+    "v2",
+    "link-hextra-shapes",
+    "index.html",
+  );
+}
+
+// The version-less builds, all of which carry a subpath baseURL:
+//   public-flat           baseURL "/docs"                      → production branch
+//   public-flat-devpath   baseURL "http://localhost:1313/docs/" → local branch
+//   public-flat-protorel  baseURL "//localhost:1313///docs/"    → local branch, protocol-relative
 // One page, one `link` call (fixture/content-flat/en/alpha/first.md). Listing
-// both is the point: the bug took the local branch, the doubling it exposed
-// took the production one, and a fix to either alone leaves the other wrong.
+// all three is the point: the bug took the local branch, the doubling it
+// exposed took the production one, the doubling the origin cut caused took the
+// local one again by a different route, and a fix to any one alone leaves the
+// others wrong.
 const FLAT_BUILDS = [
   { name: "public-flat (production branch)", dir: "public-flat" },
   { name: "public-flat-devpath (local branch)", dir: "public-flat-devpath" },
+  {
+    name: "public-flat-protorel (protocol-relative base)",
+    dir: "public-flat-protorel",
+  },
 ];
 
 function flatPage(dir: string): string {
@@ -100,47 +139,61 @@ function hrefFor(html: string, marker: string): string | null {
   return m ? m[1] : null;
 }
 
-const built = fs.existsSync(BUILT);
-
 test.describe("dev-server baseURL keeps its path", () => {
-  test.skip(
-    !built,
-    "public-oss-devpath not built — run `make build-devpath` first",
-  );
+  for (const b of VERSIONED_BUILDS) {
+    test(`${b.name}: every link shortcode href carries the baseURL path`, () => {
+      const file = versionedPage(b.dir);
+      test.skip(
+        !fs.existsSync(file),
+        `${b.dir} not built — run \`make build-devpath\` first`,
+      );
 
-  test("every link shortcode href carries the baseURL path", () => {
-    const html = fs.readFileSync(BUILT, "utf8");
-    const offenders: string[] = [];
+      const html = fs.readFileSync(file, "utf8");
+      const offenders: string[] = [];
 
-    for (const marker of MARKERS) {
-      const href = hrefFor(html, marker);
-      expect(href, `${marker} emitted no href`).not.toBeNull();
-      // Root-relative and under /test/ is the whole assertion. An absolute URL
-      // would also work in a browser, so accept either origin-ful or bare, and
-      // pin only that the path segment survived.
-      const p = href!.replace(/^https?:\/\/[^/]*/, "");
-      if (!p.startsWith("/test/")) offenders.push(`${marker} -> ${href}`);
-    }
+      for (const marker of MARKERS) {
+        const href = hrefFor(html, marker);
+        expect(href, `${marker} emitted no href`).not.toBeNull();
+        // Root-relative and under /test/ is the whole assertion. An absolute URL
+        // would also work in a browser, so accept either origin-ful or bare, and
+        // pin only that the path segment survived. The origin strip here also
+        // takes a protocol-relative one (//host), which is what the protorel
+        // build would emit if the assembly ever prefixed $origin on it.
+        const p = href!.replace(/^(https?:)?\/\/[^/]*/, "");
+        if (!p.startsWith("/test/")) offenders.push(`${marker} -> ${href}`);
+      }
 
-    expect(
-      offenders,
-      "These hrefs lost the baseURL path. resolve-link.html assembles $rel ONCE,\n" +
-        "from $baseURLPath + $versionRoot + version + path, and both branches emit\n" +
-        "it — the else branch only adds an origin. If this fails, either the two\n" +
-        "branches have come apart again or $baseURLPath is being stripped from\n" +
-        "$versionRoot without being re-supplied here.\n" +
-        offenders.join("\n"),
-    ).toEqual([]);
-  });
+      expect(
+        offenders,
+        `${b.dir}: these hrefs lost the baseURL path. resolve-link.html assembles\n` +
+          "$rel ONCE, from $baseURLPath + $versionRoot + version + path, and both\n" +
+          "branches emit it — the else branch only adds an origin. If this fails,\n" +
+          "either the two branches have come apart again or $baseURLPath is being\n" +
+          "stripped from $versionRoot without being re-supplied here.\n" +
+          offenders.join("\n"),
+      ).toEqual([]);
+    });
 
-  test("the version segment still follows the baseURL path", () => {
-    const html = fs.readFileSync(BUILT, "utf8");
-    // Guards the obvious wrong fix: prepending the path twice, or prepending it
-    // to a $versionRoot that never had it stripped, yields /test/test/v2/.
-    const href = hrefFor(html, "SHAPE_CANONICAL");
-    expect(href).not.toBeNull();
-    expect(href!.replace(/^https?:\/\/[^/]*/, "")).toBe("/test/v2/everything/");
-  });
+    test(`${b.name}: the version segment still follows the baseURL path`, () => {
+      const file = versionedPage(b.dir);
+      test.skip(
+        !fs.existsSync(file),
+        `${b.dir} not built — run \`make build-devpath\` first`,
+      );
+
+      // Guards the obvious wrong fix: prepending the path twice, or prepending it
+      // to a $versionRoot that never had it stripped, yields /test/test/v2/.
+      // That is exactly what the protocol-relative build produced while
+      // $baseURLPath could come back as "///test" — the strip missed and the
+      // assembly re-supplied anyway — so this case is not a duplicate of the
+      // devpath one above, it is the reason the slash collapse exists.
+      const href = hrefFor(fs.readFileSync(file, "utf8"), "SHAPE_CANONICAL");
+      expect(href).not.toBeNull();
+      expect(href!.replace(/^(https?:)?\/\/[^/]*/, "")).toBe(
+        "/test/v2/everything/",
+      );
+    });
+  }
 });
 
 test.describe("version-less site: the baseURL path appears once, not twice", () => {
@@ -154,7 +207,7 @@ test.describe("version-less site: the baseURL path appears once, not twice", () 
 
       const href = hrefFor(fs.readFileSync(file, "utf8"), "PROBE_FLAT_LINK");
       expect(href, "PROBE_FLAT_LINK emitted no href").not.toBeNull();
-      const p = href!.replace(/^https?:\/\/[^/]*/, "");
+      const p = href!.replace(/^(https?:)?\/\/[^/]*/, "");
 
       // Two assertions, because each one alone passes on a different bug. The
       // first fails when the path is dropped (what the versioned half of this

@@ -137,22 +137,36 @@ build-nosections:
 build-section-title:
 	$(HUGO) --config hugo-oss.toml,hugo-section-title.toml --gc 2> .build-section-title.log
 
-# THE DEV-SERVER baseURL SHAPE — a FULL baseURL that carries a path, which no
-# other config here builds and which `hugo server` manufactures for every
-# consumer whose site lives under a subpath. Two overlays, because the two code
-# paths that have to re-supply that path are on opposite sides of the
-# versioned / version-less split and a fix to one says nothing about the other:
-#   hugo-oss-devpath.toml   versioned  (hugo-oss.toml base)
-#   hugo-flat-devpath.toml  flat       (hugo-flat.toml base)
-# Static builds, so tests/dev-subpath-baseurl.spec.ts reads them like any other
-# built output — no dev server. See either toml for the shape itself.
+# THE DEV-SERVER baseURL SHAPES — what `hugo server` hands utils/resolve-link.html,
+# which no other config here builds. FOUR overlays, on two axes.
 #
-# Named build-devpath, NOT build-oss-devpath: it builds a flat tree as well as a
-# versioned one, and it is a prerequisite of test-enterprise as well as test-oss.
+# Axis one is the shape, and there are two because `hugo server` rewrites a
+# baseURL differently depending on whether it already names a host:
+#   *-devpath.toml   a FULL base with a path   http://localhost:1313/docs/
+#                    (a consumer that sets baseURL = "https://kagent.dev/docs/")
+#   *-protorel.toml  a PROTOCOL-RELATIVE base  //localhost:1313///test/
+#                    (a consumer whose baseURL is path-only, like "/test")
+# The second is not a spelling variant of the first: the origin cut that yields
+# the baseURL path leaves "///test" on it, which matches nothing in the
+# normalized $versionRoot, so the strip misses and the path gets applied twice.
+#
+# Axis two is the $versionRoot derivation, which sits on the versioned /
+# version-less split — version-root.html against .Page.FirstSection.RelPermalink
+# — and a fix verified on one derivation says nothing about the other:
+#   hugo-oss-*.toml   versioned  (hugo-oss.toml base)
+#   hugo-flat-*.toml  flat       (hugo-flat.toml base)
+#
+# All four are static builds, so tests/dev-subpath-baseurl.spec.ts reads them
+# like any other built output — no dev server. See any toml for its own shape.
+#
+# Named build-devpath, NOT build-oss-devpath: it builds flat trees as well as
+# versioned ones, and it is a prerequisite of test-enterprise as well as test-oss.
 # A brand in the name would be wrong on both counts.
 build-devpath:
 	$(HUGO) --config hugo-oss.toml,hugo-oss-devpath.toml --gc 2> .build-oss-devpath.log
 	$(HUGO) --config hugo-flat.toml,hugo-flat-devpath.toml --gc 2> .build-flat-devpath.log
+	$(HUGO) --config hugo-oss.toml,hugo-oss-protorel.toml --gc 2> .build-oss-protorel.log
+	$(HUGO) --config hugo-flat.toml,hugo-flat-protorel.toml --gc 2> .build-flat-protorel.log
 
 # THE BOOK GATE, OFF. Same content and same `outputs` front matter as
 # build-enterprise, with `buildBook = false` — so a book.html appearing under
@@ -212,11 +226,13 @@ clean:
 	rm -rf public-oss public-enterprise public-oss-local public-enterprise-local \
 	       public-flat public-flat-root public-section-title public-section-current \
 	       public-oss-devpath public-flat-devpath \
+	       public-oss-protorel public-flat-protorel \
 	       public-nobook public-nosections public-nosections-bare \
 	       public-docs \
 	       resources test-results playwright-report \
 	       .build-oss.log .build-enterprise.log \
 	       .build-oss-devpath.log .build-flat-devpath.log \
+	       .build-oss-protorel.log .build-flat-protorel.log \
 	       .build-flat.log .build-flat-root.log \
 	       .build-nosections.log .build-nosections-bare.log \
 	       .build-section-title.log .build-section-current.log \
@@ -238,7 +254,7 @@ help:
 	@echo "  build-flat           - static builds, VERSION-LESS sections   → public-flat/ + public-flat-root/"
 	@echo "  build-section-title  - static build, configured selector title → public-section-title/"
 	@echo "  build-section-current - static build, selector names current section → public-section-current/"
-	@echo "  build-devpath        - static builds, dev-server baseURL shape → public-oss-devpath/ + public-flat-devpath/"
+	@echo "  build-devpath        - static builds, both dev-server baseURL shapes → public-{oss,flat}-devpath/ + public-{oss,flat}-protorel/"
 	@echo "  build-docs           - static build, the module's own docs site → public-docs/"
 	@echo ""
 	@echo "  test-oss             - build-oss + run harness against the OSS fixture"

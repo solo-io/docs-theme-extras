@@ -81,14 +81,26 @@
        version-less branch below came to skip the strip.
 
        The scheme is optional in the pattern because a path-only baseURL makes
-       `hugo server` report a protocol-relative base (//localhost:1313///test/).
-       Matching that shape is what lets the strip work on it at all: under the
-       old scheme-REQUIRED pattern the whole malformed base came back as
-       $baseURLPath and the TrimPrefix below silently did nothing. The leading
-       "///" it leaves in an emitted URL needs no care here — the double-slash
-       collapse at the bottom of this file squashes it. */ -}}
+       `hugo server` report a PROTOCOL-RELATIVE base — //localhost:1313///test/
+       for baseURL = "/test". A scheme-required pattern cannot cut the origin
+       off that, so the whole malformed base came back as $baseURLPath and the
+       TrimPrefix below did nothing.
+
+       THE COLLAPSE ON THE NEXT LINE IS NOT COSMETIC. Cutting the origin off
+       that shape leaves "///test", and $versionRoot — which Hugo normalizes to
+       "/test/v2" on both derivations — does not start with it, so the strip
+       goes back to doing nothing while the assembly re-supplies the path
+       anyway: /test/test/v2/…, every link on the site. Under the old
+       scheme-required pattern the strip ALSO did nothing, but the assembly had
+       nothing to re-supply either, so the two no-ops cancelled and the URL came
+       out right by accident. Matching the shape removes that accident, and the
+       collapse is what replaces it. Test: hugo-oss-protorel.toml and
+       hugo-flat-protorel.toml build this baseURL statically, one per
+       $versionRoot derivation, and tests/dev-subpath-baseurl.spec.ts asserts
+       both. Any leading "///" that still reaches an emitted URL is squashed by
+       the double-slash collapse at the bottom of this file. */ -}}
 {{- $baseURLSplit := `^(https?:)?//[^/]*` -}}
-{{- $baseURLPath := replaceRE $baseURLSplit "" .Site.BaseURL | strings.TrimSuffix "/" -}}
+{{- $baseURLPath := replaceRE $baseURLSplit "" .Site.BaseURL | strings.TrimSuffix "/" | replaceRE `^/+` "/" -}}
 {{- $origin := "" -}}
 {{- with findRE $baseURLSplit .Site.BaseURL 1 -}}
   {{- $origin = index . 0 -}}
