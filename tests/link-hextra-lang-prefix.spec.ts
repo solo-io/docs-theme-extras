@@ -114,19 +114,32 @@ test.describe("localized-page version inference", () => {
 
     // The baseURL path MUST be stripped, or the hub doubles its product segment.
     //
-    // Matched by SHAPE, not by the exact pattern literal: an origin-stripping
-    // replaceRE over `.Site.BaseURL`, landing in $baseURLPath. Pinning the
-    // literal made this fail when the pattern grew an optional scheme group
-    // (`^(https?:)?//` — `hugo server` reports a protocol-relative base for a
-    // path-only baseURL), which is a change this assertion has no opinion about.
-    // What it does have an opinion about is the strip existing at all, and
-    // existing ONCE: `$baseURLPath` is now computed a single time at the top of
-    // the file and read by both $versionRoot derivations and by the assembly.
-    expect(
-      /\$baseURLPath\s*:?=\s*replaceRE\s+`\^[^`]*\/\/\[\^\/\]\*`\s+""\s+\.Site\.BaseURL/.test(
+    // Matched by SHAPE, in two independent halves, because pinning the pattern
+    // literal has now broken this assertion TWICE for changes it explicitly has
+    // no opinion about: once when the pattern grew an optional scheme group
+    // (`^(https?:)?//`, so the strip also works on the protocol-relative base
+    // `hugo server` reports for a path-only baseURL), and again when the literal
+    // was hoisted into `$baseURLSplit` so the origin half could be cut with the
+    // same pattern. Both times the strip was still there and still correct. So
+    // the halves below say only what this test actually means:
+    //
+    //   1. $baseURLPath is produced by a replaceRE over `.Site.BaseURL` — the
+    //      pattern may be a literal or a variable holding one.
+    //   2. Somewhere in the file, that pattern strips an ORIGIN (`//[^/]*`)
+    //      rather than something else.
+    //
+    // Between them a real regression — dropping the strip, or pointing it at a
+    // different source — still fails, while moving or extending the pattern does
+    // not.
+    const stripAssignment =
+      /\$baseURLPath\s*:?=\s*replaceRE\s+(?:`[^`]+`|\$[A-Za-z_]\w*)\s+""\s+\.Site\.BaseURL/.test(
         src,
-      ),
-      "the baseURL path is no longer derived from `.Site.BaseURL` — " +
+      );
+    const originPattern = /`[^`]*\/\/\[\^\/\]\*`/.test(src);
+    expect(
+      stripAssignment && originPattern,
+      "the baseURL path is no longer derived from `.Site.BaseURL` by stripping " +
+        `an origin (assignment: ${stripAssignment}, origin pattern: ${originPattern}) — ` +
         "version-root.html returns a published-URL prefix that already " +
         "contains the product, and the assembly step re-prepends baseURL, so " +
         "hub links come out as /kgateway/kgateway/2.1.x/….",

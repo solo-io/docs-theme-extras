@@ -10,7 +10,7 @@ CONFIG  ?=
         clear-cache \
         server-oss server-enterprise server-docs \
         build-oss build-enterprise build-flat build-nosections build-docs \
-        build-section-title build-section-current build-nobook build-oss-devpath \
+        build-section-title build-section-current build-nobook build-devpath \
         test-oss test-enterprise test-all \
         test clean help
 
@@ -146,7 +146,11 @@ build-section-title:
 #   hugo-flat-devpath.toml  flat       (hugo-flat.toml base)
 # Static builds, so tests/dev-subpath-baseurl.spec.ts reads them like any other
 # built output — no dev server. See either toml for the shape itself.
-build-oss-devpath:
+#
+# Named build-devpath, NOT build-oss-devpath: it builds a flat tree as well as a
+# versioned one, and it is a prerequisite of test-enterprise as well as test-oss.
+# A brand in the name would be wrong on both counts.
+build-devpath:
 	$(HUGO) --config hugo-oss.toml,hugo-oss-devpath.toml --gc 2> .build-oss-devpath.log
 	$(HUGO) --config hugo-flat.toml,hugo-flat-devpath.toml --gc 2> .build-flat-devpath.log
 
@@ -172,16 +176,16 @@ build-section-current:
 # touch the brand layer), so both brand runs assert against the same output —
 # cheap, and it keeps `make test-oss` self-contained.
 #
-# build-oss-devpath is listed in BOTH targets for the same reason, and it is not
+# build-devpath is listed in BOTH targets for the same reason, and it is not
 # optional: CI runs the brands as separate matrix jobs (`make test-${brand}`) on
 # separate runners, so a fixture listed under one target does not exist in the
 # other job — and dev-subpath-baseurl.spec.ts, like every spec here, SKIPS on a
 # missing build rather than failing. Dropping it from one target would have cost
 # nothing visible and half the coverage.
-test-oss: build-oss build-oss-devpath build-flat build-nosections build-section-title build-section-current build-nobook
+test-oss: build-oss build-devpath build-flat build-nosections build-section-title build-section-current build-nobook
 	DOCS_TEST_CONFIG=$(abspath ./fixture/.docs-test-oss.toml) npx playwright test
 
-test-enterprise: build-enterprise build-oss-devpath build-flat build-nosections build-section-title build-section-current build-nobook
+test-enterprise: build-enterprise build-devpath build-flat build-nosections build-section-title build-section-current build-nobook
 	DOCS_TEST_CONFIG=$(abspath ./fixture/.docs-test-enterprise.toml) npx playwright test
 
 # Run both brand variants. CI default — surfaces brand-specific regressions
@@ -234,7 +238,7 @@ help:
 	@echo "  build-flat           - static builds, VERSION-LESS sections   → public-flat/ + public-flat-root/"
 	@echo "  build-section-title  - static build, configured selector title → public-section-title/"
 	@echo "  build-section-current - static build, selector names current section → public-section-current/"
-	@echo "  build-oss-devpath    - static builds, dev-server baseURL shape → public-oss-devpath/ + public-flat-devpath/"
+	@echo "  build-devpath        - static builds, dev-server baseURL shape → public-oss-devpath/ + public-flat-devpath/"
 	@echo "  build-docs           - static build, the module's own docs site → public-docs/"
 	@echo ""
 	@echo "  test-oss             - build-oss + run harness against the OSS fixture"

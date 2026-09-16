@@ -67,19 +67,32 @@
        current page, e.g. "/docs/envoy". Empty on the docs hub, where the
        product lives in baseURL instead. See the derivation below. */ -}}
 {{- $versionRoot := "" -}}
-{{- /* The PATH component of baseURL — "/docs" for https://kagent.dev/docs/, ""
-       for a bare host or "/". Computed ONCE here because three places need the
-       same answer and they must not drift: both $versionRoot derivations strip
-       it (so $versionRoot is baseURL-RELATIVE by the time the assembly runs),
-       and the local branch of the assembly re-supplies it. It used to be a
-       local variable inside one of those derivations, which is exactly how the
+{{- /* baseURL, split into its two halves ONCE and with the same pattern, so the
+       halves are complements by construction: $origin is everything before the
+       path ("https://kagent.dev"), $baseURLPath is the path ("/docs"). Both are
+       "" for a "/" baseURL; $origin alone is "" for a path-only one ("/test").
+
+       Computed up here rather than where each is first needed because FOUR
+       places want an answer and they must not drift: both $versionRoot
+       derivations strip $baseURLPath (so $versionRoot is baseURL-RELATIVE by
+       the time the assembly runs), the assembly re-supplies it, and the
+       assembly's else branch prefixes $origin. $baseURLPath used to be a local
+       variable inside one of those derivations, which is exactly how the
        version-less branch below came to skip the strip.
 
        The scheme is optional in the pattern because a path-only baseURL makes
        `hugo server` report a protocol-relative base (//localhost:1313///test/).
-       That shape does not serve correctly anyway, but matching it costs one
-       group and keeps a malformed base from being pasted in as a prefix. */ -}}
-{{- $baseURLPath := replaceRE `^(https?:)?//[^/]*` "" .Site.BaseURL | strings.TrimSuffix "/" -}}
+       Matching that shape is what lets the strip work on it at all: under the
+       old scheme-REQUIRED pattern the whole malformed base came back as
+       $baseURLPath and the TrimPrefix below silently did nothing. The leading
+       "///" it leaves in an emitted URL needs no care here — the double-slash
+       collapse at the bottom of this file squashes it. */ -}}
+{{- $baseURLSplit := `^(https?:)?//[^/]*` -}}
+{{- $baseURLPath := replaceRE $baseURLSplit "" .Site.BaseURL | strings.TrimSuffix "/" -}}
+{{- $origin := "" -}}
+{{- with findRE $baseURLSplit .Site.BaseURL 1 -}}
+  {{- $origin = index . 0 -}}
+{{- end -}}
 {{- /* Sites with no `site.Params.versions` at all (ambientmesh.io, and any
        other single-tree site with no per-version URL structure) have no
        version to resolve, full stop — not a missed inference, an absent
@@ -279,34 +292,40 @@
        `/docs/<flavor>` prefix the page actually lives under, which is the whole
        point: without it a link from /docs/envoy/2.1.x/foo/ to /quickstart/ came
        out as /2.1.x/quickstart/, a 404. Measured on kgateway.dev, 637 pages. */ -}}
-{{- /* The local branch emits a root-relative URL, so it must still carry the
-       PATH component of baseURL — dropping .Site.BaseURL whole drops that path
-       with it.
+{{- /* The PATH is assembled ONCE, into $rel, and is the same string on both
+       sides of the branch below — which now differs only in whether an origin
+       is prefixed. That is load-bearing, not tidying: this file has produced
+       two separate link bugs and both were the two branches disagreeing about
+       the path. With one shared $rel that disagreement is no longer
+       expressible.
 
-       $versionRoot arrived here baseURL-RELATIVE: BOTH derivations above strip
-       $baseURLPath from it, precisely because the assembly below re-supplies
-       it. The else branch does. Emitting $versionRoot bare does not, so a site
-       whose baseURL carries a subpath loses it.
+       $versionRoot arrives here baseURL-RELATIVE — BOTH derivations above strip
+       $baseURLPath from it — so the path has to be re-supplied at assembly,
+       whichever branch runs. The old code re-supplied it on one side only: the
+       else branch prepended .Site.BaseURL whole, the local branch prepended
+       nothing, so a site whose baseURL carries a subpath lost it in dev. Point
+       a site at https://host/docs/ and run `hugo server` — .Site.BaseURL
+       becomes http://localhost:1313/docs/, the local branch fires, and every
+       {{< link >}} rendered /<section>/<version>/… instead of
+       /docs/<section>/<version>/…. Measured on kagent.dev: 8 dead links on a
+       single page, every one of them correct in the production build.
 
-       Only a FULL baseURL with a path is affected, and only in dev, which is
-       why this survived: every config in this repo's matrix is path-only
-       ("/test", "/"), where the path component is either the whole value or
-       empty and the two branches agree. Point a site at
-       https://host/docs/ and run `hugo server` — .Site.BaseURL becomes
-       http://localhost:1313/docs/, this branch fires, and every {{< link >}}
-       renders /<section>/<version>/… instead of /docs/<section>/<version>/….
-       Measured on kagent.dev: 8 dead links on a single page, every one of them
-       correct in the production build, which takes the else branch.
+       WHY THE ELSE BRANCH STILL EMITS AN ABSOLUTE URL rather than collapsing to
+       a bare $rel: docs/book-document.html stitches page .Content into the PDF
+       verbatim, with no href rewriting, so on a consumer whose baseURL carries
+       an origin these are the only clickable internal links in a generated PDF
+       — everything else on the page is RelPermalink-based and already
+       root-relative there. Absolutize in book-document.html first if this
+       branch is ever removed. The .md export does NOT depend on it:
+       page-to-markdown.html re-absolutizes root-relative links itself.
 
-       $baseURLPath is the same value both derivations stripped, taken from the
-       single computation at the top of this file rather than recomputed here —
-       a second copy of that regex is how the version-less branch came to skip
-       the strip in the first place. For a "/" or bare-host baseURL it is the
-       empty string and the emitted URL is byte-identical to before. */ -}}
+       For a "/" or bare-host baseURL $baseURLPath is "" and the emitted URL is
+       byte-identical to what this file emitted before either fix. */ -}}
+{{- $rel := printf "%s%s/%s%s" $baseURLPath $versionRoot $ver $path -}}
 {{- if or (eq .Site.BaseURL "/") (in .Site.BaseURL "localhost") -}}
-{{- $finalURL = printf "%s%s/%s%s" $baseURLPath $versionRoot $ver $path -}}
+{{- $finalURL = $rel -}}
 {{- else -}}
-{{- $finalURL = printf "%s%s/%s%s" .Site.BaseURL $versionRoot $ver $path -}}
+{{- $finalURL = printf "%s%s" $origin $rel -}}
 {{- end -}}
 
 {{- /* Append a slash if the link is not a fragment, and not a static file.

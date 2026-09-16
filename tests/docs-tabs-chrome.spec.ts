@@ -49,12 +49,21 @@ const BAND_MARKER = "docs-tabs-band";
 // the directory that must yield the index, not in its ancestors.
 const SERVE_DOTTED_DIR = /\/[^/]*\.[^/]*\/$/;
 
+// Read as a BUFFER and match bytes, rather than readFileSync(..., "utf8") and
+// match a string. This runs at COLLECTION time, in every worker process (the
+// crawl cache is per-process), over every page in the consumer's build — on the
+// docs hub that is thousands of files, many of them 300-400KB. The UTF-8 decode
+// is the expensive half of that and buys nothing: BAND_MARKER is ASCII, so a
+// byte match on the raw buffer is the same answer. Deliberately NOT sampling the
+// crawl before reading, which would be cheaper still — a sample that happened to
+// miss the tab pages would make this spec skip silently, which is the exact
+// failure mode it exists to close.
 function bandPages(): string[] {
   return crawlBuiltRoot()
     .filter((p) => !SERVE_DOTTED_DIR.test(p.url))
     .filter((p) => {
       try {
-        return fs.readFileSync(p.filePath, "utf8").includes(BAND_MARKER);
+        return fs.readFileSync(p.filePath).includes(BAND_MARKER);
       } catch {
         return false;
       }
@@ -69,6 +78,32 @@ function bandPages(): string[] {
 function spread(urls: string[], n: number): string[] {
   if (urls.length <= n) return urls;
   return Array.from({ length: n }, (_, i) => urls[Math.floor((i * urls.length) / n)]);
+}
+
+// Scroll, and come back only once the result has been PAINTED.
+//
+// `behavior: "instant"` is not a detail. assets/css/docs-theme-extras.css sets
+// `scroll-behavior: smooth` on the root for motion-safe users, so a plain
+// window.scrollBy ANIMATES — and the fixed 150ms sleep this replaces was racing
+// that animation. On a loaded CI runner it could sample the band mid-flight and
+// report it as "moved" when it was merely still scrolling, which is a failure
+// that reads exactly like the regression this file exists to catch. Spelling
+// the behavior out rather than inheriting `smooth` is the same move
+// _partials/themeExtras/head-end.html already makes for in-page anchors.
+//
+// The two nested requestAnimationFrames are the settle: the first callback runs
+// before the style/layout pass that the scroll schedules, the second after it
+// has been committed, so the getBoundingClientRect() that follows reads the
+// sticky position the reader would actually see. No wall-clock guess involved.
+async function scrollBy(page: import("@playwright/test").Page, dy: number) {
+  await page.evaluate(
+    (n) =>
+      new Promise<void>((resolve) => {
+        window.scrollBy({ top: n, behavior: "instant" as ScrollBehavior });
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+    dy,
+  );
 }
 
 // Geometry of the band as painted, plus whatever the browser says is on top of
@@ -149,31 +184,42 @@ test.describe("docTabs band — against the consumer's own build", () => {
       // "the tabs move a bit and then stop".
       const seen = [atTop!.top];
       for (const step of [350, 350]) {
-        await page.evaluate((n) => window.scrollBy(0, n), step);
-        await page.waitForTimeout(150);
+        await scrollBy(page, step);
         const s = await bandState(page, BAND_MARKER);
         seen.push(s!.top);
       }
       const moved = await page.evaluate(() => Math.round(window.scrollY));
       test.skip(moved === 0, "page is too short to scroll — nothing to hold against");
 
+      // Tolerance of 1px, not exact identity. The pin is a `calc()` over
+      // rem-based custom properties, so it resolves to a fractional pixel
+      // (133.33px on a 16px root), and which way Math.round breaks can differ
+      // between scroll offsets on a fractional devicePixelRatio. The regression
+      // this exists for moved the band 24px; a 1px band of slack cannot hide
+      // that and removes the whole class of one-pixel flake.
+      const drift = Math.max(...seen) - Math.min(...seen);
       expect(
-        new Set(seen).size,
+        drift,
         `the band moved while scrolling (tops seen: ${seen.join(" -> ")}px). ` +
           `Its sticky \`top\` is --solo-navbar-bottom; if this consumer does not use ` +
           `Hextra's own navbar it must override that variable to its real chrome height.`,
-      ).toBe(1);
+      ).toBeLessThanOrEqual(1);
     });
 
     test(`is not painted over by the chrome above it — ${url}`, async ({ page }) => {
       await page.goto(url);
-      test.skip((await bandState(page, BAND_MARKER))!.hidden, "band is display:none");
+      // Same not-null guard the position test makes. Without it a consumer whose
+      // band stopped rendering gets a TypeError out of the `!` rather than the
+      // sentence explaining what is missing — and these two tests are
+      // independent, so the other one's guard does not cover this one.
+      const initial = await bandState(page, BAND_MARKER);
+      expect(initial, `no .${BAND_MARKER} rendered at ${url}`).not.toBeNull();
+      test.skip(initial!.hidden, "band is display:none");
 
       // Scroll first: at rest the band may sit below its pin point and clear
       // everything by luck. The overlap only shows once sticky has pulled it up
       // against the chrome.
-      await page.evaluate(() => window.scrollBy(0, 400));
-      await page.waitForTimeout(150);
+      await scrollBy(page, 400);
       const s = await bandState(page, BAND_MARKER);
 
       expect(

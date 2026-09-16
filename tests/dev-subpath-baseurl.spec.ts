@@ -12,8 +12,14 @@ import path from "node:path";
 // The local branch emits a root-relative URL, which is right. What it used to
 // emit was $versionRoot ALONE — and $versionRoot arrives baseURL-relative,
 // because the strip further up removes the baseURL path from it precisely so
-// the assembly can re-supply it. The else branch re-supplies it. The local
-// branch did not, so the path vanished.
+// the assembly can re-supply it. The else branch re-supplied it, by prepending
+// .Site.BaseURL whole. The local branch prepended nothing, so the path vanished.
+//
+// Both branches now share ONE assembled path ($rel) and differ only in whether
+// an origin is prefixed, so that particular divergence can no longer be
+// written. This spec is what holds that: it is the only build in the matrix
+// where the two branches would produce different paths if they ever came apart
+// again.
 //
 // That is invisible to every other config in this repo: they are all path-only
 // ("/test", "/"), where the path component is either the whole baseURL or
@@ -68,9 +74,14 @@ function flatPage(dir: string): string {
   return path.join(__dirname, "..", dir, "alpha", "first", "index.html");
 }
 
-// Shapes that resolve to a real page. SHAPE_NO_LEADING is deliberately omitted:
-// link-hextra-shapes.spec.ts pins it as broken, and a broken shape says nothing
-// about the prefix.
+// Every shape the fixture page emits. All of them resolve to a real page —
+// including SHAPE_NO_LEADING, which link-hextra-shapes.spec.ts pins at the same
+// /test/v2/everything/ as the canonical form because resolve-link.html
+// normalizes a missing leading slash before assembly. The prefix has to survive
+// on every shape, not just the well-formed ones: the normalizations upstream
+// (leading slash, doubled slash, explicit version, bare fragment) all rewrite
+// $path, and a rewrite that ran after the prefix was applied would show up here
+// and nowhere else.
 const MARKERS = [
   "SHAPE_CANONICAL",
   "SHAPE_NO_TRAILING",
@@ -78,6 +89,7 @@ const MARKERS = [
   "SHAPE_FRAGMENT",
   "SHAPE_FRAGMENT_BARE",
   "SHAPE_EXPLICIT_V1",
+  "SHAPE_NO_LEADING",
   "SHAPE_DOUBLE_SLASH",
 ];
 
@@ -93,7 +105,7 @@ const built = fs.existsSync(BUILT);
 test.describe("dev-server baseURL keeps its path", () => {
   test.skip(
     !built,
-    "public-oss-devpath not built — run `make build-oss-devpath` first",
+    "public-oss-devpath not built — run `make build-devpath` first",
   );
 
   test("every link shortcode href carries the baseURL path", () => {
@@ -112,8 +124,11 @@ test.describe("dev-server baseURL keeps its path", () => {
 
     expect(
       offenders,
-      "These hrefs lost the baseURL path. resolve-link.html's local branch must\n" +
-        "prepend the path component of .Site.BaseURL, not drop .Site.BaseURL whole.\n" +
+      "These hrefs lost the baseURL path. resolve-link.html assembles $rel ONCE,\n" +
+        "from $baseURLPath + $versionRoot + version + path, and both branches emit\n" +
+        "it — the else branch only adds an origin. If this fails, either the two\n" +
+        "branches have come apart again or $baseURLPath is being stripped from\n" +
+        "$versionRoot without being re-supplied here.\n" +
         offenders.join("\n"),
     ).toEqual([]);
   });
@@ -134,7 +149,7 @@ test.describe("version-less site: the baseURL path appears once, not twice", () 
       const file = flatPage(b.dir);
       test.skip(
         !fs.existsSync(file),
-        `${b.dir} not built — run \`make build-flat build-oss-devpath\` first`,
+        `${b.dir} not built — run \`make build-flat build-devpath\` first`,
       );
 
       const href = hrefFor(fs.readFileSync(file, "utf8"), "PROBE_FLAT_LINK");
