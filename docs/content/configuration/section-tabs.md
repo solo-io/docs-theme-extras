@@ -105,11 +105,22 @@ needs to shift them should override the first one rather than the last:
 | `--solo-tabs-height` | `0rem`, or `4.25rem` on a page that renders a band at `xl` and up | The band's own height. |
 | `--solo-rail-top` | `calc(var(--solo-navbar-bottom) + var(--solo-tabs-height))` | Where the sidebar and TOC pin, and the `scroll-margin-top` for heading anchors. |
 
-Two things follow from that:
+Three things follow from that:
 
 - **Override `--solo-navbar-bottom`, not `--solo-rail-top`.** An override of
   `--solo-rail-top` replaces the whole expression and drops the band-height
   term, so the rails tuck under the band on tabbed pages.
+- **A site that replaces Hextra's navbar must override `--solo-navbar-bottom`.**
+  The default derives the pin position from Hextra's own navbar variables, so on
+  a site that hides `.hextra-nav-container` and renders its own fixed header
+  those variables describe nothing on the page. Nothing errors, because both
+  still resolve: agentgateway-oss-website resolved `4rem + 2rem` to 96px against
+  real chrome that ended at 133px, so the band pinned 37px too high, slid under
+  the navbar on the first scroll, and had its tab labels clipped off. Set the
+  variable to your own header's bottom edge, in a stylesheet that loads after
+  this module's. `tests/docs-tabs-chrome.spec.ts` catches the miss, but it reads
+  your build rather than this module's fixture, so it only reports in your own
+  test run.
 - **A site with no `docTabs` is unaffected.** `--solo-tabs-height` is raised
   only on a `<body>` that actually contains a band, and only inside the
   `xl` media query. Below `xl` the band is hidden, so the offset returns to zero
