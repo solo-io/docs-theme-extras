@@ -10,6 +10,10 @@ This section covers what changes for a content author when a site imports
 `docs-theme-extras`. For anything not listed here, the Hugo and Hextra defaults
 apply unchanged.
 
+Start with [resolving links](links/) if you are writing content rather than
+building a site. Links are the one thing on this list that every page uses, and
+the wrong call resolves to a real page instead of a 404, so nothing reports it.
+
 Bookmark the upstream references. When something behaves the way you expect, it
 is probably stock Hugo or Hextra, and their docs are the right place to look
 first.
