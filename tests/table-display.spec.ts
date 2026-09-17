@@ -525,6 +525,11 @@ const UNCAPPED_ID = "uncapped-table-long-unbreakable-code-token";
 const MAX_TOKEN_COL_SHARE = 0.55;
 // Column 2 holds the prose. Before the fix it got 6% (38/645).
 const MIN_PROSE_COL_SHARE = 0.35;
+// The OTHER direction on the same uncapped shape, guarded by UNCAPPED_PROSE_ID
+// below: `overflow-wrap: anywhere` is a ceiling with no floor, so a column can
+// also collapse toward one glyph. Both directions now need pinning, because a
+// change that fixes either one alone re-breaks the other.
+const MIN_KEY_COL_SHARE = 0.2;
 
 test.describe("uncapped reference table: long code token folds", () => {
   test.skip(!IS_FIXTURE_TARGET, "fixture-only content");
@@ -584,12 +589,86 @@ test.describe("uncapped reference table at phone width", () => {
       r!.scrollW,
       `uncapped table scrolls at 375px (${r!.scrollW} > ${r!.clientW})`,
     ).toBeLessThanOrEqual(r!.clientW + 1);
-    // Without a `max-width` cap squeezing the column there is no char-per-line
-    // risk here (measured 122/177px over 7 lines at 375px), but assert it so a
-    // future cap on 2-column tables cannot land silently.
+    // This assertion used to carry a comment claiming an uncapped table had no
+    // char-per-line risk because no `max-width` was squeezing the column. That
+    // was wrong, and believing it is how the starved-key-column bug shipped: an
+    // uncapped column collapses from the max-content RATIO alone, with no cap
+    // involved. It held on THIS fixture only because its two cells are close in
+    // length (79 vs 137 chars). `UNCAPPED_PROSE_ID` below is the same shape at
+    // 61 vs 1003 and folded to one character per line here.
     expect(
       r!.cellCharsPerLine,
       `token cell rendered at ${r!.cellCharsPerLine} chars/line over ${r!.cellLines} lines at 375px — that is the char-per-line fold`,
     ).toBeGreaterThanOrEqual(MIN_CHARS_PER_LINE);
   });
 });
+
+// The inverse content ratio on the same uncapped 2-column shape: a SHORT
+// backticked key against a cell holding a paragraph. `overflow-wrap: anywhere`
+// drops the key column's intrinsic min-content width to a single glyph, and
+// `table-layout: auto` then hands width out by max-content ratio, so the key
+// column collapses into a vertical ribbon. No `max-width` is involved, which is
+// why `.table-capped` never fires and why the two blocks above did not catch it.
+//
+// Reproduces kgateway 2.3.x security/waf/ip-filtering (cells at 47/335 and
+// 45/1047 chars). Before the `min-width` floor in docs-theme-extras.css:
+// 76px/595px at 1280px — 11% of the row, 3 chars/line over 22 lines — and
+// 54px/273px at 375px at ONE char/line over 42 lines. After: 205px/466px at 10
+// chars/line over 6 lines, and 132px/194px at 6 chars/line over 10 lines.
+//
+// Both widths are probed because the floor is not one value: 12rem above the
+// 767px breakpoint, 8rem at or below it, since 2 x 12rem overflows a phone
+// (measured 385px against a 327px box at 375px). The no-scroll assertions are
+// what pin that ceiling — raise the phone floor and they fail.
+const UNCAPPED_PROSE_ID = "uncapped-table-prose-starves-key-column";
+
+for (const { width, label } of [
+  { width: 1280, label: "desktop" },
+  { width: 375, label: "phone" },
+]) {
+  test.describe(`uncapped reference table: prose must not starve the key column (${label})`, () => {
+    test.skip(!IS_FIXTURE_TARGET, "fixture-only content");
+    test.use({ viewport: { width, height: 800 } });
+
+    test(`key column keeps a readable share at ${width}px`, async ({ page }) => {
+      await page.goto(PAGE);
+      const r = await probeWrapper(page, UNCAPPED_PROSE_ID, 1);
+      expect(
+        r,
+        ".table-wrapper for the starved-key-column table not found",
+      ).not.toBeNull();
+      // Guards the premise, same as the block above: if render-table.html ever
+      // starts capping 2-column tables, the floor rule stops applying (it is
+      // scoped `:not(.table-capped)`) and these numbers stop meaning anything.
+      expect(
+        r!.className,
+        "2-column table is flagged .table-capped — the `:not(.table-capped)` floor no longer applies to it",
+      ).not.toContain("table-capped");
+      // The mechanism. The floor has to coexist with the fold, not replace it:
+      // above the floor the token must still break, or the `code` arm's ceiling
+      // is gone and the long-token table starves its prose again.
+      expect(
+        r!.cellCodeOverflowWrap,
+        "inline code in the cell is not on `overflow-wrap: anywhere` — the fold that bounds the OTHER failure is gone",
+      ).toBe("anywhere");
+      const total = r!.colWidths.reduce((a, b) => a + b, 0);
+      expect(total, "no column widths measured").toBeGreaterThan(0);
+      const keyShare = r!.colWidths[0] / total;
+      expect(
+        keyShare,
+        `key column got ${(keyShare * 100).toFixed(0)}% of the row (${r!.colWidths.join("/")}px) — the prose column is starving it`,
+      ).toBeGreaterThan(MIN_KEY_COL_SHARE);
+      expect(
+        r!.cellCharsPerLine,
+        `key cell rendered at ${r!.cellCharsPerLine} chars/line over ${r!.cellLines} lines at ${width}px — that is the vertical-ribbon fold`,
+      ).toBeGreaterThanOrEqual(MIN_CHARS_PER_LINE);
+      // The floor's own failure mode. `min-width` cannot widen the table past
+      // `width: 100%`, but columns x floor CAN exceed the content area and
+      // force a scroll, which is the whole reason the phone value is lower.
+      expect(
+        r!.scrollW,
+        `uncapped table scrolls at ${width}px (${r!.scrollW} > ${r!.clientW}) — the min-width floor is too wide for this viewport`,
+      ).toBeLessThanOrEqual(r!.clientW + 1);
+    });
+  });
+}

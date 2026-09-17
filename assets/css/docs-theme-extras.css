@@ -1267,6 +1267,71 @@ hr.footnotes-sep,
 .table-wrapper td code {
   overflow-wrap: anywhere;
 }
+/* The other half of the uncapped story, and the failure the `anywhere` fold
+   above CAUSES rather than fixes.
+
+   `anywhere` works by letting a cell's intrinsic min-content width collapse to
+   a single glyph, which is exactly what stops a long token pinning its column
+   open. It has no lower bound. Invert the content ratio — a SHORT backticked
+   key against a cell holding a paragraph — and `table-layout: auto` hands width
+   out by max-content ratio, the key column falls all the way to that one-glyph
+   floor, and the key renders as a vertical ribbon.
+
+   Measured on the fixture's `uncapped-table-prose-starves-key-column` (61-char
+   key against a 1003-char description, the real kgateway 2.3.x WAF IP-filtering
+   shape at 47/335 and 45/1047 chars) before this rule: 76px/595px at 1280px —
+   11% of the row, 3 characters per line over 22 lines — and 54px/273px at 375px
+   at ONE character per line over 42 lines.
+
+   No `max-width` is involved, which is why the 3-or-more-column `.table-capped`
+   heuristic never fires here, and why the older reasoning that uncapped tables
+   have a natural floor "because nothing caps them" does not hold. The squeeze
+   comes from the ratio.
+
+   Neither `overflow-wrap` keyword can fix this, because the choice is exactly
+   between the two failures: `anywhere` gives a ceiling with no floor (this bug),
+   `break-word` gives a floor with no ceiling (the pinned-open column that the
+   `code` arm above exists to fix, measured at 627px/38px). A `min-width` is the
+   only lever that bounds the collapse without touching the fold — above the
+   floor the token still folds, so the ceiling survives.
+
+   `min-width` in PERCENT does nothing here. A percentage min-width on a cell
+   resolves against a containing block whose width is itself the table's, so the
+   auto layout ignores it: 20%, 25% and 30% each measured byte-identical to no
+   rule at all, at every width from 320px to 1440px. Only a length works.
+
+   The floor cannot widen the table past the content area, because
+   `.table-wrapper table` is already `width: 100%` — it only changes how the
+   slack is split between columns. It CAN force a horizontal scroll if
+   columns x floor exceeds the available width, which is what sets the two
+   values. Uncapped means 1 or 2 columns (render-table.html caps at 3+), so the
+   phone floor must satisfy 2 x floor <= the narrowest content area: 8rem
+   (2 x 128px = 256px) clears 320px with room, while 12rem overflowed at 375px
+   (385px against a 327px box). Above the breakpoint there is room for 12rem,
+   which is worth taking: at 1280px it moves the starved column from 11% to 31%
+   and from 22 rendered lines to 6.
+
+   Measured after, with no horizontal scroll at any width from 320px to 1440px:
+   1280px 205px/466px at 10 chars per line over 6 lines; 375px 132px/194px at 6
+   chars per line over 10 lines. The long-token table in the other direction is
+   unmoved where it matters — 44% of the row at 1280px, still under the 55%
+   ceiling `table-display.spec.ts` pins.
+
+   Capped tables are deliberately excluded. They run up to 4 columns, so even
+   the 8rem floor would demand 32rem and scroll; their collapse floor is the
+   24rem `max-width` plus the phone-width `break-word` guard below. Breakpoint
+   matches the `max-width: 767px` query below, so the two are exact
+   complements. */
+.table-wrapper:not(.table-capped) th,
+.table-wrapper:not(.table-capped) td {
+  min-width: 8rem;
+}
+@media (min-width: 768px) {
+  .table-wrapper:not(.table-capped) th,
+  .table-wrapper:not(.table-capped) td {
+    min-width: 12rem;
+  }
+}
 /* Cap how wide any single column may grow, then let content wrap inside that
    cap. Applied ONLY to generated multi-column reference tables (Helm values,
    CRD fields: `Key | Type | Default | Description`), which render-table.html

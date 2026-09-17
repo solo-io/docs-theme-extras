@@ -24,6 +24,25 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [0.3.13] — 2026-09-17
+
+
+### Fix — a long description cell squeezed its neighbor into a one-character-wide ribbon on 2-column tables (`assets/css/docs-theme-extras.css`, `tests/table-display.spec.ts`, `fixture/assets/conrefs/test/everything.md`)
+
+Reported against the docs hub's kgateway 2.3.x WAF IP-filtering guide, [Configure IP-based filtering](https://docs.solo.io/kgateway/2.3.x/security/waf/ip-filtering/), where the `Setting` column of the field table under the ListenerPolicy renders `default.httpSettings.useRemoteAddress: true` stacked three characters to a line down twenty-two lines while the Description column takes 89% of the row. This is the ordinary `Setting | Description` field table that follows a configuration block in every task guide, so the shape is common rather than exotic. What separates it from the two other 2-column tables on the same page, which render fine, is only the ratio between the columns: theirs run from 0.9 to 1.7 characters of description per character of key, this one 7.1 on the first row and 23.3 on the second.
+
+It is the exact inverse of the bug v0.3.6 fixed, caused by that fix, and the two cannot both be solved with the `overflow-wrap` keyword. `anywhere` stops a long token pinning its column open by letting a cell's intrinsic min-content width collapse to a single glyph; that collapse has no lower bound. Invert the content ratio — a short backticked key against a cell holding a paragraph — and `table-layout: auto` hands width out by max-content ratio, so the key column falls all the way to the one-glyph floor. `anywhere` is a ceiling with no floor, `break-word` a floor with no ceiling (it reinstates the 627px/38px pinned-open column v0.3.6 measured), and there is no third keyword.
+
+No `max-width` is involved, which is why the 3-or-more-column `.table-capped` heuristic never fires on this shape, and why the reasoning written into the CSS in v0.3.6 — that uncapped tables have a natural floor "because nothing caps them" — does not hold. The squeeze comes from the ratio alone. The test added in v0.3.6 encoded the same belief: it pins a *ceiling* on the token column and a *floor* on the prose column, so it is blind in the direction that broke, and a comment in the phone-width block asserted outright that an uncapped table had no char-per-line risk. Both are corrected.
+
+The fix is a `min-width` floor on uncapped cells — 8rem, raised to 12rem at 768px and up — which bounds the collapse without touching the fold, so above the floor the token still breaks and the ceiling survives. It cannot widen a table past the content area, because `.table-wrapper table` is already `width: 100%`; it only changes how the slack is split. It *can* force a horizontal scroll if columns times floor exceeds the available width, which is what sets the two values: uncapped means 1 or 2 columns, so the phone floor must satisfy twice the floor against the narrowest content area, and 12rem overflowed at 375px (385px against a 327px box) while 8rem clears 320px with room. The breakpoint is the exact complement of the existing `max-width: 767px` guard. Capped tables are deliberately excluded — they run to 4 columns, where even 8rem would demand 32rem and scroll.
+
+A percentage floor was tried first and does nothing at all: a percentage `min-width` on a cell resolves against a containing block that is itself the table, so the auto layout ignores it. 20%, 25% and 30% each measured byte-identical to no rule, at every width from 320px to 1440px. Only a length works.
+
+**Verified** by measurement on a real build at seven viewport widths (320, 375, 414, 768, 1024, 1280, 1440), not by inspection. The starved column goes from 76px/595px at 1280px — 11% of the row, 3 characters per line over 22 lines — to 205px/466px at 10 characters per line over 6 lines, and from 54px/273px at 375px at **one** character per line over 42 lines to 132px/194px at 6 over 10. No horizontal scroll at any width in the sweep. The table in the other direction is unmoved where it matters: 40% to 44% of the row at 1280px, still under the 55% ceiling the v0.3.6 spec pins. New fixture section `uncapped-table-prose-starves-key-column` reproduces the production shape (61-char key against a 1003-char description, against the page's 45/1047), and the two new cases in `tests/table-display.spec.ts` were confirmed to fail with the floor neutralized and pass with it, with the other thirteen cases in that file unaffected in both states. Full suite, both brands: 2317 passed / 21 skipped (oss), 2319 / 19 (enterprise). The one failure in each is `override-parity`'s consumer shadow inventory reading a local sibling clone of agentgateway-oss-website, which predates this branch and skips in CI.
+
+**Consumer action.** None, but note this one does change rendered output: any 1- or 2-column table whose columns are lopsided enough for the floor to bite will redistribute its column widths, which is the point. 3-or-more-column reference tables are untouched.
+
 ## [0.3.12] — 2026-09-16
 
 
