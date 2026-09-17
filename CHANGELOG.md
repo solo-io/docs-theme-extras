@@ -24,7 +24,7 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
-## [0.3.13] — 2026-09-16
+## [0.3.13] — 2026-09-17
 
 
 ### Fix — a long description cell squeezed its neighbor into a one-character-wide ribbon on 2-column tables (`assets/css/docs-theme-extras.css`, `tests/table-display.spec.ts`, `fixture/assets/conrefs/test/everything.md`)
