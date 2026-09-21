@@ -1,0 +1,140 @@
+{{- /*
+  retired-versions.html — the set of version segments this site used to publish
+  and no longer does. Returns a slice of strings; empty on a site that has
+  retired nothing.
+
+  WHY THIS IS NOT JUST `params.versions`. docs/retired-version-notice.html and
+  404.html both need to recognize a `?fromversion=` value handed forward by a
+  hosting-level redirect. Until this partial existed they answered that question
+  from `params.versions`, which meant a retired version's entry had to STAY in
+  the table long after its content tree was archived — an entry that renders
+  nothing, is hidden from the picker with a whitespace `dropdown`, and exists
+  purely to be matched against. That is an invisible obligation, and it was
+  broken in practice: solo-io/docs 94be4fc64 added the agentgateway 2.1.x/2.2.x
+  redirect rules and deleted those two entries in the same commit, which left
+  the redirect working and the explanation silently gone. Nothing failed.
+
+  So the question is asked of the hosting config instead, which is the only
+  place that actually knows: a version is retired exactly when something is
+  redirecting away from it. The rule that causes the move is now the rule that
+  explains it, and the two cannot drift.
+
+  THREE SOURCES, unioned. A consumer opts in by doing nothing.
+
+    1. `params.retiredVersions` — an explicit list, for a consumer whose
+       redirects live somewhere this partial cannot read (an edge worker, an
+       ingress rule) or who wants to name a version the hosting config does not.
+
+    2. `static/_redirects` — the Cloudflare Pages / Netlify format, used by
+       agentgateway-oss-website and kgateway-oss. One rule per line, whitespace
+       separated, destination second:
+
+           /docs/1.0.x/*  /docs/latest/:splat?fromversion=1.0.x  301
+
+    3. `firebase.json` — the docs hub. Every hosting target's `redirects` array
+       is walked and each `destination` read the same way.
+
+  IN ALL THREE CASES the version is taken from `fromversion=` in the
+  DESTINATION, never from the source pattern. That is deliberate: a redirect
+  exists for plenty of reasons that are not a retirement (a renamed page, a
+  moved section), and only the ones that opted in by appending the parameter are
+  claiming "the version this reader asked for is gone". Retiring a version is
+  therefore one edit, in the hosting config, and the notice follows.
+
+  CALL THIS THROUGH `partialCached`. It reads and unmarshals a file that is
+  routinely thousands of lines, and the callers run on every page — the docs hub
+  builds ~4,500 of them per language. The cache key is constant because the
+  answer is site-wide.
+
+      {{ $retired := partialCached "utils/retired-versions.html" . "retired" }}
+
+  NOT FILTERED BY PRODUCT, on purpose, and it matters most for the hub, where
+  one firebase.json carries every product's rules. Scoping by product path was
+  considered and rejected: the list is only ever used to RECOGNIZE a value that
+  arrived in the query string, and a reader can only arrive with another
+  product's value by following that other product's redirect, which lands them
+  on that other product's page. A cross-product entry is therefore unreachable
+  rather than wrong, and the filter would be a second place to get the product
+  path wrong for no behavior gained.
+*/ -}}
+
+{{- /* Both file formats hand their destination to utils/retired-version-param.html
+       so the parameter cannot be parsed two different ways. */ -}}
+{{- $out := slice -}}
+
+{{- /* 1. Explicit list. */ -}}
+{{- range site.Params.retiredVersions -}}
+  {{- $v := trim (printf "%v" .) " " -}}
+  {{- if and $v (not (in $out $v)) -}}{{- $out = $out | append $v -}}{{- end -}}
+{{- end -}}
+
+{{- /* BOTH FILE PATHS ARE PROJECT-ROOT-RELATIVE, ON DISK. `os.ReadFile` does
+       not traverse module mounts, and neither does `fileExists`. That is the
+       right behavior here — a hosting config belongs to the deployed project,
+       not to a module — and it holds for every real consumer: agentgateway-oss
+       and kgateway-oss keep `static/_redirects` at their project root, the docs
+       hub keeps `firebase.json` at its own.
+
+       It does NOT hold for this module's fixture, whose redirects file is
+       mounted from fixture/ so it cannot leak into consumers. A top-level
+       static/_redirects in this repo WOULD be mounted into every consumer's
+       site root and would rewrite their hosting behavior, which is not a thing
+       a theme may do. `retiredVersionsFiles` exists so the fixture can point at
+       its real on-disk path and keep the parsing under test; no consumer needs
+       it. Setting it REPLACES the defaults rather than adding to them, so a
+       consumer can also use it to opt out by naming a path that does not exist.
+
+       `os.ReadFile` returns "" for a missing path rather than failing, so the
+       common case — a consumer with neither file — costs two empty reads and
+       falls straight through. `try` is still what wraps them, because a read
+       can fail for reasons other than absence, and because a hosting config is
+       edited by hand and by CI: a stray comma in firebase.json should make this
+       partial contribute nothing, not take the whole docs build down with a
+       template error. */ -}}
+{{- /* FORMAT IS CHOSEN BY EXTENSION, not by position, so the list stays a plain
+       set of paths and a consumer with several redirect files gets them all.
+       `.json` is read as Firebase Hosting; anything else is read as the
+       line-oriented Cloudflare/Netlify format. */ -}}
+{{- $files := site.Params.retiredVersionsFiles | default (slice "static/_redirects" "firebase.json") -}}
+
+{{- range $files -}}
+  {{- $path := printf "%v" . -}}
+  {{- if $path -}}
+    {{- $read := try (os.ReadFile $path) -}}
+    {{- with $read.Value -}}
+
+      {{- if hasSuffix $path ".json" -}}
+        {{- /* 3. Firebase Hosting. `hosting` is an array on a multi-target
+               config and an object on a single-target one, so it is normalized
+               to a slice before the walk — a single-target consumer would
+               otherwise iterate the object's keys and find no `redirects`. */ -}}
+        {{- $parsed := try (transform.Unmarshal .) -}}
+        {{- with $parsed.Value -}}
+          {{- $targets := .hosting | default slice -}}
+          {{- if reflect.IsMap $targets -}}{{- $targets = slice $targets -}}{{- end -}}
+          {{- range $targets -}}
+            {{- range (.redirects | default slice) -}}
+              {{- $v := partial "utils/retired-version-param.html" (.destination | default "") -}}
+              {{- if and $v (not (in $out $v)) -}}{{- $out = $out | append $v -}}{{- end -}}
+            {{- end -}}
+          {{- end -}}
+        {{- end -}}
+
+      {{- else -}}
+        {{- /* 2. Cloudflare / Netlify `_redirects`. Comment lines are skipped
+               before the parse so a rule someone disabled cannot keep claiming
+               its version is retired. */ -}}
+        {{- range (split . "\n") -}}
+          {{- $line := trim . " \t\r" -}}
+          {{- if and $line (not (hasPrefix $line "#")) -}}
+            {{- $v := partial "utils/retired-version-param.html" $line -}}
+            {{- if and $v (not (in $out $v)) -}}{{- $out = $out | append $v -}}{{- end -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $out -}}

@@ -1328,6 +1328,8 @@
     "MARKER_REMAP_ALWAYS_DESC": "div > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
     "MARKER_REMAP_ALWAYS_KEY": "div > article > main > div.content > div.table-wrapper > table > tbody > tr > td > code",
     "MARKER_REMAP_COLLIDE_KEEP": "div > article > main > div.content > p",
+    "MARKER_REMAP_GATED_DESC": "div > article > main > div.content > div.table-wrapper > table > tbody > tr > td",
+    "MARKER_REMAP_GATED_KEY": "div > article > main > div.content > div.table-wrapper > table > tbody > tr > td > code",
     "MARKER_REMAP_INTRO": "div > article > main > div.content > p"
   },
   "v4-link/gating": {

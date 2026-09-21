@@ -29,10 +29,50 @@ retired:
 Firebase merges that with any query string the reader already had, so
 `?fromversion=2.1.x&foo=bar` works and the reader's own parameters survive.
 
-The version you name must still be present in `params.versions`. Retiring a
-version means removing its content and hiding it from the picker with a blank
-`dropdown`, not deleting its entry — the entry is what makes the value
-recognizable. An unrecognized value renders nothing at all.
+Cloudflare Pages and Netlify take the same idea in their own format:
+
+```
+/docs/1.0.x/*  /docs/latest/:splat?fromversion=1.0.x  301
+```
+
+**That is the whole opt-in.** Nothing else to configure, and in particular
+nothing to keep in `params.versions` — see below.
+
+## Where the recognized versions come from
+
+`fromversion` arrives in a URL, so it is reader-controlled. It is matched
+against a list and used to select a known string; it is never written into the
+page. That list is built by `utils/retired-versions.html` from three sources,
+unioned:
+
+| Source | For |
+|---|---|
+| `static/_redirects` | Cloudflare Pages / Netlify. Read from the project root. |
+| `firebase.json` | Firebase Hosting. Every target's `redirects` array is walked. |
+| `params.retiredVersions` | An explicit list, when your redirects live somewhere a template cannot read — an edge worker, an ingress rule. |
+
+In all three the version comes from `fromversion=` in the **destination**, never
+from the source pattern. A redirect exists for plenty of reasons that are not a
+retirement, so only the rules that appended the parameter are claiming the
+version is gone.
+
+Both files are read from the project root, and a missing one costs an empty read
+and contributes nothing. A file that cannot be parsed also contributes nothing
+rather than failing the build.
+
+> [!NOTE]
+> This used to read `params.versions` instead, which meant a retired version's
+> entry had to stay in that table forever — rendering nothing, hidden from the
+> picker with a whitespace `dropdown`, present only to be matched against.
+> Nothing enforced that and nothing announced it, so deleting the entry along
+> with the content silently turned the notice off. Reading the redirects
+> themselves makes the two impossible to separate: the rule that moves the
+> reader is the rule that explains the move.
+
+`retiredVersionsFiles` overrides which paths are read. It exists so this
+module's own fixture can point at an on-disk path, because a `_redirects` in
+the module's top-level `static/` would be mounted into every consumer's site
+root. You should not need it.
 
 ## What the reader sees
 

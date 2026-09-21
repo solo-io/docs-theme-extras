@@ -67,16 +67,30 @@
 {{- end -}}
 {{- if not $ownVersions -}}{{- $ownVersions = site.Params.versions | default slice -}}{{- end -}}
 
-{{- /* RETIRED VERSIONS STAY IN THIS LIST ON PURPOSE. agentgateway keeps 2.1.x
-       and 2.2.x in params.versions (hidden from the dropdown via a blank
-       `dropdown`) after archiving their content. Including them here is what
-       lets the client RECOGNIZE /agentgateway/2.1.x/… as a version segment
-       rather than a content path. This list answers "is this segment a
-       version?", never "does this version still build" — the HEAD probes
-       answer that, and they are authoritative because they ask the server. */ -}}
+{{- /* RETIRED VERSIONS BELONG IN THIS LIST, and they do not come from
+       params.versions. This list answers "is this segment a version?", never
+       "does this version still build" — the HEAD probes answer that, and they
+       are authoritative because they ask the server. So /agentgateway/2.1.x/…
+       has to be recognizable as a version segment long after 2.1.x stopped
+       publishing, and the same list gates the `fromversion` marker below.
+
+       utils/retired-versions.html supplies that half by reading the hosting
+       config's own redirect rules. It used to come from a params.versions
+       entry kept alive purely to be matched against, which is an obligation
+       nothing enforces — solo-io/docs 94be4fc64 deleted agentgateway's two in
+       the same commit that added their redirects, and the retired-version
+       messaging went quiet with no build error.
+
+       These entries reach CFG.versions, which feeds isVersion() and the
+       `fromversion` allowlist ONLY. Suggestion candidates are built from
+       CFG.latest and the reader's own path, never by iterating this list, so a
+       retired version cannot be offered as somewhere to go. */ -}}
 {{- $known := slice -}}
 {{- range $ownVersions -}}
   {{- with .linkVersion -}}{{- $known = $known | append . -}}{{- end -}}
+{{- end -}}
+{{- range (partialCached "utils/retired-versions.html" . "retired-versions") -}}
+  {{- if not (in $known .) -}}{{- $known = $known | append . -}}{{- end -}}
 {{- end -}}
 
 {{- /* The destination version. `latest` when the site declares one, else the

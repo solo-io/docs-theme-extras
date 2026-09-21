@@ -176,6 +176,9 @@
      params.themeExtras.warnMissingDescription = false. */}}
 {{- partial "utils/warn-missing-description.html" . -}}
 
-{{/* Emit noindex on non-latest versioned pages. Opt-in and fail-safe: does
-     nothing unless a params.versions entry is flagged `latest = true`. */}}
-{{- partial "utils/version-noindex.html" . -}}
+{{/* The non-latest-version noindex used to be emitted here, as a SECOND
+     `<meta name="robots">` appended after the one head.html had already
+     written. It now lives in `_partials/head.html`, which calls
+     `utils/version-noindex.html` for a directive string and writes a single
+     tag. Nothing replaces this call — adding one back would reintroduce the
+     duplicate. See version-noindex.html for the full reasoning. */}}

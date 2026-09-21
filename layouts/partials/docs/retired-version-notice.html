@@ -69,15 +69,30 @@
        vector. An allowlist makes that impossible by construction — the value
        is used to SELECT a known string, never to produce one.
 
-       Retired versions are still present in params.versions (hidden from the
-       picker with a blank `dropdown`), which is exactly what makes them
-       matchable here. */ -}}
+       TWO SOURCES, because a retired version is by definition absent from the
+       first. `params.versions` covers a version that still publishes; the
+       retired ones come from utils/retired-versions.html, which reads them
+       back out of the hosting config that redirects away from them.
+
+       This used to be `params.versions` alone, which forced a retired
+       version's entry to stay in the table forever as a match target with no
+       content behind it. That obligation was invisible and it was broken:
+       solo-io/docs 94be4fc64 added the agentgateway 2.1.x/2.2.x redirects and
+       deleted those entries in the same commit, so the redirect worked and
+       this notice silently stopped rendering. Sourcing the retired half from
+       the redirects themselves makes the two impossible to separate.
+
+       partialCached, not partial: the lookup reads and unmarshals the hosting
+       config, and this runs on every page of every build. */ -}}
 {{- $curProd := site.Params.currentProduct | default "" -}}
 {{- $known := slice -}}
 {{- range site.Params.versions -}}
   {{- if or (eq $curProd "") (eq (.product | default "") $curProd) -}}
     {{- with .linkVersion -}}{{- $known = $known | append . -}}{{- end -}}
   {{- end -}}
+{{- end -}}
+{{- range (partialCached "utils/retired-versions.html" . "retired-versions") -}}
+  {{- if not (in $known .) -}}{{- $known = $known | append . -}}{{- end -}}
 {{- end -}}
 
 {{- /* TRANSLATION. Resolved through i18n with the English literal as the

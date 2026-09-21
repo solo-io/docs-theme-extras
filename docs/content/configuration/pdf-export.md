@@ -120,6 +120,48 @@ because Hugo resolves an output format's template per page **kind**.
 > `book.html` that looks plausible and is not a book document at all. The tell is
 > a missing `paged.polyfill.js` script tag — see [Verifying](#verifying-the-output).
 
+### Opting out
+
+Remove `book` from `outputs`. No disable flag and no per-version setting exist:
+the front matter is the whole switch, in both directions. A tree that should stop
+shipping a manual — an archived version, an in-development branch, a hidden tree
+that duplicates another — simply does not list the format.
+
+Restore the rest of the list when you do, for the same reason as above: the line
+carries the page's `.md`, RSS and `llms.txt` as well, so deleting the whole line
+rather than the one word takes those with it.
+
+### Make the opt-in the only list
+
+Whatever publishes your manuals needs to know which trees to render. Derive that
+from this front matter rather than keeping a second list beside it. A parallel
+list is not merely duplication — the two halves fail in both directions, and
+neither failure reports itself:
+
+- **Opted in, not published.** The build spends the time to stitch a book nobody
+  uploads, and the download item below renders on every page of that tree
+  pointing at an asset that does not exist. Readers get a 404; CI stays green.
+- **Published, not opted in.** The render step finds no `book.html` and fails,
+  but only after checking out, installing and building the whole site.
+
+Both were live in the docs hub, which drove the export from a version list in
+its own CI registry: five version trees carried the opt-in with no matching
+registry entry. That workflow now builds its matrix by scanning for the opt-in
+instead —
+
+```sh
+grep -rlE '^outputs:.*"book"' --include=_index.md content/
+```
+
+— and validates each hit against the version list in the Hugo config, so an
+opt-in on a page *inside* a tree rather than on its root fails in the first
+seconds rather than twenty minutes into a render.
+
+One case cannot work this way: a site whose content lives in a repo the
+publishing workflow has not checked out yet. There the list has to be explicit,
+and it can drift — land the `book` opt-in in the content repo **before** adding
+the entry that renders it.
+
 ## 3. Ask the build for a book
 
 Front matter selects the output format, but it cannot say *when*. It is static, so

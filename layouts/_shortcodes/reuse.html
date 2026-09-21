@@ -166,11 +166,33 @@
   {{- /* Two-pass OSS→enterprise version remapping from [[params.versions]].
          Pass 1 replaces OSS versions with indexed placeholders so overlapping
          version strings (e.g. OSS 2.2.x vs enterprise 2.2.x) never double-match.
-         Pass 2 swaps placeholders for the enterprise versions. */ -}}
-  {{- range $i, $v := $.Site.Params.versions -}}
-    {{- if and $v.ossVersion (ne $v.ossVersion $v.version) -}}
-      {{- $oss := replaceRE `\.` `\.` $v.ossVersion -}}
-      {{- $ph := printf "__V%d__" $i -}}
+         Pass 2 swaps placeholders for the enterprise versions.
+
+         KEYED ON THE OSS VERSION, NOT ON THE ENTRY, and identically to
+         rebase.html — see the long note there for the agentgateway case that
+         found it. In short: a gate carries the OSS token once, so ranging the
+         entries let the first one claiming an `ossVersion` consume it and left
+         every later entry claiming the same one with nothing to rewrite. Both
+         shortcodes remap the same authored text, so they must agree; if you
+         change one, change the other. */ -}}
+  {{- $ossKeys := slice -}}
+  {{- range $.Site.Params.versions -}}
+    {{- with .ossVersion -}}
+      {{- if not (in $ossKeys .) -}}{{- $ossKeys = $ossKeys | append . -}}{{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $ossTargets := slice -}}
+  {{- range $oss := $ossKeys -}}
+    {{- $claim := slice -}}
+    {{- range $.Site.Params.versions -}}
+      {{- if eq .ossVersion $oss -}}{{- $claim = $claim | append .version -}}{{- end -}}
+    {{- end -}}
+    {{- $ossTargets = $ossTargets | append (delimit $claim ",") -}}
+  {{- end -}}
+  {{- range $j, $oss := $ossKeys -}}
+    {{- $to := index $ossTargets $j -}}
+    {{- if ne $to $oss -}}
+      {{- $pattern := replaceRE `\.` `\.` $oss -}}
       {{- /* Match BOTH angle ({{< >}}) and percent ({{% %}}) version blocks.
              Unlike rebase.html, reuse.html does not bulk-convert percent→angle
              before remapping, so an OSS version number authored in a percent-
@@ -178,13 +200,13 @@
              templating-language.md, `{{% version include-if="2.4.x,2.5.x" %}}`)
              would otherwise never be remapped to the enterprise version and the
              gated rows would be excluded on the enterprise build. */ -}}
-      {{- $content = replaceRE (printf `(\{\{[<%%]\s*version\s[^>%%]*?(?:in|ex)clude-if="[^"]*?)%s` $oss) (printf "${1}%s" $ph) $content -}}
+      {{- $content = replaceRE (printf `(\{\{[<%%]\s*version\s[^>%%]*?(?:in|ex)clude-if="[^"]*?)%s` $pattern) (printf "${1}__V%d__" $j) $content -}}
     {{- end -}}
   {{- end -}}
-  {{- range $i, $v := $.Site.Params.versions -}}
-    {{- if and $v.ossVersion (ne $v.ossVersion $v.version) -}}
-      {{- $ph := printf "__V%d__" $i -}}
-      {{- $content = replace $content $ph $v.version -}}
+  {{- range $j, $oss := $ossKeys -}}
+    {{- $to := index $ossTargets $j -}}
+    {{- if ne $to $oss -}}
+      {{- $content = replace $content (printf "__V%d__" $j) $to -}}
     {{- end -}}
   {{- end -}}
 
