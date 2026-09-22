@@ -28,6 +28,7 @@
     "layouts/_shortcodes/card.html",
     "layouts/_shortcodes/cards.html",
     "layouts/_shortcodes/reuse-append.html",
+    "layouts/_shortcodes/tabs.html",
     "layouts/partials/version-banner.html"
    ],
    "duplicatedSelectors": []

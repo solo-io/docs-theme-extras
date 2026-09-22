@@ -6,7 +6,7 @@
 # `npm run gen:docs -- --check` and fails on any diff.
 title: readfile
 description: "Inlines a file from the filesystem into the page"
-weight: 250
+weight: 260
 ---
 
 Either call form works, and both produce identical HTML.

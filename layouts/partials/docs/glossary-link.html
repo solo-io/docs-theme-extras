@@ -1,0 +1,66 @@
+{{- /*
+  EXTENSION SLOT — resolve a `data/glossary.yaml` `link` value into a URL that
+  works on THIS site. Called by `_shortcodes/gloss.html` for the tooltip's
+  optional "Learn more" anchor, and available to a consumer that renders a
+  glossary page of its own so the two cannot disagree about where a term goes.
+
+  Params (a dict, not a Page — this slot needs both):
+    page — the calling page, for version context
+    link — the raw `link` value from the glossary entry
+
+  Must `return` a string; it is interpolated straight into an `href`.
+
+  DEFAULT: rewrite a site-absolute link that names an UPSTREAM version onto the
+  tree the reader is actually in, and pass everything else through untouched.
+
+  WHY THAT IS THE DEFAULT RATHER THAN A CONSUMER'S PROBLEM. Glossary data
+  travels: a product's `data/glossary.yaml` is authored in its OSS repo and
+  reaches a downstream build through a data mount, so every `link` in it is
+  absolute against the OSS site. kagent's are `/docs/kagent/1.x/about/
+  core-concepts/#actor`; on the docs hub the same page is
+  `/kagent/1.0.x/about/core-concepts/#actor`, and emitting the value verbatim
+  404s all 19 of them. The OSS repo cannot fix it for the downstream build,
+  because `layouts/` do not travel with a content+data mount — only the data
+  does — so the OSS repo's own `gloss` override never runs there.
+
+  That is the same shape `reuse`, `rebase` and the `ossVersion` remap already
+  handle, and it is expressed in this module's own vocabulary
+  (`utils/version-root.html`, the version entry's `ossVersion`), so it belongs
+  here rather than being rewritten per consumer. It WAS written per consumer:
+  the docs hub carried this logic as `custom/glossary-link.html` plus a fork of
+  the whole `gloss` shortcode, and kagent.dev carried a second fork of the same
+  shortcode for the other half of the same problem.
+
+  The rewrite is deliberately narrow. It fires only when the value is
+  site-absolute AND the page's version entry declares an `ossVersion` AND that
+  token appears as a path segment in the value. A link that is external, a
+  glossary that holds native paths, a version with no upstream tree, a
+  version-less site: all fall through unchanged. A consumer whose glossary needs
+  something else overrides this file — that is what the slot is for.
+*/ -}}
+{{- $page := .page -}}
+{{- $link := .link | default "" -}}
+{{- $href := $link -}}
+
+{{- if hasPrefix $link "/" -}}
+  {{- /* `versionBase` is the published prefix AHEAD of the version segment (on
+         the hub, "/kagent", and it carries the language segment on a translated
+         page), so pairing it with `currentVersion` rebuilds the same root the
+         page itself is served from. Do NOT prepend site.BaseURL the way
+         resolve-link.html does — that re-adds the product segment this prefix
+         already holds. */ -}}
+  {{- $root := partial "utils/version-root.html" $page -}}
+  {{- if and $root.isVersioned $root.versionEntry -}}
+    {{- $oss := $root.versionEntry.ossVersion | default "" -}}
+    {{- $marker := printf "/%s/" $oss -}}
+    {{- if and $oss (strings.Contains $link $marker) -}}
+      {{- /* Everything after the FIRST occurrence of the upstream version
+             segment. Split-and-rejoin rather than `index … 1`, so a path that
+             repeats the segment later keeps its tail. */ -}}
+      {{- $rest := delimit (after 1 (split $link $marker)) $marker -}}
+      {{- $href = printf "%s/%s/%s" $root.versionBase $root.currentVersion $rest -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $href -}}

@@ -6,7 +6,7 @@
 # `npm run gen:docs -- --check` and fails on any diff.
 title: version-cards
 description: "Renders a card grid mirroring the navbar version dropdown"
-weight: 200
+weight: 210
 ---
 
 Either call form works, and both produce identical HTML.

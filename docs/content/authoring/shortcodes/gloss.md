@@ -40,6 +40,21 @@ The inner content is optional. When present it becomes the display text,
 overriding the key itself — useful when the prose needs "the Model Context
 Protocol" but the glossary key is `MCP`.
 
+### The "Learn more" link
+
+An entry's `link` is resolved through the `docs/glossary-link.html`
+extension slot before it is emitted, and the slot's default rewrites a
+site-absolute link that names an upstream version onto the tree the reader
+is in. That matters because glossary data usually travels: it is authored in
+a product's OSS repo, where every link is absolute against the OSS site, and
+reaches a downstream build through a data mount. Override the slot if your
+glossary needs different handling.
+
+Only an EXTERNAL destination opens in a new tab. After the slot has resolved
+the href, an `http://` or `https://` link gets `target="_blank"` with
+`rel="noopener"`; anything site-relative gets neither, so an ordinary
+cross-reference does not strand the reader in a second tab.
+
 Tooltip positioning and behavior come from this module's `glossary.js`,
 which uses `position: fixed` so a tooltip escapes an `overflow: auto`
 ancestor such as `.table-wrapper`. Styling lives in `glossary.css`. Both are

@@ -6,7 +6,7 @@
 # `npm run gen:docs -- --check` and fails on any diff.
 title: prism
 description: "Deprecated compatibility stub for the lotus prism shortcode; use a fenced code block"
-weight: 290
+weight: 300
 ---
 
 Either call form works, and both produce identical HTML.

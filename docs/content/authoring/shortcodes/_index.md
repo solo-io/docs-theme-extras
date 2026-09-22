@@ -26,6 +26,7 @@ Render a visual component on the page.
 | [`gloss`](gloss/) | Renders an inline glossary term with a tooltip carrying its definition |
 | [`render`](render/) | Embeds the interactive changelog browser on a page |
 | [`table`](table/) | Wraps a markdown table so the author picks how its columns size |
+| [`tabs`](tabs/) | Groups tab shortcodes into one tabbed block, with page-unique DOM ids |
 
 ## Gating
 

@@ -6,7 +6,7 @@
 # `npm run gen:docs -- --check` and fails on any diff.
 title: conditional-text
 description: "Includes or excludes its body based on the page's build condition"
-weight: 100
+weight: 110
 ---
 
 Either call form works, and both produce identical HTML.

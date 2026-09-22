@@ -232,7 +232,7 @@ survive contact with the actual 29 files:
 
 #### Group assignment
 
-The backfill is **complete**: all 29 shortcodes carry a conformant header, and
+The backfill is **complete**: all 30 shortcodes carry a conformant header, and
 `npm run gen:docs` generates a page for every one of them.
 
 **This table is a snapshot, not a source of truth.** Each file's header carries
@@ -242,7 +242,7 @@ which is useful when deciding where a new shortcode belongs.
 
 | Group | Shortcodes |
 |---|---|
-| `ui-components` | `alert`, `callout`, `card`, `cards`, `checklist`, `details`, `gloss`, `prism`, `render`, `table` |
+| `ui-components` | `alert`, `callout`, `card`, `cards`, `checklist`, `details`, `gloss`, `prism`, `render`, `table`, `tabs` |
 | `gating` | `conditional-text`, `downstream`, `upstream`, `version` |
 | `reuse-versioning` | `rebase`, `reuse`, `reuse-append`, `reuse-image`, `reuse-image-dark`, `reuse-image-light`, `version-cards` |
 | `external-content` | `github`, `github-table`, `github-yaml`, `openapi`, `readfile` |
@@ -320,9 +320,15 @@ silently been missing, plus `components/page-context-menu`, the
 `displayPagination` config guard, `version-banner` and the `page-badges`
 contract. Nothing was broken; the features simply never arrived.
 
-Seven partials exist purely so you do not have to fork. Each one defaults to
+Eight partials exist purely so you do not have to fork. Each one defaults to
 today's exact output, so adding them changed **0 of 770** built HTML pages on
 the docs hub.
+
+Seven of the eight are *rendering* slots: they emit markup at a point in the
+docs layout. `docs/glossary-link.html` is the odd one — it takes a dict rather
+than a Page and returns a URL, and it exists because two consumers had forked a
+whole shortcode to change one attribute of one anchor. When a consumer fork is
+that small and that duplicated, a slot is the cheaper answer.
 
 | Slot | Renders | Default |
 |---|---|---|
@@ -333,6 +339,7 @@ the docs hub.
 | `partials/docs/under-heading.html` | **inside** the heading column, below the `<h1>` and the release badges | nothing — **detail pages only**, and only when `.Title` is set |
 | `partials/docs/after-title.html` | inside `.content`, after the title block and **before** the page description | nothing — **detail pages only**, not section indexes |
 | `partials/docs/after-description.html` | inside `.content`, after the page description and before the body | nothing — **detail pages only**, not section indexes |
+| `partials/docs/glossary-link.html` | nothing — **returns** the `href` for a glossary tooltip's "Learn more" anchor. Params: `page`, `link` | the raw `link`, except a site-absolute value naming the version entry's `ossVersion`, which is rewritten onto the reader's own tree |
 
 Three things to get right:
 
@@ -405,9 +412,20 @@ every other section index hostage to one page.
 ## Shortcode shadows
 
 The [authoring section above](#shortcodes-that-override-a-hextra-shortcode) lists
-the shortcodes that shadow Hextra (`callout`, `details`, `card`, `cards`) and the
-ones unique to this module. Each shortcode file starts with a `# ours` comment
-block explaining what was changed vs. the Hextra original.
+the shortcodes that shadow Hextra (`callout`, `details`, `card`, `cards`, `tabs`)
+and the ones unique to this module. Each shortcode file starts with a `# ours`
+comment block explaining what was changed vs. the Hextra original.
+
+`tabs` is the cheapest of those shadows to re-diff and the one most worth
+checking anyway. It copies upstream's *logic* — the `tabs.sync` resolution
+order, both deprecation warnings, the `items=` rewrite — and changes exactly one
+thing: the `id` handed to Hextra's `shortcodes/tabs` partial is a page-scoped
+counter rather than `.Ordinal`, so a group nested inside a tab panel gets ids of
+its own (`.Ordinal` is parent-relative, so every nested group is 0). The MARKUP
+is not forked: the partial still comes from Hextra, so an upstream markup change
+arrives without any action here. What a bump can break is the logic around it —
+if upstream grows a third param or changes how `tabs.sync` resolves, this copy
+will not have it. `tests/tabs-nested.spec.ts` fails if the ids collide again.
 
 ## Debugging shadow resolution
 

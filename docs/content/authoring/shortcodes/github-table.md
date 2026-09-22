@@ -6,7 +6,7 @@
 # `npm run gen:docs -- --check` and fails on any diff.
 title: github-table
 description: "Fetches a remote Markdown file and inlines one section of it by heading"
-weight: 220
+weight: 230
 ---
 
 Either call form works, and both produce identical HTML.

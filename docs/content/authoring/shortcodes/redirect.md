@@ -6,7 +6,7 @@
 # `npm run gen:docs -- --check` and fails on any diff.
 title: redirect
 description: "Emits a client-side redirect from a stub page to its canonical location"
-weight: 280
+weight: 290
 ---
 
 Either call form works, and both produce identical HTML.

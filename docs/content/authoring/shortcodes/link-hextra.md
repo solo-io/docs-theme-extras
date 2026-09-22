@@ -6,7 +6,7 @@
 # `npm run gen:docs -- --check` and fails on any diff.
 title: link-hextra
 description: "Resolves a docs-relative path into a version- and product-aware URL"
-weight: 270
+weight: 280
 ---
 
 Either call form works, and both produce identical HTML.

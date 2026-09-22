@@ -6,7 +6,7 @@
 # `npm run gen:docs -- --check` and fails on any diff.
 title: link
 description: "Alias for link-hextra, kept so existing call sites keep working"
-weight: 260
+weight: 270
 ---
 
 Either call form works, and both produce identical HTML.

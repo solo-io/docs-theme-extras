@@ -6,7 +6,7 @@
 # `npm run gen:docs -- --check` and fails on any diff.
 title: github-yaml
 description: "Fetches a remote YAML file and renders it as a captioned code block"
-weight: 230
+weight: 240
 ---
 
 **Percent form only** (`{{%/* … */%}}`). The angle form would put the raw output on the page.
