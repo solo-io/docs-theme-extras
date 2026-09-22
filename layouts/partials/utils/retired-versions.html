@@ -34,19 +34,38 @@
     3. `firebase.json` — the docs hub. Every hosting target's `redirects` array
        is walked and each `destination` read the same way.
 
-  IN ALL THREE CASES the version is taken from `fromversion=` in the
-  DESTINATION, never from the source pattern. That is deliberate: a redirect
-  exists for plenty of reasons that are not a retirement (a renamed page, a
-  moved section), and only the ones that opted in by appending the parameter are
-  claiming "the version this reader asked for is gone". Retiring a version is
-  therefore one edit, in the hosting config, and the notice follows.
+  IN ALL THREE CASES a rule contributes nothing unless it carries
+  `fromversion=`. That is deliberate: a redirect exists for plenty of reasons
+  that are not a retirement (a renamed page, a moved section), and only the ones
+  that opted in by appending the parameter are claiming "the version this reader
+  asked for is gone". Retiring a version is therefore one edit, in the hosting
+  config, and the notice follows.
+
+  WHERE IN THE RULE THE PARAMETER IS READ differs between the two file formats,
+  and only one of them is exact. The firebase.json branch passes `.destination`
+  and nothing else, so a source pattern cannot contribute. The `_redirects`
+  branch passes the WHOLE LINE — source, destination and status code — and
+  utils/retired-version-param.html takes the tail of the first `fromversion=`
+  it finds anywhere in it. In practice that is the destination, because a
+  Cloudflare/Netlify source is a path pattern and the format has no way to match
+  on a query string, so the parameter can only appear on the right-hand side.
+  It is not a guarantee, though, and a line that somehow carried the marker on
+  the left would be read from there. Splitting the line on whitespace and taking
+  field 2 would close it; that was not done because the terminators in
+  retired-version-param.html already handle an unsplit line and a second parse
+  of the same string is a second place for the two formats to disagree.
 
   CALL THIS THROUGH `partialCached`. It reads and unmarshals a file that is
   routinely thousands of lines, and the callers run on every page — the docs hub
   builds ~4,500 of them per language. The cache key is constant because the
   answer is site-wide.
 
-      {{ $retired := partialCached "utils/retired-versions.html" . "retired" }}
+      {{ $retired := partialCached "utils/retired-versions.html" . "retired-versions" }}
+
+  USE THAT KEY VERBATIM. Both callers in this module (`layouts/404.html` and
+  `partials/docs/retired-version-notice.html`) pass "retired-versions", and a
+  caller that invents its own gets a second cache entry and a second parse of
+  the hosting config on every build.
 
   NOT FILTERED BY PRODUCT, on purpose, and it matters most for the hub, where
   one firebase.json carries every product's rules. Scoping by product path was
@@ -58,8 +77,10 @@
   path wrong for no behavior gained.
 */ -}}
 
-{{- /* Both file formats hand their destination to utils/retired-version-param.html
-       so the parameter cannot be parsed two different ways. */ -}}
+{{- /* Both file formats hand their rule to utils/retired-version-param.html so
+       the parameter cannot be parsed two different ways — firebase.json passes
+       the `destination` field, `_redirects` passes the whole line. See the
+       header for why that asymmetry is tolerable. */ -}}
 {{- $out := slice -}}
 
 {{- /* 1. Explicit list. */ -}}

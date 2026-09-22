@@ -1,7 +1,14 @@
 {{- /*
   retired-version-param.html — pull the `fromversion=` value out of one redirect
-  destination. Takes the destination string, returns the version segment, or ""
-  when the destination does not carry the parameter.
+  rule. Returns the version segment, or "" when the rule does not carry the
+  parameter.
+
+  Takes either a bare destination (what the firebase.json branch passes) or a
+  whole `_redirects` line with its source and status code still attached (what
+  the Cloudflare/Netlify branch passes). The terminators below are what make the
+  second form safe; it reads the FIRST `fromversion=` in whatever it is handed,
+  which on a real `_redirects` line is always the destination's, because that
+  format matches on paths and has no way to put a query string on the left.
 
   Split out of utils/retired-versions.html so the Cloudflare `_redirects` branch
   and the firebase.json branch cannot parse the same parameter two different
