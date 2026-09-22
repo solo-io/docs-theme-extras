@@ -24,7 +24,7 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
-## [Unreleased]
+## [0.3.14] — 2026-09-22
 
 ### Add — the retired-version notice reads its allowlist from the hosting config instead of requiring a dead `params.versions` entry (`layouts/partials/utils/retired-versions.html`, `layouts/partials/utils/retired-version-param.html`, `layouts/partials/docs/retired-version-notice.html`, `layouts/404.html`, `tests/retired-version-notice.spec.ts`, `fixture/static/_redirects`, fixture configs, `docs/content/configuration/retired-versions.md`, `docs/content/configuration/versions-and-sections.md`)
 
