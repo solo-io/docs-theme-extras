@@ -140,8 +140,23 @@ test.describe("glossary Learn more links", () => {
   test("no site-relative link anywhere on the page opens in a new tab", () => {
     // The blanket form of the kagent defect, so a future link shape that none
     // of the cases above names still cannot regress it.
-    for (const a of anchors()) {
-      if (/^https?:\/\//.test(a.href)) continue;
+    //
+    // FILTER FIRST, THEN ASSERT THE FILTER FOUND SOMETHING. Looping and
+    // `continue`-ing past every external link would report success having
+    // checked nothing the moment the fixture glossary holds only external
+    // links — which is not hypothetical, it is precisely the state this
+    // fixture was in before this change added the two site-relative entries,
+    // and the one state where old and new behavior agree. The targeted tests
+    // above would catch that particular drift through `hrefEndingWith`, but a
+    // blanket scan that depends on a neighbour to notice it is dead is the
+    // pattern tests/HAZARDS.md exists to break.
+    const siteRelative = anchors().filter((a) => !/^https?:\/\//.test(a.href));
+    expect(
+      siteRelative.length,
+      "no site-relative tooltip links on the page — this scan certified nothing",
+    ).toBeGreaterThan(0);
+
+    for (const a of siteRelative) {
       expect(
         a.attrs,
         `site-relative link ${a.href} carries ${a.attrs} — an ordinary ` +
