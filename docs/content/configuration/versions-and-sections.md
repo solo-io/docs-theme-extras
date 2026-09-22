@@ -288,7 +288,7 @@ Another product's versions go in `params.relatedDocs`, which is the one place a
 version URL is written by hand.
 
 ```toml
-# NOT NEEDED since 0.3.15 — an entry kept alive only so a retired version stays
+# NO LONGER NEEDED — an entry kept alive only so a retired version stays
 # recognizable, hidden from the picker with a whitespace `dropdown`.
 [[params.versions]]
   version = "2.2.x"
