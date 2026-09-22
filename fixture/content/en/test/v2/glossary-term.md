@@ -22,3 +22,16 @@ The {{< gloss "Data Plane" >}}proxy layer{{< /gloss >}} applies the policy.
 
 There is no entry for {{< gloss "Nonexistent Term" >}}Nonexistent Term{{< /gloss >}},
 so this renders as plain text with no tooltip and no markup.
+
+## Terms whose "Learn more" link goes through the slot
+
+Three link shapes, one per entry, so `docs/glossary-link.html` is exercised on
+every branch it has. The {{< gloss "Data Plane" >}}data plane{{< /gloss >}}
+entry above carries an EXTERNAL link and is the only one that may open in a new
+tab. The {{< gloss "Control Plane" >}}control plane{{< /gloss >}} entry carries
+a site-absolute link naming an upstream version, which the slot must rewrite
+onto this page's own tree. The {{< gloss "Sidecar" >}}sidecar{{< /gloss >}}
+entry carries a site-absolute link that names no upstream version, and must
+pass through untouched.
+
+Asserted by `tests/gloss-link.spec.ts`.

@@ -6,7 +6,7 @@
 # `npm run gen:docs -- --check` and fails on any diff.
 title: reuse-append
 description: "Concatenates a shared snippet with the inner content and renders them as one block"
-weight: 160
+weight: 170
 ---
 
 Either call form works, and both produce identical HTML.

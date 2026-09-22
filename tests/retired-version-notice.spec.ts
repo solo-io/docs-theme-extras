@@ -108,6 +108,72 @@ test.describe("retired-version notice", () => {
     await expect(page.locator("#retired-version-notice")).toBeHidden();
   });
 
+  // ── The allowlist no longer comes only from params.versions ──────────────
+  //
+  // A retired version is by definition absent from params.versions: its content
+  // tree is archived and its entry goes with it. Sourcing the allowlist from
+  // that table alone made the entry an invisible obligation, and it was broken
+  // in practice — solo-io/docs 94be4fc64 added agentgateway's 2.1.x/2.2.x
+  // redirect rules and deleted those entries in the same commit, leaving the
+  // redirect working and this notice silently dead, with no build error.
+  //
+  // utils/retired-versions.html supplies the retired half from three sources.
+  // None of the three versions below has a params.versions entry, so each case
+  // fails if that partial stops being consulted.
+
+  test("fires for a version named only in params.retiredVersions", async ({
+    page,
+  }) => {
+    // Source 1, the explicit escape hatch: for a consumer whose redirects live
+    // somewhere the theme cannot read.
+    await page.goto(`${PAGE}?fromversion=v0explicit`);
+    const notice = page.locator("#retired-version-notice");
+    await expect(notice).toBeVisible();
+    await expect(notice).toContainText("v0explicit");
+  });
+
+  test("fires for a version read out of the Cloudflare _redirects file", async ({
+    page,
+  }) => {
+    // Source 2, and the one that makes retiring a version a single edit: the
+    // fixture's _redirects carries `/v0/* /v2/:splat?fromversion=v0 301` and
+    // nothing else mentions v0 anywhere. The rule that causes the move is the
+    // rule that explains it.
+    await page.goto(`${PAGE}?fromversion=v0`);
+    const notice = page.locator("#retired-version-notice");
+    await expect(notice).toBeVisible();
+    await expect(notice).toContainText("v0");
+  });
+
+  test("stops the parsed version at the first &", async ({ page }) => {
+    // A destination may carry more than one parameter
+    // (`?fromversion=v0multi&foo=bar`). Without the `&` terminator the rest of
+    // the query string folds into the version, the allowlist entry becomes
+    // "v0multi&foo=bar", and the notice silently never matches.
+    await page.goto(`${PAGE}?fromversion=v0multi`);
+    await expect(page.locator("#retired-version-notice")).toBeVisible();
+  });
+
+  test("ignores a version whose redirect rule is commented out", async ({
+    page,
+  }) => {
+    // The fixture's _redirects has `# /v00/* … fromversion=v00` disabled. A
+    // rule somebody turned off must stop claiming its version is retired,
+    // otherwise commenting one out silently leaves it in the allowlist.
+    await page.goto(`${PAGE}?fromversion=v00`);
+    await expect(page.locator("#retired-version-notice")).toBeHidden();
+  });
+
+  test("ignores a redirect that carries no fromversion marker", async ({
+    page,
+  }) => {
+    // The fixture redirects /moved-page/ with no marker. A moved page is not a
+    // retired version, which is why the parameter is opt-in per rule rather
+    // than inferred from the source pattern.
+    await page.goto(`${PAGE}?fromversion=moved-page`);
+    await expect(page.locator("#retired-version-notice")).toBeHidden();
+  });
+
   test("dismisses without navigating", async ({ page }) => {
     await page.goto(`${PAGE}?fromversion=${OLD}`);
     const notice = page.locator("#retired-version-notice");
@@ -158,6 +224,19 @@ test.describe("404 states the topic is gone", () => {
     await page.goto(`${target.baseURL}/v2/no-such-page-xyz/?fromversion=${OLD}`);
     await expect(page.locator("#pnf-lede")).toContainText("no longer published");
     expect(page.url()).not.toContain("fromversion");
+  });
+
+  test("the retired lede works for a version only the redirects file knows", async ({
+    page,
+  }) => {
+    // 404.html builds CFG.versions from the same two sources as the notice, and
+    // it is the harder half to keep honest: the lede is only reached when the
+    // topic is gone too, so a regression here shows up on the pages nobody is
+    // looking at. v0 exists only in the fixture's _redirects.
+    await page.goto(`${target.baseURL}/v2/no-such-page-xyz/?fromversion=v0`);
+    const lede = (await page.locator("#pnf-lede").textContent())!;
+    expect(lede).toContain("v0");
+    expect(lede).toContain("no longer published");
   });
 
   test("an unconfigured marker leaves the generic lede", async ({ page }) => {

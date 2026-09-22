@@ -20,6 +20,29 @@ Two faces, one repo:
 > shortcode comment-header contract and for the Hextra files this module
 > shadows.
 
+> [!IMPORTANT]
+> **Hugo version.** Build this module with **Hugo extended 0.160.1**, the version
+> CI pins and the only one it is tested against. Consumers should match it.
+>
+> The floor below that is soft and deliberately undeclared. Some of this module's
+> templates use accessors that do not exist on older Hugo — `hugo.Sites` needs
+> **0.156.0** — so those are routed through a version-guarded partial
+> (`utils/default-lang.html`) and fall back rather than failing the build. The
+> module is known to build on **0.154.5**, which is what Cloudflare Pages ships
+> by default, but that is a courtesy, not a supported configuration: it is
+> verified once against one consumer, not in CI, and the next accessor someone
+> reaches for can move it without warning.
+>
+> There is no `[module.hugoVersion]` constraint in `hugo.toml` on purpose.
+> Declaring `min = "0.156.0"` would make Hugo reject the older builds the
+> fallback exists to keep working, and declaring the lower number would assert a
+> floor nothing tests. If you deploy on a platform that picks Hugo for you —
+> Cloudflare Pages reads it **only** from a dashboard environment variable, with
+> no `.hugo-version`-style file — set `HUGO_VERSION` there explicitly, or move
+> the build into CI where the version is a committed file. A Hugo version that
+> is invisible from the repo is how a site deploys broken for months with green
+> CI; see the 0.3.14 entry in [CHANGELOG.md](./CHANGELOG.md).
+
 > [!WARNING]
 > Writing a scanner, crawler or measurement spec? Read
 > [tests/HAZARDS.md](./tests/HAZARDS.md) first. It catalogues eleven ways a test in

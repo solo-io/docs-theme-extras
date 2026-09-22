@@ -18,11 +18,23 @@ import { target } from "./helpers/target";
 // Fixture wiring: content/en/test/{v2,v1}/version-remap.md reuse
 // assets/conrefs/test/version-remap.md with an explicit version (the 3-arg form
 // that turns on the remap branch). The snippet's gated row is authored against
-// the OSS string `v2oss`; both hugo configs give the v2 entry
-// `ossVersion = "v2oss"`, so the remap rewrites `v2oss → v2`. The row must then
-// render on v2 and stay excluded on v1 (proving version filtering survives the
-// remap). Not brand-specific: the remap is driven by the version param's
-// ossVersion, not the oss/enterprise flag, so this runs on both builds.
+// the OSS string `v2oss`; both hugo configs give the v2 AND v3 entries
+// `ossVersion = "v2oss"`, so the remap rewrites `v2oss → v2,v3`. The row must
+// then render on v2 and v3 and stay excluded on v1 (proving version filtering
+// survives the remap). Not brand-specific: the remap is driven by the version
+// param's ossVersion, not the oss/enterprise flag, so this runs on both builds.
+//
+// ONE UPSTREAM RELEASE, TWO ENTERPRISE TREES. That v2 and v3 share a single
+// `ossVersion` is the point, not fixture convenience. The remap used to key its
+// placeholder on the version ENTRY, and a gate carries the OSS token once, so
+// the first entry claiming `v2oss` consumed it and the second was left with
+// nothing to rewrite — no error, just a tree rendering content gated out of the
+// upstream release it is built from. agentgateway shipped that: its hub maps
+// both `latest` and `2026.9.x` to OSS 1.5.x, so `exclude-if="1.5.x"` became
+// `exclude-if="latest"` and 28 gates leaked onto 2026.9.x. Keying on the
+// distinct ossVersion and expanding to every claimant is the fix; a revert
+// makes the v3 assertions below fail while v2 still passes, which is exactly
+// how the production bug looked.
 //
 // A revert to the angle-only regex leaves the percent block gated on `v2oss`;
 // since no page version equals `v2oss`, the gated row disappears from v2 and
@@ -155,9 +167,17 @@ test.describe("reuse.html OSS→enterprise version remap (percent-form block)", 
     );
     // The plain block with the same token was remapped to v1, so not here.
     expect(body, `${COLLIDE_PLAIN} leaked onto v3`).not.toContain(COLLIDE_PLAIN);
-    expect(body, "v2oss-gated rows should not reach v3").not.toContain(GATED);
+    // v3 shares `ossVersion = "v2oss"` with v2, so the gated row is remapped
+    // onto BOTH. A failure here with the v2 case still green is the one-to-many
+    // regression: the first claimant took the token and this one got nothing.
+    expect(
+      body,
+      `${GATED} missing on v3 — the remap gave the v2oss token to the v2 entry only, so the second tree built from that upstream release was left ungated`,
+    ).toContain(GATED);
+    // keepVersion still blocks the remap, so its token stays `v2oss` and no
+    // page version equals that. Sharing an ossVersion must not weaken the guard.
     expect(body, "v2oss keepVersion row should not reach v3").not.toContain(KEEP);
-    expect(tableRows(body).length, "expected header + 1 data row on v3").toBe(2);
+    expect(tableRows(body).length, "expected header + 2 data rows on v3").toBe(3);
   });
 
   test("no raw version shortcode or placeholder token leaks into the rendered body", () => {

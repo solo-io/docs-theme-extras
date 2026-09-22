@@ -1,0 +1,65 @@
+{{- /* Returns the DEFAULT content language's `Lang` code as a string.
+
+  Callers use it to answer one question: "is the site currently being rendered
+  the default-language one?" — `eq site.Language.Lang (partial "utils/default-lang.html" .)`.
+
+  Why a partial rather than the accessor inline
+  ---------------------------------------------
+  `hugo.Sites` is the modern accessor and it is correct, but it does not exist
+  before **Hugo 0.156.0**. On anything older the template engine cannot resolve
+  the field at all and the build dies with:
+
+      can't evaluate field Sites in type interface {}
+
+  That is not a theme bug, but it is a theme-side hard floor, and it lands as an
+  unreadable render error deep inside a partial chain rather than as a version
+  message. Two call sites (utils/resolve-sections.html, which navbar.html runs on
+  EVERY page, and utils/warn-missing-description.html) meant every page of a
+  consumer on an older Hugo failed. That is how it surfaced: ambientmesh.io's
+  Cloudflare Pages build image was pinned to Hugo 0.154.5 through a dashboard
+  environment variable — invisible from the repo, and unrelated to the 0.160.1
+  its GitHub Actions CI pinned — so CI stayed green while every deploy failed.
+
+  The pre-0.156 fallback is `site.Sites`, the accessor `hugo.Sites` replaced. It
+  is deprecated on current Hugo, but the branch is never taken there, so no
+  deprecation warning is emitted on a supported version. Both return the same
+  ordering: index 0 is the default content language.
+
+  Why not `site.LanguagePrefix == ""`
+  -----------------------------------
+  That only identifies the default language while `defaultContentLanguageInSubdir`
+  is false. Flip that setting and every language gains a prefix, so the guard
+  would silently stop firing anywhere. Verified against the agentgateway build
+  (en + ja): the accessor below reports "en" from BOTH language sites.
+
+  A single-language site has one entry, so index 0 is that language and every
+  caller's comparison is a no-op.
+
+  This shim exists to keep the failure legible and non-fatal on an older Hugo.
+  It is NOT a statement that the theme supports pre-0.156 Hugo — CI pins 0.160.1
+  and consumers should match it. README.md, "Hugo version", states the floor and
+  why no `[module.hugoVersion]` constraint declares it.
+
+  Where this file lives, and why it is not a slot
+  ----------------------------------------------
+  `layouts/_partials/`, beside `utils/resolve-sections.html`, its primary
+  caller — NOT `layouts/partials/`, where some other `utils/` helpers sit. The
+  module's `utils/` are split across both trees for historical reasons; calls
+  resolve either way because Hugo searches both, but it does mean a consumer
+  cannot reliably shadow one by path. That is fine here: this is an internal
+  accessor, not an extension slot, and there is nothing in it a consumer would
+  want to replace. See MAINTAINING.md, "Three things to get right", for the
+  distinction. */ -}}
+
+{{- /* One top-level `return`, not one per branch: on Hugo 0.154.5 a `return`
+       nested inside an `if` is not recognised as the return keyword and is
+       parsed as an ordinary function call, failing with
+       `wrong number of args for return: want 0 got 1` — which would defeat the
+       entire point of this file. Assign, then return once. */ -}}
+{{- $lang := "" -}}
+{{- if ge hugo.Version "0.156.0" -}}
+  {{- $lang = (index hugo.Sites 0).Language.Lang -}}
+{{- else -}}
+  {{- $lang = (index site.Sites 0).Language.Lang -}}
+{{- end -}}
+{{- return $lang -}}

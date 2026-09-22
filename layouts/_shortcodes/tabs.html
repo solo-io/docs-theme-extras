@@ -1,0 +1,165 @@
+{{- /*
+  Shortcode: tabs
+  Summary: Groups tab shortcodes into one tabbed block, with page-unique DOM ids
+  Group: ui-components
+  CallForm: angle
+  Overrides: tabs
+
+  Parameters:
+    - items | string | no | — | Deprecated comma-separated label list. Put a name= on each tab instead.
+    - defaultIndex | int | no | — | Deprecated. Put selected=true on the tab that should open.
+
+  Example:
+    {{< tabs >}}
+    {{% tab name="Helm" %}}
+    Install with Helm.
+    {{% /tab %}}
+    {{% tab name="kubectl" %}}
+    Install with kubectl.
+    {{% /tab %}}
+    {{< /tabs >}}
+
+  Notes:
+    Wraps a set of `tab` shortcodes into one tabbed block. Authoring is exactly
+    Hextra's — this shortcode shadows it only to give each group DOM ids that
+    are unique on the page.
+
+    ### Labelling and opening state
+
+    The labels come from each `tab`, not from this shortcode: `name=` sets the
+    button text, and `selected=true` on one tab opens that tab instead of the
+    first. The two parameters listed above are Hextra's deprecated forms of the
+    same two things, kept working for content that still uses them. `items=` on
+    the group and `tabName=` on a tab are both dead ends — a tab with neither
+    `name=` nor `items=` renders as "Tab 0", "Tab 1", with no build warning, so
+    `tests/tab-syntax.spec.ts` lints for them in source.
+
+    ### Nesting
+
+    A whole `tabs` group may live inside a `tab` panel — the shape a "pick your
+    platform, then pick your install method" procedure takes:
+
+    - An inner group switches independently of the group it sits in.
+    - An inner group is hidden and shown with its parent panel, and keeps its
+      own selection when the parent is switched away and back.
+    - Nesting survives `reuse` and `rebase`, so a conref may carry the whole
+      construction.
+
+    Two levels is the practical limit. Deeper renders, but it asks the reader to
+    hold two choices in mind before any prose applies to them; prefer a second
+    step, or a page per platform.
+
+    ### Syncing groups
+
+    Set `tabs.sync` in a page's front matter, or `page.tabs.sync` in site
+    params, and groups move together — pick Helm once and every Helm/kubectl
+    group on the page follows.
+
+    **The key is the tab NAMES**, comma-joined, and nothing else. Not the
+    position, not the nesting depth, not the containing panel. So two groups
+    labelled the same are ONE control even when they are nested under different
+    outer panels, and an inner group pairs with a top-level one across the
+    nesting boundary. "Helm / kubectl" under both a Linux panel and a macOS
+    panel is a single choice, not two. That is usually what a reader wants; when
+    it is not, give the groups different labels. Pinned by
+    `tests/tabs-sync.spec.ts`.
+
+    ### Flattening for PDF and Copy as Markdown
+
+    None of the JS runs in a PDF, the `markdown` output format, or the
+    Copy-as-Markdown payload, so `utils/unhide-tabs.html` rewrites each group
+    there: the button bar becomes "You can choose from the following options."
+    and every panel is unhidden under an `Option:` label carrying the name the
+    reader would have clicked, nested groups included. Nothing is dropped —
+    write tab content that still reads when every option is stacked in source
+    order, and avoid "as shown in the tab above".
+
+    ### Difference from Hextra's `tabs`
+
+    The DOM ids only. Hextra derives them from the shortcode's `.Ordinal`, which
+    Hugo numbers relative to the parent shortcode, so every nested group
+    collides with the page's first group; this numbers them per page instead.
+    Authors never see the ids, and no other behavior differs. The implementation
+    comment in the source file has the full account.
+*/ -}}
+
+{{- /* IMPLEMENTATION NOTE — why this shortcode shadows Hextra's at all.
+       Everything visible to an author is upstream's; the one departure is the
+       id, at the bottom of this file.
+
+       Hextra derives each group's ids from the shortcode's `.Ordinal`
+       (`tabs-tab-tabs-<ordinal>-<n>`). Hugo numbers `.Ordinal` relative to the
+       PARENT shortcode, not the page, so every NESTED group is ordinal 0 and
+       collides with the page's first top-level group and with every other
+       nested group. Measured on fixture/content/en/test/v2/tabs-nested.md
+       before this shadow existed: `tabs-tab-tabs-00-0` appeared five times on
+       one page.
+
+       Tabs still SWITCHED, because Hextra's tabs.js walks DOM relations and
+       never looks an id up — which is why the collision went unnoticed. What
+       broke was everything that trusts an id. `aria-controls` /
+       `aria-labelledby` resolve to the FIRST element carrying the id, so a
+       screen reader was pointed at a different group's panel, and a fragment
+       link to a panel landed on the wrong one. And utils/unhide-tabs.html,
+       which recovers each panel's name THROUGH its `aria-labelledby` id when
+       flattening tab groups for the PDF, the `markdown` output and Copy as
+       Markdown, labelled options with names belonging to an unrelated group:
+       the nested-tabs fixture's 'Kubernetes' / 'Standalone' group came out as
+       'Option: Shell session' / 'Option: Plain'. Every COUNT stayed correct
+       throughout, so the counting invariant in tests/tab-flatten.spec.ts had
+       nothing to say about it.
+
+       Guarded by tests/tabs-nested.spec.ts (ids unique, option labels are the
+       page's own tab names, on the dedicated page and on every content page
+       that reaches the shape through `reuse` / `rebase`).
+
+       On a Hextra bump, re-diff this file against
+       `hextra/layouts/_shortcodes/tabs.html` — see MAINTAINING.md, "Maintaining
+       the shadows". The markup itself is NOT forked: this still calls Hextra's
+       `shortcodes/tabs` partial, so a markup change upstream arrives on its
+       own. */ -}}
+
+{{- /* Unused, but required for the shortcode to work. */ -}}
+{{- .Inner -}}
+
+{{- /* Enable syncing of tabs across the page. */ -}}
+{{- $enableSync := false -}}
+{{- if or (eq .Page.Params.tabs.sync false) (eq .Page.Params.tabs.sync true) -}}
+  {{- $enableSync = .Page.Params.tabs.sync -}}
+{{- else -}}
+  {{- $enableSync = site.Params.page.tabs.sync | default false -}}
+{{- end -}}
+
+{{- $tabs := ($.Store.Get "tabs") | default slice -}}
+
+{{- /* Compatibility with previous parameter "items". */ -}}
+{{- if .Get "defaultIndex" -}}
+  {{- warnf "The 'defaultIndex' parameter of the 'tabs' shortcode is deprecated. Please use 'selected' on 'tab' instead." -}}
+{{- end -}}
+
+{{- if .Get "items" -}}
+  {{- warnf "The 'items' parameter of the 'tabs' shortcode is deprecated. Please use 'name' on 'tab' instead." -}}
+
+  {{- $items := split (.Get "items") "," -}}
+
+  {{- $temp := slice -}}
+  {{- range $i, $item := $items -}}
+    {{- $tab := index $tabs $i -}}
+    {{- $temp = $temp | append (merge $tab (dict "name" $item)) -}}
+  {{- end -}}
+
+  {{- $tabs = $temp -}}
+{{- end -}}
+
+{{- /* THE ONE DEPARTURE FROM UPSTREAM: a page-scoped sequence in place of
+       `.Ordinal`. See Notes above for what the collision cost.
+
+       The counter is claimed BEFORE the partial renders, so a group's number is
+       fixed even though the partial goes on to markdownify panel bodies that
+       may contain further groups. `.Page.Store` is per page, and a page
+       rendered in several output formats simply continues the count — ids stay
+       unique within each document, which is all any of them relies on. */ -}}
+{{- $seq := add 1 (int (.Page.Store.Get "extrasTabsSeq")) -}}
+{{- .Page.Store.Set "extrasTabsSeq" $seq -}}
+
+{{- partial "shortcodes/tabs" (dict "tabs" $tabs "enableSync" $enableSync "id" $seq) -}}

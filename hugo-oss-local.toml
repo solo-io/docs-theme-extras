@@ -102,6 +102,11 @@ currentProduct = "test"
 pathName = "/docs"
 version = "latest"
 defaultVersion = "v2"
+
+# Retired-version fixtures, mirroring hugo-oss.toml / hugo-enterprise.toml so
+# `make server-*` behaves like the built fixture. See the comment there.
+retiredVersions = ["v0explicit"]
+retiredVersionsFiles = ["fixture/static/_redirects"]
 folder = ""
 versionBanner = false
 versionBannerText = ""
@@ -231,6 +236,19 @@ pageContextMode = "siteParams"
 # `server-enterprise` render it for local preview.
 [[params.versions]]
   version = "v3"
+  # SHARED WITH THE v2 ENTRY, deliberately: two enterprise trees built from one
+  # upstream release. That is the one-to-many shape the remap in reuse.html /
+  # rebase.html used to get wrong — it keyed its placeholder on the version
+  # ENTRY, so the first entry claiming `v2oss` consumed the only token in the
+  # gate and this one silently got nothing, leaving v3 to render content gated
+  # out of the upstream release it is built from. agentgateway hit exactly this
+  # with `latest` and `2026.9.x` both mapping to OSS 1.5.x.
+  #
+  # So the `include-if="v2oss"` row in conrefs/test/version-remap.md must now
+  # render on v2 AND v3, which is what tests/reuse-version-remap.spec.ts
+  # asserts. The `v3` TOKEN still maps to v1 through the v1 entry's own
+  # ossVersion, so the keepVersion collision probe is unaffected.
+  ossVersion = "v2oss"
   dropdown = "v3 (tabs demo)"
   linkVersion = "v3"
   # POISON VALUE, deliberately. `url` on a same-product params.versions entry is

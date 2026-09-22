@@ -6,7 +6,7 @@
 # `npm run gen:docs -- --check` and fails on any diff.
 title: version
 description: "Renders its body only on the versions the author names"
-weight: 130
+weight: 140
 ---
 
 Either call form works, and both produce identical HTML.

@@ -101,17 +101,42 @@ test.describe("version-noindex: old-version duplicates", () => {
     ).not.toContain(NOINDEX);
   });
 
-  // Hextra's head.html emits a self-referential canonical and an
-  // `index, follow` robots tag before head-end.html runs, and the theme does
-  // not shadow head.html. So the duplicate case must carry BOTH tags and let
-  // the most restrictive win; a second, conflicting canonical would instead
-  // make search engines ignore both.
-  test("noindex is emitted alongside Hextra's tag, not instead of it", () => {
+  // EXACTLY ONE ROBOTS TAG PER PAGE, and it is the version-aware one.
+  //
+  // This assertion is inverted from what it used to be. The partial used to
+  // APPEND a second `<meta name="robots">` from head-end.html, on top of the
+  // `index, follow` head.html had already written, and this test asserted the
+  // pair. That was a deliberate design with a sound premise at the time: the
+  // theme did not shadow head.html, so appending was the only way to reach the
+  // decision, and two robots tags do resolve deterministically to the most
+  // restrictive.
+  //
+  // The premise expired. `_partials/head.html` is shadowed here now (for an
+  // unrelated resources.Concat guard), so the directive is computed BEFORE the
+  // tag is written and one tag says the whole thing. Keeping the old assertion
+  // would pin a workaround to a constraint that no longer exists.
+  //
+  // Asserting the exact count, not just `toContain`, is the point: a duplicate
+  // tag is invisible in rendered output and in every other test here, since
+  // every assertion above passes with the stray `index, follow` still present.
+  test("a duplicate page carries exactly one robots tag, the noindex one", () => {
     const r = robots("v1/everything/index.html");
-    expect(r.length, `expected two robots tags, got ${JSON.stringify(r)}`).toBe(
-      2,
-    );
-    expect(r).toEqual(["index, follow", NOINDEX]);
+    expect(
+      r.length,
+      `expected exactly one robots tag, got ${JSON.stringify(r)}. Two tags ` +
+        "means head-end.html is appending again alongside head.html.",
+    ).toBe(1);
+    expect(r).toEqual([NOINDEX]);
+  });
+
+  // The fail-safe. version-noindex.html returns "" for a non-duplicate, and
+  // head.html must fall through to upstream's `index, follow` rather than
+  // emitting an empty or missing tag — a page with NO robots tag reads as
+  // indexable to a crawler but is indistinguishable, in a test, from the
+  // partial having gone inert.
+  test("a non-duplicate page still carries upstream's single index tag", () => {
+    expect(robots("v2/everything/index.html")).toEqual(["index, follow"]);
+    expect(robots("v1/removed-feature/index.html")).toEqual(["index, follow"]);
   });
 });
 
@@ -155,6 +180,45 @@ test.describe("version-noindex: source contract", () => {
         "Reading `site.Params.versions` directly makes the partial inert on a " +
         "sections-only site such as agentgateway.dev.",
     ).toBe(true);
+  });
+
+  // Guards the single-tag refactor at the source, not just in output. The
+  // rendered-output test above catches a reintroduced duplicate only on the
+  // fixture target; this catches it in any checkout, and names the reason.
+  test("it RETURNS a directive and emits no markup of its own", () => {
+    const src = activeSrc();
+    expect(
+      /\{\{-?\s*return\s+\$/.test(src),
+      "version-noindex.html no longer returns a value. It is a returning " +
+        "partial by contract: _partials/head.html folds its result into the " +
+        "one robots tag. Going back to emitting means two tags per page again.",
+    ).toBe(true);
+    expect(
+      /<meta\s+name="robots"/.test(src),
+      "version-noindex.html emits a <meta name=\"robots\"> tag again. " +
+        "head.html already writes one, so this appends a second, " +
+        "contradictory-looking tag — the exact thing the return refactor " +
+        "removed.",
+    ).toBe(false);
+  });
+
+  test("head.html is the single robots emitter and consults this partial", () => {
+    const HEAD = path.resolve(__dirname, "../layouts/_partials/head.html");
+    test.skip(!fs.existsSync(HEAD), "head.html not at the module-relative path");
+    const head = fs.readFileSync(HEAD, "utf8");
+    expect(
+      /partial\s+"utils\/version-noindex\.html"/.test(head),
+      "head.html does not call utils/version-noindex.html, so old-version " +
+        "duplicates get upstream's `index, follow` and nothing marks them. " +
+        "This partial fails OPEN — the symptom is only visible in search " +
+        "rankings weeks later, never in a build.",
+    ).toBe(true);
+    const tags = head.match(/<meta\s+name="robots"/g) ?? [];
+    expect(
+      tags.length,
+      "head.html should contain exactly the three robots branches " +
+        "(noindex/nofollow, the version directive, index/follow).",
+    ).toBe(3);
   });
 
   test("the fixture actually activates the partial", () => {

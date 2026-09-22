@@ -66,11 +66,11 @@
        Measured on the docs hub: of agentregistry's 69 warnings, 35 were
        `/agentregistry/ja/latest/…`, near-duplicates of the 34 English ones.
 
-       `(index hugo.Sites 0)` is the default-language site — the same accessor
-       utils/resolve-sections.html uses, for the same reason: it does not depend
-       on `defaultContentLanguageInSubdir`, and on a single-language site there
-       is one entry so this is a no-op. */ -}}
-{{- if ne site.Language.Lang (index hugo.Sites 0).Language.Lang -}}
+       `utils/default-lang.html` returns the default-language site's `Lang` —
+       the same accessor utils/resolve-sections.html uses, for the same reason:
+       it does not depend on `defaultContentLanguageInSubdir`, and on a
+       single-language site there is one entry so this is a no-op. */ -}}
+{{- if ne site.Language.Lang (partial "utils/default-lang.html" .) -}}
   {{- $enabled = false -}}
 {{- end -}}
 

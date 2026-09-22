@@ -26,3 +26,24 @@ MCP:
 Data Plane:
   short: "MARKER_GLOSS_DEF_TWO Proxies that process live network traffic."
   link: "https://example.com/data-plane"
+
+# The three link shapes `docs/glossary-link.html` has to tell apart. Only the
+# EXTERNAL one above may carry target="_blank"; the rewrite fires for exactly
+# one of the two below. Without all three, the slot's default is covered only
+# by the branch that happens to be exercised first.
+#
+# `v2oss` is the `ossVersion` that hugo-oss.toml's v2 and v3 entries both
+# declare, so on a /test/v2/ page this link names an upstream tree that the
+# reader's own tree maps to, and must be rewritten to /test/v2/…. Any change to
+# that toml's ossVersion values breaks this fixture, deliberately: the two are
+# one mechanism.
+Control Plane:
+  short: "MARKER_GLOSS_DEF_THREE Config and policy distribution, upstream-authored link."
+  link: "/docs/fixture/v2oss/about/control-plane/#overview"
+
+# Site-absolute and NOT naming any ossVersion, so it must pass through byte for
+# byte. This is the assertion that keeps the rewrite narrow — a slot that
+# rewrote every site-absolute link would pass every other check in the spec.
+Sidecar:
+  short: "MARKER_GLOSS_DEF_FOUR A proxy deployed beside a workload, native link."
+  link: "/test/v2/about/sidecar/"

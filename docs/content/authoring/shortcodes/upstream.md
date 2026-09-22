@@ -6,7 +6,7 @@
 # `npm run gen:docs -- --check` and fails on any diff.
 title: upstream
 description: "Keeps its body in the upstream build and drops it downstream"
-weight: 120
+weight: 130
 ---
 
 Either call form works, and both produce identical HTML.

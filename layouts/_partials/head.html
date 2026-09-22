@@ -13,17 +13,43 @@
        the Concat (and the now-pointless empty `<script>` tag) when there's
        nothing to bundle.
 
+       SECOND DIVERGENCE: the robots tag (marked below) now folds in
+       `utils/version-noindex.html`. Upstream writes a fixed index/noindex pair;
+       this asks the version resolver first so a non-latest duplicate page gets
+       ONE tag saying `noindex, follow` rather than upstream's `index, follow`
+       plus a second, contradictory-looking tag appended later from
+       `themeExtras/head-end.html`. See version-noindex.html for why that second
+       tag existed and why shadowing this file is what let it go away.
+
        The rest of this file is a byte-for-byte copy of Hextra v0.12.3's
-       `head.html`. Only the scripts block (marked below) changed. On a Hextra
-       bump, re-diff against upstream and re-apply just that guard. */ -}}
+       `head.html`. Only the scripts block and the robots block (both marked
+       below) changed. On a Hextra bump, re-diff against upstream and re-apply
+       just those two. */ -}}
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  {{- /* CHANGED FROM UPSTREAM — robots. Precedence, most restrictive first:
+
+         1. `noindex: true` in front matter, or a non-production build. The
+            author (or the environment) asked for the page to stay out of the
+            index entirely, so `nofollow` rides along. This wins over 2, which
+            is the case the old two-tag version left to the crawler to resolve.
+         2. An old version's copy of a page that still exists in the current
+            version. `follow` is deliberate: the duplicate is suppressed, but
+            its links still pass equity to the current version.
+         3. Otherwise indexable.
+
+         version-noindex.html returns "" for anything that is not case 2, and
+         is fail-safe: a repo that has not opted in returns "" for every page,
+         which collapses this to exactly upstream's behavior. */ -}}
   {{- $noindex := .Params.noindex | default false -}}
-  {{ if and (hugo.IsProduction) (not $noindex) -}}
-    <meta name="robots" content="index, follow" />
-  {{ else -}}
+  {{- $versionRobots := partial "utils/version-noindex.html" . -}}
+  {{ if or $noindex (not hugo.IsProduction) -}}
     <meta name="robots" content="noindex, nofollow" />
+  {{ else if $versionRobots -}}
+    <meta name="robots" content="{{ $versionRobots }}" />
+  {{ else -}}
+    <meta name="robots" content="index, follow" />
   {{ end -}}
   {{ partialCached "favicons.html" . -}}
   <title>

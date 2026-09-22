@@ -1,0 +1,42 @@
+{{- /*
+  retired-version-param.html — pull the `fromversion=` value out of one redirect
+  rule. Returns the version segment, or "" when the rule does not carry the
+  parameter.
+
+  Takes either a bare destination (what the firebase.json branch passes) or a
+  whole `_redirects` line with its source and status code still attached (what
+  the Cloudflare/Netlify branch passes). The terminators below are what make the
+  second form safe; it reads the FIRST `fromversion=` in whatever it is handed,
+  which on a real `_redirects` line is always the destination's, because that
+  format matches on paths and has no way to put a query string on the left.
+
+  Split out of utils/retired-versions.html so the Cloudflare `_redirects` branch
+  and the firebase.json branch cannot parse the same parameter two different
+  ways. The two formats differ in everything except this.
+
+      /docs/latest/:splat?fromversion=1.0.x  301   ->  "1.0.x"
+      /agentgateway/kubernetes/latest/:path* ->  ""
+
+  TERMINATORS, in order and all of them load-bearing:
+
+    `&`   a destination may carry more than one parameter, and without this the
+          rest of the query string folds into the version.
+    ` `   the `_redirects` format is whitespace-separated with the status code
+          third, so a line handed over unsplit would capture "1.0.x 301".
+    tab   the same file may be tab-aligned instead.
+
+  The trailing `trim` drops a CR from a CRLF file and the quote characters a
+  JSON value can arrive with. Anything that survives all of that is matched
+  against the caller's own configuration before it is ever displayed — see
+  docs/retired-version-notice.html, which never echoes it directly.
+*/ -}}
+{{- $dest := . | default "" -}}
+{{- $v := "" -}}
+{{- if strings.Contains $dest "fromversion=" -}}
+  {{- $v = index (split $dest "fromversion=") 1 -}}
+  {{- $v = index (split $v "&") 0 -}}
+  {{- $v = index (split $v " ") 0 -}}
+  {{- $v = index (split $v "\t") 0 -}}
+  {{- $v = trim $v "\r\"' " -}}
+{{- end -}}
+{{- return $v -}}

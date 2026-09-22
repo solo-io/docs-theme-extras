@@ -34,7 +34,7 @@ which is mechanism 2.
 
 ## Snapshot
 
-Current, 2026-09-02. "Duplicated selectors" counts REAL conflicts only — the consumer and
+Current, 2026-09-22. "Duplicated selectors" counts REAL conflicts only — the consumer and
 extras set at least one property in common. A selector they merely share the NAME of is not
 duplication and is not counted; see the note under kagent/ambientmesh for why that
 distinction mattered.
@@ -46,12 +46,18 @@ layouts, which is the opposite of the signal this table is for.
 
 | consumer | same-path shadows | slot overrides (OK) | duplicated selectors | of which divergent | contract divergences |
 |---|---|---|---|---|---|
-| docs | 4 | 0 | 0 | 0 | 1 |
-| kgateway-oss | 2 | 2 | 0 | 0 | 1 |
-| agentgateway-oss-website | 4 | 5 | 0 | 0 | 2 |
+| docs | 6 | 0 | 0 | 0 | 2 |
+| kgateway-oss | 2 | 1 | 0 | 0 | 2 |
+| agentgateway-oss-website | 4 | 5 | 1 | 1 | 2 |
 | agentregistry-oss-website | 0 | 0 | 0 | 0 | 0 |
-| kagent-oss-website | 0 | 0 | 0 | 0 | 0 |
-| ambientmesh.io | 0 | 0 | 2 | 2 | 0 |
+| kagent-oss-website | 4 | 0 | 0 | 0 | 0 |
+| ambientmesh.io | 0 | 0 | 1 | 1 | 0 |
+
+Two of the counts moved because the MODULE grew, not because a consumer drifted: `tabs.html`
+started shadowing on the hub when extras began shipping a `tabs` shortcode, and kagent's four
+forks were always there but were never baselined. A row going up is not by itself a
+regression — read the per-consumer verdict tables, which say which direction each one is
+travelling.
 
 ## Extension slots
 
@@ -96,13 +102,14 @@ than merely stale and need a judgment call, notably `.section-card-image` (extra
 `.solo-footer-inner` (extras adds `text-align:center`) and `.dark .solo-footer`
 (transparent vs dark background).
 
-Same-path template shadows: `card.html`, `cards.html`. (`gloss.html` and `table.html` were
-deleted in v0.2.0-beta.3 — see below.)
+Same-path template shadows: `card.html`, `cards.html`, `tabs.html`. (`gloss.html` and
+`table.html` were deleted in v0.2.0-beta.3 — see below.)
 
 | shadow | measured verdict |
 |---|---|
 | `layouts/_shortcodes/card.html` | **KEEP — deleting BREAKS THE BUILD.** Its own header comment says why: "Hextra's card uses utils/icon.html (SVG lookup) but docs uses Material Icons font." The hub passes Material Icons names (`open_in_new`, `rocket`) and renders `<i class="material-icons">`; extras looks the name up in `site.Data.icons` and `errorf`s when absent. The hub's `data/icons.yaml` has **2 entries**, both product logos. Deleting produced `ERROR icon "open_in_new" not found` and a failed build. Same shape as the `link-hextra` forks: an adaptation to a different convention, not a stale copy |
 | `layouts/_shortcodes/cards.html` | **KEEP.** Pairs with `card.html`; same icon contract |
+| `layouts/_shortcodes/tabs.html` | **KEEP — deleting BREAKS THE BUILD, measured.** New to this list only because extras started shipping a `tabs` shortcode in the unreleased tag; the hub's copy predates it by a long way and shadowed nothing before. Deleting it and building `gateway` against extras fails: `content/en/gateway/1.19.x/traffic-management/transformations/template-overview.md` → `{{< reuse >}}` → `RenderString` → `tabs` → Hextra's partial calls `markdownify` on tab content that is ALREADY rendered HTML, and the Inja examples in `assets/gateway-docs/pages/traffic-management/transformation-template.md` (`{{ header("bar") }}`, 19 such lines) have been Chroma-highlighted into `{{`+`<span…`, which the second pass lexes as a shortcode call — `failed to extract shortcode: template for shortcode "span" not found`, build aborted. The hub's `tab.html` sets an `isRendered` flag for exactly this and its `tabs.html` skips the second `markdownify`; extras' copy does not, because on stock Hextra the content arrives as raw Markdown. **The fork also owns two things extras has no equivalent for**: the translation export branch (`hugo.Environment == "translation"`, live in `translate-sync-ja.yml` and `scripts/export-copy-md-en.py`, which keeps `{{< tabs >}}` as source lines in the JA snapshot instead of flattening to `**Option:**`), and the whole-expansion-on-one-line `&#10;` encoding. Its variant-A markup also has no `role`/`aria` semantics at all, which is a reason to converge EVENTUALLY, not a reason to delete now. Measured on agentregistry (285 pages, EN+JA): with the fork removed, visible text and document structure are byte-for-byte identical and Hextra's `tabs.js` drives the variant-B markup correctly, including the nested group on the install guide — so the `&#10;` encoding is not load-bearing there. `tabRightAlign` in the fork has **zero call sites** in `content/` and `assets/` and can be dropped from it today |
 | `layouts/_shortcodes/reuse-append.html` | **DELETE — verdict measured, action outstanding.** Extras adopted this shortcode in 0.3.3 and fixed its asset lookup for an assembled assets tree in 0.3.5, which is the only thing the hub's copy was doing differently. The deletion was verified on a real hub build at the time: with the hub's file removed and the module resolving, `agentgateway` builds exit 0 (2759 EN + 829 JA pages), and all 6 call sites on `standalone/latest/llm/providers/azure/` render a single joined `<table>` with zero stray pipe rows. The negative control was run first — deleting the file while pinned to 0.3.4 aborts the build — so the pin floor is real. The hub is pinned to **0.3.6**, above that floor, so this is actionable now. Extras' copy is also strictly more correct here: it resolves the version through `utils/version-root.html`, which distinguishes `version` from `linkVersion`, and those differ on two hub products |
 | `layouts/partials/version-banner.html` | **DELETE, BUT NOT ALONE — the deletion needs a config move in the same commit.** Extras added section-scoped banners in 0.3.5, so the file's own instruction ("DELETE THIS FILE once docs-theme-extras supports a section-scoped banner") is satisfied. The two implementations read **different config keys**, which is the trap: the hub's reads `[params.sections.standalone]`, extras' reads `[params.versions.sectionBanners.standalone]` on the matched version entry. Delete the file without moving the keys and the standalone preview banner silently disappears, and the version banner it was suppressing returns in its place — the same class of failure the override was written to fix, only inverted. The keys are duplicated in **three** config files (`hugo-agentgateway.toml`, `hugo-local-agentgateway.toml`, `hugo-preview-agentgateway.toml`), so all three need the move |
 
@@ -136,6 +143,43 @@ drifting. **They are accepted, not settled.** The verdict for both is delete.
   capped at 24rem and fill the body width, which is exactly what `wrap` mode documents.
   **Flag for the visual pass**: this is the one item in this batch that changes appearance
   rather than whitespace.
+
+**`gloss.html` came BACK, and the unreleased tag makes it deletable again.** The file deleted above
+returned as a fork of extras v0.3.12, for a different reason: it routed the "Learn more"
+href through `custom/glossary-link.html` (rewriting OSS-authored links onto this site's
+product and version) and emitted `target="_blank"` only for an external destination. Both
+behaviors are now in the module — the rewrite is the DEFAULT of the
+`docs/glossary-link.html` extension slot, and the conditional target/rel is in `gloss.html`
+— so on the next pin bump the hub deletes **both** its `gloss.html` and its
+`custom/glossary-link.html`, keeping only `_shortcodes/glossary-list.html` and pointing its
+one call at `docs/glossary-link.html`. The verdict is delete.
+
+**It is now baselined, reversing the decision this paragraph used to record.** The previous
+text withheld it from `tests/helpers/override-baseline.json` on the grounds that baselining
+"would turn the ratchet green and remove the only thing tracking the deletion, which is
+exactly how `reuse-append.html` and `version-banner.html` above went three releases
+unactioned." That reasoning is wrong about the mechanism, and it contradicts the paragraph
+two rows up, which baselines those same two files *for the purpose of tracking them*. The
+ratchet has two arms: `added` fails when a consumer grows a shadow, and `stale` fails when a
+baselined shadow **disappears**. So a baselined entry is not an untracked one — the moment
+the hub deletes `gloss.html`, `stale` goes red and forces this file to be edited. That is
+strictly more tracking than a permanently red `added` arm, which tracks nothing and trains
+everyone to scroll past a failing suite. The three deletions are tracked the same way
+because they are the same kind of thing: accepted today, scheduled to go, and impossible to
+remove quietly.
+
+The hub is pinned to **v0.3.13**, below the unreleased tag that makes the deletion possible,
+so this is not actionable yet even in principle — one more reason a red `added` arm was
+measuring nothing but the passage of time.
+
+That deletion is **inert today**, which is worth knowing before scheduling it. The only
+`data/glossary.yaml` any hub build can currently reach is agentgateway's, via
+`.oss-clones/agentgateway*/worktrees/main/`, and it defines **zero** `link:` values — so
+neither the fork's rewrite nor the module's replacement has anything to fire on. The
+"19 links, all 404" measurement in the fork's own header dates from when the hub had
+kagent's glossary; the hub builds no kagent product today. The fork is therefore dormant
+code with a live maintenance cost, and the module now covers the case for whenever that
+data returns.
 
 **SEPARATE FINDING — the glossary feature is DEAD on the docs hub.** Not caused by the
 deletion above, and not fixed by it. Both `gloss.html` versions look the key up in
@@ -279,6 +323,12 @@ carries a measured verdict instead of a byte count.
 | `layouts/_shortcodes/reuse-append.html` | **TRANSITIONAL — delete on the next pin bump.** Same situation and same deadline as `github-yaml` above. 2 call sites, both in `llm/providers/azure.md`. The module's copy is behaviourally identical; only the doc comment grew |
 | ~~`layouts/_shortcodes/openapi.html`~~ | **DELETED 2026-08-17 — it was emitting invalid HTML.** Affects **7** pages, not the 2 recorded here before. Measured by deleting the fork and diffing the whole build: exactly those 7 pages change out of 2,237, nothing else. The fork emits a complete standalone document *inside* the docs page template, so every one of those pages shipped with **2 `<!doctype>`, 2 `<html>` and 2 `<body>` tags**; extras' version emits a fragment and the page has 1 of each. Browser-checked side by side on `/docs/kubernetes/latest/llm/guardrails/webhook/openapi-spec/`: both render Swagger UI with 2 operations and the same live title ("GuardRail Webhook API 0.1.0 OAS 3.1"), and both carry the same 2 pre-existing `invalid_request` page errors, so nothing regressed. Extras' version is also a strict superset on network resilience (`try` 6 vs 2, `timeout` 5 vs 4, `warnf` 5 vs 3, `GetRemote` 4 vs 1, plus a client-side unpkg fallback) and adds `src=` for a local spec. `make framework-test` after deletion: 2455 passed, 0 failed (4 flaky, all `console-errors` on unrelated pages) |
 
+One accepted duplicated selector:
+
+| Selector | Why it stays |
+| --- | --- |
+| `custom.css :: :root` | **KEEP.** One property in common, `--solo-navbar-bottom`. Extras computes it as `calc(var(--navbar-height, 4rem) + var(--hextra-banner-height, 0rem))`; agw sets it to `var(--agw-navbar-h)`. This consumer forks `navbar.html` down to 832B and hides Hextra's chrome entirely (see the `chrome-top.html` slot above), so extras' navbar-height variables do not describe its header — pointing the token at agw's own measured height is the correct adaptation, and the same shape as ambientmesh's `.nav-container` font swap. The two `shared-name only` selectors the scanner also reports here are not duplication and are not listed: extras and agw set no property in common on them |
+
 **Resolved (v0.2.0-beta.3):** `layouts/docs/single.html` and `layouts/docs/list.html`
 deleted, replaced by the five slot overrides above. Verified feature-by-feature on a
 before/after `--gc --minify` build: the custom navbar (1,512 pages), chatbot (1,492),
@@ -361,8 +411,35 @@ docs, `go.mod`, and the extras pin all live under `kagent-oss-website/docs-site/
 doesn't use the module at all. `tests/helpers/scan-overrides.ts` already knows this; this note exists so
 a human doing the same check by hand doesn't draw the same wrong conclusion.
 
-No same-path shadows and no contract divergences. One accepted duplicated selector, on
-ambientmesh only:
+**kagent oss carries four same-path shadows**, all four now baselined and reviewed below:
+`_shortcodes/gloss.html`, `_partials/utils/section-segment.html`,
+`partials/utils/version-noindex.html` and `partials/version-banner.html`. Every one is a
+deliberate fork carrying a "why this exists" header, and three of the four exist because the
+module gets something wrong on a site shape it was not written for, not because kagent
+drifted. That distinction is the point of the table: a KEEP here is a note that extras owes
+this consumer a fix, not that the consumer is misbehaving.
+
+| shadow | verdict |
+|---|---|
+| `layouts/_shortcodes/gloss.html` | **DELETE on the next pin bump.** Its only deltas were `hugo.Data` (issue #58, handled module-wide) and emitting `target="_blank"` only for an external link. Both are in the module now, so the fork has nothing left to do — see the paragraph below for the measurement |
+| `layouts/_partials/utils/section-segment.html` | **KEEP — and it names its own retirement condition.** A one-line fork: upstream computes `$accept = or $nextIsVersion $isLanding` on a versioned site, kagent's adds `$atDocsRoot`. The site is versioned and version-less at once — kagent nests `0.x`/`1.x` under `/docs/kagent/`, kmcp has no version axis, and one Hugo build serves both. Declaring kagent's versions is mandatory (`site.Params.versions` is the only list the module reads), which puts the whole build on the versioned branch, where every kmcp page below `/docs/kmcp/` resolved to NO section. That collapsed `utils/resolve-sections.html` to one entry and rendered no section selector, so from any kmcp page there was no way back into the kagent docs. The fork's own header says to retire it "if the module makes (c) unconditional" — **that is an extras backlog item, not a kagent one** |
+| `layouts/partials/utils/version-noindex.html` | **KEEP — upstream bug on a baseURL with a path.** kagent's `baseURL` is `https://kagent.dev/docs/`, so every `RelPermalink` carries a `/docs/` segment that comes from the baseURL PATH rather than a content directory. Upstream passes `utils/version-root.html`'s `lookupPath` straight to `site.GetPage`, which resolves relative to `contentDir` and so never matches a path carrying that prefix. Related to the known finding that 12 files parse URLs independently; the durable fix is upstream |
+| `layouts/partials/version-banner.html` | **KEEP — upstream bug, same root cause as the hub's.** Upstream substring-matches `.FirstSection.RelPermalink` (always the top-level section) against `.linkVersion`, which cannot see a version nested a level deeper, and reads only the site-wide `Site.Params.versions`, which kagent leaves unset because the build also serves kmcp. The fork resolves versions the way `navbar.html`'s override and `version-cards.html` do, from `Site.Params.sections.<section>.versions` |
+
+They are baselined rather than left red for the reason given in the `docs` section: the
+ratchet's `stale` arm turns a baselined entry into a tripwire that fires the moment the file
+is deleted, whereas a permanently red `added` arm tracks nothing and teaches everyone to
+ignore the suite.
+
+`gloss.html` is the one the unreleased tag resolves. Its only deltas were `hugo.Data` (see issue #58,
+which handles that deprecation module-wide) and emitting `target="_blank"` only for an
+external link. kagent's glossary holds **22 links and all 22 are site-relative**, so before
+this release every glossary cross-reference in its own docset opened a second tab. The
+conditional target/rel is now in the module, so the fork can go on the next pin bump — kagent
+oss is on **v0.3.12**, so that bump has to happen first; it picks up the link-rewriting slot
+at the same time, which it does not currently need.
+
+One accepted duplicated selector, on ambientmesh only:
 
 | Selector | Why it stays |
 | --- | --- |

@@ -1,66 +1,79 @@
 {
- "_readme": [
-  "Frozen inventory of consumer files and CSS selectors that SHADOW this module.",
-  "Enforced by tests/override-parity.spec.ts as a one-way ratchet: anything new",
-  "fails, and anything removed from a consumer must also be removed here.",
-  "Regenerate the raw numbers with `npm run scan:overrides`, but do NOT",
-  "bulk-overwrite this file \u2014 each line is an accepted exception, and the point",
-  "of the ratchet is that adding one is a deliberate, reviewed act.",
-  "Prose for every entry lives in OVERRIDES.md; the spec checks the two agree.",
-  "",
-  "duplicatedSelectors counts REAL conflicts only: the consumer and extras set",
-  "at least one property in common. A selector they merely share the NAME of \u2014",
-  "extras' `.hextra-toc { display: none }` versus a Tailwind `font-family` on the",
-  "same class \u2014 is not duplication and is no longer listed. Confusing the two is",
-  "what made 'four of six consumers override .hextra-toc' look like a real",
-  "backlog item when nobody overrides it.",
-  "",
-  "An entry here is an ACCEPTED shadow, NOT necessarily a permanent one. Two of",
-  "the docs entries are pending removals whose verdict is already measured (see",
-  "OVERRIDES.md). Listing them is what makes the ratchet's second arm work: the",
-  "day the hub deletes one, the 'stale' assertion fails and forces this file to",
-  "be edited, so the follow-up cannot be forgotten a second time. Leaving them",
-  "OUT was the mistake \u2014 an always-red spec is a spec everyone learns to skip."
- ],
- "consumers": {
-  "docs": {
-   "samePath": [
-    "layouts/_shortcodes/card.html",
-    "layouts/_shortcodes/cards.html",
-    "layouts/_shortcodes/reuse-append.html",
-    "layouts/partials/version-banner.html"
-   ],
-   "duplicatedSelectors": []
-  },
-  "kgateway-oss": {
-   "samePath": [
-    "layouts/_partials/navbar.html",
-    "layouts/404.html"
-   ],
-   "duplicatedSelectors": []
-  },
-  "agentgateway-oss-website": {
-   "samePath": [
-    "layouts/_partials/navbar.html",
-    "layouts/partials/announcement.html",
-    "layouts/_shortcodes/github-yaml.html",
-    "layouts/_shortcodes/reuse-append.html"
-   ],
-   "duplicatedSelectors": []
-  },
-  "agentregistry-oss-website": {
-   "samePath": [],
-   "duplicatedSelectors": []
-  },
-  "kagent-oss-website": {
-   "samePath": [],
-   "duplicatedSelectors": []
-  },
-  "ambientmesh.io": {
-   "samePath": [],
-   "duplicatedSelectors": [
-    "custom.css :: .nav-container"
-   ]
+  "_readme": [
+    "Frozen inventory of consumer files and CSS selectors that SHADOW this module.",
+    "Enforced by tests/override-parity.spec.ts as a one-way ratchet: anything new",
+    "fails, and anything removed from a consumer must also be removed here.",
+    "Regenerate the raw numbers with `npm run scan:overrides`, but do NOT",
+    "bulk-overwrite this file — each line is an accepted exception, and the point",
+    "of the ratchet is that adding one is a deliberate, reviewed act.",
+    "Prose for every entry lives in OVERRIDES.md; the spec checks the two agree.",
+    "",
+    "duplicatedSelectors counts REAL conflicts only: the consumer and extras set",
+    "at least one property in common. A selector they merely share the NAME of —",
+    "extras' `.hextra-toc { display: none }` versus a Tailwind `font-family` on the",
+    "same class — is not duplication and is no longer listed. Confusing the two is",
+    "what made 'four of six consumers override .hextra-toc' look like a real",
+    "backlog item when nobody overrides it.",
+    "",
+    "An entry here is an ACCEPTED shadow, NOT necessarily a permanent one. Six are",
+    "scheduled removals whose verdict is already measured (see OVERRIDES.md): three",
+    "on docs, two on agentgateway-oss-website, one on kagent-oss-website. Listing",
+    "them is what makes the ratchet's second arm work: the day a consumer deletes",
+    "one, the 'stale' assertion fails and forces this file to be edited, so the",
+    "follow-up cannot be forgotten a second time. Leaving them OUT was the mistake",
+    "— an always-red spec is a spec everyone learns to skip. That applies to a",
+    "shadow whose verdict is DELETE just as much as to one whose verdict is KEEP:",
+    "the 'added' arm cannot track a deletion, only the 'stale' arm can, so",
+    "withholding an entry to 'keep tracking it' tracks strictly less."
+  ],
+  "consumers": {
+    "docs": {
+      "samePath": [
+        "layouts/_shortcodes/card.html",
+        "layouts/_shortcodes/cards.html",
+        "layouts/_shortcodes/gloss.html",
+        "layouts/_shortcodes/reuse-append.html",
+        "layouts/_shortcodes/tabs.html",
+        "layouts/partials/version-banner.html"
+      ],
+      "duplicatedSelectors": []
+    },
+    "kgateway-oss": {
+      "samePath": [
+        "layouts/_partials/navbar.html",
+        "layouts/404.html"
+      ],
+      "duplicatedSelectors": []
+    },
+    "agentgateway-oss-website": {
+      "samePath": [
+        "layouts/_partials/navbar.html",
+        "layouts/partials/announcement.html",
+        "layouts/_shortcodes/github-yaml.html",
+        "layouts/_shortcodes/reuse-append.html"
+      ],
+      "duplicatedSelectors": [
+        "custom.css :: :root"
+      ]
+    },
+    "agentregistry-oss-website": {
+      "samePath": [],
+      "duplicatedSelectors": []
+    },
+    "kagent-oss-website": {
+      "samePath": [
+        "layouts/_partials/utils/section-segment.html",
+        "layouts/_shortcodes/gloss.html",
+        "layouts/partials/utils/version-noindex.html",
+        "layouts/partials/version-banner.html"
+      ],
+      "duplicatedSelectors": []
+    },
+    "ambientmesh.io": {
+      "samePath": [],
+      "duplicatedSelectors": [
+        "custom.css :: .nav-container"
+      ]
+    }
   }
- }
 }

@@ -287,6 +287,23 @@ release. Move those versions into `params.versions` and tag them.
 Another product's versions go in `params.relatedDocs`, which is the one place a
 version URL is written by hand.
 
+```toml
+# NO LONGER NEEDED — an entry kept alive only so a retired version stays
+# recognizable, hidden from the picker with a whitespace `dropdown`.
+[[params.versions]]
+  version = "2.2.x"
+  dropdown = " "
+```
+
+Delete the entry when you archive the content. The retired-version notice reads
+its allowlist from your hosting config's own `?fromversion=` redirects, not from
+this table, so retiring a version is one edit and this entry is not part of it.
+See [Retired versions](../retired-versions/).
+
+This used to be required, and the requirement was invisible: the entry rendered
+nothing and existed only to be matched against, so deleting it along with the
+content silently turned the notice off with no build error.
+
 ## Where the rules live in code
 
 | Behavior | File |
@@ -295,6 +312,7 @@ version URL is written by hand.
 | Which versions apply to a section? | `utils/resolve-section-versions.html` |
 | Which entry does this URL segment match? | `utils/match-version-entry.html` |
 | What section/version is this page in? | `utils/version-root.html` |
+| Which versions were retired? | `utils/retired-versions.html` |
 | The section selector's items | `utils/resolve-sections.html` |
 | Other products' version groups | `utils/resolve-related-docs.html` |
 

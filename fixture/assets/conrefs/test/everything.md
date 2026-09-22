@@ -909,6 +909,30 @@ istioctl install --set profile=demo --set tag={{< reuse "conrefs/test/value.md" 
 {{% /tab %}}
 {{< /tabs >}}
 
+## Tabs inside tabs
+
+A tabs group nested in a tab panel, reached through `{{</* reuse */>}}` rather than authored on the page — the shape a real "pick your platform, then pick your install method" procedure takes. `fixture/content/en/test/v2/tabs-nested.md` covers nesting directly; this covers it after the conref pipeline has flattened every newline to a `&#10;` entity, which is where a pattern written against `\s*` stops matching. Tests: tests/tabs-nested.spec.ts (the dedicated page) and tests/tab-flatten.spec.ts (the counting invariant, which walks every content page and therefore this one).
+
+{{< tabs >}}
+{{% tab name="Kubernetes" %}}
+MARKER_REUSE_NESTTABS_OUTER_A. The outer panel's own prose, before the inner group.
+
+{{< tabs >}}
+{{% tab name="Helm" %}}
+MARKER_REUSE_NESTTABS_INNER_A1. Inner tab one.
+{{% /tab %}}
+{{% tab name="kubectl" %}}
+MARKER_REUSE_NESTTABS_INNER_A2. Inner tab two.
+{{% /tab %}}
+{{< /tabs >}}
+
+MARKER_REUSE_NESTTABS_OUTER_A_TAIL. The outer panel's own prose, after the inner group.
+{{% /tab %}}
+{{% tab name="Standalone" %}}
+MARKER_REUSE_NESTTABS_OUTER_B. The second outer panel, which has no inner group.
+{{% /tab %}}
+{{< /tabs >}}
+
 ## Tabs in ordered lists
 
 A real-product pattern: a numbered procedure with a tabs block in the middle. Tests assert that the post-tab steps continue from the pre-tab count (3, 4) rather than restarting at 1, and that substep numbering inside a tab is independent.

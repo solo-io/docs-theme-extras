@@ -28,16 +28,36 @@
        explicit flag. Matching neither signal emits nothing — worst case is the
        pre-existing everything-indexable behavior.
 
-       WHY noindex AND NOT canonical: Hextra's head.html has already emitted a
-       self-referential `<link rel="canonical">` before head-end.html runs, and
-       the theme does not shadow head.html. Emitting a second, conflicting
-       canonical makes search engines ignore BOTH; a second robots tag, by
-       contrast, resolves deterministically to the most restrictive (noindex).
-       So on a duplicate this emits an ADDITIONAL
-       `<meta name="robots" content="noindex, follow">` alongside Hextra's
-       `index, follow`, and noindex wins. (A consumer wanting a single clean
-       canonical-to-current tag can instead set `.Params.canonical` via a config
-       cascade on its old version paths and leave `latest` unset here.)
+       WHY noindex AND NOT canonical: head.html has already emitted a
+       self-referential `<link rel="canonical">` by the time robots is decided.
+       Emitting a second, conflicting canonical makes search engines ignore
+       BOTH, so the duplicate is suppressed with robots instead. (A consumer
+       wanting a canonical-to-current tag can set `.Params.canonical` via a
+       config cascade on its old version paths and leave `latest` unset here.)
+
+       THIS RETURNS A DIRECTIVE STRING; IT EMITS NO MARKUP. Callers get
+       "noindex, follow" for a duplicate and "" for everything else.
+       `_partials/head.html` folds that into the ONE robots tag it already
+       writes.
+
+       It used to emit its own `<meta name="robots">` from head-end.html,
+       deliberately, and the reasoning was sound when it was written: this theme
+       did not shadow head.html then, so a second tag was the only way to reach
+       the decision at all, and two robots tags do resolve deterministically to
+       the most restrictive. That premise expired. `_partials/head.html` is now
+       shadowed here (for an unrelated `resources.Concat` guard), so the
+       directive can be computed before the tag is written, and every page gets
+       exactly one.
+
+       This was cosmetic, not a ranking bug — crawlers combined the pair to the
+       same answer. What it cost was legibility: every non-latest page shipped
+       two contradictory-looking robots tags, SEO auditors flagged them, and on
+       a page that was BOTH `noindex: true` and an old-version duplicate the
+       pair read `noindex, nofollow` + `noindex, follow`, which resolves to
+       nofollow and silently drops this partial's "follow so link equity still
+       flows to the current version" intent. Deciding once makes the precedence
+       explicit instead of leaving it to the crawler: an author's `noindex: true`
+       still wins, and it now says so in one tag.
 
        WHERE THE VERSION COMES FROM. `utils/version-root.html`, the one resolver
        the sidebar, navbar, docs-tabs band, version banner and link shortcodes
@@ -64,8 +84,13 @@
        Resolving the section's OWN version list also makes "latest" mean the
        latest of THIS section, which matters once two sections ship different
        version sets (agentgateway's kubernetes has more versions than
-       standalone). Called once per page from head-end.html. */ -}}
+       standalone). Called once per page from _partials/head.html. */ -}}
 
+{{- /* Accumulated into, then returned by the single `return` at the very end.
+       Hugo requires a returning partial to reach exactly one `return` on the
+       template's top level, so the branches below ASSIGN (`=`) into this and
+       never return from inside the `with`/`if` scopes. */ -}}
+{{- $directive := "" -}}
 {{- $root := partial "utils/version-root.html" . -}}
 {{- with partial "utils/resolve-section-versions.html" $root.section -}}
   {{- /* The current version's URL segment. Two detection paths, in order:
@@ -106,7 +131,8 @@
     {{- $latestEquiv := printf "%s%s/%s" $lookupPrefix $latestSeg $root.pathAfterVersion -}}
     {{- $latestEquiv = strings.TrimRight "/" $latestEquiv -}}
     {{- if site.GetPage $latestEquiv -}}
-  <meta name="robots" content="noindex, follow" />
+      {{- $directive = "noindex, follow" -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
+{{- return $directive -}}

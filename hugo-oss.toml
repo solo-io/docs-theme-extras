@@ -122,6 +122,23 @@ currentProduct = "test"
 pathName = "/test/docs"
 version = "latest"
 defaultVersion = "v2"
+
+# Retired versions named explicitly, source 1 of utils/retired-versions.html.
+# `v0explicit` has no [[params.versions]] entry and no redirect rule: it is here
+# to prove the escape hatch works on its own, for a consumer whose redirects
+# live somewhere the theme cannot read (an edge worker, an ingress rule).
+# Sources 2 and 3 are exercised by fixture/static/_redirects.
+retiredVersions = ["v0explicit"]
+
+# Point the retired-version reader at the fixture's REAL on-disk path.
+# utils/retired-versions.html reads redirect files relative to the project root
+# and does not traverse mounts, so the mounted `static/_redirects` is invisible
+# to it. The fixture file cannot live at this repo's top-level static/ — that
+# directory IS mounted into consumers, and shipping a `_redirects` would rewrite
+# the hosting behavior of every Cloudflare consumer that imports this module.
+# No real consumer sets this; they keep the file where the defaults look.
+retiredVersionsFiles = ["fixture/static/_redirects"]
+
 folder = "test"
 versionBanner = false
 versionBannerText = ""
@@ -333,6 +350,19 @@ pageContextMode = "siteParams"
 # band; the other versions have no tab dirs and stay in the DISABLED state.
 [[params.versions]]
   version = "v3"
+  # SHARED WITH THE v2 ENTRY, deliberately: two enterprise trees built from one
+  # upstream release. That is the one-to-many shape the remap in reuse.html /
+  # rebase.html used to get wrong — it keyed its placeholder on the version
+  # ENTRY, so the first entry claiming `v2oss` consumed the only token in the
+  # gate and this one silently got nothing, leaving v3 to render content gated
+  # out of the upstream release it is built from. agentgateway hit exactly this
+  # with `latest` and `2026.9.x` both mapping to OSS 1.5.x.
+  #
+  # So the `include-if="v2oss"` row in conrefs/test/version-remap.md must now
+  # render on v2 AND v3, which is what tests/reuse-version-remap.spec.ts
+  # asserts. The `v3` TOKEN still maps to v1 through the v1 entry's own
+  # ossVersion, so the keepVersion collision probe is unaffected.
+  ossVersion = "v2oss"
   dropdown = "v3 (tabs demo)"
   linkVersion = "v3"
   # POISON VALUE, deliberately. `url` on a same-product params.versions entry is

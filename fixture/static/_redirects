@@ -1,0 +1,26 @@
+# Cloudflare Pages / Netlify redirect fixture.
+#
+# Exercises source 2 of utils/retired-versions.html: a retired version is
+# recognized because something redirects away from it with `?fromversion=`,
+# with no [[params.versions]] entry and no params.retiredVersions line.
+#
+# Lives under fixture/ and is mounted to `static` by the fixture configs, so
+# consumers importing this module never receive it. A real `_redirects` at the
+# repo's top-level static/ WOULD be mounted into every consumer's site root and
+# would change their hosting behavior.
+
+# A retirement. v0 appears nowhere else in the fixture config — the notice
+# firing for it is the whole point of the test.
+/v0/*  /v2/:splat?fromversion=v0  301
+
+# An ordinary redirect with no marker. Must contribute nothing: a moved page is
+# not a retired version, which is why the parameter is opt-in per rule.
+/moved-page/  /v2/everything/  301
+
+# Commented out, and must stay ignored. A rule someone disabled should not keep
+# claiming its version is retired.
+# /v00/*  /v2/:splat?fromversion=v00  301
+
+# Multiple parameters, marker first. The extractor terminates on `&`, so this
+# contributes "v0multi" rather than "v0multi&foo=bar".
+/v0multi/*  /v2/:splat?fromversion=v0multi&foo=bar  301

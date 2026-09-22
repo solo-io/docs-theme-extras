@@ -79,16 +79,17 @@
   renders. See the warning block at the bottom of this file for the full rule
   and the four real false positives that shaped it.
 
-  `(index hugo.Sites 0)` is the default-language site. Verified against the
-  agentgateway build (en + ja): it reports "en" from BOTH language sites. It is
-  used rather than `site.LanguagePrefix == ""` because that only identifies the
-  default language while `defaultContentLanguageInSubdir` is false — flip that
-  setting and every language gains a prefix, so the guard would silently stop
-  firing anywhere. A single-language site has one entry, so index 0 is that
-  language and the check is a no-op.
+  `utils/default-lang.html` returns the default-language site's `Lang`. Verified
+  against the agentgateway build (en + ja): it reports "en" from BOTH language
+  sites. It is used rather than `site.LanguagePrefix == ""` because that only
+  identifies the default language while `defaultContentLanguageInSubdir` is
+  false — flip that setting and every language gains a prefix, so the guard
+  would silently stop firing anywhere. A single-language site has one entry, so
+  index 0 is that language and the check is a no-op. The accessor lives in a
+  partial because it has to be version-guarded; see that file for why.
 */ -}}
 {{- $page := . -}}
-{{- $isDefaultLang := eq site.Language.Lang (index hugo.Sites 0).Language.Lang -}}
+{{- $isDefaultLang := eq site.Language.Lang (partial "utils/default-lang.html" $page) -}}
 {{- $root := partial "utils/version-root.html" $page -}}
 {{- $currentSection := (partial "utils/section-segment.html" $page).segment -}}
 {{- $currentVersion := $root.currentVersion -}}

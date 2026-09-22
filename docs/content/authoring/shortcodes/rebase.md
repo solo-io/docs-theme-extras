@@ -6,7 +6,7 @@
 # `npm run gen:docs -- --check` and fails on any diff.
 title: rebase
 description: "Renders a page from another version's asset tree, rewriting its shortcodes to match"
-weight: 140
+weight: 150
 ---
 
 Either call form works, and both produce identical HTML.
