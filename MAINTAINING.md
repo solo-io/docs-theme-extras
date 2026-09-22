@@ -353,6 +353,19 @@ Three things to get right:
   module keeps these under `partials/`, matching the existing `partials/docs/`
   directory. An override in the wrong tree is silently ignored — no error, it
   just never runs.
+
+  That rule is firm for **slots**, and slots only. The module's internal
+  `utils/` helpers are split across both trees for historical reasons —
+  `_partials/utils/resolve-sections.html` and `_partials/utils/default-lang.html`
+  on one side, `partials/utils/version-noindex.html`,
+  `partials/utils/retired-versions.html` and others on the other. Calls resolve
+  either way, because Hugo searches both trees for `partial "utils/x.html"`, so
+  nothing is broken and nothing needs moving. But it means **a `utils/` helper is
+  not reliably overridable by path**: put your copy in the tree the module does
+  not use and the module's own file keeps winning, silently. If you need to
+  change one of these, ask for a slot rather than shadowing it — and if you are
+  adding a helper here, put it beside its primary caller and say so in its
+  header, as `default-lang.html` does.
 - **Do not call a slot from its own override.** Your file wins the lookup, so
   `{{ partial "docs/chrome-top.html" . }}` inside your `chrome-top.html` is
   infinite recursion. To keep the default banner, call it by its own name:

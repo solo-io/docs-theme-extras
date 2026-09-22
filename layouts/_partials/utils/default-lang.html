@@ -37,7 +37,19 @@
 
   This shim exists to keep the failure legible and non-fatal on an older Hugo.
   It is NOT a statement that the theme supports pre-0.156 Hugo — CI pins 0.160.1
-  and consumers should match it. */ -}}
+  and consumers should match it. README.md, "Hugo version", states the floor and
+  why no `[module.hugoVersion]` constraint declares it.
+
+  Where this file lives, and why it is not a slot
+  ----------------------------------------------
+  `layouts/_partials/`, beside `utils/resolve-sections.html`, its primary
+  caller — NOT `layouts/partials/`, where some other `utils/` helpers sit. The
+  module's `utils/` are split across both trees for historical reasons; calls
+  resolve either way because Hugo searches both, but it does mean a consumer
+  cannot reliably shadow one by path. That is fine here: this is an internal
+  accessor, not an extension slot, and there is nothing in it a consumer would
+  want to replace. See MAINTAINING.md, "Three things to get right", for the
+  distinction. */ -}}
 
 {{- /* One top-level `return`, not one per branch: on Hugo 0.154.5 a `return`
        nested inside an `if` is not recognised as the return keyword and is

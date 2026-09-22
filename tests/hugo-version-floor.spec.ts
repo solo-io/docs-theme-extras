@@ -34,8 +34,39 @@ import path from "node:path";
 
 const LAYOUTS_DIR = path.resolve(__dirname, "..", "layouts");
 
-// The one file allowed to touch the accessor, relative to layouts/.
-const CANONICAL = "_partials/utils/default-lang.html";
+// Version-gated accessors, and the one file each is allowed to live in.
+//
+// A TABLE RATHER THAN A CONSTANT, because the failure class is "a template
+// reaches for something the consumer's Hugo does not have", not "a template
+// says hugo.Sites". The identifier that caused the incident is one instance;
+// the next one will be a different name with the same shape, and a spec that
+// can only see this one will not be there for it.
+//
+// TO ADD AN ENTRY: name the accessor, the Hugo version that introduced it, and
+// the partial that version-guards it. The guard partial must assign and return
+// once at top level — on pre-0.156 Hugo a `return` nested inside an `if` is
+// parsed as an ordinary function call and fails with `wrong number of args for
+// return: want 0 got 1`, which would defeat the point of the guard.
+//
+// WHAT DOES NOT BELONG HERE: anything introduced at or below the floor this
+// module is known to build on (0.154.5 — see README.md, "Hugo version"). The
+// accessors the newer code in this release uses were all checked against it:
+// `try` (0.141.0), `.Page.Store` (0.128.0), `reflect.IsMap`,
+// `transform.Unmarshal` and `os.ReadFile` all predate it, so none is gated.
+const GUARDED = [
+  {
+    // Does not exist before Hugo 0.156.0. utils/resolve-sections.html runs from
+    // navbar.html on EVERY page, so one unguarded reference takes down every
+    // page of a consumer's build.
+    identifier: "hugo.Sites",
+    since: "0.156.0",
+    canonical: "_partials/utils/default-lang.html",
+    // The fallback the guard selects below `since`. Asserted to still be there:
+    // it is deprecated on current Hugo, and the day it is REMOVED this spec
+    // should be what notices, not a consumer's deploy.
+    fallback: "site.Sites",
+  },
+];
 
 function walkHtml(root: string): string[] {
   if (!fs.existsSync(root)) return [];
@@ -61,40 +92,59 @@ function blankHugoComments(src: string): string {
   );
 }
 
-test.describe("hugo.Sites is centralised behind a version guard", () => {
-  test("no layout calls hugo.Sites outside utils/default-lang.html", () => {
-    const files = walkHtml(LAYOUTS_DIR);
-    // Guard against a vacuous pass if layouts/ ever moves.
-    expect(files.length).toBeGreaterThan(0);
+// `hugo.Sites` -> /\bhugo\.Sites\b/, with the dot escaped.
+function identifierRe(identifier: string): RegExp {
+  return new RegExp(`\\b${identifier.replace(/\./g, "\\.")}\\b`);
+}
 
-    const offenders: string[] = [];
-    for (const file of files) {
-      const rel = path.relative(LAYOUTS_DIR, file);
-      if (rel === CANONICAL) continue;
+test.describe("version-gated accessors are centralised behind a guard", () => {
+  // Non-vacuous: an empty table would make every test below pass by iterating
+  // nothing, which is the shape HAZARDS.md catalogues.
+  test("the guarded-accessor table is populated", () => {
+    expect(GUARDED.length).toBeGreaterThan(0);
+  });
+
+  for (const { identifier, since, canonical, fallback } of GUARDED) {
+    test(`no layout calls ${identifier} outside ${canonical}`, () => {
+      const files = walkHtml(LAYOUTS_DIR);
+      // Guard against a vacuous pass if layouts/ ever moves.
+      expect(files.length).toBeGreaterThan(0);
+
+      const re = identifierRe(identifier);
+      const offenders: string[] = [];
+      for (const file of files) {
+        const rel = path.relative(LAYOUTS_DIR, file);
+        if (rel === canonical) continue;
+        const src = blankHugoComments(fs.readFileSync(file, "utf8"));
+        if (re.test(src)) offenders.push(rel);
+      }
+
+      expect(
+        offenders,
+        `${identifier} needs Hugo >= ${since} and must go through ` +
+          `${canonical}. Direct call sites found in:\n  ` +
+          offenders.join("\n  "),
+      ).toEqual([]);
+    });
+
+    test(`${canonical} still guards ${identifier}`, () => {
+      const file = path.join(LAYOUTS_DIR, canonical);
+      expect(fs.existsSync(file)).toBe(true);
       const src = blankHugoComments(fs.readFileSync(file, "utf8"));
-      if (/\bhugo\.Sites\b/.test(src)) offenders.push(rel);
-    }
 
-    expect(
-      offenders,
-      `hugo.Sites needs Hugo >= 0.156.0 and must go through ` +
-        `partial "utils/default-lang.html". Direct call sites found in:\n  ` +
-        offenders.join("\n  "),
-    ).toEqual([]);
-  });
-
-  test("the canonical partial still guards the call", () => {
-    const file = path.join(LAYOUTS_DIR, CANONICAL);
-    expect(fs.existsSync(file)).toBe(true);
-    const src = blankHugoComments(fs.readFileSync(file, "utf8"));
-
-    // Non-vacuous: the accessor is actually here, so the scan above is
-    // excluding a real call rather than passing because nothing matches.
-    expect(src).toMatch(/\bhugo\.Sites\b/);
-    // The version guard, and the pre-0.156 fallback it guards.
-    expect(src).toMatch(/ge\s+hugo\.Version\s+"0\.156\.0"/);
-    expect(src).toMatch(/\bsite\.Sites\b/);
-  });
+      // Non-vacuous: the accessor is actually here, so the scan above is
+      // excluding a real call rather than passing because nothing matches.
+      expect(src).toMatch(identifierRe(identifier));
+      // The version guard itself, pinned to the version in the table so the
+      // two cannot drift apart.
+      expect(src).toMatch(
+        new RegExp(`ge\\s+hugo\\.Version\\s+"${since.replace(/\./g, "\\.")}"`),
+      );
+      // The fallback the guard selects below `since`. If a future Hugo removes
+      // it, this is where that should surface.
+      expect(src).toMatch(identifierRe(fallback));
+    });
+  }
 
   test("the comment blanker does not hide a real call", () => {
     const commented = `{{- /* hugo.Sites is the accessor */ -}}\n<p>ok</p>`;
