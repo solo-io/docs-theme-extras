@@ -24,6 +24,20 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [Unreleased]
+
+### Add — `file-size.spec.ts` and `[limits].maxFileMiB`, which fail a build that has a file larger than its host accepts, defaulting to the Cloudflare Pages 25 MiB per-file limit (`tests/file-size.spec.ts`, `tests/helpers/file-size.ts`, `tests/helpers/config.ts`, `tests/helpers/target.ts`, `playwright.config.ts`, `docs/content/testing/_index.md`)
+
+Cloudflare Pages rejects any single file over 25 MiB, and the whole deploy fails rather than skipping the file. Nothing in a PR build caught it: Hugo builds the page, every other spec passes, and the failure only shows up at deploy time, after merge. agentgateway-oss-website and kgateway-oss both deploy to Cloudflare Pages. The page most likely to cross the line is a generated reference page: [agentgateway — Configuration schema](https://agentgateway.dev/docs/standalone/latest/reference/configuration/schema/) was 16 MiB in a local agentgateway-oss-website build when this spec was added (and 18 MiB of HTML on the docs hub), and it grows a little with each release. The site's `en.search-data.json` was 14 MiB.
+
+The spec is in the `content` project and walks every file under `builtRoot`, not only `*.html`, because host limits cover every file type and a search index or generated JSON is as likely to grow past one as a page. It has two tiers: over the limit fails and lists every file that's too big, and over 80% of the limit passes but adds a `warning` annotation to the test and prints the file, so the report shows what's getting close before a release breaks the deploy. A file exactly at the limit passes. Symlinks are skipped so a file is not counted twice.
+
+The limit is a setting because the hosts differ by two orders of magnitude. `[limits].maxFileMiB` defaults to 25 for [Cloudflare Pages](https://developers.cloudflare.com/pages/platform/limits/). [Firebase Hosting](https://firebase.google.com/docs/hosting/usage-quotas-pricing), which the docs hub deploys to, allows 2 GB per file, and the hub's `gateway` build already has a 26.1 MiB `en.search-data.json`, so a fixed 25 MiB limit would fail the hub over a file that deploys fine. `[checks] fileSize = false` turns the check off entirely.
+
+**Verified** with unit tests on the walker (strict threshold, all file types, largest first, symlink, missing root, MiB conversion), then against real and synthetic builds: the OSS fixture and a local docs hub `agentgateway` build (largest file about 18 MiB) both pass with no warning at the default limit; a scratch build with a 21 MiB `en.search-data.json` and a 26 MiB page warns on the first and fails naming the second; the same scratch build passes with `maxFileMiB = 2048`; and a zero, negative, or string `maxFileMiB` fails config loading with a message naming the key.
+
+**Consumer action.** None for a site on Cloudflare Pages: the check is on by default and runs with the `content` project that the framework-tests workflows already invoke, so agentgateway-oss-website and kgateway-oss start running it on the pin bump to this release. **The docs hub must set `[limits] maxFileMiB = 2048` in `.docs-test.toml` in the same PR as the pin bump**, or its `gateway` content job fails on the search index. The key can go in before the bump too: an older pin ignores an unknown top-level table without a warning.
+
 ## [0.3.14] — 2026-09-22
 
 ### Add — the retired-version notice reads its allowlist from the hosting config instead of requiring a dead `params.versions` entry (`layouts/partials/utils/retired-versions.html`, `layouts/partials/utils/retired-version-param.html`, `layouts/partials/docs/retired-version-notice.html`, `layouts/404.html`, `tests/retired-version-notice.spec.ts`, `fixture/static/_redirects`, fixture configs, `docs/content/configuration/retired-versions.md`, `docs/content/configuration/versions-and-sections.md`)

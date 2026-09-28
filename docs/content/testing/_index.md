@@ -153,6 +153,22 @@ With no `[[gateAxes]]` the spec **skips** rather than passes — with no
 combinations there is nothing to evaluate against, and a green run would be a
 false all-clear. Needs `scanRoots` too, since it reads source, not built HTML.
 
+### 2c. `[limits].maxFileMiB` sets the per-file size limit
+
+```toml
+[limits]
+maxFileMiB = 2048   # default 25
+```
+
+`file-size.spec.ts` (`content` project) fails if any file in `builtRoot` is
+larger than `maxFileMiB`, and warns without failing above 80% of it. It checks
+every file type, not only HTML, because host limits do.
+
+The default, 25 MiB, is the Cloudflare Pages per-file limit. A file over it
+fails the whole deploy. A consumer on another host sets that host's limit
+instead. The docs hub, on Firebase Hosting, sets `2048` (2 GB). To skip the
+check entirely, set `[checks] fileSize = false`.
+
 ### 3. `buildLog` enables hugo-warnings.spec
 
 ```toml
