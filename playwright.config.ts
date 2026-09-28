@@ -111,6 +111,7 @@ export default defineConfig({
     //     fragmented code blocks, copy-md presence), copy-md-fidelity
     //     (copy-as-markdown output vs HTML), hugo-warnings (build-log warnings),
     //     dev-build (fails if the build carries a dev-server LiveReload script).
+    //     file-size (any built file over the Cloudflare Pages 25 MiB limit).
     //   source scanners: curl-quotes, tab-syntax, shortcode-args,
     //     heading-shortcode-id, include-form, cascade-type (all walk scanRoots
     //     markdown).
@@ -120,7 +121,7 @@ export default defineConfig({
     {
       name: "content",
       testMatch:
-        /markdown-leaks\.spec\.ts$|missing-images\.spec\.ts$|built-html-integrity\.spec\.ts$|copy-md-fidelity\.spec\.ts$|hugo-warnings\.spec\.ts$|dev-build\.spec\.ts$|curl-quotes\.spec\.ts$|tab-syntax\.spec\.ts$|shortcode-args\.spec\.ts$|heading-shortcode-id\.spec\.ts$|include-form\.spec\.ts$|gate-form\.spec\.ts$|gate-axis-collision\.spec\.ts$|gate-axis-collision\.spec\.ts$|gate-axis-collision\.spec\.ts$|cascade-type\.spec\.ts$|scan-roots\.spec\.ts$|gate-normalize-corpus\.spec\.ts$|gate-inline-form\.spec\.ts$|reuse-image-pair-lint\.spec\.ts$/,
+        /markdown-leaks\.spec\.ts$|missing-images\.spec\.ts$|built-html-integrity\.spec\.ts$|copy-md-fidelity\.spec\.ts$|hugo-warnings\.spec\.ts$|dev-build\.spec\.ts$|curl-quotes\.spec\.ts$|tab-syntax\.spec\.ts$|shortcode-args\.spec\.ts$|heading-shortcode-id\.spec\.ts$|include-form\.spec\.ts$|gate-form\.spec\.ts$|gate-axis-collision\.spec\.ts$|gate-axis-collision\.spec\.ts$|gate-axis-collision\.spec\.ts$|cascade-type\.spec\.ts$|scan-roots\.spec\.ts$|gate-normalize-corpus\.spec\.ts$|gate-inline-form\.spec\.ts$|reuse-image-pair-lint\.spec\.ts$|file-size\.spec\.ts$/,
     },
     {
       name: "browser",
