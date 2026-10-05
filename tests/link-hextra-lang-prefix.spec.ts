@@ -174,11 +174,31 @@ test.describe("localized-page version inference", () => {
         "so every {{< card >}} on a translated page links to the English copy.",
     ).toBe(true);
 
-    // It must reach $prefix, not merely be assigned to a dead variable.
+    // It must reach $prefix, not merely be assigned to a dead variable. The
+    // product segment is $basePath (the baseURL's path), not $folder, so
+    // `make server` with baseURL "/" doesn't prepend a product that isn't
+    // there; either way the language goes directly after it, in EVERY
+    // siteParams branch that assigns $prefix. (url mode builds its own
+    // /docs/… prefix and is out of scope here.)
+    // The url-mode marker is a comment (stripped by activeSrc), so split on
+    // the only unindented `else`, which closes the siteParams branch.
+    const urlModeAt = src.search(/^\{\{-?\s*else\s*-?\}\}/m);
+    expect(urlModeAt, "url-mode `else` not found in page-context.html").toBeGreaterThan(-1);
+    const siteParams = src.slice(0, urlModeAt);
+    const assignments = [
+      ...siteParams.matchAll(/\$prefix\s*=\s*printf\s+"[^"]*"((?:\s+\$\w+)+)/g),
+    ].map((m) => m[1].trim().split(/\s+/));
     expect(
-      /\$prefix\s*=\s*printf\s+"\/%s%s/.test(src),
-      "`$prefix` is no longer built with the language segment interpolated " +
-        "directly after the folder — the value is computed but never used.",
-    ).toBe(true);
+      assignments.length,
+      "no `$prefix = printf …` assignments found in page-context.html",
+    ).toBeGreaterThan(0);
+    for (const args of assignments) {
+      expect(
+        args[1],
+        `\`$prefix\` is built from (${args.join(" ")}) without the language ` +
+          "segment interpolated directly after the product segment — the " +
+          "value is computed but never used.",
+      ).toBe("$lang");
+    }
   });
 });
