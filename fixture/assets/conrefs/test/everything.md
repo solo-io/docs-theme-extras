@@ -775,6 +775,17 @@ The counterpart to the table above, and the reason the mobile rule must not use 
 | MARKER_TABLE_CAPPED_PROSE | integer | 1 | The number of gateway proxy replicas to deploy. Increase this value to scale the data plane horizontally for higher throughput, or set it to zero to temporarily disable the proxy without deleting the resource. |
 | spec.gateway.logLevel | string | info | Controls the verbosity of the proxy log stream. Raising this above info produces a large volume of output and should be reserved for short debugging sessions on a single replica. |
 
+### Capped table header wider than its column
+
+The kagent 1.0.x audit-prompts shape: a first column whose body cells are short backticked values, narrower than the header label. Under `overflow-wrap: anywhere` the label split mid-word (`Runtim` / `e`). `table-display.spec.ts` asserts every header word stays on one line.
+
+| Runtime | Where the content goes | Settings |
+| --- | --- | --- |
+| `kagent` | The `generate_content` span of each model call, in two attributes. See the section on what a record holds for the attribute names and an example payload. | `otel.captureSensitiveContent` |
+| `codex` | The runtime's own spans. | `otel.captureSensitiveContent` |
+| `claude` | Prompts and tool details on spans, and assistant replies in the runtime's own log records. With raw API body capture on, the log records also carry the complete provider request and response bodies, which is a fuller record than the spans give you. | `otel.captureSensitiveContent`, `otel.logging.captureRawApiBodies` |
+| `byo` | Nowhere. The controller sends this runtime no telemetry configuration. | None |
+
 ### Version shortcode wrapping a table row
 
 Reproduces the kgateway k8sgwapi-exp.md pattern: a markdown table where authors try to gate an entire row with a version shortcode. Both forms are broken — the percent form spills the row outside the table as a paragraph, and the angle-bracket form wraps the whole pipe-string in a single `<td>` cell so the cell delimiters never get parsed. Tests pin both failure shapes as fail-pending so a future fix flips them green. A third table below shows the working pattern (per-cell conditionals with pipes outside the shortcode tags).

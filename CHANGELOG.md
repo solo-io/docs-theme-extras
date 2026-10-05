@@ -24,6 +24,20 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [Unreleased]
+
+### Fix — table header labels no longer split mid-word into a lone letter (`assets/css/docs-theme-extras.css`, `tests/table-display.spec.ts`, `fixture/assets/conrefs/test/everything.md`)
+
+Visible on the docs hub at [agentgateway — compatibility matrix](https://docs.solo.io/agentgateway/kubernetes/latest/release-notes/versions/#compatibility-matrix), where the `Gateway API Experimental` header renders one or two letters per line, and in every generated API reference, where `Default` and `Validation` render as `Defaul` / `t` and `Validatio` / `n`.
+
+Table cells use `overflow-wrap: anywhere` so a long token can fold instead of pinning its column open. That keyword also lets a cell's min-content width collapse to a single glyph, and nothing exempted headers. When a column's body cells are narrower than its label, which is common because render-table.html pins short cells `nowrap`, the auto table layout sizes the column to the body and splits the label wherever it runs out of room. Across the local docs hub, agentgateway, and kgateway builds (about 15,400 tables), 1,326 tables at 1280px and 252 at 375px left a one-letter header fragment.
+
+`.table-wrapper th` (and the `table` shortcode's wrap-mode header) now use `overflow-wrap: break-word`, which keeps a header's min-content at its longest word, so labels wrap between words only. Inline code in a header keeps the `anywhere` fold: a backticked dotted key used as a column label is the long token the fold exists for, and giving it a word floor squeezed the other column of a 2-column table to 89px at phone width. Body cells are unchanged.
+
+Verified by loading every table page in those three builds in Chromium before and after the rule: one-letter header fragments dropped to 10 tables at 1280px and 13 at 375px (all backticked keys), no table gained horizontal scroll, and total table height went down. About 9 tables, mostly API references, grew more than 15% as `Default` widened and took width from Description. A new fixture table reproduces the kagent 1.0.x audit-prompts `Runtime` split, and `table-display.spec.ts` asserts at 1280px and 375px that no header word spans two lines; the test fails at 1280px without the rule. Safari and Firefox were not measured.
+
+---
+
 ## [0.3.14] — 2026-09-22
 
 ### Add — the retired-version notice reads its allowlist from the hosting config instead of requiring a dead `params.versions` entry (`layouts/partials/utils/retired-versions.html`, `layouts/partials/utils/retired-version-param.html`, `layouts/partials/docs/retired-version-notice.html`, `layouts/404.html`, `tests/retired-version-notice.spec.ts`, `fixture/static/_redirects`, fixture configs, `docs/content/configuration/retired-versions.md`, `docs/content/configuration/versions-and-sections.md`)
