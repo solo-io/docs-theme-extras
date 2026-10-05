@@ -24,7 +24,7 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
-## [Unreleased]
+## [0.3.15] — 2026-10-05
 
 ### Add — `file-size.spec.ts` and `[limits].maxFileMiB`, which fail a build that has a file larger than its host accepts, defaulting to the Cloudflare Pages 25 MiB per-file limit (`tests/file-size.spec.ts`, `tests/helpers/file-size.ts`, `tests/helpers/config.ts`, `tests/helpers/target.ts`, `playwright.config.ts`, `docs/content/testing/_index.md`)
 
@@ -48,6 +48,28 @@ Table cells use `overflow-wrap: anywhere` so a long token can fold instead of pi
 
 Verified by loading every table page in those three builds in Chromium before and after the rule: one-letter header fragments dropped to 10 tables at 1280px and 13 at 375px (all backticked keys), no table gained horizontal scroll, and total table height went down. About 9 tables, mostly API references, grew more than 15% as `Default` widened and took width from Description. A new fixture table reproduces the kagent 1.0.x audit-prompts `Runtime` split, and `table-display.spec.ts` asserts at 1280px and 375px that no header word spans two lines; the test fails at 1280px without the rule. Safari and Firefox were not measured.
 
+### Fix — a prose column is no longer squeezed to a one-character ribbon by its short neighbors (`layouts/_markup/render-table.html`, `assets/css/docs-theme-extras.css`, `tests/table-matrix.spec.ts`, `tests/table-display.spec.ts`, `playwright.config.ts`, `fixture/assets/conrefs/test/everything.md`)
+
+Visible on the docs hub at [kagent 1.0.x — network architecture](https://docs.solo.io/kagent/1.0.x/about/architecture/network/), where the first table's Description column is 39px wide at 1280px and the table runs 34,000px tall, one character per line. The generated API references show the same failure: on the kagent API reference, Description measures 38px beside its Default and Validation columns.
+
+render-table.html stamped an inline `white-space: nowrap` on every cell of 30 plain characters or fewer, to stop the `overflow-wrap: anywhere` fold from collapsing short columns to one character per line. Nowrap went further than that: it held every short cell at its full one-line width. In a row with several short columns (`8080 HTTP | Browser client | Your OIDC identity provider | Public`, or `STREAMABLE_HTTP | Enum: [SSE STREAMABLE_HTTP]`), those widths filled almost the whole row, and the one wrapping column got whatever was left. An inline style also beat every class rule, so neither the `table` shortcode's modes nor the cap could touch it. Across the local docs hub, agentgateway, and kgateway builds, 463 tables at 1280px rendered a prose cell at fewer than 8 characters per line.
+
+Short cells now get a `.cell-short` class instead, and the class uses `overflow-wrap: break-word`: a short cell can no longer be narrower than its longest word, so the old collapse stays fixed, but it can wrap at its spaces and give width back to the prose. At 767px and narrower, `.cell-short` restores `white-space: nowrap`, so phones render exactly as before. Most multi-column tables already scroll sideways at that width, and letting short cells wrap there made 1,717 tables more than 15% taller in exchange for less scrolling.
+
+**Consumer action.** None for content. A site with its own CSS or tests keyed to the inline `style="white-space: nowrap"` on table cells must switch to the `.cell-short` class.
+
+Verified in Chromium by loading every table page in those three builds with and without the change: tables with a ribbon prose cell at 1280px went from 463 to 248, and the rest are mild (6 to 7 characters per line against 1 before). 352 tables scroll less, none start scrolling, and the kagent network table measures 2,910px instead of 34,134px. A new table matrix in the fixture copies eight production shapes with varied content lengths per column: the network table with and without the `table` shortcode, a generated API reference, a concept table with lists, the nine-column compatibility matrix, an all-short and an all-prose control, and a long URL beside prose. `table-matrix.spec.ts` holds every matrix table at 1280px and 375px to four checks: no header word split mid-word, no short-cell word split mid-word, no prose cell under 10 characters per line at 1280px (8 at 375px), and no sideways scroll at 1280px except the compatibility matrix. Against the old render hook, the spec fails on the four shapes that fail in production. Not fixed here: the agentgateway Helm values table, which is 81,000px tall from very long JSON defaults, a different cause. Safari and Firefox were not measured.
+
+
+### Fix — `{{< card path= >}}` links no longer gain a stray `/<product>/` segment on a docs hub `make server` build (`layouts/_partials/utils/page-context.html`)
+
+Visible only on a local hub build: on `make server PRODUCT=agentgateway`, the cards at the bottom of `/kubernetes/latest/documentation/quickstart/install/` linked to `/agentgateway/kubernetes/latest/documentation/quickstart/llm/`, a 404, because the local site is served at the root. Production is unaffected and unchanged; the same cards on [agentgateway — install](https://docs.solo.io/agentgateway/kubernetes/latest/documentation/quickstart/install/) link to `/agentgateway/kubernetes/latest/documentation/quickstart/llm/`, which is correct there.
+
+In `siteParams` mode, page-context built `prefix` as `/<folder>/<section>/<version>`, which assumes the baseURL path is `/<folder>/`. That holds for the hub's `hugo-<product>.toml` and `hugo-preview-<product>.toml` configs, but `hugo-local-<product>.toml` sets `baseURL = "/"`, so every page lives at `/<section>/<version>/…` while every card, `redirect` link, and versioned image resolved through `prefix` still carried `/<folder>/`. The prefix now takes its product segment from the baseURL's path (`(urls.Parse site.BaseURL).Path`), which equals `/<folder>` wherever the two already agreed and is empty on a root-served local build.
+
+**Verified** on a docs hub `agentgateway` build pointed at this change through a `go.mod` `replace`: with the local config, card hrefs carrying `/agentgateway/` went from 406 to 0, and the quickstart cards resolve in both `en` and `ja`; with the production config, no page's `href` or `src` attributes changed compared to v0.3.14.
+
+**Consumer action.** None.
 ---
 
 ## [0.3.14] — 2026-09-22

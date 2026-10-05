@@ -786,6 +786,91 @@ The kagent 1.0.x audit-prompts shape: a first column whose body cells are short 
 | `claude` | Prompts and tool details on spans, and assistant replies in the runtime's own log records. With raw API body capture on, the log records also carry the complete provider request and response bodies, which is a fuller record than the spans give you. | `otel.captureSensitiveContent`, `otel.logging.captureRawApiBodies` |
 | `byo` | Nowhere. The controller sends this runtime no telemetry configuration. | None |
 
+### Table matrix: network ports in wrap mode
+
+The table matrix below copies production table shapes with varied content lengths per column, so a change to the table CSS or to render-table.html can be judged against all of them at once. `table-matrix.spec.ts` checks the same invariants on every matrix table at 1280px and 375px: no header word splits mid-word, no word in a short cell splits mid-word, and no prose cell renders as a narrow ribbon.
+
+This first shape copies the kagent 1.0.x network architecture page: six columns in the `table` shortcode's wrap mode, an empty first header, five columns of short multi-word cells, and one column of long prose that opens with a bold label and a line break. Before a fix, the Description column measured 39px at 1280px and the table ran 34,000px tall.
+
+{{% table %}}
+|   | Port / Protocol | Source | Destination | Network | Description |
+|---|-----------------|--------|-------------|---------|-------------|
+| 1 | 8080 HTTP | Browser client | `kagent-ui` | Public | **UI entry point**<br> nginx serves the static bundle and proxies API paths to the controller. The Service port and target port are both 8080. |
+| 2 | 443 HTTPS | Browser client | Your OIDC identity provider | Public | **Login redirect**<br> Only when `enterprise.oidc.issuer` names an external provider. If the value is empty, the bundled provider in the controller pod serves this flow instead. |
+| 3 | 8085 HTTP | `kagent-ui` | `kagent-controller` | Cluster network | **Enterprise API**<br> nginx proxies `/api/`, `/a2a/`, and `/autoauth/` to the controller enterprise listener. This listener is separate from 8083 because the kagent HTTP listener serves a different set of routes. |
+| 4 | 5556 HTTP | `controller` container | `idp` container | Pod-local | **Bundled identity provider**<br> Present only while `enterprise.oidc.issuer` is empty. The controller retries discovery ten times at two-second intervals while the container starts. |
+{{% /table %}}
+
+### Table matrix: network ports without the shortcode
+
+The same content as the table above with no `table` shortcode, so render-table.html's default 3-or-more-column cap applies instead of wrap mode. The kagent 1.0.x system requirements page carries this shape and measured 38,000px tall at 1280px.
+
+|   | Port / Protocol | Source | Destination | Network | Description |
+|---|-----------------|--------|-------------|---------|-------------|
+| 1 | 8080 HTTP | Browser client | `kagent-ui` | Public | **UI entry point**<br> nginx serves the static bundle and proxies API paths to the controller. The Service port and target port are both 8080. |
+| 2 | 443 HTTPS | Browser client | Your OIDC identity provider | Public | **Login redirect**<br> Only when `enterprise.oidc.issuer` names an external provider. If the value is empty, the bundled provider in the controller pod serves this flow instead. |
+| 3 | 8085 HTTP | `kagent-ui` | `kagent-controller` | Cluster network | **Enterprise API**<br> nginx proxies `/api/`, `/a2a/`, and `/autoauth/` to the controller enterprise listener. This listener is separate from 8083 because the kagent HTTP listener serves a different set of routes. |
+
+### Table matrix: generated API reference
+
+The generated CRD reference shape that every product's API reference page uses: a backticked field with an italic type link, a Description that is empty in some rows and a paragraph in others, a Default that is usually empty, and a Validation column of short `Enum` and `MinLength` values. The short Default and Validation cells pin their columns open, and on the kagent API reference the Description column measured 38px at 1280px.
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `description` *string* | | | |
+| `protocol` *[RemoteMCPServerProtocol](#table-matrix-generated-api-reference)* | Protocol is the transport the controller uses to reach the remote MCP server. Streamable HTTP is the default, and SSE is kept only for servers that predate it. | STREAMABLE_HTTP | Enum: [SSE STREAMABLE_HTTP] <br> |
+| `url` *string* | URL is the address of the remote MCP server, including the scheme and the path of the MCP endpoint. The controller does not follow redirects, so the URL must point at the final endpoint. | | MinLength: 1 <br> |
+| `headersFrom` *[ValueRef](#table-matrix-generated-api-reference) array* | HeadersFrom lists the headers to send with every request to the server. Each entry reads its value from a Secret or a ConfigMap in the same namespace as the resource, so credentials never appear in the resource itself. | | MaxItems: 32 <br> |
+| `timeout` *Duration* | Timeout is how long the controller waits for the server to answer a single request before it gives up and reports the server as unavailable. | 30s | |
+
+### Table matrix: concept table with lists
+
+The agentgateway timeouts overview shape: a short linked name, a prose description, and two columns of bulleted lists whose items are short. Before a fix, the Description column measured 72px at 1280px against 269px for a list column.
+
+| Type of timeout | Description | Configured via | Attach to |
+| --- | --- | --- | --- |
+| [Request timeout](#table-matrix-concept-table-with-lists) | Request timeouts configure the time the proxy allows for the entire request stream to be received from the client. | <ul><li>HTTPRoute</li><li>EnterpriseAgentgatewayPolicy</li></ul> | <ul><li>HTTPRoute</li><li>HTTPRoute rule</li><li>Gateway listener (AgentgatewayPolicy only)</li></ul> |
+| [Idle timeout](#table-matrix-concept-table-with-lists) | An idle timeout is the time when the proxy terminates the connection to a downstream or upstream service if there are no active streams. | <ul><li>EnterpriseAgentgatewayPolicy</li></ul> | <ul><li>Gateway listener</li></ul> |
+| [Per-try timeout](#table-matrix-concept-table-with-lists) | Set a shorter timeout for retries than the overall request timeout. | <ul><li>HTTPRoute</li><li>EnterpriseAgentgatewayPolicy</li></ul> | <ul><li>HTTPRoute</li><li>HTTPRoute rule</li><li>Gateway listener (EnterpriseAgentgatewayPolicy only)</li></ul> |
+
+### Table matrix: wide compatibility matrix
+
+The agentgateway compatibility matrix shape: nine columns of short version strings under multi-word headers, some with footnote markers. A table this wide legitimately scrolls sideways at phone width, but the headers must still not split mid-word. Before a fix, `Gateway API Experimental` rendered one or two letters per line.
+
+| Solo Enterprise for agentgateway | Kubernetes* | Gateway API Standard† | Gateway API Experimental† | agentgateway OSS | MCP spec‡ | Istio | Helm | Release date |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026.9.0 | 1.32 - 1.36 | 1.4 - 1.6 | 1.6 | Up to this [commit ID](#table-matrix-wide-compatibility-matrix) | 2026-07-28 | 1.26 - 1.28 | 3.18+ | 2026-09-15 |
+| 2026.7.1-patch.x | 1.32 - 1.36 | 1.4 - 1.6 | 1.6 | Up to this [commit ID](#table-matrix-wide-compatibility-matrix) | 2026-07-28 | 1.26 - 1.28 | 3.18+ | 2026-08-02 |
+| 2.3.x | 1.31 - 1.35 | 1.3 - 1.5 | 1.5 | Up to this [commit ID](#table-matrix-wide-compatibility-matrix) | 2025-06-18 | 1.25 - 1.27 | 3.16+ | 2026-04-20 |
+
+### Table matrix: all short cells
+
+A control shape with every cell 30 characters or fewer, including multi-word values. Nothing here is long enough to need wrapping at 1280px, so the table must fit without scrolling and without splitting any word.
+
+| Metric | Type | Unit | Labels |
+| --- | --- | --- | --- |
+| `agentgateway_requests_total` | Counter | Requests | route, status code |
+| `agentgateway_request_duration` | Histogram | Seconds | route, upstream |
+| `agentgateway_tokens_total` | Counter | Tokens | model, token type |
+
+### Table matrix: all prose cells
+
+A control shape with three columns that all hold prose of similar length. No column holds a short pinned value, so the auto layout must share the width roughly evenly and every column must stay readable.
+
+| Option | Behavior | When to use it |
+| --- | --- | --- |
+| Fail open on errors from the external service and forward the request to the backend. | The proxy forwards the request unchanged when the external processor times out or returns an error, and records the failure in its metrics. | Use this option when availability matters more than the processing, for example a request logger that must never block traffic. |
+| Fail closed on errors from the external service and reject the request. | The proxy rejects the request with a 500 status when the external processor times out or returns an error. | Use this option when the processing enforces a policy, for example a redaction step that must run before data reaches the backend. |
+
+### Table matrix: long unbroken value beside prose
+
+A shape with a cell longer than 30 characters that holds no spaces, a URL, beside a prose column. The URL must fold instead of pushing the prose column narrow, and the prose must stay readable.
+
+| Provider | Endpoint | Notes |
+| --- | --- | --- |
+| Azure OpenAI | `https://my-resource.openai.azure.com/openai/deployments/gpt-4o/chat/completions` | The deployment name is part of the path, so each model deployment needs its own backend. Requests without the `api-version` query parameter are rejected by the service. |
+| Vertex AI | `https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1` | The project and region are part of the path. The proxy appends the model path and the method for each request. |
+
 ### Version shortcode wrapping a table row
 
 Reproduces the kgateway k8sgwapi-exp.md pattern: a markdown table where authors try to gate an entire row with a version shortcode. Both forms are broken — the percent form spills the row outside the table as a paragraph, and the angle-bracket form wraps the whole pipe-string in a single `<td>` cell so the cell delimiters never get parsed. Tests pin both failure shapes as fail-pending so a future fix flips them green. A third table below shows the working pattern (per-cell conditionals with pipes outside the shortcode tags).

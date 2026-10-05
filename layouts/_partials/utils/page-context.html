@@ -92,14 +92,22 @@
          English copy — 67 hrefs on one agentgateway ja build. LanguagePrefix is
          "" for the default language, so English output is byte-identical. */ -}}
   {{- $lang := .Site.LanguagePrefix | default "" -}}
+  {{- /* The product segment comes from the baseURL's path, not from $folder.
+         The two agree in production and preview (baseURL
+         https://docs.solo.io/<folder>/ or /<folder>), but the hub's
+         hugo-local-<product>.toml serves the product at the site root
+         (baseURL "/"), so pages live at /<section>/<version>/… while a
+         $folder-built prefix sent every {{< card path= >}} to
+         /<folder>/<section>/<version>/… — a 404 on `make server`. */ -}}
+  {{- $basePath := strings.TrimSuffix "/" (urls.Parse site.BaseURL).Path -}}
   {{- if and $folder $version -}}
     {{- if $sectionSeg -}}
-      {{- $prefix = printf "/%s%s/%s/%s" $folder $lang $sectionSeg $version -}}
+      {{- $prefix = printf "%s%s/%s/%s" $basePath $lang $sectionSeg $version -}}
     {{- else -}}
-      {{- $prefix = printf "/%s%s/%s" $folder $lang $version -}}
+      {{- $prefix = printf "%s%s/%s" $basePath $lang $version -}}
     {{- end -}}
   {{- else if $folder -}}
-    {{- $prefix = printf "/%s%s" $folder $lang -}}
+    {{- $prefix = printf "%s%s" $basePath $lang -}}
   {{- end -}}
 {{- else -}}
   {{/* url mode */}}

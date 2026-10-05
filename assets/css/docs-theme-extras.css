@@ -1489,6 +1489,46 @@ hr.footnotes-sep,
   overflow-wrap: anywhere;
 }
 
+/* Short cells (1-30 plain characters, tagged `.cell-short` by
+   render-table.html) wrap between words only. They need protection from the
+   `anywhere` fold: without it a short column collapses to one character per
+   line (`b/o/o/l` in a Type column). That protection used to be an inline
+   `white-space: nowrap`, which went too far. It held every short cell at its
+   full one-line width, so in a row with several short columns
+   (`8080 HTTP | Browser client | Your OIDC identity provider | Public`) the
+   one prose column got whatever was left. On the kagent 1.0.x network page
+   that was 39px, one character per line, and a 34,000px table; generated API
+   references lost Description the same way to their Default and Validation
+   columns.
+   `break-word` gives the same protection with a lower floor: a short cell
+   can no longer be narrower than its longest word, but it can wrap at its
+   spaces, which gives width back to the prose column.
+
+   Selectors carry `table` so they tie the `table` shortcode's mode rules
+   above at (0,2,2) and win on source order; without that, wrap mode's
+   `anywhere` reaches short cells and splits `8080` digit by digit. The `code`
+   arm outranks the `.table-wrapper td code` fold for the same reason the
+   header and phone-width rules need one. `nowrap` mode is unaffected: it sets
+   `white-space: nowrap` on every cell, so there is nothing to wrap.
+   `tests/table-matrix.spec.ts` pins the shapes. */
+.table-wrapper table td.cell-short,
+.table-wrapper table td.cell-short code {
+  overflow-wrap: break-word;
+}
+/* Phones keep the old one-line short cells. Below 768px most multi-column
+   tables already scroll sideways, and letting short cells wrap there traded
+   that scroll for height: measured across the docs hub, agentgateway, and
+   kgateway builds at 375px, 7,573 tables scrolled less but 1,717 grew more
+   than 15% taller. Restoring `nowrap` here makes phone rendering identical to
+   the inline style this class replaced. Same specificity as the wrap and
+   equal mode rules, so it wins on source order. Breakpoint matches the other
+   table queries in this file. */
+@media (max-width: 767px) {
+  .table-wrapper table td.cell-short {
+    white-space: nowrap;
+  }
+}
+
 /* ── Section cards (auto-generated on list pages) ────────────────────── */
 /* Replicates the docs-theme-lotus card grid on parent sections */
 .section-cards {

@@ -71,9 +71,7 @@ async function probe(page: import("@playwright/test").Page, headingId: string) {
       tableClientW: table ? table.clientWidth : null,
       tableScrollW: table ? table.scrollWidth : null,
       cellOverflow,
-      inlineNowrapCells: cells.filter((c) =>
-        /nowrap/.test(c.getAttribute("style") || ""),
-      ).length,
+      shortCells: cells.filter((c) => c.classList.contains("cell-short")).length,
       wrapperClientW: wrapper ? wrapper.clientWidth : null,
       wrapperScrollW: wrapper ? wrapper.scrollWidth : null,
       wrapperOverflowX: wrapper ? getComputedStyle(wrapper).overflowX : null,
@@ -135,10 +133,11 @@ test.describe("table shortcode display modes", () => {
     expect(r!.className).toContain("solo-table--wrap");
     expect(r!.colWidths.length, "fixture table is not 4 columns").toBe(4);
     // Non-vacuity: the section only exercises the bug while it still holds
-    // cells short enough for render-table.html to stamp (tests/HAZARDS.md #1).
-    // Those cells are the pressure that used to push the last column out.
+    // cells short enough for render-table.html to tag `.cell-short`
+    // (tests/HAZARDS.md #1). Those cells are the pressure that used to push the
+    // last column out.
     expect(
-      r!.inlineNowrapCells,
+      r!.shortCells,
       "fixture no longer contains short (<=30 char) cells, so it cannot reproduce the bug",
     ).toBeGreaterThan(0);
     expect(
@@ -171,13 +170,11 @@ test.describe("table shortcode display modes", () => {
     // first cell holds the intentionally long, unbreakable command
     expect(r!.firstCellWhiteSpace, "nowrap cell is allowed to wrap").toBe("nowrap");
     expect(r!.firstCellMaxWidth, "nowrap cell is capped (max-width != none)").toBe("none");
-    // render-table.html's inline declaration must survive into nowrap mode.
     // The fixture's second row exists to guarantee at least one cell short
-    // enough (<=30 chars) to carry it, so this is not vacuous.
-    expect(
-      r!.inlineNowrapCells,
-      "nowrap mode lost render-table.html's inline white-space:nowrap",
-    ).toBeGreaterThan(0);
+    // enough (<=30 chars) for render-table.html to tag `.cell-short`, so the
+    // mode rule is shown to keep it on one line rather than the short-cell
+    // word wrap.
+    expect(r!.shortCells, "nowrap fixture has no `.cell-short` cell").toBeGreaterThan(0);
     expect(r!.wrapperOverflowX, "wrapper is not horizontally scrollable").toMatch(
       /auto|scroll/,
     );

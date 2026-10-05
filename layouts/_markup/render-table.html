@@ -23,8 +23,14 @@
       {{- range .TBody }}
       <tr>
         {{- range . }}
-        {{- $nowrap := and (le (len (plainify .Text)) 30) (ne (len (plainify .Text)) 0) -}}
-        <td{{ with .Alignment }} style="text-align: {{ . }}{{ if $nowrap }}; white-space: nowrap{{ end }}"{{ else }}{{ if $nowrap }} style="white-space: nowrap"{{ end }}{{ end }}>
+        {{- /* Short cells (1-30 plain characters) get `.cell-short`, which
+              wraps them between words only (see `.cell-short` in
+              docs-theme-extras.css). This used to be an inline
+              `white-space: nowrap`, which held every short cell at its full
+              one-line width; in rows with several short columns that starved
+              the one prose column down to a one-character ribbon. */ -}}
+        {{- $short := and (le (len (plainify .Text)) 30) (ne (len (plainify .Text)) 0) -}}
+        <td{{ if $short }} class="cell-short"{{ end }}{{ with .Alignment }} style="text-align: {{ . }}"{{ end }}>
           {{- .Text -}}
         </td>
         {{- end }}
