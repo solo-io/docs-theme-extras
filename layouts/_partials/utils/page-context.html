@@ -107,7 +107,9 @@
       {{- $prefix = printf "%s%s/%s" $basePath $lang $version -}}
     {{- end -}}
   {{- else if $folder -}}
-    {{- $prefix = printf "%s%s" $basePath $lang -}}
+    {{- /* "" at a root baseURL would read as "no prefix" to card.html and
+           redirect.html, which then fall back to the page's FirstSection. */ -}}
+    {{- $prefix = printf "%s%s" $basePath $lang | default "/" -}}
   {{- end -}}
 {{- else -}}
   {{/* url mode */}}
