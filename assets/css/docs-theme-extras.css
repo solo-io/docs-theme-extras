@@ -1267,6 +1267,32 @@ hr.footnotes-sep,
 .table-wrapper td code {
   overflow-wrap: anywhere;
 }
+/* Header cells opt back out of the `anywhere` fold. A header is a short label,
+   never the long token the fold exists for, but `anywhere` still lets the
+   header's min-content collapse to one glyph. When a column's body cells are
+   narrower than its label (short values, which render-table.html also pins
+   `nowrap`), the auto layout sizes the column to the body and splits the label
+   mid-word, leaving a lone letter: `Defaul` / `t` in every generated API
+   reference, `Runtim` / `e` on the kagent 1.0.x audit-prompts table at 1280px.
+   `break-word` keeps the header's min-content at its longest word, so the
+   column can never be narrower than that word and labels wrap between words
+   only. Placed after the rule above so it wins on source order at equal
+   specificity.
+
+   Plain header text only: inline code in a header deliberately keeps the
+   `anywhere` fold from the `th code` rule above. A backticked dotted key used
+   as a column label (`discovery.namespaces.from | Behavior`) is exactly the
+   long token the fold exists for; giving it a longest-word floor took 237px of
+   a 327px phone-width row and squeezed Behavior to 89px.
+
+   Measured across the docs hub, agentgateway, and kgateway builds (about
+   15,400 tables): tables leaving a one-letter header fragment went from 1,326
+   to 10 at 1280px and from 252 to 13 at 375px, with no new horizontal scroll.
+   About 9 tables, mostly API references, grew more than 15% as `Default`
+   widened. `tests/table-display.spec.ts` pins it. */
+.table-wrapper th {
+  overflow-wrap: break-word;
+}
 /* The other half of the uncapped story, and the failure the `anywhere` fold
    above CAUSES rather than fixes.
 
@@ -1427,6 +1453,9 @@ hr.footnotes-sep,
   max-width: none;         /* fill the body width; don't cap at 24rem */
   white-space: normal;
   overflow-wrap: anywhere; /* break long tokens so nothing overflows the row */
+}
+.solo-table--wrap .table-wrapper table th {
+  overflow-wrap: break-word; /* headers split between words only, see `.table-wrapper th` */
 }
 
 .solo-table--nowrap .table-wrapper table {

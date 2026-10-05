@@ -672,3 +672,51 @@ for (const { width, label } of [
     });
   });
 }
+
+// Header labels must never split mid-word. `overflow-wrap: anywhere` on the
+// cells lets a header's min-content collapse to one glyph, so a column whose
+// body cells are narrower than its label (short values, pinned `nowrap` by
+// render-table.html) split `Runtime` into `Runtim` / `e` on the kagent 1.0.x
+// audit-prompts table, and `Default` into `Defaul` / `t` in every generated
+// API reference. The `.table-wrapper th` rule restores a longest-word floor.
+// Asserted per word: a Range over each word must produce a single line box.
+for (const width of [1280, 375]) {
+  test.describe(`table header words do not split mid-word (${width}px)`, () => {
+    test.skip(!IS_FIXTURE_TARGET, "fixture-only content");
+    test.use({ viewport: { width, height: 800 } });
+
+    test(`every header word stays on one line at ${width}px`, async ({ page }) => {
+      await page.goto(PAGE);
+      const split = await page.evaluate((id) => {
+        const anchor = document.getElementById(id);
+        const heading = anchor ? anchor.closest("h1, h2, h3, h4, h5, h6") : null;
+        let scope: Element | null = heading ? heading.nextElementSibling : null;
+        while (scope && !scope.classList.contains("table-wrapper")) {
+          scope = scope.nextElementSibling;
+        }
+        if (!scope) return null;
+        const broken: string[] = [];
+        for (const th of Array.from(scope.querySelectorAll("thead th"))) {
+          const walker = document.createTreeWalker(th, NodeFilter.SHOW_TEXT);
+          for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+            const text = n.textContent || "";
+            for (const m of text.matchAll(/\S+/g)) {
+              const range = document.createRange();
+              range.setStart(n, m.index!);
+              range.setEnd(n, m.index! + m[0].length);
+              const tops = new Set(
+                [...range.getClientRects()]
+                  .filter((r) => r.height > 0)
+                  .map((r) => Math.round(r.top)),
+              );
+              if (tops.size > 1) broken.push(m[0]);
+            }
+          }
+        }
+        return broken;
+      }, "capped-table-header-wider-than-its-column");
+      expect(split, "header-word fixture table not found").not.toBeNull();
+      expect(split, `header words split across lines: ${split!.join(", ")}`).toEqual([]);
+    });
+  });
+}
