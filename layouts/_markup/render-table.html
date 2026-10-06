@@ -34,11 +34,18 @@
               freeing width from short cells cannot hand the ribbon to a
               different prose column instead. A long cell with no space is a
               token (a URL, a hyphenated role name) and keeps folding with no
-              floor. */ -}}
+              floor.
+              A cell that holds a list is never prose: it renders one short
+              item per line, so a width floor only takes room from the real
+              prose column. On the agentgateway timeouts table the floor on
+              the `Attach to` lists, beside a column held at the width of
+              `EnterpriseAgentgatewayPolicy`, pushed the table past the
+              content area at 1280px. */ -}}
         {{- $plain := plainify .Text -}}
         {{- $len := len $plain -}}
         {{- $class := "" -}}
-        {{- if and (gt $len 30) (strings.Contains $plain " ") -}}
+        {{- $list := or (strings.Contains (string .Text) "<ul") (strings.Contains (string .Text) "<ol") -}}
+        {{- if and (gt $len 30) (strings.Contains $plain " ") (not $list) -}}
           {{- $class = "cell-prose" -}}
         {{- else if and (gt $len 0) (le $len 30) -}}
           {{- $class = "cell-short" -}}
