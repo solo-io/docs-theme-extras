@@ -28,9 +28,22 @@
               docs-theme-extras.css). This used to be an inline
               `white-space: nowrap`, which held every short cell at its full
               one-line width; in rows with several short columns that starved
-              the one prose column down to a one-character ribbon. */ -}}
-        {{- $short := and (le (len (plainify .Text)) 30) (ne (len (plainify .Text)) 0) -}}
-        <td{{ if $short }} class="cell-short"{{ end }}{{ with .Alignment }} style="text-align: {{ . }}"{{ end }}>
+              the one prose column down to a one-character ribbon.
+              Longer cells that contain a space are prose and get
+              `.cell-prose`, which gives them a minimum width at desktop, so
+              freeing width from short cells cannot hand the ribbon to a
+              different prose column instead. A long cell with no space is a
+              token (a URL, a hyphenated role name) and keeps folding with no
+              floor. */ -}}
+        {{- $plain := plainify .Text -}}
+        {{- $len := len $plain -}}
+        {{- $class := "" -}}
+        {{- if and (gt $len 30) (strings.Contains $plain " ") -}}
+          {{- $class = "cell-prose" -}}
+        {{- else if and (gt $len 0) (le $len 30) -}}
+          {{- $class = "cell-short" -}}
+        {{- end -}}
+        <td{{ with $class }} class="{{ . }}"{{ end }}{{ with .Alignment }} style="text-align: {{ . }}"{{ end }}>
           {{- .Text -}}
         </td>
         {{- end }}

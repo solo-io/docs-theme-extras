@@ -1270,8 +1270,8 @@ hr.footnotes-sep,
 /* Header cells opt back out of the `anywhere` fold. A header is a short label,
    never the long token the fold exists for, but `anywhere` still lets the
    header's min-content collapse to one glyph. When a column's body cells are
-   narrower than its label (short values, which render-table.html also pins
-   `nowrap`), the auto layout sizes the column to the body and splits the label
+   narrower than its label (short values, which `.cell-short` holds to their
+   longest word), the auto layout sizes the column to the body and splits the label
    mid-word, leaving a lone letter: `Defaul` / `t` in every generated API
    reference, `Runtim` / `e` on the kagent 1.0.x audit-prompts table at 1280px.
    `break-word` keeps the header's min-content at its longest word, so the
@@ -1431,10 +1431,12 @@ hr.footnotes-sep,
    wrapper + table still come from render-table.html) with an extra element
    in the selector so it outweighs the `.table-wrapper.table-capped th`
    cap rule (both are two classes; the trailing `table` element tips the
-   specificity) regardless of source order. Note render-table.html also
-   emits an INLINE `white-space: nowrap` on short cells (<=30 chars); inline
-   styles beat these class rules, so in `wrap`/`equal` mode short cells stay
-   unwrapped — harmless, they're short by definition.
+   specificity) regardless of source order. Short cells (<=30 chars) carry
+   `.cell-short` from render-table.html, whose rules further down tie these
+   at (0,2,2) and win on source order, so in `wrap`/`equal` mode a short
+   cell wraps between words only. (render-table.html used to emit an INLINE
+   `white-space: nowrap` here, which beat every class rule; see
+   `.cell-short` for why it went.)
 
    Those short cells were briefly suspected of causing the cut-off trailing
    column described on `.table-wrapper table` above, on the theory that a
@@ -1526,6 +1528,34 @@ hr.footnotes-sep,
 @media (max-width: 767px) {
   .table-wrapper table td.cell-short {
     white-space: nowrap;
+  }
+}
+/* A short cell that holds an image (a provider icon before its name) stays on
+   one line at every width. The space between the icon and the name is a
+   break opportunity, so the word wrap above put the icon on one line and the
+   name on the next: on the agentgateway LLM providers table that made every
+   row taller for no gain in width. */
+.table-wrapper table td.cell-short:has(img) {
+  white-space: nowrap;
+}
+/* Prose cells (more than 30 plain characters with at least one space, tagged
+   `.cell-prose` by render-table.html) get a width floor at desktop. A long
+   cell with no space is a token and gets no floor, so it keeps folding: the
+   floor on the 34-character role names of the table described below pushed
+   that table 168px past the content area. Letting short cells wrap
+   frees width, but a prose cell still folds under `overflow-wrap: anywhere`
+   with no lower bound, so the freed width could go to one prose column while
+   another collapsed instead. On the kagent 1.0.x security roles table, the
+   role-name columns took the room and the Verbs column became a ribbon that
+   split `Reader` into `Reade` / `r`.
+   The floor bounds that collapse without touching the fold, the same way the
+   uncapped-table `min-width` above does. A long token still folds above the
+   floor. Desktop only, for the same reason the short-cell word wrap stops at
+   768px: below that, multi-column tables scroll sideways and a floor would
+   only widen the scroll. */
+@media (min-width: 768px) {
+  .table-wrapper table td.cell-prose {
+    min-width: 10rem;
   }
 }
 

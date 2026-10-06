@@ -16,7 +16,12 @@ import { target } from "./helpers/target";
 //      cells that hold their full width starve the one wrapping column: the
 //      kagent network table's Description measured 39px and 1 character per
 //      line at 1280px, 34,000px tall.
-//   4. At 1280px, tables that fit the content width do not scroll sideways.
+//   4. No ordinary word (2 to 12 letters, outside code) splits mid-word in
+//      any cell. A prose column that still collapses splits words like
+//      `Reader` into `Reade` / `r` (the kagent security roles table).
+//   5. A cell that starts with an icon keeps the icon on the same line as its
+//      name (the agentgateway LLM providers table).
+//   6. At 1280px, tables that fit the content width do not scroll sideways.
 //
 // Fixture-only: skipped against consumer builds.
 
@@ -25,8 +30,11 @@ const FIXTURE_BASE = "/" + target.baseURL.replace(/^\/+|\/+$/g, "");
 const PAGE = `${FIXTURE_BASE}/v2/everything/`;
 
 // Heading id of each matrix table, and whether it may scroll sideways at
-// 1280px. Only the nine-column compatibility matrix is wider than the content
-// area by design.
+// 1280px. Three are wider than the content area by design: the nine-column
+// compatibility matrix, the eight-column providers table, and the roles table,
+// whose unbreakable words (`AgentInstanceAllCreators` and the role names)
+// leave no room for a readable Verbs column. That table scrolled in production
+// before any of this; the alternative to scrolling is the Verbs ribbon.
 const TABLES: { id: string; scrollsAtDesktop: boolean }[] = [
   { id: "capped-table-header-wider-than-its-column", scrollsAtDesktop: false },
   { id: "table-matrix-network-ports-in-wrap-mode", scrollsAtDesktop: false },
@@ -36,6 +44,8 @@ const TABLES: { id: string; scrollsAtDesktop: boolean }[] = [
   { id: "table-matrix-wide-compatibility-matrix", scrollsAtDesktop: true },
   { id: "table-matrix-all-short-cells", scrollsAtDesktop: false },
   { id: "table-matrix-all-prose-cells", scrollsAtDesktop: false },
+  { id: "table-matrix-role-names-beside-a-verbs-column", scrollsAtDesktop: true },
+  { id: "table-matrix-icon-before-a-name", scrollsAtDesktop: true },
   { id: "table-matrix-long-unbroken-value-beside-prose", scrollsAtDesktop: false },
 ];
 
@@ -58,13 +68,27 @@ async function measure(page: import("@playwright/test").Page, headingId: string)
       : null;
     if (!table) return null;
 
-    // Distinct line tops of a range, ignoring empty rects.
-    const lineCount = (range: Range) =>
-      new Set(
-        [...range.getClientRects()]
-          .filter((r) => r.height > 0)
-          .map((r) => Math.round(r.top)),
-      ).size;
+    // Rendered lines in a range. Boxes on one line do not share a top edge:
+    // an icon with `vertical-align: middle` or a padded code pill sits a few
+    // pixels off the text beside it, so counting distinct tops reports extra
+    // lines. A box starts a new line only when its vertical midpoint is below
+    // the bottom of the line so far.
+    const lineCount = (range: Range) => {
+      const rects = [...range.getClientRects()]
+        .filter((r) => r.height > 0 && r.width > 0)
+        .sort((a, b) => a.top - b.top);
+      let lines = 0;
+      let bottom = -Infinity;
+      for (const r of rects) {
+        if ((r.top + r.bottom) / 2 > bottom) {
+          lines++;
+          bottom = r.bottom;
+        } else {
+          bottom = Math.max(bottom, r.bottom);
+        }
+      }
+      return lines;
+    };
 
     // Words in `root` that span more than one line. A word is a run of 2+
     // letters or digits, so a break at a hyphen or a dot is not counted:
@@ -90,6 +114,20 @@ async function measure(page: import("@playwright/test").Page, headingId: string)
       splitWords(th, true),
     );
     const shortCellSplits: string[] = [];
+    // Ordinary words anywhere in the body. Longer runs are identifiers or
+    // tokens, which may legitimately fold.
+    const wordSplits = [...table.querySelectorAll("tbody td")]
+      .flatMap((td) => splitWords(td, true))
+      .filter((w) => w.length <= 12);
+    // Icon cells whose content spans more than one line.
+    const iconCellsWrapped = [...table.querySelectorAll("tbody td")]
+      .filter((td) => td.querySelector("img"))
+      .filter((td) => {
+        const range = document.createRange();
+        range.selectNodeContents(td);
+        return lineCount(range) > 1;
+      })
+      .map((td) => (td.textContent || "").trim());
     const ribbons: { text: string; charsPerLine: number }[] = [];
     let minProseCharsPerLine: number | null = null;
     for (const td of table.querySelectorAll("tbody td")) {
@@ -116,6 +154,8 @@ async function measure(page: import("@playwright/test").Page, headingId: string)
     return {
       headerSplits,
       shortCellSplits,
+      wordSplits,
+      iconCellsWrapped,
       minProseCharsPerLine,
       narrowest: ribbons.sort((a, b) => a.charsPerLine - b.charsPerLine)[0] || null,
       overflowPx: Math.max(0, Math.round(right - box.right)),
@@ -141,6 +181,14 @@ for (const width of [1280, 375]) {
         expect(
           r!.shortCellSplits,
           `short-cell words split mid-word: ${r!.shortCellSplits.join(", ")}`,
+        ).toEqual([]);
+        expect(
+          r!.wordSplits,
+          `ordinary words split mid-word: ${r!.wordSplits.join(", ")}`,
+        ).toEqual([]);
+        expect(
+          r!.iconCellsWrapped,
+          `icon cells wrapped onto a second line: ${r!.iconCellsWrapped.join(", ")}`,
         ).toEqual([]);
         if (r!.minProseCharsPerLine !== null) {
           expect(

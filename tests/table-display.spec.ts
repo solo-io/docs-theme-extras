@@ -672,8 +672,8 @@ for (const { width, label } of [
 
 // Header labels must never split mid-word. `overflow-wrap: anywhere` on the
 // cells lets a header's min-content collapse to one glyph, so a column whose
-// body cells are narrower than its label (short values, pinned `nowrap` by
-// render-table.html) split `Runtime` into `Runtim` / `e` on the kagent 1.0.x
+// body cells are narrower than its label (short values, which render-table.html
+// pinned `nowrap` at the time) split `Runtime` into `Runtim` / `e` on the kagent 1.0.x
 // audit-prompts table, and `Default` into `Defaul` / `t` in every generated
 // API reference. The `.table-wrapper th` rule restores a longest-word floor.
 // Asserted per word: a Range over each word must produce a single line box.

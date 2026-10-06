@@ -862,6 +862,27 @@ A control shape with three columns that all hold prose of similar length. No col
 | Fail open on errors from the external service and forward the request to the backend. | The proxy forwards the request unchanged when the external processor times out or returns an error, and records the failure in its metrics. | Use this option when availability matters more than the processing, for example a request logger that must never block traffic. |
 | Fail closed on errors from the external service and reject the request. | The proxy rejects the request with a 500 status when the external processor times out or returns an error. | Use this option when the processing enforces a policy, for example a redaction step that must run before data reaches the backend. |
 
+### Table matrix: role names beside a verbs column
+
+The kagent 1.0.x security roles shape: a short resource name, three columns of hyphenated role names in code that are either short or just over 30 characters, and a Verbs column of bold labels, a line break, and a short list of verbs. Once short cells could wrap, the role columns took the freed width and the Verbs column became a ribbon that split `Reader` into `Reade` / `r`.
+
+| Resource type | Admin role | Writer role | Reader role | Verbs |
+| ------------- | ---------- | ----------- | ----------- | ----- |
+| Agent | `agent-admin` | `agent-writer` | `agent-reader` | **Admin** and **writer**: create, delete, get, update. </br>**Reader**: get. |
+| AgentInstance | `agent-instance-admin` | `agent-instance-writer` | `agent-instance-reader` | **Admin** and **writer**: create, delete, get, update. </br>**Reader**: get. |
+| AgentInstanceAllCreators | `agent-instance-all-creators-admin` | `agent-instance-all-creators-writer` | `agent-instance-all-creators-reader` | **All three roles**: get. |
+| Checkpoint | `checkpoint-admin` | `checkpoint-writer` | `checkpoint-reader` | **Admin** and **writer**: delete, get, update. </br>**Reader**: get. No role grants create. |
+
+### Table matrix: icon before a name
+
+The agentgateway LLM providers shape: a first column of an inline icon followed by a provider name, then many centered columns of single symbols. The icon and the name must stay on one line: once short cells could wrap, the space between them put each name under its icon.
+
+| Provider | Chat Completions | Responses | Messages | Embeddings | Realtime | Count Tokens | Rerank |
+| -------- | :--------------: | :-------: | :------: | :--------: | :------: | :----------: | :----: |
+| <img src="/images/logos/solo-dark.svg" alt="Provider logo" width="20" height="20" style="vertical-align:middle;margin-right:0.4rem;"> Vertex AI | ✅ | ◇ | ✅ | ✅ | - | ✅ | - |
+| <img src="/images/logos/solo-dark.svg" alt="Provider logo" width="20" height="20" style="vertical-align:middle;margin-right:0.4rem;"> Amazon Bedrock | ✅ | ✅ | ✅ | ✅ | - | ✅ | - |
+| <img src="/images/logos/solo-dark.svg" alt="Provider logo" width="20" height="20" style="vertical-align:middle;margin-right:0.4rem;"> Azure OpenAI | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | - |
+
 ### Table matrix: long unbroken value beside prose
 
 A shape with a cell longer than 30 characters that holds no spaces, a URL, beside a prose column. The URL must fold instead of pushing the prose column narrow, and the prose must stay readable.
