@@ -1552,10 +1552,25 @@ hr.footnotes-sep,
    uncapped-table `min-width` above does. A long token still folds above the
    floor. Desktop only, for the same reason the short-cell word wrap stops at
    768px: below that, multi-column tables scroll sideways and a floor would
-   only widen the scroll. */
+   only widen the scroll.
+
+   List cells longer than 30 characters (`.cell-list`) get a smaller floor
+   for the same reason. They keep the `anywhere` fold, because an item can
+   hold a long token (`Gateway listener (EnterpriseAgentgatewayPolicy only)`),
+   so without a floor a list column took the whole shortfall when its
+   neighbors were pinned: on the agentgateway timeouts table in DejaVu Sans
+   (the Linux fallback when the webfont is blocked) `Attach to` fell to
+   123px and split `HTTPRoute`. 8.5rem holds a short item on one line after
+   the list indent and padding. The prose floor is 9rem rather than 10rem
+   so both fit beside that table's 293px `EnterpriseAgentgatewayPolicy`
+   column in a 672px content area; 10rem left the list floor 12px short.
+   9rem still averages about 15 characters a line. */
 @media (min-width: 768px) {
   .table-wrapper table td.cell-prose {
-    min-width: 10rem;
+    min-width: 9rem;
+  }
+  .table-wrapper table td.cell-list {
+    min-width: 8.5rem;
   }
 }
 
