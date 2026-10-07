@@ -197,6 +197,8 @@ for every consumer regardless of `[[pages]]`:
 
 - `static.spec.ts` — shortcode delimiter leaks, raw markdown bleed,
   copy-as-md script presence, image alt text
+- `file-size.spec.ts` — every built file under `[limits].maxFileMiB`
+  (default 25), see 2c
 - `contrast.spec.ts` / `viewport.spec.ts` (mostly) — sampled across
   crawled pages
 
