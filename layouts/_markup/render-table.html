@@ -23,8 +23,42 @@
       {{- range .TBody }}
       <tr>
         {{- range . }}
-        {{- $nowrap := and (le (len (plainify .Text)) 30) (ne (len (plainify .Text)) 0) -}}
-        <td{{ with .Alignment }} style="text-align: {{ . }}{{ if $nowrap }}; white-space: nowrap{{ end }}"{{ else }}{{ if $nowrap }} style="white-space: nowrap"{{ end }}{{ end }}>
+        {{- /* Short cells (1-30 plain characters) get `.cell-short`, which
+              wraps them between words only (see `.cell-short` in
+              docs-theme-extras.css). This used to be an inline
+              `white-space: nowrap`, which held every short cell at its full
+              one-line width; in rows with several short columns that starved
+              the one prose column down to a one-character ribbon.
+              Longer cells that contain a space are prose and get
+              `.cell-prose`, which gives them a minimum width at desktop, so
+              freeing width from short cells cannot hand the ribbon to a
+              different prose column instead. A long cell with no space is a
+              token (a URL, a hyphenated role name) and keeps folding with no
+              floor.
+              A cell that holds a list is never prose: it renders one short
+              item per line, so a width floor only takes room from the real
+              prose column. On the agentgateway timeouts table the floor on
+              the `Attach to` lists, beside a column held at the width of
+              `EnterpriseAgentgatewayPolicy`, pushed the table past the
+              content area at 1280px.
+              A longer list cell gets `.cell-list` instead, a smaller floor
+              sized to keep a short item such as `HTTPRoute` on one line.
+              With no floor at all, the list column absorbed the whole
+              shortfall when a wider fallback font (DejaVu Sans on the Linux
+              CI runner) widened the `EnterpriseAgentgatewayPolicy` column,
+              and split `HTTPRoute` mid-word. */ -}}
+        {{- $plain := plainify .Text -}}
+        {{- $len := len $plain -}}
+        {{- $class := "" -}}
+        {{- $list := or (strings.Contains (string .Text) "<ul") (strings.Contains (string .Text) "<ol") -}}
+        {{- if and (gt $len 30) (strings.Contains $plain " ") (not $list) -}}
+          {{- $class = "cell-prose" -}}
+        {{- else if and (gt $len 0) (le $len 30) -}}
+          {{- $class = "cell-short" -}}
+        {{- else if $list -}}
+          {{- $class = "cell-list" -}}
+        {{- end -}}
+        <td{{ with $class }} class="{{ . }}"{{ end }}{{ with .Alignment }} style="text-align: {{ . }}"{{ end }}>
           {{- .Text -}}
         </td>
         {{- end }}

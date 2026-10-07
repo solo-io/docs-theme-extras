@@ -90,6 +90,10 @@ export type Checks = {
   // only to enforce the canonical single-call `src`+`srcDark` form in source.
   // See helpers/reuse-image-pair.ts.
   reuseImagePair: boolean;
+  // Built-output scan for any file over [limits].maxFileMiB (default: the
+  // Cloudflare Pages 25 MiB per-file limit, which fails the whole deploy).
+  // Warns, without failing, above 80% of the limit. See file-size.spec.ts.
+  fileSize: boolean;
 };
 
 export type Allowlists = {
@@ -123,6 +127,14 @@ export type Crawl = {
   // Only the browser crawl is capped — the cheap file-read scans always walk
   // every page.
   maxFiles: number;
+};
+
+// Host limits the built output must fit, for file-size.spec.ts.
+export type Limits = {
+  // Largest single file the host accepts, in MiB. Default 25, the Cloudflare
+  // Pages per-file limit. A consumer on another host sets its own, e.g. the
+  // docs hub on Firebase Hosting sets 2048 (2 GB).
+  maxFileMiB: number;
 };
 
 // One build the SAME source corpus is rendered under, for gateAxisCollision.
@@ -163,6 +175,7 @@ export type Config = {
   checks: Checks;
   allowlists: Allowlists;
   crawl: Crawl;
+  limits: Limits;
 };
 
 const DEFAULT_CHECKS: Checks = {
@@ -186,6 +199,7 @@ const DEFAULT_CHECKS: Checks = {
   // Opt-in: the CSS defense makes the legacy pattern render correctly, so this
   // is a "prefer the canonical form" lint, not a correctness gate.
   reuseImagePair: false,
+  fileSize: true,
 };
 
 const DEFAULT_ALLOWLISTS: Allowlists = {
@@ -199,6 +213,10 @@ const DEFAULT_ALLOWLISTS: Allowlists = {
 
 const DEFAULT_CRAWL: Crawl = {
   maxFiles: 50,
+};
+
+const DEFAULT_LIMITS: Limits = {
+  maxFileMiB: 25,
 };
 
 let cached: Config | null = null;
@@ -381,6 +399,7 @@ function validate(
   const checks = mergeChecks(data.checks, configPath);
   const allowlists = mergeAllowlists(data.allowlists, configPath);
   const crawl = mergeCrawl(data.crawl, configPath);
+  const limits = mergeLimits(data.limits, configPath);
 
   return {
     version,
@@ -397,6 +416,7 @@ function validate(
     checks,
     allowlists,
     crawl,
+    limits,
   };
 }
 
@@ -478,6 +498,22 @@ function mergeCrawl(raw: unknown, configPath: string): Crawl {
     );
   }
   out.maxFiles = v;
+  return out;
+}
+
+function mergeLimits(raw: unknown, configPath: string): Limits {
+  const out = { ...DEFAULT_LIMITS };
+  if (!raw || typeof raw !== "object") return out;
+  const obj = raw as Record<string, unknown>;
+  warnUnknownKeys(obj, ["maxFileMiB"], "[limits]", configPath);
+  const v = obj.maxFileMiB;
+  if (v === undefined) return out;
+  if (typeof v !== "number" || !Number.isFinite(v) || v <= 0) {
+    throw new Error(
+      `[limits].maxFileMiB must be a positive number in ${configPath}; got ${JSON.stringify(v)}`,
+    );
+  }
+  out.maxFileMiB = v;
   return out;
 }
 

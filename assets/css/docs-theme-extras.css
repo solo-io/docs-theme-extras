@@ -1267,6 +1267,32 @@ hr.footnotes-sep,
 .table-wrapper td code {
   overflow-wrap: anywhere;
 }
+/* Header cells opt back out of the `anywhere` fold. A header is a short label,
+   never the long token the fold exists for, but `anywhere` still lets the
+   header's min-content collapse to one glyph. When a column's body cells are
+   narrower than its label (short values, which `.cell-short` holds to their
+   longest word), the auto layout sizes the column to the body and splits the label
+   mid-word, leaving a lone letter: `Defaul` / `t` in every generated API
+   reference, `Runtim` / `e` on the kagent 1.0.x audit-prompts table at 1280px.
+   `break-word` keeps the header's min-content at its longest word, so the
+   column can never be narrower than that word and labels wrap between words
+   only. Placed after the rule above so it wins on source order at equal
+   specificity.
+
+   Plain header text only: inline code in a header deliberately keeps the
+   `anywhere` fold from the `th code` rule above. A backticked dotted key used
+   as a column label (`discovery.namespaces.from | Behavior`) is exactly the
+   long token the fold exists for; giving it a longest-word floor took 237px of
+   a 327px phone-width row and squeezed Behavior to 89px.
+
+   Measured across the docs hub, agentgateway, and kgateway builds (about
+   15,400 tables): tables leaving a one-letter header fragment went from 1,326
+   to 10 at 1280px and from 252 to 13 at 375px, with no new horizontal scroll.
+   About 9 tables, mostly API references, grew more than 15% as `Default`
+   widened. `tests/table-display.spec.ts` pins it. */
+.table-wrapper th {
+  overflow-wrap: break-word;
+}
 /* The other half of the uncapped story, and the failure the `anywhere` fold
    above CAUSES rather than fixes.
 
@@ -1405,10 +1431,12 @@ hr.footnotes-sep,
    wrapper + table still come from render-table.html) with an extra element
    in the selector so it outweighs the `.table-wrapper.table-capped th`
    cap rule (both are two classes; the trailing `table` element tips the
-   specificity) regardless of source order. Note render-table.html also
-   emits an INLINE `white-space: nowrap` on short cells (<=30 chars); inline
-   styles beat these class rules, so in `wrap`/`equal` mode short cells stay
-   unwrapped — harmless, they're short by definition.
+   specificity) regardless of source order. Short cells (<=30 chars) carry
+   `.cell-short` from render-table.html, whose rules further down tie these
+   at (0,2,2) and win on source order, so in `wrap`/`equal` mode a short
+   cell wraps between words only. (render-table.html used to emit an INLINE
+   `white-space: nowrap` here, which beat every class rule; see
+   `.cell-short` for why it went.)
 
    Those short cells were briefly suspected of causing the cut-off trailing
    column described on `.table-wrapper table` above, on the theory that a
@@ -1427,6 +1455,9 @@ hr.footnotes-sep,
   max-width: none;         /* fill the body width; don't cap at 24rem */
   white-space: normal;
   overflow-wrap: anywhere; /* break long tokens so nothing overflows the row */
+}
+.solo-table--wrap .table-wrapper table th {
+  overflow-wrap: break-word; /* headers split between words only, see `.table-wrapper th` */
 }
 
 .solo-table--nowrap .table-wrapper table {
@@ -1458,6 +1489,89 @@ hr.footnotes-sep,
   max-width: none;
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+/* Short cells (1-30 plain characters, tagged `.cell-short` by
+   render-table.html) wrap between words only. They need protection from the
+   `anywhere` fold: without it a short column collapses to one character per
+   line (`b/o/o/l` in a Type column). That protection used to be an inline
+   `white-space: nowrap`, which went too far. It held every short cell at its
+   full one-line width, so in a row with several short columns
+   (`8080 HTTP | Browser client | Your OIDC identity provider | Public`) the
+   one prose column got whatever was left. On the kagent 1.0.x network page
+   that was 39px, one character per line, and a 34,000px table; generated API
+   references lost Description the same way to their Default and Validation
+   columns.
+   `break-word` gives the same protection with a lower floor: a short cell
+   can no longer be narrower than its longest word, but it can wrap at its
+   spaces, which gives width back to the prose column.
+
+   Selectors carry `table` so they tie the `table` shortcode's mode rules
+   above at (0,2,2) and win on source order; without that, wrap mode's
+   `anywhere` reaches short cells and splits `8080` digit by digit. The `code`
+   arm outranks the `.table-wrapper td code` fold for the same reason the
+   header and phone-width rules need one. `nowrap` mode is unaffected: it sets
+   `white-space: nowrap` on every cell, so there is nothing to wrap.
+   `tests/table-matrix.spec.ts` pins the shapes. */
+.table-wrapper table td.cell-short,
+.table-wrapper table td.cell-short code {
+  overflow-wrap: break-word;
+}
+/* Phones keep the old one-line short cells. Below 768px most multi-column
+   tables already scroll sideways, and letting short cells wrap there traded
+   that scroll for height: measured across the docs hub, agentgateway, and
+   kgateway builds at 375px, 7,573 tables scrolled less but 1,717 grew more
+   than 15% taller. Restoring `nowrap` here makes phone rendering identical to
+   the inline style this class replaced. Same specificity as the wrap and
+   equal mode rules, so it wins on source order. Breakpoint matches the other
+   table queries in this file. */
+@media (max-width: 767px) {
+  .table-wrapper table td.cell-short {
+    white-space: nowrap;
+  }
+}
+/* A short cell that holds an image (a provider icon before its name) stays on
+   one line at every width. The space between the icon and the name is a
+   break opportunity, so the word wrap above put the icon on one line and the
+   name on the next: on the agentgateway LLM providers table that made every
+   row taller for no gain in width. */
+.table-wrapper table td.cell-short:has(img) {
+  white-space: nowrap;
+}
+/* Prose cells (more than 30 plain characters with at least one space, tagged
+   `.cell-prose` by render-table.html) get a width floor at desktop. A long
+   cell with no space is a token and gets no floor, so it keeps folding: the
+   floor on the 34-character role names of the table described below pushed
+   that table 168px past the content area. Letting short cells wrap
+   frees width, but a prose cell still folds under `overflow-wrap: anywhere`
+   with no lower bound, so the freed width could go to one prose column while
+   another collapsed instead. On the kagent 1.0.x security roles table, the
+   role-name columns took the room and the Verbs column became a ribbon that
+   split `Reader` into `Reade` / `r`.
+   The floor bounds that collapse without touching the fold, the same way the
+   uncapped-table `min-width` above does. A long token still folds above the
+   floor. Desktop only, for the same reason the short-cell word wrap stops at
+   768px: below that, multi-column tables scroll sideways and a floor would
+   only widen the scroll.
+
+   List cells longer than 30 characters (`.cell-list`) get a smaller floor
+   for the same reason. They keep the `anywhere` fold, because an item can
+   hold a long token (`Gateway listener (EnterpriseAgentgatewayPolicy only)`),
+   so without a floor a list column took the whole shortfall when its
+   neighbors were pinned: on the agentgateway timeouts table in DejaVu Sans
+   (the Linux fallback when the webfont is blocked) `Attach to` fell to
+   123px and split `HTTPRoute`. 8.5rem holds a short item on one line after
+   the list indent and padding. The prose floor is 9rem rather than 10rem
+   so both fit beside that table's 293px `EnterpriseAgentgatewayPolicy`
+   column in a 672px content area; 10rem left the list floor 12px short.
+   9rem still averages about 15 characters a line. */
+@media (min-width: 768px) {
+  .table-wrapper table td.cell-prose {
+    min-width: 9rem;
+  }
+  .table-wrapper table td.cell-list {
+    min-width: 8.5rem;
+  }
 }
 
 /* ── Section cards (auto-generated on list pages) ────────────────────── */

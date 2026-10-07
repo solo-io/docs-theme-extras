@@ -71,9 +71,7 @@ async function probe(page: import("@playwright/test").Page, headingId: string) {
       tableClientW: table ? table.clientWidth : null,
       tableScrollW: table ? table.scrollWidth : null,
       cellOverflow,
-      inlineNowrapCells: cells.filter((c) =>
-        /nowrap/.test(c.getAttribute("style") || ""),
-      ).length,
+      shortCells: cells.filter((c) => c.classList.contains("cell-short")).length,
       wrapperClientW: wrapper ? wrapper.clientWidth : null,
       wrapperScrollW: wrapper ? wrapper.scrollWidth : null,
       wrapperOverflowX: wrapper ? getComputedStyle(wrapper).overflowX : null,
@@ -135,10 +133,11 @@ test.describe("table shortcode display modes", () => {
     expect(r!.className).toContain("solo-table--wrap");
     expect(r!.colWidths.length, "fixture table is not 4 columns").toBe(4);
     // Non-vacuity: the section only exercises the bug while it still holds
-    // cells short enough for render-table.html to stamp (tests/HAZARDS.md #1).
-    // Those cells are the pressure that used to push the last column out.
+    // cells short enough for render-table.html to tag `.cell-short`
+    // (tests/HAZARDS.md #1). Those cells are the pressure that used to push the
+    // last column out.
     expect(
-      r!.inlineNowrapCells,
+      r!.shortCells,
       "fixture no longer contains short (<=30 char) cells, so it cannot reproduce the bug",
     ).toBeGreaterThan(0);
     expect(
@@ -171,13 +170,11 @@ test.describe("table shortcode display modes", () => {
     // first cell holds the intentionally long, unbreakable command
     expect(r!.firstCellWhiteSpace, "nowrap cell is allowed to wrap").toBe("nowrap");
     expect(r!.firstCellMaxWidth, "nowrap cell is capped (max-width != none)").toBe("none");
-    // render-table.html's inline declaration must survive into nowrap mode.
     // The fixture's second row exists to guarantee at least one cell short
-    // enough (<=30 chars) to carry it, so this is not vacuous.
-    expect(
-      r!.inlineNowrapCells,
-      "nowrap mode lost render-table.html's inline white-space:nowrap",
-    ).toBeGreaterThan(0);
+    // enough (<=30 chars) for render-table.html to tag `.cell-short`, so the
+    // mode rule is shown to keep it on one line rather than the short-cell
+    // word wrap.
+    expect(r!.shortCells, "nowrap fixture has no `.cell-short` cell").toBeGreaterThan(0);
     expect(r!.wrapperOverflowX, "wrapper is not horizontally scrollable").toMatch(
       /auto|scroll/,
     );
@@ -669,6 +666,54 @@ for (const { width, label } of [
         r!.scrollW,
         `uncapped table scrolls at ${width}px (${r!.scrollW} > ${r!.clientW}) — the min-width floor is too wide for this viewport`,
       ).toBeLessThanOrEqual(r!.clientW + 1);
+    });
+  });
+}
+
+// Header labels must never split mid-word. `overflow-wrap: anywhere` on the
+// cells lets a header's min-content collapse to one glyph, so a column whose
+// body cells are narrower than its label (short values, which render-table.html
+// pinned `nowrap` at the time) split `Runtime` into `Runtim` / `e` on the kagent 1.0.x
+// audit-prompts table, and `Default` into `Defaul` / `t` in every generated
+// API reference. The `.table-wrapper th` rule restores a longest-word floor.
+// Asserted per word: a Range over each word must produce a single line box.
+for (const width of [1280, 375]) {
+  test.describe(`table header words do not split mid-word (${width}px)`, () => {
+    test.skip(!IS_FIXTURE_TARGET, "fixture-only content");
+    test.use({ viewport: { width, height: 800 } });
+
+    test(`every header word stays on one line at ${width}px`, async ({ page }) => {
+      await page.goto(PAGE);
+      const split = await page.evaluate((id) => {
+        const anchor = document.getElementById(id);
+        const heading = anchor ? anchor.closest("h1, h2, h3, h4, h5, h6") : null;
+        let scope: Element | null = heading ? heading.nextElementSibling : null;
+        while (scope && !scope.classList.contains("table-wrapper")) {
+          scope = scope.nextElementSibling;
+        }
+        if (!scope) return null;
+        const broken: string[] = [];
+        for (const th of Array.from(scope.querySelectorAll("thead th"))) {
+          const walker = document.createTreeWalker(th, NodeFilter.SHOW_TEXT);
+          for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+            const text = n.textContent || "";
+            for (const m of text.matchAll(/\S+/g)) {
+              const range = document.createRange();
+              range.setStart(n, m.index!);
+              range.setEnd(n, m.index! + m[0].length);
+              const tops = new Set(
+                [...range.getClientRects()]
+                  .filter((r) => r.height > 0)
+                  .map((r) => Math.round(r.top)),
+              );
+              if (tops.size > 1) broken.push(m[0]);
+            }
+          }
+        }
+        return broken;
+      }, "capped-table-header-wider-than-its-column");
+      expect(split, "header-word fixture table not found").not.toBeNull();
+      expect(split, `header words split across lines: ${split!.join(", ")}`).toEqual([]);
     });
   });
 }

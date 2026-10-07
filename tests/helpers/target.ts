@@ -12,6 +12,7 @@ import {
   type Page,
   type Config,
   type Crawl,
+  type Limits,
   type GateAxis,
 } from "./config";
 
@@ -128,6 +129,10 @@ class Target {
 
   get crawl(): Crawl {
     return this.cfg().crawl;
+  }
+
+  get limits(): Limits {
+    return this.cfg().limits;
   }
 
   // Extract the version string from a URL using the configured regex.
