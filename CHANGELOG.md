@@ -24,7 +24,7 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
-## [0.3.15] — 2026-10-05
+## [0.3.15] — 2026-10-07
 
 ### Add — `file-size.spec.ts` and `[limits].maxFileMiB`, which fail a build that has a file larger than its host accepts, defaulting to the Cloudflare Pages 25 MiB per-file limit (`tests/file-size.spec.ts`, `tests/helpers/file-size.ts`, `tests/helpers/config.ts`, `tests/helpers/target.ts`, `playwright.config.ts`, `docs/content/testing/_index.md`)
 
