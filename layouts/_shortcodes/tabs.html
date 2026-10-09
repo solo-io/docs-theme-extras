@@ -21,8 +21,9 @@
 
   Notes:
     Wraps a set of `tab` shortcodes into one tabbed block. Authoring is exactly
-    Hextra's — this shortcode shadows it only to give each group DOM ids that
-    are unique on the page.
+    Hextra's — this shortcode shadows it to give each group DOM ids that are
+    unique on the page, and to keep a group inside a gate from breaking the
+    page around it.
 
     ### Labelling and opening state
 
@@ -64,6 +65,15 @@
     it is not, give the groups different labels. Pinned by
     `tests/tabs-sync.spec.ts`.
 
+    ### Inside a gate
+
+    A group may sit inside a `version` or `conditional-text` block, including
+    inside a numbered step, and the step, the list, and the headings after the
+    gate stay intact. There is no need to move the gated section into a snippet
+    and gate a one-line `reuse`; that workaround still works, but it was only
+    ever needed because of the bug this fixed. Pinned by
+    `tests/gate-tabs.spec.ts`.
+
     ### Flattening for PDF and Copy as Markdown
 
     None of the JS runs in a PDF, the `markdown` output format, or the
@@ -76,16 +86,24 @@
 
     ### Difference from Hextra's `tabs`
 
-    The DOM ids only. Hextra derives them from the shortcode's `.Ordinal`, which
-    Hugo numbers relative to the parent shortcode, so every nested group
-    collides with the page's first group; this numbers them per page instead.
-    Authors never see the ids, and no other behavior differs. The implementation
-    comment in the source file has the full account.
+    Two things, neither of which changes how a group is written.
+
+    - **DOM ids.** Hextra derives them from the shortcode's `.Ordinal`, which
+      Hugo numbers relative to the parent shortcode, so every nested group
+      collides with the page's first group; this numbers them per page instead.
+    - **Nested output is one line.** A group inside another shortcode (a gate,
+      `steps`, a `tab`, `details`) has its output flattened to a single line,
+      the way `reuse` and `callout` already are. Hextra's markup spans several
+      lines, and inside a gate it is parsed as markdown again, where a line at
+      column 0 ends the list item it sits in. A top-level group is unchanged.
+
+    The implementation comments in the source file have the full account.
 */ -}}
 
 {{- /* IMPLEMENTATION NOTE — why this shortcode shadows Hextra's at all.
-       Everything visible to an author is upstream's; the one departure is the
-       id, at the bottom of this file.
+       Everything visible to an author is upstream's. There are two departures,
+       both at the bottom of this file: the id, explained here, and the
+       one-line flatten of a nested group, explained at its call site.
 
        Hextra derives each group's ids from the shortcode's `.Ordinal`
        (`tabs-tab-tabs-<ordinal>-<n>`). Hugo numbers `.Ordinal` relative to the
@@ -162,4 +180,30 @@
 {{- $seq := add 1 (int (.Page.Store.Get "extrasTabsSeq")) -}}
 {{- .Page.Store.Set "extrasTabsSeq" $seq -}}
 
-{{- partial "shortcodes/tabs" (dict "tabs" $tabs "enableSync" $enableSync "id" $seq) -}}
+{{- $out := partial "shortcodes/tabs" (dict "tabs" $tabs "enableSync" $enableSync "id" $seq) -}}
+
+{{- /* A NESTED group is flattened to one logical line, the same way `reuse`
+       and `callout` flatten their output (utils/flatten-rendered, bypassPre
+       false — see the note in reuse.html for why the <pre> bypass is off).
+
+       Why: Hextra's partial emits several lines, and every line after the first
+       starts at column 0. At top level that is harmless, because an angle-form
+       `tabs` is substituted AFTER Goldmark has run. But inside a percent-form
+       shortcode — a `version` or `conditional-text` gate (which `reuse` and
+       `rebase` normalize to percent), `steps`, `details`, a `tab` — the group's
+       output becomes part of the parent's `.Inner`, and gate-emit hands that
+       back to Goldmark as markdown. Inside a list item, the column-0 second line
+       ends the item: measured as `<div class="hextra-scrollbar"> </li></ol>`,
+       with the group's closing `</div>`s landing later, where they close the
+       page's `.content` wrapper. Every heading after the gate then renders
+       outside `.content`, unstyled. The authoring workaround was to move the
+       gated section into a snippet and gate a one-line `reuse`, which works
+       only because `reuse` flattens.
+
+       Gated on `.Parent` so a top-level group, the common case, stays
+       byte-identical. Guarded by fixture/content/en/test/v2/gate-tabs.md and
+       tests/gate-tabs.spec.ts. */ -}}
+{{- if .Parent -}}
+  {{- $out = partial "utils/flatten-rendered.html" (dict "html" $out "bypassPre" false) -}}
+{{- end -}}
+{{- $out -}}

@@ -24,6 +24,18 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [0.3.16] — 2026-10-09
+
+### Fix — tabs inside a `version` or `conditional-text` gate broke the list around them and pushed every later heading out of the page content, unstyled (`layouts/_shortcodes/tabs.html`, `fixture/content/en/test/v2/gate-tabs.md`, `tests/gate-tabs.spec.ts`, `playwright.config.ts`, `MAINTAINING.md`, `docs/content/authoring/shortcodes/tabs.md`)
+
+Reported on kgateway.dev's [Outlier detection](https://kgateway.dev/docs/envoy/main/resiliency/outlier-detection/) page, where the only way to gate a section with tabs in its steps was to move it into a snippet and gate a one-line `{{< reuse >}}` ([kgateway-dev/kgateway.dev#1041](https://github.com/kgateway-dev/kgateway.dev/pull/1041/files#r4223536531)). The same bug had been worked around on agentgateway's JWT page and kgateway's buffering page.
+
+Hextra's tabs markup spans several lines, with every line after the first at column 0. At top level that is harmless, because angle-form `tabs` is substituted after Goldmark runs. Inside a percent-form gate, which is what every gate becomes once `reuse` or `rebase` normalizes it, the markup goes back through Goldmark, and the column-0 line ends the list item. The group's closing `</div>`s then close the page's `.content` wrapper. `tabs.html` now flattens a group's output to one line with `utils/flatten-rendered` (`bypassPre: false`) whenever the group has a `.Parent`, as `reuse` and `callout` already do. The docs hub's own `tabs` already emits one line, which is why the hub never showed this.
+
+**Verified** with a new fixture page and spec that check, through parse5, that every marker stays under `.content` and that steps on either side of gated tabs share one `<ol>`: 11 of 13 assertions fail without the fix, all pass with it. On kgateway-oss with the snippet inlined back into the gate, `## Cleanup` is ejected on v0.3.10 and v0.3.15 and stays in place with this change. Top-level tabs are byte-identical; only pages with tabs inside another shortcode change. Full suite green: 2,404 passed OSS, 2,406 enterprise.
+
+**Consumer action.** Bump to pick it up. The snippet workaround keeps working, so inlining those sections again is optional. Nested tab groups now render on one line, which no reader sees, but CSS or JS that matches newlines in tab markup would.
+
 ## [0.3.15] — 2026-10-07
 
 ### Add — `file-size.spec.ts` and `[limits].maxFileMiB`, which fail a build that has a file larger than its host accepts, defaulting to the Cloudflare Pages 25 MiB per-file limit (`tests/file-size.spec.ts`, `tests/helpers/file-size.ts`, `tests/helpers/config.ts`, `tests/helpers/target.ts`, `playwright.config.ts`, `docs/content/testing/_index.md`)

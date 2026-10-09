@@ -50,8 +50,9 @@ Install with kubectl.
 ## Notes
 
 Wraps a set of `tab` shortcodes into one tabbed block. Authoring is exactly
-Hextra's — this shortcode shadows it only to give each group DOM ids that
-are unique on the page.
+Hextra's — this shortcode shadows it to give each group DOM ids that are
+unique on the page, and to keep a group inside a gate from breaking the
+page around it.
 
 ### Labelling and opening state
 
@@ -93,6 +94,15 @@ panel is a single choice, not two. That is usually what a reader wants; when
 it is not, give the groups different labels. Pinned by
 `tests/tabs-sync.spec.ts`.
 
+### Inside a gate
+
+A group may sit inside a `version` or `conditional-text` block, including
+inside a numbered step, and the step, the list, and the headings after the
+gate stay intact. There is no need to move the gated section into a snippet
+and gate a one-line `reuse`; that workaround still works, but it was only
+ever needed because of the bug this fixed. Pinned by
+`tests/gate-tabs.spec.ts`.
+
 ### Flattening for PDF and Copy as Markdown
 
 None of the JS runs in a PDF, the `markdown` output format, or the
@@ -105,11 +115,18 @@ order, and avoid "as shown in the tab above".
 
 ### Difference from Hextra's `tabs`
 
-The DOM ids only. Hextra derives them from the shortcode's `.Ordinal`, which
-Hugo numbers relative to the parent shortcode, so every nested group
-collides with the page's first group; this numbers them per page instead.
-Authors never see the ids, and no other behavior differs. The implementation
-comment in the source file has the full account.
+Two things, neither of which changes how a group is written.
+
+- **DOM ids.** Hextra derives them from the shortcode's `.Ordinal`, which
+  Hugo numbers relative to the parent shortcode, so every nested group
+  collides with the page's first group; this numbers them per page instead.
+- **Nested output is one line.** A group inside another shortcode (a gate,
+  `steps`, a `tab`, `details`) has its output flattened to a single line,
+  the way `reuse` and `callout` already are. Hextra's markup spans several
+  lines, and inside a gate it is parsed as markdown again, where a line at
+  column 0 ends the list item it sits in. A top-level group is unchanged.
+
+The implementation comments in the source file have the full account.
 
 ---
 
