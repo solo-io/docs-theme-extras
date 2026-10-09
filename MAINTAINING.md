@@ -431,14 +431,20 @@ comment block explaining what was changed vs. the Hextra original.
 
 `tabs` is the cheapest of those shadows to re-diff and the one most worth
 checking anyway. It copies upstream's *logic* — the `tabs.sync` resolution
-order, both deprecation warnings, the `items=` rewrite — and changes exactly one
-thing: the `id` handed to Hextra's `shortcodes/tabs` partial is a page-scoped
+order, both deprecation warnings, the `items=` rewrite — and changes two things.
+First, the `id` handed to Hextra's `shortcodes/tabs` partial is a page-scoped
 counter rather than `.Ordinal`, so a group nested inside a tab panel gets ids of
-its own (`.Ordinal` is parent-relative, so every nested group is 0). The MARKUP
-is not forked: the partial still comes from Hextra, so an upstream markup change
-arrives without any action here. What a bump can break is the logic around it —
-if upstream grows a third param or changes how `tabs.sync` resolves, this copy
-will not have it. `tests/tabs-nested.spec.ts` fails if the ids collide again.
+its own (`.Ordinal` is parent-relative, so every nested group is 0). Second, when
+the group has a `.Parent`, the partial's output goes through
+`utils/flatten-rendered` (`bypassPre: false`), because inside a percent-form gate
+it is parsed as markdown again and its multi-line markup ends the list item it
+sits in. The MARKUP is not forked: the partial still comes from Hextra, so an
+upstream markup change arrives without any action here. What a bump can break is
+the logic around it — if upstream grows a third param or changes how `tabs.sync`
+resolves, this copy will not have it. If upstream ever emits the group on one
+line, the flatten becomes a no-op rather than a conflict.
+`tests/tabs-nested.spec.ts` fails if the ids collide again, and
+`tests/gate-tabs.spec.ts` fails if a gated group breaks its list again.
 
 ## Debugging shadow resolution
 
