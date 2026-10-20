@@ -94,6 +94,48 @@ panel is a single choice, not two. That is usually what a reader wants; when
 it is not, give the groups different labels. Pinned by
 `tests/tabs-sync.spec.ts`.
 
+Prefer the site param. Turning sync on per page works, but only on the
+pages that remember to set it. A reader who picks "Config file" on one page
+is back on "UI" on the next page that forgot. One line in the site
+config covers every page, current and future:
+
+```yaml
+params:
+  page:
+    tabs:
+      sync: true
+```
+
+Page front matter wins over the site param in both directions, so
+`tabs.sync: false` opts one page out, and `tabs.sync: true` on a page is
+redundant once the site param is on. Remove it then, so that the site
+config stays the one place to look.
+
+### What a reader sees once sync is on
+
+- **The choice follows the reader across pages, and across visits.**
+  tabs.js saves the choice in `localStorage` under `hextra-tab-<names>`,
+  and replays it on every page load. Any group with the same names on any
+  page of the same site opens on that tab, until the reader picks another.
+  The docs hub is one site, so a choice made in one product's docs carries
+  into the others.
+- **A saved choice beats `selected=true`.** The author's default applies
+  only until the reader picks a tab in a group with those names.
+- **The saved value is a POSITION, keyed by the names.** Keep the order
+  the same everywhere a set of names is used. "UI, Config file" on one
+  page and "Config file, UI" on another are two different controls, not
+  one control in two orders.
+- **The whole set of names must match, not one tab.** "Simplified (LLM) /
+  Routing-based" and "Simplified (LLM) / Simplified (MCP) / Routing-based"
+  are two controls, so picking "Routing-based" in one leaves the other
+  alone. To make two groups one control, give them the same tabs.
+- **Turning it on site-wide changes existing groups.** Every group that
+  shares its names with another group, on the same page or a different
+  one, now moves with it. Before you turn the site param on, list the name
+  sets in use and check that each one means the same choice everywhere it
+  appears. A set such as "Option A / Option B" that means different things
+  on different pages needs distinct labels first.
+
 ### Inside a gate
 
 A group may sit inside a `version` or `conditional-text` block, including
