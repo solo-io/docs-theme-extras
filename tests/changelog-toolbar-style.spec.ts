@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import fs from "node:fs";
+import path from "node:path";
 import { target } from "./helpers/target";
 
 // The render shortcode's changelog toolbar in a real browser: the CSS in
@@ -14,9 +15,14 @@ import { target } from "./helpers/target";
 //     (color-scheme: dark);
 //   - the bar has to wrap, not scroll, on a phone.
 // The page's render_changelog.js is a fixture stub (fixture/static/changelog/)
-// that, like the hub's real script, binds only to the two control ids.
+// that, like the hub's real script, binds only to the two control ids. The test
+// serves it by route rather than relying on the build: a consumer that ships the
+// real changelog scripts (the docs hub's static/changelog/) wins over this
+// module's fixture mount at the same URL, and the real script never sets the
+// data-* attributes the last test reads.
 
 const PAGE = "/test/v2/changelog-render/";
+const STUB = path.join(__dirname, "..", "fixture", "static", "changelog", "render_changelog.js");
 
 function pageBuilt(): boolean {
   try {
@@ -34,6 +40,11 @@ test.describe("changelog toolbar styling", () => {
   test.skip(!pageBuilt(), `${PAGE} is not in this build`);
 
   test.beforeEach(async ({ page }) => {
+    await page.route("**/changelog/render_changelog.js", (route) =>
+      route.fulfill({ path: STUB, contentType: "text/javascript" }));
+    // The consumer's real helpers would fetch changelog data; the stub needs neither.
+    await page.route(/\/changelog\/(Renderers|changelog_utils)\.js$/, (route) =>
+      route.fulfill({ body: "", contentType: "text/javascript" }));
     await page.goto(PAGE);
   });
 

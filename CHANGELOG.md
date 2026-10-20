@@ -24,6 +24,14 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [0.3.21] — 2026-10-19
+
+### Fix — the changelog toolbar test failed in solo-io/docs, which ships the real changelog script at the stub's URL (`tests/changelog-toolbar-style.spec.ts`)
+
+"The controls still drive the changelog script" failed on every solo-io/docs PR after the 0.3.20 pin bump, for example [this framework-test-browser run](https://github.com/solo-io/docs/actions/runs/39474088950/job/118815125106). The test reads `data-view` and `data-show-open-source`, which only the fixture stub at `fixture/static/changelog/render_changelog.js` sets. The hub's test build mounts the fixture from this module, but its own `static/changelog/render_changelog.js` is served at the same URL, `/test/changelog/render_changelog.js`, and a project's static file wins over a module mount. So the page ran the real script and both attributes stayed unset. Adding the mount on the hub side doesn't help, for the same reason. The spec now serves the stub by `page.route`, and serves empty bodies for `Renderers.js` and `changelog_utils.js`, so the result no longer depends on which script the consumer's build kept. The test still checks what it was written for: the controls, now inside their labels, still reach a script bound to their ids.
+
+Verified by running `changelog-toolbar-style.spec.ts` and `changelog-toolbar.spec.ts` against a local build of solo-io/docs `main` (pinned to 0.3.20) with its `.docs-test.toml`. The last test fails there without this change and all five pass with it. All five also pass against this repo's own enterprise fixture build.
+
 ## [0.3.20] — 2026-10-19
 
 ### Fix — the navbar icon check failed kgateway.dev and agentgateway.dev, whose icons follow the theme (`tests/helpers/navbar-icon-color.ts`, `tests/navbar-icon-color.spec.ts`, `docs/content/testing/_index.md`)
