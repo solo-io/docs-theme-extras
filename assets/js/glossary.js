@@ -8,6 +8,17 @@
 document.addEventListener('DOMContentLoaded', function () {
   const TOOLTIP_GAP = 8; // px gap between tooltip and term
 
+  // The tooltip sits below the sticky navbar and docs-tabs band (see the
+  // z-index note in glossary.css), so it must not open underneath them.
+  // Returns the lowest bottom edge of that chrome, or 0 when there is none.
+  function chromeBottom() {
+    let bottom = 0;
+    document.querySelectorAll('.hextra-nav-container, .docs-tabs-band').forEach(function (el) {
+      bottom = Math.max(bottom, el.getBoundingClientRect().bottom);
+    });
+    return bottom;
+  }
+
   function positionTooltip(term) {
     const tip = term.querySelector(':scope > span');
     if (!tip) return;
@@ -27,14 +38,15 @@ document.addEventListener('DOMContentLoaded', function () {
     let left = termRect.left + (termRect.width / 2) - (tipRect.width / 2);
     left = Math.max(8, Math.min(left, viewportWidth - tipRect.width - 8));
 
-    // Prefer above the term; flip below if not enough room.
+    // Prefer above the term; flip below if not enough room under the chrome.
+    const minTop = chromeBottom() + 8;
     let top = termRect.top - tipRect.height - TOOLTIP_GAP;
     let placeBelow = false;
-    if (top < 8) {
+    if (top < minTop) {
       top = termRect.bottom + TOOLTIP_GAP;
       placeBelow = true;
       if (top + tipRect.height > viewportHeight - 8) {
-        top = Math.max(8, viewportHeight - tipRect.height - 8);
+        top = Math.max(minTop, viewportHeight - tipRect.height - 8);
       }
     }
 
@@ -72,16 +84,75 @@ document.addEventListener('DOMContentLoaded', function () {
     clearPosition(term);
   }
 
+  // The term whose tooltip Escape dismissed while it still held focus. Focus
+  // no longer keeps that tooltip open, so hovering it again does not make it
+  // stick. Cleared when focus moves, which counts as a fresh request.
+  let dismissedTerm = null;
+
+  function focusedTerm() {
+    const el = document.activeElement;
+    return el && el.closest ? el.closest('.glossary-term') : null;
+  }
+
+  // Hovering one term replaces the tooltip of a focused one. Bring the
+  // focused term's tooltip back once the pointer leaves the other term.
+  function restoreFocusedTooltip() {
+    const term = focusedTerm();
+    if (term && term !== dismissedTerm && term !== activeTerm) showTooltip(term);
+  }
+
+  // A short term can be narrower than its tooltip, so a diagonal path toward
+  // the Learn more link leaves the term from its side, outside the gap bridge
+  // in glossary.css. Wait briefly before hiding; entering the tooltip (part of
+  // the term) cancels the hide.
+  const HIDE_DELAY = 200; // ms
+  let hideTimer = null;
+
+  function cancelHide() {
+    clearTimeout(hideTimer);
+    hideTimer = null;
+  }
+
   const glossaryTerms = document.querySelectorAll('.glossary-term');
   glossaryTerms.forEach(function (term) {
     // Desktop: hover and keyboard focus.
-    term.addEventListener('mouseenter', function () { showTooltip(term); });
-    term.addEventListener('mouseleave', function () { hideTooltip(term); });
-    term.addEventListener('focus', function () { showTooltip(term); });
-    term.addEventListener('blur', function () { hideTooltip(term); });
+    term.addEventListener('mouseenter', function () {
+      cancelHide();
+      showTooltip(term);
+    });
+    function isHeld() {
+      const held = term.contains(document.activeElement) || term.classList.contains('active');
+      return held && term !== dismissedTerm;
+    }
+    term.addEventListener('mouseleave', function () {
+      if (isHeld()) return;
+      cancelHide();
+      hideTimer = setTimeout(function () {
+        hideTimer = null;
+        if (term.matches(':hover') || isHeld()) return;
+        hideTooltip(term);
+        restoreFocusedTooltip();
+      }, HIDE_DELAY);
+    });
+    // Focus can move from the term into its Learn more link. Treat the whole
+    // term/tooltip subtree as one focus region, just as we do for hover.
+    term.addEventListener('focusin', function () {
+      if (term === dismissedTerm) dismissedTerm = null;
+      showTooltip(term);
+    });
+    term.addEventListener('focusout', function (e) {
+      if (term.contains(e.relatedTarget)) return;
+      if (term === dismissedTerm) dismissedTerm = null;
+      if (!term.matches(':hover') && !term.classList.contains('active')) {
+        hideTooltip(term);
+      }
+    });
 
-    // Mobile/touch: tap to toggle.
+    // Mobile/touch: tap to toggle. A tap on the tooltip's own Learn more link
+    // follows it; a link that merely wraps the term does not count.
     term.addEventListener('click', function (e) {
+      const link = e.target.closest('a');
+      if (link && term.contains(link)) return;
       if (window.innerWidth <= 768) {
         e.preventDefault();
         const wasActive = term.classList.contains('active');
@@ -120,6 +191,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // Close on escape key.
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && activeTerm) {
+      if (activeTerm.contains(document.activeElement)) dismissedTerm = activeTerm;
       activeTerm.classList.remove('active', 'show-tooltip');
       clearPosition(activeTerm);
       activeTerm = null;
