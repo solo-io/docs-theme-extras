@@ -21,8 +21,9 @@
        across visitors and CDN edges, which made a render regression impossible to
        reproduce. 11.15.0 is verified to render the OSS/enterprise diagrams correctly.
        Override per site with `params.mermaid.base`. */ -}}
+{{- $mermaidVersion := "11.15.0" -}}
 {{- if $useDefaultCdn -}}
-  {{- $mermaidBase = "https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist" -}}
+  {{- $mermaidBase = printf "https://cdn.jsdelivr.net/npm/mermaid@%s/dist" $mermaidVersion -}}
 {{- end -}}
 
 {{- $isRemoteBase := or (strings.HasPrefix $mermaidBase "http://") (strings.HasPrefix $mermaidBase "https://") -}}
@@ -31,18 +32,36 @@
 {{- /* JS retrieval: get raw JS from either local asset or remote, then process */ -}}
 {{- if $isRemoteBase -}}
   {{- $jsPath := cond (ne $mermaidJsAsset "") $mermaidJsAsset (printf "mermaid%s.js" $minSuffix) -}}
-  {{- $mermaidJsUrl := urls.JoinPath $mermaidBase $jsPath -}}
-  {{- /* `timeout` caps a slow/unreachable CDN so a cold build fails fast instead
-         of hanging (Hugo's default is ~30s per attempt with no cap here). */ -}}
-  {{- with try (resources.GetRemote $mermaidJsUrl (dict "timeout" "15s")) -}}
-    {{- with .Err -}}
-      {{- errorf "Could not retrieve Mermaid js file from %s. Reason: %s." $mermaidJsUrl . -}}
-    {{- else with .Value -}}
-      {{- with resources.Copy (printf "js/mermaid%s.js" $minSuffix) . -}}
-        {{- $mermaidJs := . | fingerprint -}}
-        <script defer src="{{ $mermaidJs.RelPermalink }}" integrity="{{ $mermaidJs.Data.Integrity }}" crossorigin="anonymous"></script>
+  {{- $mermaidJsUrls := slice (urls.JoinPath $mermaidBase $jsPath) -}}
+  {{- /* jsdelivr intermittently resets the connection from CI runners, which
+         failed the whole build. On the default CDN only, fall back to unpkg,
+         which serves the same npm package. A site that sets `params.mermaid.base`
+         gets no fallback: its base may be a host the site chose on purpose. */ -}}
+  {{- if $useDefaultCdn -}}
+    {{- $mermaidJsUrls = $mermaidJsUrls | append (urls.JoinPath (printf "https://unpkg.com/mermaid@%s/dist" $mermaidVersion) $jsPath) -}}
+  {{- end -}}
+  {{- $mermaidRemote := "" -}}
+  {{- $mermaidErrs := slice -}}
+  {{- range $mermaidJsUrls -}}
+    {{- if not $mermaidRemote -}}
+      {{- /* `timeout` caps a slow/unreachable CDN so a cold build fails fast instead
+             of hanging (Hugo's default is ~30s per attempt with no cap here). */ -}}
+      {{- with try (resources.GetRemote . (dict "timeout" "15s")) -}}
+        {{- with .Err -}}
+          {{- $mermaidErrs = $mermaidErrs | append . -}}
+        {{- else with .Value -}}
+          {{- $mermaidRemote = . -}}
+        {{- end -}}
       {{- end -}}
     {{- end -}}
+  {{- end -}}
+  {{- with $mermaidRemote -}}
+    {{- with resources.Copy (printf "js/mermaid%s.js" $minSuffix) . -}}
+      {{- $mermaidJs := . | fingerprint -}}
+      <script defer src="{{ $mermaidJs.RelPermalink }}" integrity="{{ $mermaidJs.Data.Integrity }}" crossorigin="anonymous"></script>
+    {{- end -}}
+  {{- else -}}
+    {{- errorf "Could not retrieve Mermaid js file from %s. Reasons: %s." (delimit $mermaidJsUrls ", ") (delimit $mermaidErrs "; ") -}}
   {{- end -}}
 {{- else if $mermaidJsAsset -}}
   {{- with resources.Get $mermaidJsAsset -}}
