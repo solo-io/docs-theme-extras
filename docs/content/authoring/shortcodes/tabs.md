@@ -135,6 +135,10 @@ config stays the one place to look.
   sets in use and check that each one means the same choice everywhere it
   appears. A set such as "Option A / Option B" that means different things
   on different pages needs distinct labels first.
+- **The clicked tab stays where it was.** A synced click can switch groups
+  above the clicked one, and they can change height. The page scrolls by
+  the difference, so the clicked tab button keeps its place on screen.
+  Pinned by `tests/tabs-sync-scroll.spec.ts`.
 
 ### Inside a gate
 

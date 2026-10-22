@@ -1364,6 +1364,15 @@
     "MARKER_NESTTABS_S3_OUTER_B": "div > article > main > div.content > div > div.hextra-tabs-panel",
     "MARKER_NESTTABS_S3_PROSE": "div > article > main > div.content > div > div.hextra-tabs-panel > div > div.hextra-tabs-panel > p"
   },
+  "v2/tabs-sync-scroll": {
+    "MARKER_SYNCSCROLL_A_CONFIG": "div > article > main > div.content > div > div.hextra-tabs-panel",
+    "MARKER_SYNCSCROLL_A_UI": "div > article > main > div.content > div > div.hextra-tabs-panel > p",
+    "MARKER_SYNCSCROLL_AFTER": "div > article > main > div.content > p",
+    "MARKER_SYNCSCROLL_B_CONFIG": "div > article > main > div.content > div > div.hextra-tabs-panel",
+    "MARKER_SYNCSCROLL_B_UI": "div > article > main > div.content > div > div.hextra-tabs-panel",
+    "MARKER_SYNCSCROLL_BETWEEN": "div > article > main > div.content > p",
+    "MARKER_SYNCSCROLL_INTRO": "div > article > main > div.content > p"
+  },
   "v2/tabs-sync": {
     "MARKER_SYNCTABS_S1_A_HELM": "div > article > main > div.content > div > div.hextra-tabs-panel",
     "MARKER_SYNCTABS_S1_A_KUBECTL": "div > article > main > div.content > div > div.hextra-tabs-panel",
