@@ -121,6 +121,12 @@ Three things follow from that:
   this module's. `tests/docs-tabs-chrome.spec.ts` catches the miss, but it reads
   your build rather than this module's fixture, so it only reports in your own
   test run.
+- **A site that repaints its navbar or page must set the band's color.** The
+  band is opaque so content can scroll under it. By default it uses Hextra's
+  navbar colors, white and `#111`. A site with its own chrome colors shows the
+  band as a visible strip. Set `--solo-chrome-bg` (light) and
+  `--solo-chrome-bg-dark` (dark) on `:root` to your page color, for example
+  `:root { --solo-chrome-bg-dark: #030712; }`.
 - **A site with no `docTabs` is unaffected.** `--solo-tabs-height` is raised
   only on a `<body>` that actually contains a band, and only inside the
   `xl` media query. Below `xl` the band is hidden, so the offset returns to zero
