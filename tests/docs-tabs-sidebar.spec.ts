@@ -260,6 +260,21 @@ test.describe("docTabs band — sticky under the navbar (desktop)", () => {
     const alpha = bg.startsWith("rgba(") ? Number(bg.split(",")[3]?.replace(")", "").trim()) : 1;
     expect(alpha, "the sticky band background is translucent").toBe(1);
   });
+
+  test("a site can repaint the band with --solo-chrome-bg / --solo-chrome-bg-dark", async ({ page }) => {
+    // A site that repaints its navbar and page (agentgateway-oss-website uses
+    // #030712 in dark mode) otherwise gets a visible strip in Hextra's #111.
+    await page.goto(SHOWN_URL);
+    const bg = () =>
+      page.evaluate(() => getComputedStyle(document.querySelector(".docs-tabs-band")!).backgroundColor);
+    await page.addStyleTag({
+      content: ":root { --solo-chrome-bg: rgb(1, 2, 3); --solo-chrome-bg-dark: rgb(3, 7, 18); }",
+    });
+    await page.evaluate(() => document.documentElement.classList.remove("dark"));
+    expect(await bg(), "--solo-chrome-bg did not reach the band in light mode").toBe("rgb(1, 2, 3)");
+    await page.evaluate(() => document.documentElement.classList.add("dark"));
+    expect(await bg(), "--solo-chrome-bg-dark did not reach the band in dark mode").toBe("rgb(3, 7, 18)");
+  });
 });
 
 test.describe("docTabs band — the rail offset is scoped, not global", () => {
