@@ -24,6 +24,18 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## Next release
+
+### Fix — a dropped jsdelivr connection failed the whole build (`layouts/_partials/scripts/mermaid.html`)
+
+Hugo downloads the Mermaid script from jsdelivr at build time, and one failed download failed the build. CI runners sometimes get `connection reset by peer` from jsdelivr. In the docs hub, it caused about 1 in 30 failed link-check runs and 2 in 30 failed preview builds. When a site uses the default CDN, the partial now tries unpkg if jsdelivr fails. unpkg serves the same npm package at the same pinned version, 11.15.0, so the fingerprint and `integrity` hash don't change. A site that sets `params.mermaid.base` gets no fallback, because it may have chosen that host on purpose. If both downloads fail, the build still fails, and the error lists both URLs and both reasons. To check a built page, view source on any page with a diagram, such as https://docs.solo.io/agentgateway/latest/about/architecture/, and search for `js/mermaid.min.` to find the fingerprinted script.
+
+Verified with three production builds of `hugo-oss.toml`. The normal build and a build with the jsdelivr host made unreachable both succeed and write the same `mermaid.min.70137e77….js`. A build with both hosts made unreachable fails with the combined error. The fixture Playwright suite also passes (`DOCS_TEST_CONFIG=fixture/.docs-test-oss.toml`, 283 passed).
+
+### Chore — every WebKit test failed when a runner on a newer Ubuntu image restored an older image's browser cache (`.github/workflows/test.yml`)
+
+`ubuntu-latest` is moving from Ubuntu 24.04 to 26.04 one runner at a time. The Playwright browser cache key held only the OS and the lockfile hash, so a 26.04 runner restored WebKit binaries built for 24.04. They need `libicudata.so.74`, which 26.04 does not ship, so all 26 WebKit tests failed at launch on both brand jobs of #75. The key now includes the runner image (`ImageOS`), so each image keeps its own cache, and Playwright 1.64.1 downloads its native 26.04 WebKit build on a miss. This is a CI change only, so consumers need no action.
+
 ## [0.3.21] — 2026-10-19
 
 ### Fix — the changelog toolbar test failed in solo-io/docs, which ships the real changelog script at the stub's URL (`tests/changelog-toolbar-style.spec.ts`)

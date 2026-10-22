@@ -103,13 +103,23 @@ jobs:
       # Every run installs the same three engines now, so the key needs no
       # browser-set component (the PW_BROWSER_TAG split existed only to keep a
       # PR's chromium-only cache from being restored by a main run that needed
-      # all three).
+      # all three). The key does need the runner image (ImageOS, e.g. ubuntu24 or
+      # ubuntu26): Playwright downloads a per-distro WebKit build, and
+      # ubuntu-latest rolls between images gradually. A 24.04 cache restored on
+      # a 26.04 runner fails every WebKit launch with "libicudata.so.74: cannot
+      # open shared object file" (observed on PR #75). ImageOS is a runner
+      # environment variable, which the `env` expression context does not see,
+      # so read it from the shell.
+      - name: Read runner image
+        id: runner-image
+        run: echo "os=${ImageOS:?ImageOS is not set on this runner}" >> "$GITHUB_OUTPUT"
+
       - name: Cache Playwright browsers
         id: playwright-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-${{ steps.runner-image.outputs.os }}-playwright-${{ hashFiles('package-lock.json') }}
 
       # ubuntu-latest resolves apt's default mirror to a region-specific
       # azure.archive.ubuntu.com endpoint that has repeatedly gone unreachable
