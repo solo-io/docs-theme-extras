@@ -32,6 +32,12 @@ Hugo downloads the Mermaid script from jsdelivr at build time, and one failed do
 
 Verified with three production builds of `hugo-oss.toml`. The normal build and a build with the jsdelivr host made unreachable both succeed and write the same `mermaid.min.70137e77….js`. A build with both hosts made unreachable fails with the combined error. The fixture Playwright suite also passes (`DOCS_TEST_CONFIG=fixture/.docs-test-oss.toml`, 283 passed).
 
+### Fix — the docTabs band showed as a gray strip on sites that repaint their navbar (`assets/css/docs-theme-extras.css`, `docs/content/configuration/section-tabs.md`, `tests/docs-tabs-sidebar.spec.ts`)
+
+The band is opaque so content can scroll under it, and its background was hard-wired to Hextra's navbar colors, white in light mode and `#111` in dark mode. agentgateway.dev paints its navbar and page `#030712` in dark mode, so the band shows as a lighter strip between the navbar and the page, for example in dark mode on https://agentgateway.dev/docs/kubernetes/latest/documentation/. The band now reads two optional variables, `--solo-chrome-bg` for light mode and `--solo-chrome-bg-dark` for dark mode, and falls back to Hextra's colors when they are unset. A site that sets neither renders exactly as before. To fix the strip, a site sets the variables on `:root` to its page color, for example `:root { --solo-chrome-bg-dark: #030712; }`. The section tabs configuration page documents the variables.
+
+Verified with a new test in `tests/docs-tabs-sidebar.spec.ts` that sets both variables and checks the band's computed background in light and dark mode. The docTabs specs (`docs-tabs-sidebar.spec.ts`, `docs-tabs-chrome.spec.ts`) pass against the OSS fixture build (`DOCS_TEST_CONFIG=fixture/.docs-test-oss.toml`, 17 passed).
+
 ### Chore — every WebKit test failed when a runner on a newer Ubuntu image restored an older image's browser cache (`.github/workflows/test.yml`)
 
 `ubuntu-latest` is moving from Ubuntu 24.04 to 26.04 one runner at a time. The Playwright browser cache key held only the OS and the lockfile hash, so a 26.04 runner restored WebKit binaries built for 24.04. They need `libicudata.so.74`, which 26.04 does not ship, so all 26 WebKit tests failed at launch on both brand jobs of #75. The key now includes the runner image (`ImageOS`), so each image keeps its own cache, and Playwright 1.64.1 downloads its native 26.04 WebKit build on a miss. This is a CI change only, so consumers need no action.
