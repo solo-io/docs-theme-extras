@@ -32,6 +32,10 @@ Hugo downloads the Mermaid script from jsdelivr at build time, and one failed do
 
 Verified with three production builds of `hugo-oss.toml`. The normal build and a build with the jsdelivr host made unreachable both succeed and write the same `mermaid.min.70137e77….js`. A build with both hosts made unreachable fails with the combined error. The fixture Playwright suite also passes (`DOCS_TEST_CONFIG=fixture/.docs-test-oss.toml`, 283 passed).
 
+### Chore — every WebKit test failed when a runner on a newer Ubuntu image restored an older image's browser cache (`.github/workflows/test.yml`)
+
+`ubuntu-latest` is moving from Ubuntu 24.04 to 26.04 one runner at a time. The Playwright browser cache key held only the OS and the lockfile hash, so a 26.04 runner restored WebKit binaries built for 24.04. They need `libicudata.so.74`, which 26.04 does not ship, so all 26 WebKit tests failed at launch on both brand jobs of #75. The key now includes the runner image (`ImageOS`), so each image keeps its own cache, and Playwright 1.64.1 downloads its native 26.04 WebKit build on a miss. This is a CI change only, so consumers need no action.
+
 ## [0.3.21] — 2026-10-19
 
 ### Fix — the changelog toolbar test failed in solo-io/docs, which ships the real changelog script at the stub's URL (`tests/changelog-toolbar-style.spec.ts`)
