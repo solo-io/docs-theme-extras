@@ -826,11 +826,11 @@ pre.mermaid:not([data-processed]) {
   z-index: 10;
   width: 100%;
   border-bottom: 1px solid #f0f1f3;
-  /* --solo-chrome-bg / --solo-chrome-bg-dark: set these on :root in a site
+  /* --solo-tabs-band-bg / --solo-tabs-band-bg-dark: set these on :root in a site
      that repaints its navbar and page (agentgateway-oss-website paints dark
      mode #030712), so the band follows that site's chrome instead of
      Hextra's. Unset, they fall through to Hextra's colors below. */
-  background: var(--solo-chrome-bg, var(--hx-color-white, #fff));
+  background: var(--solo-tabs-band-bg, var(--hx-color-white, #fff));
   /* A little room above the tab row so the band isn't jammed against the
      navbar's divider. The space below the tabs is the .docs-tab padding, whose
      bottom edge lands on the band's hairline (the active underline sits on it),
@@ -882,7 +882,7 @@ pre.mermaid:not([data-processed]) {
      in both hextra@v0.12.3 (`--hx-color-dark:#111` in the compiled stylesheet)
      and hextra@v0.9.7 (`dark: '#111'` in tailwind.config.js), so the fallback
      matches on the pre-0.12 consumers that never define the variable. */
-  background: var(--solo-chrome-bg-dark, var(--hx-color-dark, #111));
+  background: var(--solo-tabs-band-bg-dark, var(--hx-color-dark, #111));
 }
 /* The band's page-width container (.docs-tabs-inner, added in docs-tabs.html)
    sources its max-width class from docs/width-class.html, the same slot

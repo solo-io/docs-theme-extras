@@ -47,20 +47,48 @@ const EXPECTED_HIGHLIGHTS = [
   "with an updated sentence.",
 ];
 
-async function serve(page: Page, manifest: () => unknown = () => MANIFEST) {
+type ServeOptions = {
+  manifest?: () => unknown;
+  // Serve pages as `hugo server` would emit them, with data-poll set, so the
+  // overlay keeps polling. The static build fetches the manifest once.
+  poll?: boolean;
+  // Count manifest requests, to pin how often the overlay asks.
+  onManifestRequest?: () => void;
+};
+
+async function serve(page: Page, opts: ServeOptions = {}) {
+  const manifest = opts.manifest ?? (() => MANIFEST);
   await page.route("**/*", async (route) => {
     const url = new URL(route.request().url());
     if (url.origin !== ORIGIN) return route.abort();
     if (url.pathname === "/test/_extras/changes.json") {
-      return route.fulfill({ json: manifest() });
+      opts.onManifestRequest?.();
+      const body = manifest();
+      return body === null
+        ? route.fulfill({ status: 404, body: "" })
+        : route.fulfill({ json: body });
     }
     let file = path.join(ROOT, decodeURIComponent(url.pathname));
     if (url.pathname.endsWith("/")) file = path.join(file, "index.html");
     if (!file.startsWith(ROOT) || !fs.existsSync(file)) {
       return route.fulfill({ status: 404, body: "" });
     }
+    if (opts.poll && file.endsWith(".html")) {
+      const html = fs.readFileSync(file, "utf8").replace(
+        / data-manifest=/,
+        ' data-poll="true" data-manifest=',
+      );
+      return route.fulfill({ body: html, contentType: "text/html" });
+    }
     return route.fulfill({ path: file });
   });
+}
+
+// The overlay sets <html data-extras-changes> once it has decided what to
+// show, so "shows nothing" can be asserted after a decision, not after a
+// guessed delay.
+async function settled(page: Page, state: string) {
+  await expect(page.locator("html")).toHaveAttribute("data-extras-changes", state);
 }
 
 async function highlights(page: Page): Promise<string[]> {
@@ -104,6 +132,18 @@ test.describe("change highlights overlay", () => {
     await page.goto(PAGE);
     await expect.poll(() => highlights(page)).toHaveLength(EXPECTED_HIGHLIGHTS.length);
     expect(await highlights(page)).not.toContain("The gateway routes");
+  });
+
+  test("a versioned snippet is matched by its resolved path, not the unversioned copy", async ({ page }) => {
+    // The page reuses conrefs/test/change-highlights-versioned.md, which a v2
+    // page resolves to fixture/assets/test/v2/.... The manifest also has an
+    // edit to the UNVERSIONED copy, adding "override of this snippet," -- text
+    // that is on this page, but from the v2 file. Matching the written path
+    // too used to paint it.
+    await serve(page);
+    await page.goto(PAGE);
+    await expect.poll(() => highlights(page)).toHaveLength(EXPECTED_HIGHLIGHTS.length);
+    expect(await highlights(page)).not.toContain("override of this snippet,");
   });
 
   test("puts a removal marker where text was deleted, and none of its text in the page", async ({ page }) => {
@@ -181,12 +221,12 @@ test.describe("change highlights overlay", () => {
     await expect(page.locator(".extras-removed")).toHaveCount(2);
   });
 
-  test("repaints when the manifest changes, without a reload", async ({ page }) => {
+  test("under hugo server, repaints when the manifest changes, without a reload", async ({ page }) => {
     // `changes_manifest.py --watch` rewrites the manifest as an author saves,
-    // and the overlay polls for it. Swap the manifest mid-test and expect the
-    // marks to follow while the page stays loaded.
+    // and the overlay polls for it under `hugo server`. Swap the manifest
+    // mid-test and expect the marks to follow while the page stays loaded.
     let current: any = MANIFEST;
-    await serve(page, () => current);
+    await serve(page, { manifest: () => current, poll: true });
     await page.goto(PAGE);
     await expect.poll(() => highlights(page)).toHaveLength(EXPECTED_HIGHLIGHTS.length);
     await page.evaluate(() => ((window as any).__sameDocument = true));
@@ -212,28 +252,43 @@ test.describe("change highlights overlay", () => {
 
   test("a page with no changes shows nothing", async ({ page }) => {
     await serve(page);
-    // Wait for the first manifest fetch to land before asserting absence.
-    const fetched = page.waitForResponse((r) => r.url().endsWith("/_extras/changes.json"));
     await page.goto(UNRELATED_PAGE);
-    await fetched;
-    await page.waitForTimeout(200);
+    await settled(page, "none");
     expect(await panelText(page)).toBeNull();
     expect(await highlights(page)).toEqual([]);
   });
 
   test("with no manifest at all, the page shows nothing and throws nothing", async ({ page }) => {
-    // A preview whose manifest step failed (it is continue-on-error in the
-    // docs hub workflow) must render exactly like a normal page.
+    // A preview whose manifest step failed (the step must never block the
+    // build) has to render exactly like a normal page.
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
-    await serve(page);
-    // Registered after serve(): Playwright tries the most recently added
-    // matching route first.
-    await page.route("**/_extras/changes.json", (route) => route.fulfill({ status: 404, body: "" }));
+    await serve(page, { manifest: () => null });
     await page.goto(PAGE);
-    await page.waitForTimeout(500);
+    await settled(page, "no-manifest");
     expect(await panelText(page)).toBeNull();
     expect(await highlights(page)).toEqual([]);
     expect(errors).toEqual([]);
+  });
+
+  test("a built preview fetches the manifest once; it never changes there", async ({ page }) => {
+    let requests = 0;
+    await serve(page, { onManifestRequest: () => requests++ });
+    await page.goto(PAGE);
+    await settled(page, "painted");
+    // Longer than the 2s poll interval, so a second request would land.
+    await page.waitForTimeout(2600);
+    expect(requests).toBe(1);
+  });
+
+  test("under hugo server, a missing manifest stops the polling", async ({ page }) => {
+    // Every consumer's dev server loads the overlay. A site that never set up
+    // the watcher must not log a 404 every two seconds.
+    let requests = 0;
+    await serve(page, { manifest: () => null, poll: true, onManifestRequest: () => requests++ });
+    await page.goto(PAGE);
+    await settled(page, "no-manifest");
+    await page.waitForTimeout(2600);
+    expect(requests).toBe(1);
   });
 });

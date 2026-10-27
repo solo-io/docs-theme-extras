@@ -40,8 +40,7 @@
     },
     "kgateway-oss": {
       "samePath": [
-        "layouts/_partials/navbar.html",
-        "layouts/404.html"
+        "layouts/_partials/navbar.html"
       ],
       "duplicatedSelectors": []
     },
@@ -67,7 +66,21 @@
         "layouts/partials/utils/version-noindex.html",
         "layouts/partials/version-banner.html"
       ],
-      "duplicatedSelectors": []
+      "duplicatedSelectors": [
+        "custom.css :: .dark .test-status-passed",
+        "custom.css :: .dark .test-status-passed .test-status-icon",
+        "custom.css :: .dark .test-status-tooltip",
+        "custom.css :: .dark .test-status-tooltip::before",
+        "custom.css :: .test-status-badge",
+        "custom.css :: .test-status-badge:hover .test-status-tooltip",
+        "custom.css :: .test-status-icon",
+        "custom.css :: .test-status-passed",
+        "custom.css :: .test-status-passed .test-status-icon",
+        "custom.css :: .test-status-passed:hover",
+        "custom.css :: .test-status-text",
+        "custom.css :: .test-status-tooltip",
+        "custom.css :: .test-status-tooltip::before"
+      ]
     },
     "ambientmesh.io": {
       "samePath": [],

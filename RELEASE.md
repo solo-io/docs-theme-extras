@@ -31,6 +31,10 @@ REQUIRE_CONSUMER_CLONES=1 make test-all
 > `agentregistry-oss-website`, `kagent-oss-website/docs-site`, `ambientmesh.io`.
 > Without the variable, run `npx playwright test override-parity` and confirm the
 > `cross-repo coverage` test did not skip before you accept the suite as green.
+>
+> The scan looks for the clones next to this repo. Running from a git worktree,
+> set `CONSUMER_CLONES_DIR` to the folder that holds them, for example
+> `CONSUMER_CLONES_DIR=~/Documents/GitHub REQUIRE_CONSUMER_CLONES=1 make test-all`.
 
 Also confirm the bare baseline (no brand layer) builds clean:
 

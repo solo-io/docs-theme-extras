@@ -42,15 +42,19 @@
   {{- end -}}
   {{- $mermaidRemote := "" -}}
   {{- $mermaidErrs := slice -}}
-  {{- range $mermaidJsUrls -}}
+  {{- range $url := $mermaidJsUrls -}}
     {{- if not $mermaidRemote -}}
       {{- /* `timeout` caps a slow/unreachable CDN so a cold build fails fast instead
              of hanging (Hugo's default is ~30s per attempt with no cap here). */ -}}
-      {{- with try (resources.GetRemote . (dict "timeout" "15s")) -}}
+      {{- with try (resources.GetRemote $url (dict "timeout" "15s")) -}}
         {{- with .Err -}}
-          {{- $mermaidErrs = $mermaidErrs | append . -}}
+          {{- $mermaidErrs = $mermaidErrs | append (printf "%s: %s" $url .) -}}
         {{- else with .Value -}}
           {{- $mermaidRemote = . -}}
+        {{- else -}}
+          {{- /* GetRemote returns no value and NO error for a 404, so without
+                 this the message ended "Reasons: ." with nothing to act on. */ -}}
+          {{- $mermaidErrs = $mermaidErrs | append (printf "%s: not found (HTTP 404)" $url) -}}
         {{- end -}}
       {{- end -}}
     {{- end -}}
@@ -61,7 +65,7 @@
       <script defer src="{{ $mermaidJs.RelPermalink }}" integrity="{{ $mermaidJs.Data.Integrity }}" crossorigin="anonymous"></script>
     {{- end -}}
   {{- else -}}
-    {{- errorf "Could not retrieve Mermaid js file from %s. Reasons: %s." (delimit $mermaidJsUrls ", ") (delimit $mermaidErrs "; ") -}}
+    {{- errorf "Could not retrieve the Mermaid js file. Tried: %s." (delimit $mermaidErrs "; ") -}}
   {{- end -}}
 {{- else if $mermaidJsAsset -}}
   {{- with resources.Get $mermaidJsAsset -}}

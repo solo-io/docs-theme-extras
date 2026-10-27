@@ -24,6 +24,7 @@ import hashlib
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 import time
@@ -34,13 +35,23 @@ OPEN, CLOSE = "\u0001", "\u0002"
 CONTEXT_CHARS = 40
 
 
+class GitError(RuntimeError):
+    pass
+
+
 def git(*args, check=True):
+    # core.quotePath=false: git otherwise quotes a path with non-ASCII
+    # characters ("b/caf\303\251.md"), and the parser below never recognized
+    # it, so the file was dropped. Output is decoded leniently because the diff
+    # can carry any encoding, and one Latin-1 file used to crash the run.
     result = subprocess.run(
-        ["git", *args], capture_output=True, text=True, check=False
+        ["git", "-c", "core.quotePath=false", *args],
+        capture_output=True, check=False,
     )
     if check and result.returncode != 0:
-        sys.exit(f"git {' '.join(args)} failed: {result.stderr.strip()}")
-    return result.stdout
+        err = result.stderr.decode("utf-8", errors="replace").strip()
+        raise GitError(f"git {' '.join(args)} failed: {err}")
+    return result.stdout.decode("utf-8", errors="replace")
 
 
 def resolve_base(base, exact=False):
@@ -72,7 +83,7 @@ def resolve_base(base, exact=False):
             best = (ref, mb)
     if best:
         return best
-    sys.exit(f"no base ref found (tried {', '.join(candidates)}); pass --base")
+    raise GitError(f"no base ref found (tried {', '.join(candidates)}); pass --base")
 
 
 def strip_markdown(text):
@@ -234,12 +245,16 @@ def parse_word_diff(diff):
             files[path]["removed"].extend(removed)
         hunk, line = [], []
 
-    for raw in diff.splitlines():
+    # split("\n"), not splitlines(): splitlines also breaks on U+2028, form
+    # feeds, and other separators that can sit inside a diffed line, which
+    # left an empty fragment that crashed the parser.
+    for raw in diff.split("\n"):
         if raw.startswith("diff --git "):
             end_hunk()
             path = None
         elif raw.startswith("+++ "):
-            target = raw[4:]
+            # git ends the header with a tab when the path contains a space.
+            target = raw[4:].rstrip("\t")
             path = target[2:] if target.startswith("b/") else None
             if path:
                 files.setdefault(path, {"new": False, "added": [], "removed": []})
@@ -251,15 +266,24 @@ def parse_word_diff(diff):
         elif raw == "~":
             hunk.append(line)
             line = []
-        elif raw[:1] in "+- ":
+        elif raw and raw[0] in "+- ":
             line.append((raw[0], raw[1:]))
     end_hunk()
     return files
 
 
+def pathspecs(paths, exts):
+    """Limit git itself to the wanted file types. Filtering after the diff was
+    slower on a large branch, and parsed (and could crash on) files that were
+    thrown away anyway. A pathspec `*` also matches `/`, so `*.md` covers
+    every directory."""
+    roots = [p.rstrip("/") + "/" for p in paths] or [""]
+    return ["--", *(f"{root}*{ext}" for root in roots for ext in exts)]
+
+
 def build_manifest(base_arg, paths, exts, exact=False):
     base_ref, base_sha = resolve_base(base_arg, exact)
-    pathspec = ["--", *paths] if paths else []
+    pathspec = pathspecs(paths, exts)
     keep = lambda p: p.endswith(tuple(exts))
 
     # Three lines of context, not one: Markdown separates paragraphs with a
@@ -269,9 +293,12 @@ def build_manifest(base_arg, paths, exts, exact=False):
                "--word-diff=porcelain", "-U3", base_sha, *pathspec)
     files = {p: v for p, v in parse_word_diff(diff).items() if keep(p)}
 
-    status = git("diff", "--name-status", "--no-renames", base_sha, *pathspec)
-    new_paths = [l.split("\t", 1)[1] for l in status.splitlines() if l.startswith("A\t")]
-    new_paths += git("ls-files", "--others", "--exclude-standard", *pathspec).splitlines()
+    # -z: NUL-separated, so no path is quoted or split on whitespace. Renames
+    # are off, so a renamed page shows as new.
+    status = git("diff", "--name-status", "-z", "--no-renames", base_sha, *pathspec).split("\0")
+    new_paths = [status[i + 1] for i in range(0, len(status) - 1, 2) if status[i] == "A"]
+    new_paths += [p for p in git("ls-files", "-z", "--others", "--exclude-standard",
+                                 *pathspec).split("\0") if p]
     for p in new_paths:
         if keep(p):
             files[p] = {"new": True, "added": [], "removed": []}
@@ -314,17 +341,51 @@ def main():
     ap.add_argument("--watch", action="store_true", help="rewrite on change until interrupted")
     ap.add_argument("--interval", type=float, default=1.0)
     args = ap.parse_args()
+    if args.exact_base and not args.base:
+        ap.error("--exact-base needs --base")
     exts = args.ext or [".md"]
 
-    while True:
-        manifest = build_manifest(args.base, args.path, exts, args.exact_base)
-        if write_if_changed(args.out, manifest):
-            n = len(manifest["files"])
-            print(f"changes_manifest: {n} changed file(s) vs {manifest['base']} -> {args.out}",
-                  flush=True)
-        if not args.watch:
-            return
-        time.sleep(args.interval)
+    if not args.watch:
+        try:
+            report(args, build_manifest(args.base, args.path, exts, args.exact_base))
+        except GitError as err:
+            sys.exit(str(err))
+        return
+
+    # --watch: the manifest sits in a static folder, and Hugo copies static
+    # files into EVERY build, production included. Delete it when the watcher
+    # stops, so a production build or deploy later run from this clone cannot
+    # publish the branch's unreleased text. SIGTERM (a Makefile's `kill`) takes
+    # the same path as Ctrl+C.
+    signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt))
+    try:
+        while True:
+            try:
+                report(args, build_manifest(args.base, args.path, exts, args.exact_base))
+            except GitError as err:
+                # A transient failure (index.lock during a rebase, say) must
+                # not end the watch. Report it and try again next tick.
+                print(f"changes_manifest: {err}", file=sys.stderr, flush=True)
+            time.sleep(args.interval)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        remove_manifest(args.out)
+
+
+def report(args, manifest):
+    if write_if_changed(args.out, manifest):
+        n = len(manifest["files"])
+        print(f"changes_manifest: {n} changed file(s) vs {manifest['base']} -> {args.out}",
+              flush=True)
+
+
+def remove_manifest(out):
+    for path in (out, out + ".tmp"):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":

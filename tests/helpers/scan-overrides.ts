@@ -31,7 +31,13 @@ import fs from "node:fs";
 import path from "node:path";
 
 const ROOT = process.cwd();
-const PARENT = path.resolve(ROOT, "..");
+// The consumer clones are siblings of this repo. From a git worktree they are
+// not (the worktree's parent is the worktrees folder), and a stray folder
+// there with a consumer's name reads as a clone with no overrides. Set
+// CONSUMER_CLONES_DIR to the folder that holds the real clones.
+export const PARENT = process.env.CONSUMER_CLONES_DIR
+  ? path.resolve(process.env.CONSUMER_CLONES_DIR)
+  : path.resolve(ROOT, "..");
 export const CONSUMERS = [
   { name: "docs", dir: "docs" },
   { name: "kgateway-oss", dir: "kgateway-oss" },

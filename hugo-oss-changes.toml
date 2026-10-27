@@ -7,9 +7,8 @@
 # The overlay is NOT turned on here. `make build-changes` sets
 # HUGO_PARAMS_THEMEEXTRAS_CHANGEHIGHLIGHTS=true on the command line instead,
 # because that environment variable is exactly how a consumer's PR preview opts
-# in (the docs hub's firebase-hosting-pull-request.yml), and a production build
-# that opts in is the case worth pinning. Setting the param in this file would
-# test a path no consumer uses.
+# in, and a production build that opts in is the case worth pinning. Setting
+# the param in this file would test a path no consumer uses.
 #
 # Everything else is hugo-oss.toml's, so the page under test renders exactly as
 # it does in public-oss, and the static spec can compare the two.

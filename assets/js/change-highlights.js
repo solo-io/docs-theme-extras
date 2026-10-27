@@ -20,9 +20,15 @@
   var manifestUrl = script && script.dataset.manifest;
   var HL_NAME = "extras-changed";
   var POLL_MS = 2000;
+  // Poll only under `hugo server` (the template sets data-poll there), where
+  // the watcher rewrites the manifest as an author saves. A built preview's
+  // manifest never changes, so it is fetched once.
+  var polling = !!(script && script.dataset.poll);
+  var timer = null;
   if (!manifestUrl) return;
 
-  var sources = [];
+  // { page: "<project-relative path>", snippets: [{resolved, written}, ...] }
+  var sources = { page: "", snippets: [] };
   var lastHash = null;
   var lastManifest = null;
   var enabled = true;
@@ -50,8 +56,11 @@
   }
 
   // ── Page text index ───────────────────────────────────────────────────
-  // One normalized string for the content area, plus a map from each
-  // normalized character back to its text node and offset.
+  // One normalized string for the content area, plus, for each normalized
+  // character, the index of its text node and its offset in that node. Two
+  // flat number arrays rather than a [node, offset] pair per character: on a
+  // large generated reference page that was millions of small arrays per
+  // repaint.
   function indexPage(root) {
     var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode: function (n) {
@@ -60,28 +69,33 @@
         return NodeFilter.FILTER_ACCEPT;
       }
     });
-    var text = "", map = [], node;
+    var parts = [], nodes = [], nodeOf = [], offsetOf = [], last = "", node;
     while ((node = walker.nextNode())) {
+      var n = nodes.push(node) - 1;
       var v = node.nodeValue;
       for (var i = 0; i < v.length; i++) {
         var c = normChar(v[i]);
         for (var k = 0; k < c.length; k++) {
           var ch = c[k];
           if (/\s/.test(ch)) continue;
-          if (ch === "-" && text[text.length - 1] === "-") continue;
-          text += ch;
-          map.push([node, i]);
+          if (ch === "-" && last === "-") continue;
+          parts.push(ch);
+          last = ch;
+          nodeOf.push(n);
+          offsetOf.push(i);
         }
       }
     }
-    return { text: text, map: map };
+    return { text: parts.join(""), nodes: nodes, nodeOf: nodeOf, offsetOf: offsetOf, length: nodeOf.length };
   }
 
+  function nodeAt(index, i) { return index.nodes[index.nodeOf[i]]; }
+
   function rangeFor(index, start, len) {
-    var a = index.map[start], b = index.map[start + len - 1];
+    var end = start + len - 1;
     var r = document.createRange();
-    r.setStart(a[0], a[1]);
-    r.setEnd(b[0], b[1] + 1);
+    r.setStart(nodeAt(index, start), index.offsetOf[start]);
+    r.setEnd(nodeAt(index, end), index.offsetOf[end] + 1);
     return r;
   }
 
@@ -89,11 +103,10 @@
   // before it when `at` is past the end.
   function pointFor(index, at) {
     var r = document.createRange();
-    if (at < index.map.length) {
-      r.setStart(index.map[at][0], index.map[at][1]);
+    if (at < index.length) {
+      r.setStart(nodeAt(index, at), index.offsetOf[at]);
     } else {
-      var last = index.map[index.map.length - 1];
-      r.setStart(last[0], last[1] + 1);
+      r.setStart(nodeAt(index, index.length - 1), index.offsetOf[index.length - 1] + 1);
     }
     r.collapse(true);
     return r;
@@ -153,26 +166,41 @@
 
   function pointAfter(index, i) {
     var r = document.createRange();
-    r.setStart(index.map[i][0], index.map[i][1] + 1);
+    r.setStart(nodeAt(index, i), index.offsetOf[i] + 1);
     r.collapse(true);
     return r;
   }
 
   // ── Manifest → entries for this page ──────────────────────────────────
-  function matchesSource(key) {
-    for (var i = 0; i < sources.length; i++) {
-      var s = sources[i];
-      if (s === key) return true;
-      // Page sources are absolute paths; reuse sources are relative to
-      // assets/. Manifest keys are repo-relative. Either can be a suffix.
-      if (s.slice(-(key.length + 1)) === "/" + key) return true;
-      if (key.slice(-(s.length + 1)) === "/" + s) return true;
-    }
-    return false;
+  // Manifest keys are relative to the git root. The page path is relative to
+  // the Hugo project, which can sit in a subdirectory of the repository, and
+  // snippet paths are relative to assets/. So a source matches a key that
+  // equals it or ends in "/" + it.
+  function keyMatches(key, path) {
+    return !!path && (key === path || key.slice(-(path.length + 1)) === "/" + path);
   }
+
   function matchesPageFile(key) {
-    var page = sources[0] || "";
-    return page === key || page.slice(-(key.length + 1)) === "/" + key;
+    return keyMatches(key, sources.page);
+  }
+
+  // The manifest keys this page was built from. For each snippet, the
+  // resolved path wins and the written path is only a fallback: on a site
+  // with a real per-version override, the written path also matches the
+  // unversioned copy, and an edit to that copy must not mark this page. The
+  // fallback is for an assembled site, which MOUNTS the written file at the
+  // resolved path, so only the written path is in its diff.
+  function pageKeys(keys) {
+    var out = {};
+    keys.forEach(function (k) { if (matchesPageFile(k)) out[k] = true; });
+    (sources.snippets || []).forEach(function (s) {
+      var resolved = keys.filter(function (k) { return keyMatches(k, s.resolved); });
+      if (!resolved.length && s.written !== s.resolved) {
+        resolved = keys.filter(function (k) { return keyMatches(k, s.written); });
+      }
+      resolved.forEach(function (k) { out[k] = true; });
+    });
+    return out;
   }
 
   // ── Panel ─────────────────────────────────────────────────────────────
@@ -274,11 +302,11 @@
     replaced = [];
     if (tip) tip.hidden = true;
 
-    var entries = [];
-    Object.keys(manifest.files || {}).forEach(function (key) {
-      if (matchesSource(key)) entries.push([key, manifest.files[key]]);
+    var files = manifest.files || {};
+    var entries = Object.keys(pageKeys(Object.keys(files))).map(function (key) {
+      return [key, files[key]];
     });
-    if (!entries.length) { renderPanel(null); return; }
+    if (!entries.length) { renderPanel(null); setState("none"); return; }
 
     var index = indexPage(root), usedA = {}, usedR = {};
     var ranges = [], points = [], missed = [], isNew = false;
@@ -307,9 +335,11 @@
       if (window.CSS && CSS.highlights && window.Highlight) {
         CSS.highlights.set(HL_NAME, new Highlight(...ranges));
       }
-      // Insert markers last-first so earlier points are not shifted. Ranges
-      // are live, so the highlight ranges follow the text-node splits.
-      points.reverse().forEach(function (pt) {
+      // insertNode splits a text node, and every Range already created
+      // (the other markers' points and the highlight ranges) is live, so the
+      // browser moves them to the new nodes. That is what keeps the order of
+      // insertion from mattering; nothing here relies on document order.
+      points.forEach(function (pt) {
         var m = document.createElement("span");
         m.className = "extras-removed";
         m.setAttribute("data-removed", pt[1].length > 160 ? pt[1].slice(0, 157) + "..." : pt[1]);
@@ -319,27 +349,49 @@
       if (isNew) root.classList.add("extras-changed-new");
     }
     renderPanel({ found: ranges.length, removed: points.length, missed: missed, isNew: isNew, base: manifest.base });
+    setState(enabled ? "painted" : "hidden");
+  }
+
+  // A signal for tests and for anyone debugging a preview: <html
+  // data-extras-changes="..."> says what the overlay last concluded.
+  //   painted / hidden  the manifest had entries for this page
+  //   none              the manifest had nothing for this page
+  //   no-manifest       there is no manifest (or it could not be read)
+  function setState(state) {
+    document.documentElement.setAttribute("data-extras-changes", state);
   }
 
   function refresh() {
     fetch(manifestUrl, { cache: "no-store" })
-      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (r) {
+        // No manifest: stop asking. A site that never set the watcher up
+        // would otherwise log a 404 every two seconds on every dev page. When
+        // the watcher starts later, its first write is a static-file change,
+        // which reloads the page, and the new page finds the manifest.
+        if (r.status === 404) { stopPolling(); return null; }
+        return r.ok ? r.json() : null;
+      })
       .then(function (m) {
-        if (!m) { renderPanel(null); return; }
+        if (!m) { renderPanel(null); setState("no-manifest"); return; }
         if (m.hash === lastHash) return;
         lastHash = m.hash;
         lastManifest = m;
         apply(m);
       })
-      .catch(function () { /* no manifest: overlay stays off */ });
+      .catch(function () { renderPanel(null); setState("no-manifest"); });
+  }
+
+  function stopPolling() {
+    if (timer) { clearInterval(timer); timer = null; }
   }
 
   function start() {
     try {
-      sources = JSON.parse(document.getElementById("extras-change-sources").textContent) || [];
+      var parsed = JSON.parse(document.getElementById("extras-change-sources").textContent);
+      if (parsed && typeof parsed === "object") sources = parsed;
     } catch (e) { /* no sources: nothing to match */ }
     refresh();
-    setInterval(function () { if (!document.hidden) refresh(); }, POLL_MS);
+    if (polling) timer = setInterval(function () { if (!document.hidden) refresh(); }, POLL_MS);
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
   else start();

@@ -204,16 +204,16 @@ build-prodhost:
 build-sitemap-i18n:
 	$(HUGO) --config hugo-sitemap-i18n.toml --gc 2> .build-sitemap-i18n.log
 
-# CHANGE HIGHLIGHTS: the overlay is off in production, so the regular builds
-# never render it. build-changes produces two fixture builds that do decide it:
-# a PRODUCTION build opted in through HUGO_PARAMS_THEMEEXTRAS_CHANGEHIGHLIGHTS=true
-# (the exact mechanism a consumer's PR preview uses), and a DEVELOPMENT build
-# opted out with =false (the only build where `false` changes anything, since
-# the overlay is on by default outside production). Read by
-# tests/change-highlights.spec.ts and tests/change-highlights-overlay.spec.ts.
+# CHANGE HIGHLIGHTS: the overlay is on by default only under `hugo server`, so
+# the regular builds never render it. build-changes produces two fixture builds
+# that decide it: a PRODUCTION build opted in through
+# HUGO_PARAMS_THEMEEXTRAS_CHANGEHIGHLIGHTS=true (the exact mechanism a
+# consumer's PR preview uses), and a DEVELOPMENT build with the switch unset,
+# which must stay off (on means `hugo server`, not "anything but production").
+# Read by tests/change-highlights.spec.ts and tests/change-highlights-overlay.spec.ts.
 build-changes:
 	HUGO_PARAMS_THEMEEXTRAS_CHANGEHIGHLIGHTS=true $(HUGO) --config hugo-oss.toml,hugo-oss-changes.toml --gc 2> .build-oss-changes.log
-	HUGO_PARAMS_THEMEEXTRAS_CHANGEHIGHLIGHTS=false $(HUGO) --environment development --config hugo-oss.toml,hugo-oss-changes-off.toml --gc 2> .build-oss-changes-off.log
+	$(HUGO) --environment development --config hugo-oss.toml,hugo-oss-changes-off.toml --gc 2> .build-oss-changes-off.log
 
 # ── Tests against the bundled fixture ────────────────────────────────────
 

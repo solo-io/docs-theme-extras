@@ -30,7 +30,7 @@ Read in [`assets/css/docs-theme-extras.css`](https://github.com/solo-io/docs-the
 
 ## `themeExtras.changeHighlights`
 
-Turns the change-highlights overlay on or off. Unset, it is on outside production (`hugo server`, or `--environment` set to anything other than `production`) and off in production. `true` turns it on in any environment: a PR preview build runs in the production environment, so it opts in with `HUGO_PARAMS_THEMEEXTRAS_CHANGEHIGHLIGHTS=true` in the preview workflow. Never set `true` in a config that a production build reads. `false` turns it off everywhere. The overlay only shows anything when `scripts/changes_manifest.py` has written `static/_extras/changes.json`. See [Change highlights](../change-highlights/) for what reviewers see and how to set it up.
+Turns the change-highlights overlay on or off. Unset, it is on under `hugo server` only, and off in every built site. `true` turns it on in any environment: a PR preview opts in with `HUGO_PARAMS_THEMEEXTRAS_CHANGEHIGHLIGHTS=true` on preview builds only. Never set `true` in a config that a production build reads. `false` turns it off everywhere, and any other value fails the build. The overlay only shows anything when `scripts/changes_manifest.py` has written `static/_extras/changes.json`. See [Change highlights](../change-highlights/) for what reviewers see and how to set it up.
 
 Read in [`layouts/_partials/utils/change-highlights-enabled.html`](https://github.com/solo-io/docs-theme-extras/blob/main/layouts/_partials/utils/change-highlights-enabled.html), [`layouts/_partials/utils/change-highlights.html`](https://github.com/solo-io/docs-theme-extras/blob/main/layouts/_partials/utils/change-highlights.html).
 

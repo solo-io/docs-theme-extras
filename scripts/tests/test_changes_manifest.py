@@ -219,3 +219,73 @@ def test_cli_writes_only_when_the_manifest_changes(repo, tmp_path):
     second = subprocess.run(args, cwd=root, capture_output=True, text=True, check=True)
     assert second.stdout == ""
     assert out.stat().st_mtime_ns == mtime
+
+
+def test_non_ascii_and_spaced_paths_are_reported(repo):
+    """git quotes a non-ASCII path in diff headers and ends a spaced one with
+    a tab; both used to be dropped, so the change never showed."""
+    _, commit, write, manifest = repo
+    commit({"café.md": "Old text here.\n", "a b.md": "Old text here.\n"})
+    write("café.md", "New text here.\n")
+    write("a b.md", "New text here.\n")
+    files = manifest()
+    assert files["café.md"]["added"][0]["text"] == "New"
+    assert files["a b.md"]["added"][0]["text"] == "New"
+
+
+def test_non_utf8_file_does_not_crash(repo):
+    root, commit, write, manifest = repo
+    commit({"page.md": "Old.\n"})
+    (root / "latin.txt").write_bytes("caf\xe9\n".encode("latin-1"))
+    (root / "latin.md").write_bytes("caf\xe9 new\n".encode("latin-1"))
+    write("page.md", "New.\n")
+    files = manifest()
+    assert "page.md" in files and "latin.txt" not in files
+
+
+def test_unicode_line_separator_does_not_crash(repo):
+    """splitlines() also splits on U+2028, which left an empty fragment that
+    crashed the parser."""
+    _, commit, write, manifest = repo
+    commit({"page.md": "Old line  with a separator.\n"})
+    write("page.md", "New line  with a separator.\n")
+    assert manifest()["page.md"]["added"][0]["text"] == "New"
+
+
+def test_exact_base_requires_base(repo):
+    root, *_ = repo
+    result = subprocess.run([sys.executable, SCRIPT, "--exact-base", "--out", "m.json"],
+                            cwd=root, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert "--exact-base needs --base" in result.stderr
+
+
+def test_watch_survives_git_errors_and_removes_its_manifest(repo):
+    """A git failure must not end --watch, and stopping the watcher deletes
+    the manifest, so a later production build from the same clone cannot
+    publish it."""
+    import signal
+    import time
+    root, commit, write, _ = repo
+    commit({"page.md": "Old.\n"})
+    write("page.md", "New.\n")
+    out = root / "static" / "_extras" / "changes.json"
+    proc = subprocess.Popen(
+        [sys.executable, SCRIPT, "--base", "main", "--out", str(out), "--watch", "--interval", "0.2"],
+        cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        for _ in range(50):
+            if out.exists():
+                break
+            time.sleep(0.1)
+        assert out.exists()
+        # Break git for a moment: the watcher reports and keeps going.
+        (root / ".git" / "HEAD").rename(root / ".git" / "HEAD.bak")
+        time.sleep(0.6)
+        assert proc.poll() is None
+        (root / ".git" / "HEAD.bak").rename(root / ".git" / "HEAD")
+    finally:
+        proc.send_signal(signal.SIGTERM)
+        _, err = proc.communicate(timeout=10)
+    assert not out.exists()
+    assert "failed" in err

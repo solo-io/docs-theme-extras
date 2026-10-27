@@ -95,15 +95,15 @@
 
 {{- /* Record the snippet for the change-highlights overlay
        (utils/change-highlights.html), so an edit to a snippet highlights on
-       every page that includes it. Both paths are recorded: the resolved one
-       matches a file that really sits at <product>/<version>/<asset>, and the
-       written one matches a file that an assembled product MOUNTS there (the
-       docs hub mounts assets/<dir> at assets/<product>/<version>/<dir>), which
-       is the path the git diff reports. Skipped when the overlay is off, so
-       production output is unchanged. */ -}}
+       every page that includes it. Keyed on the resolved path, with the
+       written path as the value: the resolved one matches a file that really
+       sits at <product>/<version>/<asset>, and the written one matches a file
+       that an assembled product MOUNTS there (an assembled site mounts
+       assets/<dir> at assets/<product>/<version>/<dir>), which is the path its
+       git diff reports. Skipped when the overlay is off, so production output
+       is unchanged. */ -}}
 {{- if partialCached "utils/change-highlights-enabled.html" site -}}
-  {{- .Page.Store.SetInMap "extrasChangeSources" $asset true -}}
-  {{- .Page.Store.SetInMap "extrasChangeSources" $writtenAsset true -}}
+  {{- .Page.Store.SetInMap "extrasChangeSources" $asset $writtenAsset -}}
 {{- end -}}
 
 {{- $content := $r.Content -}}

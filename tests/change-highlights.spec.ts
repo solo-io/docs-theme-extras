@@ -20,15 +20,15 @@ import path from "node:path";
 //     Store bookkeeping, or previews would mark page text but miss snippets.
 //
 // The builds (see `make build-changes`):
-//   public-oss              production, switch unset          → off
-//   public-oss-changes      production, env var `true`        → on
-//   public-oss-changes-off  development, env var `false`      → off
+//   public-oss              production, switch unset   → off
+//   public-oss-changes      production, env var `true` → on
+//   public-oss-changes-off  development, switch unset  → off
 // The `true` build opts in through HUGO_PARAMS_THEMEEXTRAS_CHANGEHIGHLIGHTS on
 // purpose: that environment variable is how a consumer's PR preview turns it
-// on (the docs hub's firebase-hosting-pull-request.yml), so it is the path
-// worth pinning. The `false` build has to be a development build, because
-// that is the only environment where the default is on and `false` changes
-// anything.
+// on, so it is the path worth pinning. The development build pins that the
+// default is on under `hugo server` ONLY, not in every non-production
+// environment: a named environment (a translation or staging build) is a
+// machine build that someone may deploy.
 
 const ROOT = path.join(__dirname, "..");
 const PAGE = path.join("test", "v2", "change-highlights", "index.html");
@@ -51,7 +51,9 @@ function allHtml(dir: string): string[] {
   return out;
 }
 
-function sources(html: string): string[] {
+type Sources = { page: string; snippets: { resolved: string; written: string }[] };
+
+function sources(html: string): Sources {
   const m = html.match(
     /<script type="?application\/json"? id="?extras-change-sources"?>([^<]*)<\/script>/,
   );
@@ -88,38 +90,48 @@ test.describe("change highlights: the build-time switch", () => {
     expect(html).toMatch(
       /<script defer src="?\/test\/js\/change-highlights\.js"? data-manifest="?\/test\/_extras\/changes\.json/,
     );
+    // A built preview's manifest never changes, so it must not poll. Only
+    // `hugo server` sets data-poll.
+    expect(html).not.toContain("data-poll");
   });
 });
 
 test.describe("change highlights: the source list the overlay matches against", () => {
-  test("the page lists its own file, then each snippet's written and resolved path", () => {
+  test("the page lists its own file and each snippet's resolved and written path", () => {
     const html = read("public-oss-changes");
     test.skip(!html, "public-oss-changes not built (make build-changes)");
     const list = sources(html!);
 
-    // The page's own file comes first: the overlay treats sources[0] as the
-    // page when it decides whether a NEW file means "New page".
-    expect(list[0]).toMatch(/[/\\]fixture[/\\]content[/\\]en[/\\]test[/\\]v2[/\\]change-highlights\.md$/);
+    // Relative to the project root, the same form as a git diff path. Never
+    // the build machine's absolute path, which a public preview would expose.
+    expect(list.page).toBe("fixture/content/en/test/v2/change-highlights.md");
 
     // A snippet reused twice is listed once. The overlay marks every copy on
-    // the page from that one entry.
-    expect(list.filter((s) => s === "conrefs/test/change-highlights-snippet.md")).toHaveLength(1);
+    // the page from that one entry. Its resolved and written paths are equal.
+    expect(list.snippets).toContainEqual({
+      resolved: "conrefs/test/change-highlights-snippet.md",
+      written: "conrefs/test/change-highlights-snippet.md",
+    });
+    expect(list.snippets.filter((s) => s.written === "conrefs/test/change-highlights-snippet.md")).toHaveLength(1);
 
-    // The versioned snippet is listed under BOTH paths. The resolved one
-    // matches a file that really sits at <product>/<version>/; the written one
-    // matches a file an assembled product MOUNTS there (the docs hub mounts
-    // assets/<dir> at assets/<product>/<version>/<dir>), which is the path its
-    // git diff reports.
-    expect(list).toContain("conrefs/test/change-highlights-versioned.md");
-    expect(list).toContain("test/v2/conrefs/test/change-highlights-versioned.md");
+    // The versioned snippet is listed as {resolved, written}. The overlay
+    // matches the resolved path first, and the written one only as a
+    // fallback, for a site that MOUNTS the written file at the resolved path
+    // (so only the written path is in its git diff).
+    expect(list.snippets).toContainEqual({
+      resolved: "test/v2/conrefs/test/change-highlights-versioned.md",
+      written: "conrefs/test/change-highlights-versioned.md",
+    });
+    expect(JSON.stringify(list)).not.toMatch(/"\/(Users|home)\//);
   });
 
   test("a page with no reuse lists only its own file", () => {
     const html = read("public-oss-changes", path.join("test", "v2", "change-highlights-new", "index.html"));
     test.skip(!html, "public-oss-changes not built (make build-changes)");
-    const list = sources(html!);
-    expect(list).toHaveLength(1);
-    expect(list[0]).toMatch(/change-highlights-new\.md$/);
+    expect(sources(html!)).toEqual({
+      page: "fixture/content/en/test/v2/change-highlights-new.md",
+      snippets: [],
+    });
   });
 
   test("turning the overlay on changes nothing else on the page", () => {
