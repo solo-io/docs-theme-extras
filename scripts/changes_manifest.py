@@ -47,10 +47,31 @@ def resolve_base(base, exact=False):
     if exact:
         sha = git("rev-parse", "--verify", base).strip()
         return base, sha
-    candidates = [base] if base else ["upstream/main", "origin/main", "main"]
+    if base:
+        return base, git("merge-base", "HEAD", base).strip()
+    # No --base: try every usual name for the main branch and keep the one whose
+    # branch point is newest. Taking the first name that exists picked a stale
+    # `upstream/main` in a clone where `origin` is the real repository, and every
+    # merge to main since that fetch showed up as this branch's change. Remote
+    # names differ from clone to clone, so the freshest branch point is the
+    # only rule that holds in all of them.
+    candidates = ["upstream/main", "origin/main", "main"]
+    best = None
     for ref in candidates:
-        if git("rev-parse", "--verify", "--quiet", ref, check=False).strip():
-            return ref, git("merge-base", "HEAD", ref).strip()
+        if not git("rev-parse", "--verify", "--quiet", ref, check=False).strip():
+            continue
+        mb = git("merge-base", "HEAD", ref, check=False).strip()
+        if not mb:
+            continue
+        # Newer means the current best branch point is an ancestor of this
+        # one. Ancestry, not commit time: two commits can share a timestamp.
+        newer = best is not None and mb != best[1] and subprocess.run(
+            ["git", "merge-base", "--is-ancestor", best[1], mb],
+            capture_output=True).returncode == 0
+        if best is None or newer:
+            best = (ref, mb)
+    if best:
+        return best
     sys.exit(f"no base ref found (tried {', '.join(candidates)}); pass --base")
 
 
@@ -284,7 +305,7 @@ def write_if_changed(out, manifest):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", required=True, help="manifest path, under a static dir")
-    ap.add_argument("--base", help="base ref (default: upstream/main, origin/main, or main)")
+    ap.add_argument("--base", help="base ref (default: whichever of upstream/main, origin/main, or main branched off newest)")
     ap.add_argument("--exact-base", action="store_true",
                     help="diff against --base itself, not its merge-base with HEAD "
                          "(--base can then be any commit or tree)")

@@ -185,6 +185,22 @@ def test_merge_base_ignores_commits_on_the_base_after_branching(repo):
     assert "theirs.md" not in files
 
 
+def test_default_base_prefers_the_freshest_main(repo):
+    """A stale `upstream/main` next to a current `origin/main` used to win
+    just because it was tried first, and every merge since that fetch showed
+    up as this branch's change."""
+    root, commit, write, _ = repo
+    commit({"page.md": "Base.\n"})
+    run(root, "git", "update-ref", "refs/remotes/upstream/main", "HEAD")   # stale
+    commit({"theirs.md": "Merged to main later.\n"})
+    run(root, "git", "update-ref", "refs/remotes/origin/main", "HEAD")     # current
+    run(root, "git", "checkout", "-q", "-b", "feature")
+    write("mine.md", "Mine.\n")
+    manifest = cm.build_manifest(None, [], [".md"])
+    assert manifest["base"] in ("origin/main", "main")
+    assert sorted(manifest["files"]) == ["mine.md"]
+
+
 def test_cli_writes_only_when_the_manifest_changes(repo, tmp_path):
     root, commit, write, _ = repo
     commit({"page.md": "Old.\n"})

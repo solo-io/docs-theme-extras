@@ -35,8 +35,10 @@ version 140. Older browsers show the panel without highlights.
 Hugo cannot run git, so a script does the diff:
 
 1. `scripts/changes_manifest.py` diffs the working tree, including uncommitted
-   and new files that are not in git yet, against the merge-base with `upstream/main`, then
-   `origin/main`, then `main`. It writes the added and removed text of each
+   and new files that are not in git yet, against the point where the branch
+   left main. It checks `upstream/main`, `origin/main`, and `main`, and uses
+   whichever branched off most recently, so a stale remote cannot add other
+   people's merges to the diff. It writes the added and removed text of each
    changed Markdown file to `static/_extras/changes.json`. That folder ignores
    itself in git, so you do not need to edit your `.gitignore`.
 2. When the overlay is on, every page lists the files it was built from: its
