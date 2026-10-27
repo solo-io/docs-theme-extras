@@ -93,25 +93,29 @@
 
 /* Deleted text: an empty <span> placed where the text used to be. The icon
    is generated content, so it adds nothing to innerText or a code copy. */
+/* Whole-pixel sizes on purpose: at 0.9em the circle was 14.39px and the bar
+   55% of that, and the rounding drew the bar half a CSS pixel left of center
+   (a full device pixel on a 2x screen). 14px with an 8px bar leaves exactly
+   3px on each side, and 6px above and below the 2px bar. */
 .extras-removed {
   position: relative;
   display: inline-block;
-  width: 0.9em;
-  height: 0.9em;
+  width: 14px;
+  height: 14px;
   margin: 0 0.15em;
-  vertical-align: -0.1em;
+  vertical-align: -2px;
 }
+/* The minus is drawn as a centered gradient bar, not a text glyph: a glyph
+   sits on the font's baseline, so its vertical position depended on the font
+   and line height and landed below center. */
 .extras-removed::before {
-  content: "\2212";
+  content: "";
   position: absolute;
   inset: 0;
-  width: 0.9em;
-  height: 0.9em;
   border-radius: 50%;
-  background: var(--extras-removed-bg);
-  color: var(--extras-removed-fg);
-  font: 700 0.75em/1.2em system-ui, sans-serif;
-  text-align: center;
+  background:
+    linear-gradient(var(--extras-removed-fg), var(--extras-removed-fg)) center / 8px 2px no-repeat,
+    var(--extras-removed-bg);
   box-shadow: 0 0 0 2px var(--extras-removed-ring, transparent);
   cursor: help;
 }
