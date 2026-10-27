@@ -1,0 +1,32 @@
+{{- /*
+  Change-highlights overlay: non-production builds only.
+
+  Emits the list of source files that produced this page (the page's own file
+  plus every snippet the `reuse` shortcode pulled in, recorded in
+  .Store "extrasChangeSources") and loads assets/js/change-highlights.js,
+  which fetches the manifest written by scripts/changes_manifest.py and
+  highlights the added text.
+
+  The manifest is NOT read here. Keeping it out of the templates means a
+  rewrite of the manifest never triggers a page re-render under `hugo server`.
+
+  Called from head.html after its `.WordCount` call, which forces .Content to
+  render first, so the Store already holds every reuse made on the page.
+
+  Off in production. Opt out elsewhere with params.themeExtras.changeHighlights = false.
+*/ -}}
+{{- $cfg := site.Params.themeExtras | default dict -}}
+{{- if and (not hugo.IsProduction) (ne $cfg.changeHighlights false) -}}
+  {{- $sources := slice -}}
+  {{- with .File -}}{{- $sources = $sources | append .Filename -}}{{- end -}}
+  {{- with .Store.Get "extrasChangeSources" -}}
+    {{- range $k, $_ := . -}}{{- $sources = $sources | append $k -}}{{- end -}}
+  {{- end -}}
+  {{- with resources.Get "css/change-highlights.css" -}}
+    <link rel="stylesheet" href="{{ .RelPermalink }}" />
+  {{- end -}}
+  {{- with resources.Get "js/change-highlights.js" -}}
+    <script type="application/json" id="extras-change-sources">{{ $sources | jsonify | safeJS }}</script>
+    <script defer src="{{ .RelPermalink }}" data-manifest="{{ relURL "_extras/changes.json" }}"></script>
+  {{- end -}}
+{{- end -}}

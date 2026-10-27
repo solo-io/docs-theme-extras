@@ -8,7 +8,7 @@ CONFIG  ?=
 
 .PHONY: install \
         clear-cache \
-        server-oss server-enterprise server-docs \
+        server-oss server-oss-changes server-enterprise server-docs \
         build-oss build-enterprise build-flat build-nosections build-docs \
         build-section-title build-section-current build-nobook build-devpath build-prodhost build-sitemap-i18n \
         test-oss test-enterprise test-all \
@@ -35,6 +35,15 @@ server-oss: clear-cache
 	@echo "→ open http://localhost:1313/  (brand=oss; uses hugo-oss-local.toml)"
 	@echo "  if it still looks like the previous brand: hard-reload browser (Cmd+Shift+R)"
 	$(HUGO) server -D --ignoreCache --config hugo-oss-local.toml --gc 2> .build-oss-local.log
+
+# server-oss plus the change-highlights overlay: the manifest watcher runs in
+# the background and highlights your edits against the merge-base with
+# upstream/main (or origin/main). Override the base with BASE=<ref>.
+server-oss-changes: clear-cache
+	@echo "→ open http://localhost:1313/  (your changes are highlighted)"
+	@python3 scripts/changes_manifest.py --out fixture/static/_extras/changes.json --watch $(if $(BASE),--base $(BASE)) & \
+	  trap 'kill $$!' EXIT INT TERM; \
+	  $(HUGO) server -D --ignoreCache --config hugo-oss-local.toml --gc 2> .build-oss-local.log
 
 server-enterprise: clear-cache
 	@echo "→ open http://localhost:1313/  (brand=enterprise; uses hugo-enterprise-local.toml)"

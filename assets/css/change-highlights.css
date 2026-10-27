@@ -1,0 +1,135 @@
+/* Change-highlights overlay. Loaded only in non-production builds by
+   layouts/_partials/utils/change-highlights.html. */
+
+:root {
+  --extras-changed-bg: rgb(255 214 0 / 0.45);
+  --extras-changed-line: #c98a00;
+  --extras-changed-new-edge: rgb(255 184 0);
+  --extras-changes-panel-bg: #fffbea;
+  --extras-changes-panel-fg: #3d3200;
+  --extras-changes-panel-border: rgb(255 184 0 / 0.6);
+  --extras-removed-bg: #d92d20;
+  --extras-removed-fg: #fff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --extras-changed-bg: rgb(255 214 0 / 0.38);
+    --extras-changed-line: #ffd60a;
+    --extras-changes-panel-bg: #2b2500;
+    --extras-changes-panel-fg: #ffe9a0;
+  }
+}
+:root.dark {
+  --extras-changed-bg: rgb(255 214 0 / 0.38);
+  --extras-changed-line: #ffd60a;
+  --extras-changes-panel-bg: #2b2500;
+  --extras-changes-panel-fg: #ffe9a0;
+}
+
+/* The underline keeps a highlight visible on callouts whose own background
+   is close to the highlight color (warning, caution). */
+::highlight(extras-changed) {
+  background-color: var(--extras-changed-bg);
+  text-decoration: underline 2px var(--extras-changed-line);
+  text-underline-offset: 3px;
+}
+
+.extras-changed-new {
+  box-shadow: inset 4px 0 0 var(--extras-changed-new-edge);
+}
+
+.extras-changes-panel {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 60;
+  max-width: min(420px, calc(100vw - 32px));
+  font: 13px/1.4 system-ui, sans-serif;
+  color: var(--extras-changes-panel-fg);
+  background: var(--extras-changes-panel-bg);
+  border: 1px solid var(--extras-changes-panel-border);
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.15);
+}
+.extras-changes-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+}
+.extras-changes-bar button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.extras-changes-bar button[data-action="toggle"] {
+  margin-left: auto;
+  text-decoration: underline;
+}
+.extras-changes-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--extras-changed-new-edge);
+  flex: none;
+}
+.extras-changes-missed {
+  display: none;
+  margin: 0;
+  padding: 6px 10px 8px 28px;
+  max-height: 40vh;
+  overflow: auto;
+  border-top: 1px solid var(--extras-changes-panel-border);
+}
+.extras-changes-panel.is-open .extras-changes-missed {
+  display: block;
+}
+.extras-changes-missed span {
+  opacity: 0.7;
+}
+
+/* Deleted text: an empty <span> placed where the text used to be. The icon
+   is generated content, so it adds nothing to innerText or a code copy. */
+.extras-removed {
+  position: relative;
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  margin: 0 0.15em;
+  vertical-align: -0.1em;
+}
+.extras-removed::before {
+  content: "\2212";
+  position: absolute;
+  inset: 0;
+  width: 0.9em;
+  height: 0.9em;
+  border-radius: 50%;
+  background: var(--extras-removed-bg);
+  color: var(--extras-removed-fg);
+  font: 700 0.75em/1.2em system-ui, sans-serif;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--extras-removed-ring, transparent);
+  cursor: help;
+}
+.extras-changes-tip {
+  padding: 4px 8px;
+  font: 12px/1.4 system-ui, sans-serif;
+  color: var(--extras-changes-panel-fg);
+  background: var(--extras-changes-panel-bg);
+  border: 1px solid var(--extras-changes-panel-border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.15);
+  pointer-events: none;
+}
+.extras-changes-tip[hidden] {
+  display: none;
+}
+.extras-changes-tip {
+  position: fixed;
+  z-index: 61;
+  max-width: min(360px, 80vw);
+}

@@ -28,6 +28,12 @@ Selects the brand CSS layer loaded on top of the component baseline: `oss` loads
 
 Read in [`assets/css/docs-theme-extras.css`](https://github.com/solo-io/docs-theme-extras/blob/main/assets/css/docs-theme-extras.css), [`layouts/_partials/breadcrumb.html`](https://github.com/solo-io/docs-theme-extras/blob/main/layouts/_partials/breadcrumb.html), [`layouts/_partials/docs/book-document.html`](https://github.com/solo-io/docs-theme-extras/blob/main/layouts/_partials/docs/book-document.html), [`layouts/partials/themeExtras/head-end.html`](https://github.com/solo-io/docs-theme-extras/blob/main/layouts/partials/themeExtras/head-end.html).
 
+## `themeExtras.changeHighlights`
+
+Set to `false` to turn off the change-highlights overlay. The overlay only loads in non-production builds (`hugo server`, or a build with `--environment` set to something other than `production`), and only shows anything when `scripts/changes_manifest.py` has written `static/_extras/changes.json`. It highlights text added since the branch point, marks removed text, and shows a panel with the counts. Production builds never include it, whatever this key says.
+
+Read in [`layouts/_partials/utils/change-highlights.html`](https://github.com/solo-io/docs-theme-extras/blob/main/layouts/_partials/utils/change-highlights.html).
+
 ## `themeExtras.logo`
 
 Logo used in the schema.org `Organization` block. Falls back to the navbar logo, and is left empty when neither is set. This is metadata only — it does not affect what renders in the navbar.

@@ -92,6 +92,13 @@
   {{- errorf "The %q shortcode was unable to find %q. See %s" .Name $asset .Position -}}
 {{- end -}}
 
+{{- /* Record the resolved snippet for the change-highlights overlay
+       (utils/change-highlights.html), so an edit to a snippet highlights on
+       every page that includes it. Non-production only. */ -}}
+{{- if not hugo.IsProduction -}}
+  {{- .Page.Store.SetInMap "extrasChangeSources" $asset true -}}
+{{- end -}}
+
 {{- $content := $r.Content -}}
 
 {{- /* Strip front matter */ -}}
