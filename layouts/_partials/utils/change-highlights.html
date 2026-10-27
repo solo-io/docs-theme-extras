@@ -13,10 +13,11 @@
   Called from head.html after its `.WordCount` call, which forces .Content to
   render first, so the Store already holds every reuse made on the page.
 
-  Off in production. Opt out elsewhere with params.themeExtras.changeHighlights = false.
+  On outside production by default. See utils/change-highlights-enabled.html
+  for the params.themeExtras.changeHighlights switch, which is also how a PR
+  preview (a production-environment build) turns it on.
 */ -}}
-{{- $cfg := site.Params.themeExtras | default dict -}}
-{{- if and (not hugo.IsProduction) (ne $cfg.changeHighlights false) -}}
+{{- if partialCached "utils/change-highlights-enabled.html" site -}}
   {{- $sources := slice -}}
   {{- with .File -}}{{- $sources = $sources | append .Filename -}}{{- end -}}
   {{- with .Store.Get "extrasChangeSources" -}}

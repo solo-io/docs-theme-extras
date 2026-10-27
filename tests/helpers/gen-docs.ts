@@ -97,13 +97,16 @@ const PARAM_DOCS: Record<string, string> = {
     "module's own `[!SOLO]` and `[!SUCCESS]`. An unknown type still warns and " +
     "falls back to the default style, so a typo is visible rather than silent.",
   changeHighlights:
-    "Set to `false` to turn off the change-highlights overlay. The overlay " +
-    "only loads in non-production builds (`hugo server`, or a build with " +
-    "`--environment` set to something other than `production`), and only " +
-    "shows anything when `scripts/changes_manifest.py` has written " +
-    "`static/_extras/changes.json`. It highlights text added since the " +
-    "branch point, marks removed text, and shows a panel with the counts. " +
-    "Production builds never include it, whatever this key says.",
+    "Turns the change-highlights overlay on or off. Unset, it is on outside " +
+    "production (`hugo server`, or `--environment` set to anything other " +
+    "than `production`) and off in production. `true` turns it on in any " +
+    "environment: a PR preview build runs in the production environment, so " +
+    "it opts in with `HUGO_PARAMS_THEMEEXTRAS_CHANGEHIGHLIGHTS=true` in the " +
+    "preview workflow. Never set `true` in a config that a production build " +
+    "reads. `false` turns it off everywhere. The overlay only shows anything " +
+    "when `scripts/changes_manifest.py` has written " +
+    "`static/_extras/changes.json`. It highlights text added since the base, " +
+    "marks removed text, and shows a panel with the counts.",
   logo:
     "Logo used in the schema.org `Organization` block. Falls back to the " +
     "navbar logo, and is left empty when neither is set. This is metadata only " +

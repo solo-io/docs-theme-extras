@@ -59,6 +59,7 @@
 
 {{- /* Strip leading slash from asset paths */ -}}
 {{- $asset = strings.TrimPrefix "/" $asset -}}
+{{- $writtenAsset := $asset -}}
 
 {{- /* For assembled products, try the versioned path at
      <product>/<version>/<asset> first. Falls back to the direct path for
@@ -92,11 +93,17 @@
   {{- errorf "The %q shortcode was unable to find %q. See %s" .Name $asset .Position -}}
 {{- end -}}
 
-{{- /* Record the resolved snippet for the change-highlights overlay
+{{- /* Record the snippet for the change-highlights overlay
        (utils/change-highlights.html), so an edit to a snippet highlights on
-       every page that includes it. Non-production only. */ -}}
-{{- if not hugo.IsProduction -}}
+       every page that includes it. Both paths are recorded: the resolved one
+       matches a file that really sits at <product>/<version>/<asset>, and the
+       written one matches a file that an assembled product MOUNTS there (the
+       docs hub mounts assets/<dir> at assets/<product>/<version>/<dir>), which
+       is the path the git diff reports. Skipped when the overlay is off, so
+       production output is unchanged. */ -}}
+{{- if partialCached "utils/change-highlights-enabled.html" site -}}
   {{- .Page.Store.SetInMap "extrasChangeSources" $asset true -}}
+  {{- .Page.Store.SetInMap "extrasChangeSources" $writtenAsset true -}}
 {{- end -}}
 
 {{- $content := $r.Content -}}
