@@ -1,0 +1,16 @@
+# Overlay on hugo-oss.toml. Comma-joined, later wins:
+#   HUGO_PARAMS_THEMEEXTRAS_CHANGEHIGHLIGHTS=true hugo --config hugo-oss.toml,hugo-oss-changes.toml
+#
+# The change-highlights build: the fixture with the overlay turned on, read by
+# tests/change-highlights.spec.ts and tests/change-highlights-overlay.spec.ts.
+#
+# The overlay is NOT turned on here. `make build-changes` sets
+# HUGO_PARAMS_THEMEEXTRAS_CHANGEHIGHLIGHTS=true on the command line instead,
+# because that environment variable is exactly how a consumer's PR preview opts
+# in (the docs hub's firebase-hosting-pull-request.yml), and a production build
+# that opts in is the case worth pinning. Setting the param in this file would
+# test a path no consumer uses.
+#
+# Everything else is hugo-oss.toml's, so the page under test renders exactly as
+# it does in public-oss, and the static spec can compare the two.
+publishDir = "public-oss-changes/test"

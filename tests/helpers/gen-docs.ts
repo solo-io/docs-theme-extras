@@ -105,8 +105,8 @@ const PARAM_DOCS: Record<string, string> = {
     "preview workflow. Never set `true` in a config that a production build " +
     "reads. `false` turns it off everywhere. The overlay only shows anything " +
     "when `scripts/changes_manifest.py` has written " +
-    "`static/_extras/changes.json`. It highlights text added since the base, " +
-    "marks removed text, and shows a panel with the counts.",
+    "`static/_extras/changes.json`. See [Change highlights](../change-highlights/) " +
+    "for what reviewers see and how to set it up.",
   logo:
     "Logo used in the schema.org `Organization` block. Falls back to the " +
     "navbar logo, and is left empty when neither is set. This is metadata only " +

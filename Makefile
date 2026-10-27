@@ -10,7 +10,7 @@ CONFIG  ?=
         clear-cache \
         server-oss server-oss-changes server-enterprise server-docs \
         build-oss build-enterprise build-flat build-nosections build-docs \
-        build-section-title build-section-current build-nobook build-devpath build-prodhost build-sitemap-i18n \
+        build-section-title build-section-current build-nobook build-devpath build-prodhost build-sitemap-i18n build-changes \
         test-oss test-enterprise test-all \
         test clean help
 
@@ -204,6 +204,17 @@ build-prodhost:
 build-sitemap-i18n:
 	$(HUGO) --config hugo-sitemap-i18n.toml --gc 2> .build-sitemap-i18n.log
 
+# CHANGE HIGHLIGHTS: the overlay is off in production, so the regular builds
+# never render it. build-changes produces two fixture builds that do decide it:
+# a PRODUCTION build opted in through HUGO_PARAMS_THEMEEXTRAS_CHANGEHIGHLIGHTS=true
+# (the exact mechanism a consumer's PR preview uses), and a DEVELOPMENT build
+# opted out with =false (the only build where `false` changes anything, since
+# the overlay is on by default outside production). Read by
+# tests/change-highlights.spec.ts and tests/change-highlights-overlay.spec.ts.
+build-changes:
+	HUGO_PARAMS_THEMEEXTRAS_CHANGEHIGHLIGHTS=true $(HUGO) --config hugo-oss.toml,hugo-oss-changes.toml --gc 2> .build-oss-changes.log
+	HUGO_PARAMS_THEMEEXTRAS_CHANGEHIGHLIGHTS=false $(HUGO) --environment development --config hugo-oss.toml,hugo-oss-changes-off.toml --gc 2> .build-oss-changes-off.log
+
 # ── Tests against the bundled fixture ────────────────────────────────────
 
 # build-flat runs alongside each brand build so section-versionless.spec.ts has
@@ -217,10 +228,10 @@ build-sitemap-i18n:
 # other job — and dev-subpath-baseurl.spec.ts, like every spec here, SKIPS on a
 # missing build rather than failing. Dropping it from one target would have cost
 # nothing visible and half the coverage.
-test-oss: build-oss build-devpath build-flat build-nosections build-section-title build-section-current build-nobook build-prodhost build-sitemap-i18n
+test-oss: build-oss build-devpath build-flat build-nosections build-section-title build-section-current build-nobook build-prodhost build-sitemap-i18n build-changes
 	DOCS_TEST_CONFIG=$(abspath ./fixture/.docs-test-oss.toml) npx playwright test
 
-test-enterprise: build-enterprise build-devpath build-flat build-nosections build-section-title build-section-current build-nobook build-prodhost build-sitemap-i18n
+test-enterprise: build-enterprise build-devpath build-flat build-nosections build-section-title build-section-current build-nobook build-prodhost build-sitemap-i18n build-changes
 	DOCS_TEST_CONFIG=$(abspath ./fixture/.docs-test-enterprise.toml) npx playwright test
 
 # Run both brand variants. CI default — surfaces brand-specific regressions

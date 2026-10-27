@@ -1,0 +1,8 @@
+# Overlay on hugo-oss.toml. Comma-joined, later wins:
+#   HUGO_PARAMS_THEMEEXTRAS_CHANGEHIGHLIGHTS=false hugo --environment development --config hugo-oss.toml,hugo-oss-changes-off.toml
+#
+# The change-highlights opt-OUT build. Outside production the overlay is on by
+# default, so the only way to prove `false` turns it off is a non-production
+# build that sets it. `make build-changes` does that; tests/change-highlights.spec.ts
+# asserts this build carries no overlay markup at all.
+publishDir = "public-oss-changes-off/test"
