@@ -2,7 +2,7 @@
 
 ### Info
 
-{{< alert context="info" >}}MARKER_ALERT_INFO. Informational alerts use the info context.{{< /alert >}}
+{{< alert context="info" >}}MARKER_ALERT_INFO. Informational alerts use the info context by default.{{< /alert >}}
 
 ### Warning
 
@@ -84,19 +84,19 @@ The `callout` shortcode works inside a markdown table cell: its `solo-alert` div
 ## Callouts - Github default styling
 
 > [!NOTE]
-> Useful information that users should know, even when skimming.
+> Useful information that every reader should know, even when skimming quickly.
 
 > [!TIP]
-> Helpful advice for doing things better or more easily.
+> Helpful advice for doing things better.
 
 > [!IMPORTANT]
 > Key information users need to know to achieve their goal.
 
 > [!WARNING]
-> Urgent info that needs immediate user attention to avoid problems.
+> Urgent information that needs immediate user attention to avoid problems.
 
 > [!CAUTION]
-> Advises about risks or negative outcomes of certain actions.
+> Describes the risks of an action before a reader takes it.
 
 > [!SOLO]
 > Theme-shipped custom alert type — the icon and header label come from the theme, with no consumer config. (Body avoids the label text so custom-alert.spec asserts the rendered header.)
@@ -149,8 +149,6 @@ A GitHub callout whose body spans several paragraphs. Each paragraph is separate
 > [!TIP]
 > MARKER_GH_CALLOUT_PARA1. This is the first paragraph of the callout.
 >
-> MARKER_GH_CALLOUT_PARA2. This is the second paragraph, separated from the first by a blank quoted line.
->
 > MARKER_GH_CALLOUT_PARA3. And a third paragraph confirms multi-paragraph bodies render as separate `<p>` elements inside the callout.
 
 ### With a list
@@ -161,8 +159,9 @@ A GitHub callout whose body is a markdown list. The blank `>` line before the li
 > MARKER_GH_CALLOUT_LIST_BODY. This callout contains a list:
 >
 > - MARKER_GH_CALLOUT_LIST_ITEM1 first item
-> - MARKER_GH_CALLOUT_LIST_ITEM2 second item
+> - MARKER_GH_CALLOUT_LIST_ITEM2 second item, reworded
 > - MARKER_GH_CALLOUT_LIST_ITEM3 third item
+> - A brand-new fourth item
 
 ### With reuse, version, and conditional-text shortcodes
 
@@ -264,7 +263,8 @@ A code block with line highlighting — Chroma wraps the highlighted lines in `<
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
-  name: highlight-fixture
+  name: highlight-fixture-v2
+  namespace: default
 ```
 
 ### Line numbering and highlighting combined
@@ -292,8 +292,6 @@ example: |
 ~~~
 
 ### Indented code (no fence)
-
-An indented code block (4-space indentation, no fence). Goldmark's CommonMark default treats four leading spaces as a code block:
 
     # MARKER_FENCE_INDENTED
     indented_code: true
@@ -353,10 +351,10 @@ curl -sSL \
   | bash
 ```
 
-## Details
+## Details and disclosure
 
 {{< details title="Open this details block" >}}
-MARKER_DETAILS. Details bodies hide until clicked. Bodies render markdown, including **bold**, *italic*, and inline `code`.
+MARKER_DETAILS. Details bodies hide until clicked. Bodies render markdown, including **bold**, *italic*, and inline `code`. This sentence is new in the details body.
 {{< /details >}}
 
 ## GitHub embed
@@ -539,7 +537,7 @@ A 3-level ordered list — the deepest level carries `MARKER_OL_L3` so tests can
 1. Ordered level 1 (MARKER_OL_L1).
    1. Ordered level 2 (MARKER_OL_L2).
       1. Ordered level 3 (MARKER_OL_L3).
-      2. Ordered level 3, second item.
+      2. Ordered level 3, second item, now edited.
    2. Ordered level 2, second item.
 2. Ordered level 1, second item.
 
@@ -552,6 +550,7 @@ A 3-level unordered list:
     - Unordered level 3 (MARKER_UL_L3).
     - Unordered level 3, second item.
   - Unordered level 2, second item.
+  - Unordered level 2, a new third item.
 - Unordered level 1, second item.
 
 ## Multi-block conditional with bullets and code (debug-gateway pattern)
@@ -711,13 +710,13 @@ kind: ConfigMap
 metadata:
   name: marker-step-2
 data:
-  step: "2"
+  step: "two"
 EOF
 ```
 
 ### MARKER_STEP_3. Verify
 
-Confirm the resource exists, then move on.
+Confirm that the resource exists and is ready, then move on.
 
 {{% /steps %}}
 
@@ -726,7 +725,8 @@ Confirm the resource exists, then move on.
 | Column A | Column B | Column C |
 | -------- | -------- | -------- |
 | MARKER_TABLE_ROW1A | MARKER_TABLE_ROW1B | row 1 cell C |
-| row 2 cell A | row 2 cell B | row 2 cell C |
+| row 2 cell A | row 2 cell B (edited) | row 2 cell C |
+| new row A | new row B | new row C |
 
 ### Capped table long unbreakable token
 
@@ -1002,7 +1002,7 @@ Tabs accept both forms. The outer tabs uses the angle-bracket form and the inner
 
 {{< tabs >}}
 {{% tab name="YAML" %}}
-MARKER_TAB_YAML. Inside the YAML tab.
+MARKER_TAB_YAML. Inside the YAML tab, with a new sentence.
 
 ```yaml
 apiVersion: v1
