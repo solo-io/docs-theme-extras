@@ -1,0 +1,114 @@
+{
+ "base": "fixture",
+ "baseSha": "0000000000000000000000000000000000000000",
+ "hash": "fixture-a",
+ "files": {
+  "fixture/content/en/test/v2/change-highlights.md": {
+   "new": false,
+   "added": [
+    {
+     "before": "CH_PARA. The gateway routes",
+     "text": "all",
+     "after": "traffic to the service on port 9090,"
+    },
+    {
+     "before": "all traffic to the service on port",
+     "text": "9090,",
+     "after": "then retries twice.",
+     "was": "8080 by default,"
+    },
+    {
+     "before": "Policies on a tunnel bind are",
+     "text": "never",
+     "after": "applied to the CONNECT request."
+    },
+    {
+     "before": "CH_TABLE_VALUE",
+     "text": "enabled by default",
+     "after": ""
+    },
+    {
+     "before": "-f gateway.yaml --namespace",
+     "text": "prod",
+     "after": ""
+    },
+    {
+     "before": "CH_TAB. The first tab has a",
+     "text": "freshly added clause.",
+     "after": ""
+    },
+    {
+     "before": "CH_LIST_TWO. Second step",
+     "text": "with a new ending.",
+     "after": ""
+    },
+    {
+     "before": "nothing on the page reads like this",
+     "text": "CH_NOT_ON_PAGE",
+     "after": ""
+    }
+   ],
+   "removed": [
+    {
+     "before": "routes all traffic to the",
+     "text": "backend",
+     "after": "service on port 9090, then retries"
+    },
+    {
+     "before": "kubectl apply -f gateway.yaml",
+     "text": "--validate=false",
+     "after": "--namespace prod"
+    }
+   ]
+  },
+  "fixture/assets/conrefs/test/change-highlights-snippet.md": {
+   "new": false,
+   "added": [
+    {
+     "before": "CH_SNIPPET. Review the following table to understand",
+     "text": "each setting in",
+     "after": "this configuration."
+    }
+   ],
+   "removed": []
+  },
+  "fixture/assets/test/v2/conrefs/test/change-highlights-versioned.md": {
+   "new": false,
+   "added": [
+    {
+     "before": "CH_VERSIONED. The v2 override of this snippet,",
+     "text": "with an updated sentence.",
+     "after": ""
+    }
+   ],
+   "removed": []
+  },
+  "fixture/content/en/test/v2/change-highlights-new.md": {
+   "new": true,
+   "added": [],
+   "removed": []
+  },
+  "fixture/content/en/test/v2/not-this-page.md": {
+   "new": false,
+   "added": [
+    {
+     "before": "",
+     "text": "The gateway routes",
+     "after": ""
+    }
+   ],
+   "removed": []
+  },
+  "fixture/assets/conrefs/test/change-highlights-versioned.md": {
+   "new": false,
+   "added": [
+    {
+     "before": "CH_VERSIONED. The v2",
+     "text": "override of this snippet,",
+     "after": ""
+    }
+   ],
+   "removed": []
+  }
+ }
+}

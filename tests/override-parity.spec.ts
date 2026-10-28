@@ -6,6 +6,7 @@ import {
   compareRule,
   cssBlocks,
   CONSUMERS,
+  PARENT,
   declMap,
   scan,
 } from "./helpers/scan-overrides";
@@ -48,7 +49,7 @@ import { target } from "./helpers/target";
 // quietly checked nothing.
 
 const IS_FIXTURE_TARGET = target.name.startsWith("docs-theme-extras-fixture");
-const PARENT = path.resolve(process.cwd(), "..");
+// Same folder the scanner reads, including the CONSUMER_CLONES_DIR override.
 const CLONES_PRESENT = CONSUMERS.filter((c) =>
   fs.existsSync(path.join(PARENT, c.dir)),
 ).map((c) => c.name);

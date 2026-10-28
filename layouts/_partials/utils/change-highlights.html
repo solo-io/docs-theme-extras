@@ -1,0 +1,50 @@
+{{- /*
+  Change-highlights overlay. Renders only when utils/change-highlights-enabled.html
+  says so: under `hugo server` by default, or in a build that sets
+  params.themeExtras.changeHighlights to true (a PR preview).
+
+  Emits the source files that produced this page, and loads
+  assets/js/change-highlights.js, which fetches the manifest written by
+  scripts/changes_manifest.py and paints the changes. The source list is:
+
+    page      this page's Markdown file, relative to the project root (the
+              same form as the paths in a git diff). Empty when the file lives
+              outside the project, in a module mount: those files are never in
+              this repository's diff. Relative, not .File.Filename, so a public
+              preview never carries the build machine's absolute paths.
+    snippets  one {resolved, written} object per snippet the `reuse` shortcode
+              pulled in (recorded in .Store "extrasChangeSources"). The overlay
+              matches the resolved path first and falls back to the written one
+              only when nothing matched, so an edit to an unversioned copy does
+              not mark a page that used its versioned override.
+
+  The manifest is NOT read here. Keeping it out of the templates means a
+  rewrite of the manifest never triggers a page re-render under `hugo server`.
+
+  `data-poll` is set only under `hugo server`, where the watcher rewrites the
+  manifest as an author saves. A built preview's manifest never changes, so it
+  is fetched once.
+
+  Called from head.html after its `.WordCount` call, which forces .Content to
+  render first, so the Store already holds every reuse made on the page.
+*/ -}}
+{{- if partialCached "utils/change-highlights-enabled.html" site -}}
+  {{- $page := "" -}}
+  {{- with .File -}}
+    {{- $root := printf "%s/" (strings.TrimSuffix "/" hugo.WorkingDir) -}}
+    {{- if strings.HasPrefix .Filename $root -}}
+      {{- $page = strings.TrimPrefix $root .Filename -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $snippets := slice -}}
+  {{- with .Store.Get "extrasChangeSources" -}}
+    {{- range $resolved, $written := . -}}{{- $snippets = $snippets | append (dict "resolved" $resolved "written" $written) -}}{{- end -}}
+  {{- end -}}
+  {{- with resources.Get "css/change-highlights.css" -}}
+    <link rel="stylesheet" href="{{ .RelPermalink }}" />
+  {{- end -}}
+  {{- with resources.Get "js/change-highlights.js" -}}
+    <script type="application/json" id="extras-change-sources">{{ dict "page" $page "snippets" $snippets | jsonify | safeJS }}</script>
+    <script defer src="{{ .RelPermalink }}" data-manifest="{{ relURL "_extras/changes.json" }}"{{ if hugo.IsServer }} data-poll="true"{{ end }}></script>
+  {{- end -}}
+{{- end -}}

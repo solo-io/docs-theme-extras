@@ -28,6 +28,12 @@ Selects the brand CSS layer loaded on top of the component baseline: `oss` loads
 
 Read in [`assets/css/docs-theme-extras.css`](https://github.com/solo-io/docs-theme-extras/blob/main/assets/css/docs-theme-extras.css), [`layouts/_partials/breadcrumb.html`](https://github.com/solo-io/docs-theme-extras/blob/main/layouts/_partials/breadcrumb.html), [`layouts/_partials/docs/book-document.html`](https://github.com/solo-io/docs-theme-extras/blob/main/layouts/_partials/docs/book-document.html), [`layouts/partials/themeExtras/head-end.html`](https://github.com/solo-io/docs-theme-extras/blob/main/layouts/partials/themeExtras/head-end.html).
 
+## `themeExtras.changeHighlights`
+
+Turns the change-highlights overlay on or off. Unset, it is on under `hugo server` only, and off in every built site. `true` turns it on in any environment: a PR preview opts in with `HUGO_PARAMS_THEMEEXTRAS_CHANGEHIGHLIGHTS=true` on preview builds only. Never set `true` in a config that a production build reads. `false` turns it off everywhere, and any other value fails the build. The overlay only shows anything when `scripts/changes_manifest.py` has written `static/_extras/changes.json`. See [Change highlights](../change-highlights/) for what reviewers see and how to set it up.
+
+Read in [`layouts/_partials/utils/change-highlights-enabled.html`](https://github.com/solo-io/docs-theme-extras/blob/main/layouts/_partials/utils/change-highlights-enabled.html), [`layouts/_partials/utils/change-highlights.html`](https://github.com/solo-io/docs-theme-extras/blob/main/layouts/_partials/utils/change-highlights.html).
+
 ## `themeExtras.logo`
 
 Logo used in the schema.org `Organization` block. Falls back to the navbar logo, and is left empty when neither is set. This is metadata only — it does not affect what renders in the navbar.

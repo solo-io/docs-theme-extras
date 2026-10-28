@@ -1,0 +1,1 @@
+CH_SNIPPET. Review the following table to understand each setting in this configuration.

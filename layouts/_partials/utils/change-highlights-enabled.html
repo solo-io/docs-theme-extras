@@ -1,0 +1,36 @@
+{{- /*
+  Whether the change-highlights overlay is on for this build. Returns a bool.
+
+  params.themeExtras.changeHighlights (case-insensitive):
+    true   on, in any environment. This is how a PR preview opts in: preview
+           builds usually run in the production environment, so they match
+           what ships, and set it explicitly, with the environment variable
+           HUGO_PARAMS_THEMEEXTRAS_CHANGEHIGHLIGHTS=true on preview builds only,
+           never in a config file that a production build could also read.
+    false  off everywhere.
+    unset  on under `hugo server` only. Not "everything outside production":
+           a named environment such as a translation or staging build is a
+           machine build that someone may deploy, so it stays off unless it
+           opts in.
+  Any other value fails the build, rather than silently meaning "unset".
+
+  Compared as a string so the environment-variable form ("true") and the
+  config-file form (true) behave the same.
+
+  Shared by utils/change-highlights.html and the `reuse` shortcode so the two
+  can never disagree. Safe to partialCached with `site` as the context: the
+  answer depends only on the site.
+*/ -}}
+{{- $cfg := site.Params.themeExtras | default dict -}}
+{{- $raw := $cfg.changeHighlights -}}
+{{- $v := "" -}}
+{{- if ne $raw nil -}}{{- $v = lower (printf "%v" $raw) -}}{{- end -}}
+{{- $on := false -}}
+{{- if eq $v "true" -}}
+  {{- $on = true -}}
+{{- else if eq $v "" -}}
+  {{- $on = hugo.IsServer -}}
+{{- else if ne $v "false" -}}
+  {{- errorf "params.themeExtras.changeHighlights must be true or false, not %q (HUGO_PARAMS_THEMEEXTRAS_CHANGEHIGHLIGHTS sets it from the environment)" $v -}}
+{{- end -}}
+{{- return $on -}}

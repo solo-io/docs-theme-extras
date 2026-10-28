@@ -8,9 +8,9 @@ CONFIG  ?=
 
 .PHONY: install \
         clear-cache \
-        server-oss server-enterprise server-docs \
+        server-oss server-oss-changes server-enterprise server-docs \
         build-oss build-enterprise build-flat build-nosections build-docs \
-        build-section-title build-section-current build-nobook build-devpath build-prodhost build-sitemap-i18n \
+        build-section-title build-section-current build-nobook build-devpath build-prodhost build-sitemap-i18n build-changes \
         test-oss test-enterprise test-all \
         test clean help
 
@@ -35,6 +35,15 @@ server-oss: clear-cache
 	@echo "→ open http://localhost:1313/  (brand=oss; uses hugo-oss-local.toml)"
 	@echo "  if it still looks like the previous brand: hard-reload browser (Cmd+Shift+R)"
 	$(HUGO) server -D --ignoreCache --config hugo-oss-local.toml --gc 2> .build-oss-local.log
+
+# server-oss plus the change-highlights overlay: the manifest watcher runs in
+# the background and highlights your edits against the merge-base with
+# upstream/main (or origin/main). Override the base with BASE=<ref>.
+server-oss-changes: clear-cache
+	@echo "→ open http://localhost:1313/  (your changes are highlighted)"
+	@python3 scripts/changes_manifest.py --out fixture/static/_extras/changes.json --watch $(if $(BASE),--base $(BASE)) & \
+	  trap 'kill $$!' EXIT INT TERM; \
+	  $(HUGO) server -D --ignoreCache --config hugo-oss-local.toml --gc 2> .build-oss-local.log
 
 server-enterprise: clear-cache
 	@echo "→ open http://localhost:1313/  (brand=enterprise; uses hugo-enterprise-local.toml)"
@@ -195,6 +204,17 @@ build-prodhost:
 build-sitemap-i18n:
 	$(HUGO) --config hugo-sitemap-i18n.toml --gc 2> .build-sitemap-i18n.log
 
+# CHANGE HIGHLIGHTS: the overlay is on by default only under `hugo server`, so
+# the regular builds never render it. build-changes produces two fixture builds
+# that decide it: a PRODUCTION build opted in through
+# HUGO_PARAMS_THEMEEXTRAS_CHANGEHIGHLIGHTS=true (the exact mechanism a
+# consumer's PR preview uses), and a DEVELOPMENT build with the switch unset,
+# which must stay off (on means `hugo server`, not "anything but production").
+# Read by tests/change-highlights.spec.ts and tests/change-highlights-overlay.spec.ts.
+build-changes:
+	HUGO_PARAMS_THEMEEXTRAS_CHANGEHIGHLIGHTS=true $(HUGO) --config hugo-oss.toml,hugo-oss-changes.toml --gc 2> .build-oss-changes.log
+	$(HUGO) --environment development --config hugo-oss.toml,hugo-oss-changes-off.toml --gc 2> .build-oss-changes-off.log
+
 # ── Tests against the bundled fixture ────────────────────────────────────
 
 # build-flat runs alongside each brand build so section-versionless.spec.ts has
@@ -208,10 +228,10 @@ build-sitemap-i18n:
 # other job — and dev-subpath-baseurl.spec.ts, like every spec here, SKIPS on a
 # missing build rather than failing. Dropping it from one target would have cost
 # nothing visible and half the coverage.
-test-oss: build-oss build-devpath build-flat build-nosections build-section-title build-section-current build-nobook build-prodhost build-sitemap-i18n
+test-oss: build-oss build-devpath build-flat build-nosections build-section-title build-section-current build-nobook build-prodhost build-sitemap-i18n build-changes
 	DOCS_TEST_CONFIG=$(abspath ./fixture/.docs-test-oss.toml) npx playwright test
 
-test-enterprise: build-enterprise build-devpath build-flat build-nosections build-section-title build-section-current build-nobook build-prodhost build-sitemap-i18n
+test-enterprise: build-enterprise build-devpath build-flat build-nosections build-section-title build-section-current build-nobook build-prodhost build-sitemap-i18n build-changes
 	DOCS_TEST_CONFIG=$(abspath ./fixture/.docs-test-enterprise.toml) npx playwright test
 
 # Run both brand variants. CI default — surfaces brand-specific regressions
