@@ -24,7 +24,7 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
-## [0.4.0] — 2026-10-27
+## [0.4.0] — 2026-10-28
 
 ### Add — local and preview builds highlight the text you changed (`scripts/changes_manifest.py`, `assets/js/change-highlights.js`, `assets/css/change-highlights.css`, `layouts/_partials/utils/change-highlights.html`, `layouts/_partials/utils/change-highlights-enabled.html`, `layouts/_partials/head.html`, `layouts/_shortcodes/reuse.html`, `Makefile`, `tests/helpers/gen-docs.ts`, `docs/content/configuration/params.md`, `docs/content/configuration/change-highlights.md`, `scripts/tests/test_changes_manifest.py`, `tests/change-highlights.spec.ts`, `tests/change-highlights-overlay.spec.ts`, `tests/helpers/change-highlights-manifest.json`, `fixture/content/en/test/v2/change-highlights.md`, `fixture/content/en/test/v2/change-highlights-new.md`, `fixture/assets/conrefs/test/change-highlights-*.md`, `fixture/assets/test/v2/conrefs/test/change-highlights-versioned.md`, `hugo-oss-changes.toml`, `hugo-oss-changes-off.toml`, `playwright.config.ts`)
 
