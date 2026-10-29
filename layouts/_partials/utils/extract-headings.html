@@ -1,4 +1,8 @@
-{{- /* Override: nil-safe version of hextra's extract-headings partial */ -}}
+{{- /* Override: nil-safe version of hextra's extract-headings partial.
+  Lives in _partials/ because hextra's _partials/ copy shadows partials/.
+  Keys are plainified and unescaped so typographer entities such as
+  &rsquo; don't show as literal text in search results (fixed upstream
+  in hextra v0.13.0). */ -}}
 
 {{- with .target -}}
   {{- with .Headings -}}
@@ -6,7 +10,8 @@
       {{- if and (eq $heading.Level 0) (not $heading.Title) -}}
         {{- $.scratch.Add "keys" (slice $heading.Title) -}}
       {{- else -}}
-        {{- $key := (printf "%s#%s" $heading.ID $heading.Title) -}}
+        {{- $headingTitle := $heading.Title | plainify | htmlUnescape | strings.TrimSpace -}}
+        {{- $key := (printf "%s#%s" $heading.ID $headingTitle) -}}
         {{- $.scratch.Add "keys" (slice $key) -}}
       {{- end -}}
 
