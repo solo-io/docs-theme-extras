@@ -13,6 +13,10 @@
   --theme-primary:       #3b82f6;
   --theme-primary-hover: #2563eb;
   --theme-primary-tint:  rgba(59, 130, 246, 0.1);
+  /* Shared corner radius for content containers: cards, code blocks,
+     images. Small controls (buttons, badges, sidebar items) keep their
+     own smaller radii so nested corners still look right. */
+  --solo-radius: 8px;
 }
 .dark {
   --theme-primary:       #60a5fa;
@@ -1113,17 +1117,18 @@ pre.mermaid:not([data-processed]) {
 }
 
 /* ── Code blocks ─────────────────────────────────────────────────────── */
-/* Match old theme: white background in light mode, dark grey in dark mode */
+/* Light grey background in light mode (so code stands apart from the white
+   page), dark grey in dark mode */
 .content pre {
-  border-radius: 6px;
+  border-radius: var(--solo-radius);
   padding: 1rem;
-  background-color: #fff !important;
+  background-color: #f8fafc !important;
   border: 1px solid #e5e7eb;
 }
 
 .content .highlight pre,
 .content .chroma {
-  background-color: #fff !important;
+  background-color: #f8fafc !important;
 }
 
 /* Syntax-highlighted blocks with line numbering: put the border/radius
@@ -1136,7 +1141,7 @@ pre.mermaid:not([data-processed]) {
    non-`div` form is the <pre> itself; applying overflow:hidden there
    killed horizontal scroll on every plain code block. */
 .content div.chroma {
-  border-radius: 6px;
+  border-radius: var(--solo-radius);
   border: 1px solid #e5e7eb;
   overflow: hidden;
 }
@@ -1196,6 +1201,33 @@ hr.footnotes-sep,
   display: inline;
   vertical-align: middle;
   margin: 0 2px;
+}
+
+/* Lined-up digits, so version and number columns align. */
+.content table {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Row hover: a faint brand tint helps the eye follow a row across wide
+   reference tables. Skips Chroma's line-number tables (.lntable). */
+.content table:not(.lntable) tbody tr > td {
+  transition: background-color 0.15s;
+}
+.content table:not(.lntable) tbody tr:hover > td {
+  background-color: var(--theme-primary-tint);
+}
+
+/* ── Content images ──────────────────────────────────────────────────── */
+/* Soft frame for screenshots and figures: shared radius plus a thin border.
+   Only plain images get it: class-ed images (logos, card images), images
+   with inline styles (small inline icons), and images in tables (badges)
+   keep their own look. */
+.content :not(td, th) > img:not([class]):not([style]) {
+  border-radius: var(--solo-radius);
+  border: 1px solid #e5e7eb;
+}
+.dark .content :not(td, th) > img:not([class]):not([style]) {
+  border-color: #374151;
 }
 
 /* Responsive table wrapper styling (the wrapper itself comes from
@@ -1609,7 +1641,7 @@ hr.footnotes-sep,
   flex-direction: column;
   padding: 1.25rem;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  border-radius: var(--solo-radius);
   text-decoration: none;
   color: inherit;
   transition: border-color 0.2s, box-shadow 0.25s ease;
