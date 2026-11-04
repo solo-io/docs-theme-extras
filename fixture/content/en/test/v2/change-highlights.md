@@ -45,7 +45,7 @@ CH_TAB_SECOND. The second tab is unchanged.
 {{% /tab %}}
 {{< /tabs >}}
 
-1. CH_LIST_ONE. First step.
+1. CH_LIST_ONE. First step, with `kubectl get pods` inline.
 2. CH_LIST_TWO. Second step with a new ending.
 
 {{< reuse "conrefs/test/change-highlights-snippet.md" >}}

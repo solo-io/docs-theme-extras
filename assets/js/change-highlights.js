@@ -146,8 +146,28 @@
     if (after) c.push([text + after, 0]);
     if (text.length >= 8 || (!before && !after)) c.push([text, 0]);
     return findMatches(index, c, used, all).map(function (start) {
-      return rangeFor(index, start, text.length);
+      return { start: start, len: text.length };
     });
+  }
+
+  // The manifest has one fragment per source line, so a paragraph added over
+  // several lines arrives as several fragments, and the space where each
+  // source line broke belonged to neither: the highlight showed a gap there.
+  // Spans that touch in the index (whitespace is not indexed) are painted as
+  // one range. Only the painted ranges merge; the panel still counts
+  // fragments, and the hover lookup keeps each fragment's own range.
+  function mergeSpans(spans) {
+    var sorted = spans.slice().sort(function (a, b) { return a.start - b.start; });
+    var out = [];
+    sorted.forEach(function (s) {
+      var last = out[out.length - 1];
+      if (last && s.start <= last.start + last.len) {
+        last.len = Math.max(last.len, s.start + s.len - last.start);
+      } else {
+        out.push({ start: s.start, len: s.len });
+      }
+    });
+    return out;
   }
 
   function locateRemoved(index, frag, used, all) {
@@ -284,7 +304,31 @@
   document.addEventListener("mousemove", onMove, { passive: true });
 
   // ── Paint ─────────────────────────────────────────────────────────────
+  // A highlight paints text only, so an inline code span inside a changed
+  // run showed its own padding and border as a gap in the tint and the
+  // underline. A span the highlight covers end to end gets this class, and
+  // the CSS paints its whole box instead. Block code (pre) is left alone: a
+  // change there is usually a few words, not the whole block.
+  var CODE_CLASS = "extras-changed-code";
+  function markCoveredCode(root, ranges) {
+    root.querySelectorAll("code").forEach(function (code) {
+      if (code.closest("pre")) return;
+      var walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+      var first = walker.nextNode(), last = first, n;
+      if (!first) return;
+      while ((n = walker.nextNode())) last = n;
+      for (var i = 0; i < ranges.length; i++) {
+        var r = ranges[i];
+        if (r.comparePoint(first, 0) === 0 && r.comparePoint(last, last.length) === 0) {
+          code.classList.add(CODE_CLASS);
+          return;
+        }
+      }
+    });
+  }
+
   function clearMarkers(root) {
+    root.querySelectorAll("." + CODE_CLASS).forEach(function (c) { c.classList.remove(CODE_CLASS); });
     var parents = [];
     root.querySelectorAll(".extras-removed").forEach(function (m) {
       parents.push(m.parentNode);
@@ -309,7 +353,7 @@
     if (!entries.length) { renderPanel(null); setState("none"); return; }
 
     var index = indexPage(root), usedA = {}, usedR = {};
-    var ranges = [], points = [], missed = [], isNew = false;
+    var spans = [], points = [], missed = [], isNew = false;
     entries.forEach(function (e) {
       var file = e[0], info = e[1];
       var isPage = matchesPageFile(file);
@@ -317,11 +361,11 @@
       // A snippet can appear on the page more than once; mark every copy.
       var all = !isPage;
       (info.added || []).forEach(function (frag) {
-        var rs = locateAdded(index, frag, usedA, all);
-        if (!rs.length) { missed.push({ kind: "added", text: frag.text, file: file }); return; }
-        rs.forEach(function (r) {
-          ranges.push(r);
-          if (frag.was) replaced.push([r, frag.was]);
+        var ss = locateAdded(index, frag, usedA, all);
+        if (!ss.length) { missed.push({ kind: "added", text: frag.text, file: file }); return; }
+        ss.forEach(function (s) {
+          spans.push(s);
+          if (frag.was) replaced.push([rangeFor(index, s.start, s.len), frag.was]);
         });
       });
       (info.removed || []).forEach(function (frag) {
@@ -331,9 +375,11 @@
       });
     });
 
+    var ranges = mergeSpans(spans).map(function (s) { return rangeFor(index, s.start, s.len); });
     if (enabled) {
       if (window.CSS && CSS.highlights && window.Highlight) {
         CSS.highlights.set(HL_NAME, new Highlight(...ranges));
+        markCoveredCode(root, ranges);
       }
       // insertNode splits a text node, and every Range already created
       // (the other markers' points and the highlight ranges) is live, so the
@@ -348,7 +394,7 @@
       });
       if (isNew) root.classList.add("extras-changed-new");
     }
-    renderPanel({ found: ranges.length, removed: points.length, missed: missed, isNew: isNew, base: manifest.base });
+    renderPanel({ found: spans.length, removed: points.length, missed: missed, isNew: isNew, base: manifest.base });
     setState(enabled ? "painted" : "hidden");
   }
 
