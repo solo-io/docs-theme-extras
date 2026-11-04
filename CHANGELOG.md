@@ -28,6 +28,12 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ### Fix: Search headings
 
+### Change — card hover was easy to miss, and tables, code blocks, and images looked flat next to modern docs sites (`assets/css/docs-theme-extras.css`)
+
+A hovered card only changed its border color and got a faint shadow, so readers got little feedback that a card was a link. Wide reference tables gave no help following a row, code blocks had the same white background as the page, and cards and code blocks used different corner radii. Cards now lift 4px on hover with a deeper shadow, and the card icon grows to 110%. Keyboard focus (`:focus-visible`) gets the same effect. The movement sits inside `@media (prefers-reduced-motion: no-preference)`, so readers who set reduced motion get only the border and shadow change. The card moves but does not scale, because scaling made the browser redraw the card text, which flickered at the end of the animation. Table rows get a faint brand-color background on hover, except Chroma's line-number tables (`.lntable`), and tables use `font-variant-numeric: tabular-nums` so numbers line up in their columns. A new `--solo-radius: 8px` variable sets the corners of cards, code blocks, and content images. Before, code blocks used 6px. Small controls such as buttons, badges, and sidebar items keep their own smaller radius. Code blocks in light mode use a very light gray background (`#f8fafc`) instead of white. Dark mode does not change. Plain content images get the shared radius and a thin border. Images with a `class` (logos, card images), an inline `style` (small inline icons), or a `td` or `th` parent (badges) keep their current look. Transparent SVG diagrams also get the border, so check a page with diagrams after you bump the pin.
+
+To see the card hover, open a card grid such as https://agentgateway.dev/docs/kubernetes/latest/llm/ after the site bumps to this release. Verified with `make server-oss` in light and dark mode, plus a headless Playwright check on `/v1/everything/`: code blocks have the gray background and 8px corners, all 14 plain images have the border, provider logos and card images have none, and a hovered table cell has the brand tint. No spec checks hover styles, radius, or background colors.
+
 
 ## [0.4.0] — 2026-10-28
 
