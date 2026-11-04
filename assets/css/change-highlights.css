@@ -11,17 +11,23 @@
   --extras-removed-bg: #d92d20;
   --extras-removed-fg: #fff;
 }
+/* Dark mode uses a faint amber wash and lets the underline carry the signal.
+   At 0.38 the wash blended with the dark page into a mid-tone mustard
+   (about #6b5c0b), so light body text sat on a muddy, glaring block and the
+   neon #ffd60a underline added more glare on top. At 0.16 the wash is about
+   #3a330f, which keeps light text crisp (contrast about 11:1 instead of
+   6.7:1), and the softer underline still marks every change. */
 @media (prefers-color-scheme: dark) {
   :root:not(.light) {
-    --extras-changed-bg: rgb(255 214 0 / 0.38);
-    --extras-changed-line: #ffd60a;
+    --extras-changed-bg: rgb(255 200 0 / 0.16);
+    --extras-changed-line: rgb(255 204 0 / 0.75);
     --extras-changes-panel-bg: #2b2500;
     --extras-changes-panel-fg: #ffe9a0;
   }
 }
 :root.dark {
-  --extras-changed-bg: rgb(255 214 0 / 0.38);
-  --extras-changed-line: #ffd60a;
+  --extras-changed-bg: rgb(255 200 0 / 0.16);
+  --extras-changed-line: rgb(255 204 0 / 0.75);
   --extras-changes-panel-bg: #2b2500;
   --extras-changes-panel-fg: #ffe9a0;
 }
@@ -32,6 +38,24 @@
   background-color: var(--extras-changed-bg);
   text-decoration: underline 2px var(--extras-changed-line);
   text-underline-offset: 3px;
+}
+
+/* An inline code span the highlight covers end to end (set by
+   markCoveredCode in change-highlights.js). The tint is a background image,
+   so it sits over the span's own gray background instead of replacing it,
+   and the underline is a 2px strip at the bottom of the box. The highlight
+   itself is turned off inside the span, or the text would be tinted twice. */
+.extras-changed-code {
+  background-image:
+    linear-gradient(var(--extras-changed-line), var(--extras-changed-line)),
+    linear-gradient(var(--extras-changed-bg), var(--extras-changed-bg));
+  background-size: 100% 2px, 100% 100%;
+  background-position: bottom, center;
+  background-repeat: no-repeat;
+}
+.extras-changed-code::highlight(extras-changed) {
+  background-color: transparent;
+  text-decoration: none;
 }
 
 .extras-changed-new {

@@ -40,11 +40,14 @@
   {{- with .Store.Get "extrasChangeSources" -}}
     {{- range $resolved, $written := . -}}{{- $snippets = $snippets | append (dict "resolved" $resolved "written" $written) -}}{{- end -}}
   {{- end -}}
-  {{- with resources.Get "css/change-highlights.css" -}}
-    <link rel="stylesheet" href="{{ .RelPermalink }}" />
-  {{- end -}}
-  {{- with resources.Get "js/change-highlights.js" -}}
+  {{- /* Fingerprinted under `hugo server` too, which is where this overlay
+       mostly runs: with a fixed file name, a browser kept the cached copy
+       after the CSS or JS changed, so a reload showed the old behavior. */ -}}
+  {{- with resources.Get "css/change-highlights.css" -}}{{- with . | fingerprint -}}
+    <link rel="stylesheet" href="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" />
+  {{- end -}}{{- end -}}
+  {{- with resources.Get "js/change-highlights.js" -}}{{- with . | fingerprint -}}
     <script type="application/json" id="extras-change-sources">{{ dict "page" $page "snippets" $snippets | jsonify | safeJS }}</script>
-    <script defer src="{{ .RelPermalink }}" data-manifest="{{ relURL "_extras/changes.json" }}"{{ if hugo.IsServer }} data-poll="true"{{ end }}></script>
-  {{- end -}}
+    <script defer src="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" data-manifest="{{ relURL "_extras/changes.json" }}"{{ if hugo.IsServer }} data-poll="true"{{ end }}></script>
+  {{- end -}}{{- end -}}
 {{- end -}}

@@ -83,12 +83,14 @@ test.describe("change highlights: the build-time switch", () => {
   test("public-oss-changes: a production build that opts in loads the overlay", () => {
     const html = read("public-oss-changes");
     test.skip(!html, "public-oss-changes not built (make build-changes)");
-    expect(html).toMatch(/<link[^>]+href="?\/test\/css\/change-highlights\.css/);
+    // Both files are fingerprinted, so a changed file gets a new URL and a
+    // browser cannot keep showing a cached copy.
+    expect(html).toMatch(/<link[^>]+href="?\/test\/css\/change-highlights\.[0-9a-f]{64}\.css/);
     // The manifest URL goes through relURL, so it carries the baseURL path.
     // Without it, every consumer served under a subpath (the docs hub serves
     // each product under /<product>/) would fetch a manifest that 404s.
     expect(html).toMatch(
-      /<script defer src="?\/test\/js\/change-highlights\.js"? data-manifest="?\/test\/_extras\/changes\.json/,
+      /<script defer src="?\/test\/js\/change-highlights\.[0-9a-f]{64}\.js"? integrity="?[^"\s]+"? data-manifest="?\/test\/_extras\/changes\.json/,
     );
     // A built preview's manifest never changes, so it must not poll. Only
     // `hugo server` sets data-poll.

@@ -125,6 +125,70 @@ test.describe("change highlights overlay", () => {
     expect((await highlights(page)).sort()).toEqual([...EXPECTED_HIGHLIGHTS].sort());
   });
 
+  test("paints fragments from consecutive source lines as one range, with no gap", async ({ page }) => {
+    // Two fragments the way the manifest writes a sentence added over two
+    // source lines. Separately, the space between them was left unpainted.
+    await serve(page, {
+      manifest: () => ({
+        ...MANIFEST,
+        files: {
+          "fixture/content/en/test/v2/change-highlights.md": {
+            new: false,
+            added: [
+              { before: "CH_PARA.", text: "The gateway routes all traffic", after: "" },
+              { before: "", text: "to the service on port 9090,", after: "then retries twice." },
+            ],
+            removed: [],
+          },
+        },
+      }),
+    });
+    await page.goto(PAGE);
+    await expect.poll(() => highlights(page)).toEqual([
+      "The gateway routes all traffic to the service on port 9090,",
+    ]);
+    // The panel still counts what the manifest listed.
+    expect(await panelText(page)).toContain("2 added");
+  });
+
+  test("an inline code span the highlight fully covers is painted as a whole box", async ({ page }) => {
+    // A highlight paints text only, so a covered code span's padding and
+    // border showed as a gap. The overlay marks such a span with a class
+    // instead. A span the highlight only partly covers keeps its plain look.
+    const withFragment = (text: string, before: string) => () => ({
+      ...MANIFEST,
+      files: {
+        "fixture/content/en/test/v2/change-highlights.md": {
+          new: false,
+          added: [{ before, text, after: "inline." }],
+          removed: [],
+        },
+      },
+    });
+    const codeClass = () =>
+      page.evaluate(() => {
+        const code = [...document.querySelectorAll("#content code")].find(
+          (c) => c.textContent === "kubectl get pods",
+        )!;
+        return code.classList.contains("extras-changed-code");
+      });
+
+    await serve(page, { manifest: withFragment("with kubectl get pods", "First step,") });
+    await page.goto(PAGE);
+    await expect.poll(codeClass).toBe(true);
+
+    // Hide clears it along with the highlight.
+    await page.locator('.extras-changes-panel [data-action="toggle"]').click();
+    expect(await codeClass()).toBe(false);
+
+    await page.unrouteAll();
+    await serve(page, { manifest: withFragment("get pods", "First step, with kubectl") });
+    await page.goto(PAGE);
+    await settled(page, "painted");
+    await expect.poll(() => highlights(page)).toEqual(["get pods"]);
+    expect(await codeClass()).toBe(false);
+  });
+
   test("ignores manifest entries for files this page is not built from", async ({ page }) => {
     // not-this-page.md adds "The gateway routes", which IS on this page. A
     // highlight there would mean entries leak across pages.
