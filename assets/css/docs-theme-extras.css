@@ -13,6 +13,10 @@
   --theme-primary:       #3b82f6;
   --theme-primary-hover: #2563eb;
   --theme-primary-tint:  rgba(59, 130, 246, 0.1);
+  /* Shared corner radius for content containers: cards, code blocks,
+     images. Small controls (buttons, badges, sidebar items) keep their
+     own smaller radii so nested corners still look right. */
+  --solo-radius: 8px;
 }
 .dark {
   --theme-primary:       #60a5fa;
@@ -826,11 +830,11 @@ pre.mermaid:not([data-processed]) {
   z-index: 10;
   width: 100%;
   border-bottom: 1px solid #f0f1f3;
-  /* --solo-chrome-bg / --solo-chrome-bg-dark: set these on :root in a site
+  /* --solo-tabs-band-bg / --solo-tabs-band-bg-dark: set these on :root in a site
      that repaints its navbar and page (agentgateway-oss-website paints dark
      mode #030712), so the band follows that site's chrome instead of
      Hextra's. Unset, they fall through to Hextra's colors below. */
-  background: var(--solo-chrome-bg, var(--hx-color-white, #fff));
+  background: var(--solo-tabs-band-bg, var(--hx-color-white, #fff));
   /* A little room above the tab row so the band isn't jammed against the
      navbar's divider. The space below the tabs is the .docs-tab padding, whose
      bottom edge lands on the band's hairline (the active underline sits on it),
@@ -882,7 +886,7 @@ pre.mermaid:not([data-processed]) {
      in both hextra@v0.12.3 (`--hx-color-dark:#111` in the compiled stylesheet)
      and hextra@v0.9.7 (`dark: '#111'` in tailwind.config.js), so the fallback
      matches on the pre-0.12 consumers that never define the variable. */
-  background: var(--solo-chrome-bg-dark, var(--hx-color-dark, #111));
+  background: var(--solo-tabs-band-bg-dark, var(--hx-color-dark, #111));
 }
 /* The band's page-width container (.docs-tabs-inner, added in docs-tabs.html)
    sources its max-width class from docs/width-class.html, the same slot
@@ -1113,17 +1117,18 @@ pre.mermaid:not([data-processed]) {
 }
 
 /* ── Code blocks ─────────────────────────────────────────────────────── */
-/* Match old theme: white background in light mode, dark grey in dark mode */
+/* Light grey background in light mode (so code stands apart from the white
+   page), dark grey in dark mode */
 .content pre {
-  border-radius: 6px;
+  border-radius: var(--solo-radius);
   padding: 1rem;
-  background-color: #fff !important;
+  background-color: #f8fafc !important;
   border: 1px solid #e5e7eb;
 }
 
 .content .highlight pre,
 .content .chroma {
-  background-color: #fff !important;
+  background-color: #f8fafc !important;
 }
 
 /* Syntax-highlighted blocks with line numbering: put the border/radius
@@ -1136,7 +1141,7 @@ pre.mermaid:not([data-processed]) {
    non-`div` form is the <pre> itself; applying overflow:hidden there
    killed horizontal scroll on every plain code block. */
 .content div.chroma {
-  border-radius: 6px;
+  border-radius: var(--solo-radius);
   border: 1px solid #e5e7eb;
   overflow: hidden;
 }
@@ -1196,6 +1201,33 @@ hr.footnotes-sep,
   display: inline;
   vertical-align: middle;
   margin: 0 2px;
+}
+
+/* Lined-up digits, so version and number columns align. */
+.content table {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Row hover: a faint brand tint helps the eye follow a row across wide
+   reference tables. Skips Chroma's line-number tables (.lntable). */
+.content table:not(.lntable) tbody tr > td {
+  transition: background-color 0.15s;
+}
+.content table:not(.lntable) tbody tr:hover > td {
+  background-color: var(--theme-primary-tint);
+}
+
+/* ── Content images ──────────────────────────────────────────────────── */
+/* Soft frame for screenshots and figures: shared radius plus a thin border.
+   Only plain images get it: class-ed images (logos, card images), images
+   with inline styles (small inline icons), and images in tables (badges)
+   keep their own look. */
+.content :not(td, th) > img:not([class]):not([style]) {
+  border-radius: var(--solo-radius);
+  border: 1px solid #e5e7eb;
+}
+.dark .content :not(td, th) > img:not([class]):not([style]) {
+  border-color: #374151;
 }
 
 /* Responsive table wrapper styling (the wrapper itself comes from
@@ -1609,10 +1641,10 @@ hr.footnotes-sep,
   flex-direction: column;
   padding: 1.25rem;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  border-radius: var(--solo-radius);
   text-decoration: none;
   color: inherit;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color 0.2s, box-shadow 0.25s ease;
   height: 100%;
   /* Prevent the grid cell from expanding to the image's intrinsic width.
      Without this, a wide-aspect SVG with no explicit dimensions (only a
@@ -1621,9 +1653,40 @@ hr.footnotes-sep,
   min-width: 0;
 }
 
-.section-card:hover {
+.section-card:hover,
+.section-card:focus-visible {
   border-color: var(--theme-primary);
-  box-shadow: 0 2px 8px var(--theme-primary-tint);
+  /* The brand tint is only 10% alpha, so a neutral layer gives the lift
+     visible depth in light mode. Dark mode drops it (see below). */
+  box-shadow:
+    0 4px 6px -2px var(--theme-primary-tint),
+    0 12px 24px -6px var(--theme-primary-tint),
+    0 12px 24px -8px rgb(0 0 0 / 0.08);
+}
+
+/* Hover lift: the card rises and the icon scales up. The card itself only
+   translates, by whole pixels: scaling it re-rasterizes the text and makes
+   it flicker at the end of the transition. Motion is gated on
+   `no-preference` so users who set reduced motion get only the border and
+   shadow change above. */
+@media (prefers-reduced-motion: no-preference) {
+  .section-card {
+    transition:
+      border-color 0.2s,
+      box-shadow 0.25s ease,
+      transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .section-card:hover,
+  .section-card:focus-visible {
+    transform: translateY(-4px);
+  }
+  .section-card-icon {
+    transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .section-card:hover .section-card-icon,
+  .section-card:focus-visible .section-card-icon {
+    transform: scale(1.1);
+  }
 }
 
 /* Icons. Auto-cards emit <i class="material-icons section-card-icon">
@@ -1716,9 +1779,12 @@ svg.section-card-icon {
   border-color: #374151;
 }
 
-.dark .section-card:hover {
+.dark .section-card:hover,
+.dark .section-card:focus-visible {
   border-color: var(--theme-primary);
-  box-shadow: 0 2px 8px var(--theme-primary-tint);
+  box-shadow:
+    0 4px 6px -2px var(--theme-primary-tint),
+    0 12px 24px -6px var(--theme-primary-tint);
 }
 
 .dark .section-card-title {

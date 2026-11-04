@@ -124,9 +124,9 @@ Three things follow from that:
 - **A site that repaints its navbar or page must set the band's color.** The
   band is opaque so content can scroll under it. By default it uses Hextra's
   navbar colors, white and `#111`. A site with its own chrome colors shows the
-  band as a visible strip. Set `--solo-chrome-bg` (light) and
-  `--solo-chrome-bg-dark` (dark) on `:root` to your page color, for example
-  `:root { --solo-chrome-bg-dark: #030712; }`.
+  band as a visible strip. Set `--solo-tabs-band-bg` (light) and
+  `--solo-tabs-band-bg-dark` (dark) on `:root` to your page color, for example
+  `:root { --solo-tabs-band-bg-dark: #030712; }`.
 - **A site with no `docTabs` is unaffected.** `--solo-tabs-height` is raised
   only on a `<body>` that actually contains a band, and only inside the
   `xl` media query. Below `xl` the band is hidden, so the offset returns to zero

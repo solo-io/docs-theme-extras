@@ -21,10 +21,12 @@
        `themeExtras/head-end.html`. See version-noindex.html for why that second
        tag existed and why shadowing this file is what let it go away.
 
+       THIRD DIVERGENCE: the change-highlights include (marked below).
+
        The rest of this file is a byte-for-byte copy of Hextra v0.12.3's
-       `head.html`. Only the scripts block and the robots block (both marked
-       below) changed. On a Hextra bump, re-diff against upstream and re-apply
-       just those two. */ -}}
+       `head.html`. Only the scripts block, the robots block, and the
+       change-highlights include (all marked below) changed. On a Hextra bump,
+       re-diff against upstream and re-apply just those three. */ -}}
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -125,6 +127,13 @@
     {{ partialCached "scripts/mathjax.html" . -}}
   {{ end -}}
 
+  {{- /* CHANGED FROM UPSTREAM: change-highlights overlay, non-production only
+         (see utils/change-highlights.html). Placed after the `.WordCount` call
+         above, which forces .Content to render, so the Store already holds
+         every snippet `reuse` pulled in. In head rather than the footer
+         because consumers override footer.html (kgateway-oss does) but none
+         override head.html. */ -}}
+  {{ partial "utils/change-highlights.html" . }}
   {{ partial "utils/page-width-override.html" . }}
   {{ partial "custom/head-end.html" . -}}
 </head>

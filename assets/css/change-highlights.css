@@ -1,0 +1,139 @@
+/* Change-highlights overlay. Loaded only in non-production builds by
+   layouts/_partials/utils/change-highlights.html. */
+
+:root {
+  --extras-changed-bg: rgb(255 214 0 / 0.45);
+  --extras-changed-line: #c98a00;
+  --extras-changed-new-edge: rgb(255 184 0);
+  --extras-changes-panel-bg: #fffbea;
+  --extras-changes-panel-fg: #3d3200;
+  --extras-changes-panel-border: rgb(255 184 0 / 0.6);
+  --extras-removed-bg: #d92d20;
+  --extras-removed-fg: #fff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --extras-changed-bg: rgb(255 214 0 / 0.38);
+    --extras-changed-line: #ffd60a;
+    --extras-changes-panel-bg: #2b2500;
+    --extras-changes-panel-fg: #ffe9a0;
+  }
+}
+:root.dark {
+  --extras-changed-bg: rgb(255 214 0 / 0.38);
+  --extras-changed-line: #ffd60a;
+  --extras-changes-panel-bg: #2b2500;
+  --extras-changes-panel-fg: #ffe9a0;
+}
+
+/* The underline keeps a highlight visible on callouts whose own background
+   is close to the highlight color (warning, caution). */
+::highlight(extras-changed) {
+  background-color: var(--extras-changed-bg);
+  text-decoration: underline 2px var(--extras-changed-line);
+  text-underline-offset: 3px;
+}
+
+.extras-changed-new {
+  box-shadow: inset 4px 0 0 var(--extras-changed-new-edge);
+}
+
+.extras-changes-panel {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 60;
+  max-width: min(420px, calc(100vw - 32px));
+  font: 13px/1.4 system-ui, sans-serif;
+  color: var(--extras-changes-panel-fg);
+  background: var(--extras-changes-panel-bg);
+  border: 1px solid var(--extras-changes-panel-border);
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.15);
+}
+.extras-changes-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+}
+.extras-changes-bar button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.extras-changes-bar button[data-action="toggle"] {
+  margin-left: auto;
+  text-decoration: underline;
+}
+.extras-changes-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--extras-changed-new-edge);
+  flex: none;
+}
+.extras-changes-missed {
+  display: none;
+  margin: 0;
+  padding: 6px 10px 8px 28px;
+  max-height: 40vh;
+  overflow: auto;
+  border-top: 1px solid var(--extras-changes-panel-border);
+}
+.extras-changes-panel.is-open .extras-changes-missed {
+  display: block;
+}
+.extras-changes-missed span {
+  opacity: 0.7;
+}
+
+/* Deleted text: an empty <span> placed where the text used to be. The icon
+   is generated content, so it adds nothing to innerText or a code copy. */
+/* Whole-pixel sizes on purpose: at 0.9em the circle was 14.39px and the bar
+   55% of that, and the rounding drew the bar half a CSS pixel left of center
+   (a full device pixel on a 2x screen). 14px with an 8px bar leaves exactly
+   3px on each side, and 6px above and below the 2px bar. */
+.extras-removed {
+  position: relative;
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin: 0 0.15em;
+  vertical-align: -2px;
+}
+/* The minus is drawn as a centered gradient bar, not a text glyph: a glyph
+   sits on the font's baseline, so its vertical position depended on the font
+   and line height and landed below center. */
+.extras-removed::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    linear-gradient(var(--extras-removed-fg), var(--extras-removed-fg)) center / 8px 2px no-repeat,
+    var(--extras-removed-bg);
+  box-shadow: 0 0 0 2px var(--extras-removed-ring, transparent);
+  cursor: help;
+}
+.extras-changes-tip {
+  padding: 4px 8px;
+  font: 12px/1.4 system-ui, sans-serif;
+  color: var(--extras-changes-panel-fg);
+  background: var(--extras-changes-panel-bg);
+  border: 1px solid var(--extras-changes-panel-border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.15);
+  pointer-events: none;
+}
+.extras-changes-tip[hidden] {
+  display: none;
+}
+.extras-changes-tip {
+  position: fixed;
+  z-index: 61;
+  max-width: min(360px, 80vw);
+}

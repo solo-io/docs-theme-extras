@@ -1,0 +1,10 @@
+# Overlay on hugo-oss.toml. Comma-joined, later wins:
+#   hugo --environment development --config hugo-oss.toml,hugo-oss-changes-off.toml
+#
+# The change-highlights default-off build. With the switch unset, the overlay
+# is on under `hugo server` only, not in every non-production environment: a
+# named environment such as a translation or staging build is a machine build
+# that someone may deploy. `make build-changes` builds this in the development
+# environment; tests/change-highlights.spec.ts asserts no page carries the
+# overlay.
+publishDir = "public-oss-changes-off/test"

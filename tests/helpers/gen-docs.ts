@@ -96,6 +96,17 @@ const PARAM_DOCS: Record<string, string> = {
     "Custom GitHub-style alert types, beyond the built-in set plus this " +
     "module's own `[!SOLO]` and `[!SUCCESS]`. An unknown type still warns and " +
     "falls back to the default style, so a typo is visible rather than silent.",
+  changeHighlights:
+    "Turns the change-highlights overlay on or off. Unset, it is on under " +
+    "`hugo server` only, and off in every built site. `true` turns it on in " +
+    "any environment: a PR preview opts in with " +
+    "`HUGO_PARAMS_THEMEEXTRAS_CHANGEHIGHLIGHTS=true` on preview builds only. " +
+    "Never set `true` in a config that a production build reads. `false` " +
+    "turns it off everywhere, and any other value fails the build. The " +
+    "overlay only shows anything when `scripts/changes_manifest.py` has " +
+    "written `static/_extras/changes.json`. See " +
+    "[Change highlights](../change-highlights/) for what reviewers see and " +
+    "how to set it up.",
   logo:
     "Logo used in the schema.org `Organization` block. Falls back to the " +
     "navbar logo, and is left empty when neither is set. This is metadata only " +
