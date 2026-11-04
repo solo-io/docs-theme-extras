@@ -3300,6 +3300,12 @@ a[class*="word-break:break-word"] {
   border: 6px solid transparent;
   border-bottom-color: #1f2937;
 }
+/* The hover transform makes the badge a stacking context, which traps the
+   tooltip's z-index inside it, so on a narrow page the copy/context buttons
+   (positioned, later in the DOM) painted over the tooltip. Lift the badge
+   itself while the tooltip can be open. */
+.test-status-badge:hover,
+.test-status-badge:focus-visible { z-index: 50; }
 /* Focus as well as hover, so the tooltip is reachable from the keyboard. */
 .test-status-badge:hover .test-status-tooltip,
 .test-status-badge:focus-visible .test-status-tooltip {
@@ -3314,6 +3320,23 @@ a[class*="word-break:break-word"] {
   opacity: 0;
   visibility: hidden;
 }
+/* The tooltip with a `test_types` list: an intro line, then one row per kind
+   of test that ran, a bold label over a one-line description. Spans, not a
+   list, because the tooltip sits inside the badge's <span>; display:block
+   stacks them. The check before each label repeats the badge's icon color. */
+.test-status-tooltip-types { width: min(20rem, calc(100vw - 2rem)); }
+.test-status-intro { display: block; margin-bottom: 0.4rem; }
+.test-status-type { display: block; padding-left: 1rem; position: relative; }
+.test-status-type + .test-status-type { margin-top: 0.35rem; }
+.test-status-type::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: #34d399;
+  font-weight: 700;
+}
+.test-status-type-label { display: block; font-weight: 700; }
+.test-status-type-desc { display: block; font-weight: 400; opacity: 0.9; }
 .dark .test-status-tooltip { background: #374151; color: #f3f4f6; }
 .dark .test-status-tooltip::before { border-bottom-color: #374151; }
 
