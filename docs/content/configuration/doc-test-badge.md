@@ -29,6 +29,11 @@ the latest doc-test results and writes one of three values:
 | `failed` | At least one scenario failed. | No |
 | `partial` | No scenario failed, but at least one was skipped because its test annotations no longer match the page. | No |
 
+For a `passed` page, the script also writes `test_types`, the kinds of test
+that ran on it, such as `[schema, functional]`. The tooltip lists each kind
+with a short description. A kind the module has no wording for is skipped, and
+a page without `test_types` shows the generic sentence.
+
 A page without the field shows no badge. A site that never runs the inject step
 therefore renders exactly what it rendered before the badge existed.
 
@@ -68,6 +73,11 @@ keys in your site's `i18n/<lang>.yaml`:
 |---|---|
 | `testStatusVerified` | Verified |
 | `testStatusVerifiedTooltip` | Code examples on this page have been automatically tested and verified. |
+| `testStatusTypesIntro` | The code examples on this page passed these automated tests: |
+| `testTypeSchema`, `testTypeSchemaDescription` | Matches the API; The Kubernetes resources and config files on this page were checked against their schemas. |
+| `testTypeFunctional`, `testTypeFunctionalDescription` | Runs end to end; Every step ran in a fresh test environment, and the results were checked. |
+| `testTypeLive`, `testTypeLiveDescription` | Reaches real services; Requests went to a real external endpoint. |
+| `testTypeCredentialed`, `testTypeCredentialedDescription` | Works with the provider; The steps ran against the real provider with a test account. |
 
 ## Upgrading from a site-local badge
 

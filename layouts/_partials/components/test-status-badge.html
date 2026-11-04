@@ -24,19 +24,58 @@
   hovered without closing, and Esc closes it (assets/js/docs-init.js), as
   WCAG 1.4.13 asks of content shown on hover or focus.
 
-  Strings come from i18n (`testStatusVerified`, `testStatusVerifiedTooltip`)
-  with an English default. Styles live in assets/css/docs-theme-extras.css
-  under `.test-status-*`.
+  WHAT RAN. The same inject script also writes `test_types`, the kinds of test
+  that ran on the page (schema, functional, live, credentialed), taken from the
+  results. When it lists a kind this partial has wording for, the tooltip
+  shows an intro line and one row per kind (a label and a one-line
+  description) in place of the generic sentence. A kind with no wording is
+  skipped, so a new kind never shows its raw name. A page with no known kind
+  (older results, or a site whose inject script predates the field) keeps the
+  generic sentence.
+
+  Strings come from i18n with an English default: `testStatusVerified`,
+  `testStatusVerifiedTooltip`, `testStatusTypesIntro`, and per kind
+  `testType<Kind>` and `testType<Kind>Description`. Styles live in
+  assets/css/docs-theme-extras.css under `.test-status-*`.
 */ -}}
 {{- if eq .Params.test_status "passed" -}}
 {{- $label := (T "testStatusVerified") | default "Verified" -}}
 {{- $tip := (T "testStatusVerifiedTooltip") | default "Code examples on this page have been automatically tested and verified." -}}
+{{- $defaults := dict
+  "schema" (slice "Matches the API" "The Kubernetes resources and config files on this page were checked against their schemas.")
+  "functional" (slice "Runs end to end" "Every step ran in a fresh test environment, and the results were checked.")
+  "live" (slice "Reaches real services" "Requests went to a real external endpoint.")
+  "credentialed" (slice "Works with the provider" "The steps ran against the real provider with a test account.")
+-}}
+{{- $types := .Params.test_types | default slice -}}
+{{- if not (reflect.IsSlice $types) }}{{ $types = slice $types }}{{ end -}}
+{{- $rows := slice -}}
+{{- range $types -}}
+  {{- $kind := lower (string .) -}}
+  {{- with index $defaults $kind -}}
+    {{- $key := printf "testType%s" (title $kind) -}}
+    {{- $rows = $rows | append (dict
+      "label" ((T $key) | default (index . 0))
+      "desc" ((T (printf "%sDescription" $key)) | default (index . 1))) -}}
+  {{- end -}}
+{{- end -}}
+{{- $intro := (T "testStatusTypesIntro") | default "The code examples on this page passed these automated tests:" -}}
 <span class="test-status-badge test-status-passed" tabindex="0">
   <svg class="test-status-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" aria-hidden="true" focusable="false">
     <path d="M447.9 142.5l-23.2 22L181 395.3l-22 20.8-22-20.8L23.2 287.6 0 265.6l44-46.5 23.2 22L159 328 380.7 118l23.2-22 44 46.5z"/>
   </svg>
   <span class="test-status-text">{{ $label }}</span>
+  {{- if $rows }}
+  <span class="test-status-sr">: {{ $intro }}{{ range $rows }} {{ .label }}: {{ .desc }}{{ end }}</span>
+  <span class="test-status-tooltip test-status-tooltip-types" aria-hidden="true">
+    <span class="test-status-intro">{{ $intro }}</span>
+    {{- range $rows }}
+    <span class="test-status-type"><span class="test-status-type-label">{{ .label }}</span><span class="test-status-type-desc">{{ .desc }}</span></span>
+    {{- end }}
+  </span>
+  {{- else }}
   <span class="test-status-sr">: {{ $tip }}</span>
   <span class="test-status-tooltip" aria-hidden="true">{{ $tip }}</span>
+  {{- end }}
 </span>
 {{- end -}}

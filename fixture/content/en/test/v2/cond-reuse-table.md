@@ -9,12 +9,6 @@ Regression guard for the docs-hub escaping bug (retry-timeout / api-key). When a
 reuse's rendered inline code must stay a real code element, not leak as escaped
 text, and the table must still render.
 
-Create a `global` budget that allows 100 tokens a day for the whole fleet. The
-budget has no subject, so every LLM request on every gateway counts against it.
-In the UI of `gateway-1`, go to **LLM** > **Budgets**, and click **New budget**.
-The small limit lets you see enforcement after a few requests. For more
-information, see [Rebased](../rebased/).
-
 ## Case 1 list with a table then a reuse
 
 {{% conditional-text include-if="test" %}}

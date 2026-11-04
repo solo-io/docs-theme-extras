@@ -11,3 +11,14 @@ docsNavigation: Docs
 # explanation shown in its tooltip and read by screen readers.
 testStatusVerified: Verified
 testStatusVerifiedTooltip: Code examples on this page have been automatically tested and verified.
+# When the page lists the kinds of test that ran (`test_types`), the tooltip
+# shows this intro and one label plus description per kind instead.
+testStatusTypesIntro: "The code examples on this page passed these automated tests:"
+testTypeSchema: Matches the API
+testTypeSchemaDescription: The Kubernetes resources and config files on this page were checked against their schemas.
+testTypeFunctional: Runs end to end
+testTypeFunctionalDescription: Every step ran in a fresh test environment, and the results were checked.
+testTypeLive: Reaches real services
+testTypeLiveDescription: Requests went to a real external endpoint.
+testTypeCredentialed: Works with the provider
+testTypeCredentialedDescription: The steps ran against the real provider with a test account.

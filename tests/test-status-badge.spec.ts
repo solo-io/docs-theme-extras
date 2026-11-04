@@ -45,6 +45,26 @@ test.describe("doc-test Verified badge", () => {
     expect(html).toContain('tabindex="0"');
   });
 
+  test("test_types lists each known kind, in order, and skips unknown ones", () => {
+    // The fixture lists schema, functional, and an unknown kind. The tooltip
+    // shows the intro and a label plus description for the two known kinds,
+    // in place of the generic sentence, and never prints the raw unknown name.
+    const html = builtPage("types");
+    expect(html.split(BADGE).length - 1, "badge count").toBe(1);
+    expect(html).toContain('class="test-status-tooltip test-status-tooltip-types" aria-hidden="true"');
+    expect(html).toContain("passed these automated tests:");
+    const labels = [...html.matchAll(/class="test-status-type-label">([^<]+)</g)].map((m) => m[1]);
+    expect(labels).toEqual(["Matches the API", "Runs end to end"]);
+    expect(html).not.toContain("not-a-kind");
+    expect(html).not.toContain("Code examples on this page have been automatically tested");
+    // Screen readers get the same rows as text, in one sentence.
+    expect(html).toMatch(/class="test-status-sr">: The code examples on this page passed these automated tests: Matches the API: The Kubernetes resources and config files on this page/);
+  });
+
+  test("without test_types the tooltip keeps the generic sentence", () => {
+    expect(builtPage("passed")).not.toContain("test-status-type-label");
+  });
+
   test("a slot override that already prints a badge leaves exactly one", () => {
     const html = builtPage("legacy-override");
     expect(html.split(BADGE).length - 1, "badge count").toBe(1);
@@ -82,6 +102,7 @@ test.describe("doc-test Verified badge", () => {
           e.name.endsWith(".html") &&
           !full.includes(`${path.sep}test-status-passed${path.sep}`) &&
           !full.includes(`${path.sep}test-status-legacy-override${path.sep}`) &&
+          !full.includes(`${path.sep}test-status-types${path.sep}`) &&
           fs.readFileSync(full, "utf8").includes(BADGE)
         )
           offenders.push(path.relative(target.builtRoot, full));
@@ -101,6 +122,7 @@ test.describe("doc-test Verified badge", () => {
       ".test-status-sr",
       ".test-status-dismissed",
       ".dark .test-status-passed",
+      ".test-status-type-label",
     ]) {
       expect(src, `${sel} missing from docs-theme-extras.css`).toContain(sel);
     }
