@@ -23,7 +23,7 @@ testTypeSchemaDescription: The code examples on this page were checked against t
 testTypeHelm: Matches the Helm chart
 testTypeHelmDescription: The Helm values on this page were checked against the values the chart accepts.
 testTypeFunctional: Runs end to end
-testTypeFunctionalDescription: Every step ran in a fresh test environment, and the results were checked.
+testTypeFunctionalDescription: Every step ran in a fresh test environment and the results were checked.
 testTypeLive: Reaches real services
 testTypeLiveDescription: Requests went to a real external endpoint.
 testTypeCredentialed: Works with the provider
