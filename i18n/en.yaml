@@ -14,17 +14,17 @@ testStatusVerifiedTooltip: Code examples on this page have been automatically te
 # When the page lists the kinds of test that ran (`test_types`), the tooltip
 # shows this intro and one label plus description per kind instead.
 testStatusTypesIntro: "The code examples on this page passed these automated tests:"
-testTypeKubernetes: Matches the Kubernetes API
+testTypeKubernetes: Kubernetes resources
 testTypeKubernetesDescription: The Kubernetes resources on this page were checked against their API schemas.
-testTypeConfig: Matches the config schema
+testTypeConfig: Configuration files
 testTypeConfigDescription: The configuration files on this page were checked against their schema.
-testTypeSchema: Matches the API
+testTypeSchema: Code examples
 testTypeSchemaDescription: The code examples on this page were checked against their schemas.
-testTypeHelm: Matches the Helm chart
+testTypeHelm: Helm values
 testTypeHelmDescription: The Helm values on this page were checked against the values the chart accepts.
-testTypeFunctional: Runs end to end
+testTypeFunctional: End-to-end run
 testTypeFunctionalDescription: Every step ran in a fresh test environment and the results were checked.
-testTypeLive: Reaches real services
+testTypeLive: Live services
 testTypeLiveDescription: Requests went to a real external endpoint.
-testTypeCredentialed: Works with the provider
+testTypeCredentialed: Real provider account
 testTypeCredentialedDescription: The steps ran against the real provider with a test account.

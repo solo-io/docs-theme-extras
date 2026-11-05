@@ -55,15 +55,15 @@ test.describe("doc-test Verified badge", () => {
     expect(html).toContain("passed these automated tests:");
     const labels = [...html.matchAll(/class="test-status-type-label">([^<]+)</g)].map((m) => m[1]);
     expect(labels).toEqual([
-      "Matches the Kubernetes API",
-      "Matches the config schema",
-      "Matches the Helm chart",
-      "Runs end to end",
+      "Kubernetes resources",
+      "Configuration files",
+      "Helm values",
+      "End-to-end run",
     ]);
     expect(html).not.toContain("not-a-kind");
     expect(html).not.toContain("Code examples on this page have been automatically tested");
     // Screen readers get the same rows as text, in one sentence.
-    expect(html).toMatch(/class="test-status-sr">: The code examples on this page passed these automated tests: Matches the Kubernetes API: The Kubernetes resources on this page/);
+    expect(html).toMatch(/class="test-status-sr">: The code examples on this page passed these automated tests: Kubernetes resources: The Kubernetes resources on this page/);
   });
 
   test("without test_types the tooltip keeps the generic sentence", () => {
