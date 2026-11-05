@@ -4,7 +4,9 @@ weight: 397
 description: Renders the doc-test badge with the kinds of test that ran listed in its tooltip.
 test_status: passed
 test_types:
-- schema
+- kubernetes
+- config
+- helm
 - functional
 - not-a-kind
 # Direct-path fixture (see gate-transparency.md) so auto-cards.spec.ts's child

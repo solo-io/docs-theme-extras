@@ -1691,12 +1691,16 @@ hr.footnotes-sep,
 
 /* Icons. Auto-cards emit <i class="material-icons section-card-icon">
    (font icon, sized via font-size); the {{< card >}} shortcode emits an
-   inline <svg class="section-card-icon"> via utils/icon.html. Cover both. */
+   inline <svg class="section-card-icon"> via utils/icon.html. Cover both.
+   `align-self: flex-start` keeps the font icon's box as wide as its glyph.
+   Without it the <i> stretches across the card, so the hover scale(),
+   which grows from the box center, shifts a left-aligned glyph leftward. */
 .section-card-icon {
   font-size: 28px;
   color: var(--theme-primary);
   flex-shrink: 0;
   margin-top: 2px;
+  align-self: flex-start;
 }
 svg.section-card-icon {
   width: 28px;

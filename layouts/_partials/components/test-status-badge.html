@@ -25,8 +25,11 @@
   WCAG 1.4.13 asks of content shown on hover or focus.
 
   WHAT RAN. The same inject script also writes `test_types`, the kinds of test
-  that ran on the page (schema, functional, live, credentialed), taken from the
-  results. When it lists a kind this partial has wording for, the tooltip
+  that ran on the page (kubernetes, config, schema, helm, functional, live,
+  credentialed), taken from the results. `kubernetes`, `config`, and `helm` are
+  the parts of the schema check, listed only for what the page itself has, so
+  a standalone page never mentions Kubernetes. `schema` is their generic
+  fallback, for results that predate the split. When it lists a kind this partial has wording for, the tooltip
   shows an intro line and one row per kind (a label and a one-line
   description) in place of the generic sentence. A kind with no wording is
   skipped, so a new kind never shows its raw name. A page with no known kind
@@ -42,7 +45,10 @@
 {{- $label := (T "testStatusVerified") | default "Verified" -}}
 {{- $tip := (T "testStatusVerifiedTooltip") | default "Code examples on this page have been automatically tested and verified." -}}
 {{- $defaults := dict
-  "schema" (slice "Matches the API" "The Kubernetes resources and config files on this page were checked against their schemas.")
+  "kubernetes" (slice "Matches the Kubernetes API" "The Kubernetes resources on this page were checked against their API schemas.")
+  "config" (slice "Matches the config schema" "The configuration files on this page were checked against their schema.")
+  "schema" (slice "Matches the API" "The code examples on this page were checked against their schemas.")
+  "helm" (slice "Matches the Helm chart" "The Helm values on this page were checked against the values the chart accepts.")
   "functional" (slice "Runs end to end" "Every step ran in a fresh test environment, and the results were checked.")
   "live" (slice "Reaches real services" "Requests went to a real external endpoint.")
   "credentialed" (slice "Works with the provider" "The steps ran against the real provider with a test account.")
