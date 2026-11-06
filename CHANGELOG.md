@@ -24,38 +24,37 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
-## Next release
+## [0.4.1] — 2026-11-06
 
-### Change — the Verified badge names what the schema check validated, and each row is labeled by what was tested (`layouts/_partials/components/test-status-badge.html`, `i18n/en.yaml`, `i18n/ja.yaml`, `docs/content/configuration/doc-test-badge.md`, `fixture/content/en/test/v2/test-status-types.md`, `tests/test-status-badge.spec.ts`)
+### Add — the Verified badge's tooltip lists what the automated tests checked (`layouts/_partials/components/test-status-badge.html`, `assets/css/docs-theme-extras.css`, `i18n/en.yaml`, `i18n/ja.yaml`, `docs/content/configuration/doc-test-badge.md`, `fixture/content/en/test/v2/test-status-types.md`, `tests/test-status-badge.spec.ts`)
 
-The `schema` row read "Matches the API: The Kubernetes resources and config files on this page were checked against their schemas." on every page, so a standalone page whose only checked example was a config file still told readers about Kubernetes resources, and Helm values the check validated were never mentioned. solo-io/docs-tests' schema check now reports what it validated on the page itself, and the inject script writes those kinds into `test_types` in place of `schema`. The badge has wording for each: `kubernetes` ("Kubernetes resources"), `config` ("Configuration files"), and `helm` ("Helm values"), in English and Japanese. `schema` stays as the fallback for results that predate the split, now labeled "Code examples", and its description no longer says "Kubernetes". The other rows are also labeled by what was tested rather than by a verb phrase: `functional` is "End-to-end run", `live` is "Live services", and `credentialed` is "Real provider account", with matching Japanese nouns. The intro line above the rows, which read "The code examples on this page passed these automated tests:", is now "Automated tests passed for:", so it leads into the noun labels and no longer repeats "code examples" above the `schema` row. The `testStatusTypesIntro` and `testType<Kind>` keys are unchanged, so a site that overrides the intro or a label in its own i18n keeps its wording. The docs-tests change is already on its `main`, and a theme without the new wording skips the new kinds, so a Kubernetes page shows only its functional row until the site bumps to this release. To see it, hover the badge on a standalone agentgateway page in the docs hub once the hub bumps the pin and the page is in the badge list. Verified with the badge specs against the OSS fixture build (`DOCS_TEST_CONFIG=$PWD/fixture/.docs-test-oss.toml npx playwright test tests/test-status-badge.spec.ts`), with the fixture listing `kubernetes`, `config`, `helm`, `functional`, and an unknown kind.
+The tooltip said only that the examples "have been automatically tested and verified", so a reader couldn't tell whether a page's examples were checked against their schemas, run end to end, or both. solo-io/docs-tests' `doc_test_inject_status.py` now also writes `test_types` on a passed page, the kinds of test that ran, taken from the results rather than from `tests.yaml`. The schema check reports what it validated on the page itself, so a page lists `kubernetes`, `config`, or `helm` instead of one generic schema kind, and a standalone page with only configuration files never mentions Kubernetes. When the list holds a known kind, the tooltip shows the intro "Automated tests passed for:" and a label plus a one-line description for each kind: `kubernetes` ("Kubernetes resources"), `config` ("Configuration files"), `helm` ("Helm values"), `functional` ("End-to-end run"), `live` ("Live services"), and `credentialed` ("Real provider account"). `schema` ("Code examples") is the fallback for results from before docs-tests split the schema check. Screen readers get the same text. An unknown kind is skipped. A page without the field keeps the old sentence, so a site whose inject script predates it renders exactly as before. The strings come from i18n in English and Japanese, under the `testStatusTypesIntro` and `testType<Kind>` keys, so a site can override any of them. The docs-tests change is already live, and an older theme has no wording for `kubernetes`, `config`, or `helm`, so it skips them: a page shows only its other rows, or the generic sentence, until the site bumps to this release. This also fixes a bug that was already there: the badge's hover transform trapped the tooltip's `z-index`, so on a narrow page the copy/context buttons painted over it. The badge now takes `z-index: 50` while hovered or focused. To see it, hover the badge on https://agentgateway.dev/docs/kubernetes/main/integrations/llm/clients/claude-code/ once that site bumps the pin.
 
-### Fix — a font-icon section card's icon slides left on hover (`assets/css/docs-theme-extras.css`)
-
-The hover lift scales `.section-card-icon` from its box's center. An inline SVG icon has a fixed 28px box, so it grew in place. A Material Icons ligature (`<i class="material-icons section-card-icon">`, which auto-cards emit for any `icon:` that is not in Hextra's icon data) stretched across the whole card, because the card is a column flexbox, so it scaled from the card's center and the left-aligned glyph moved left. The icon now takes `align-self: flex-start`, so its box is only as wide as its glyph. To see it, hover the Kubernetes card (`icon: hub`) next to the Standalone card (`icon: terminal`) on https://docs.solo.io/agentgateway/. Verified with `tests/auto-cards.spec.ts` against the OSS fixture build and in a local docs hub agentgateway build that served this file.
-
-### Add — the Verified badge's tooltip lists the kinds of test that ran (`layouts/_partials/components/test-status-badge.html`, `assets/css/docs-theme-extras.css`, `i18n/en.yaml`, `i18n/ja.yaml`, `docs/content/configuration/doc-test-badge.md`, `fixture/content/en/test/v2/test-status-types.md`, `tests/test-status-badge.spec.ts`)
-
-The tooltip said only that the examples "have been automatically tested and verified", so a reader couldn't tell whether a page's examples were checked against their schemas, run end to end, or both. solo-io/docs-tests' `doc_test_inject_status.py` now also writes `test_types`, the kinds that ran on a passed page, taken from the results rather than from `tests.yaml`. When the list holds a known kind (`schema`, `functional`, `live`, `credentialed`), the tooltip shows an intro line and a label plus a one-line description for each one, and screen readers get the same text. An unknown kind is skipped. A page without the field keeps the old sentence, so a site whose inject script predates it renders exactly as before. The strings come from i18n in English and Japanese. This also fixes a bug that was already there: the badge's hover transform trapped the tooltip's `z-index`, so on a narrow page the copy/context buttons painted over it. The badge now takes `z-index: 50` while hovered or focused. To see it, hover the badge on an agentgateway.dev page that runs both kinds, such as https://agentgateway.dev/docs/kubernetes/main/integrations/llm/clients/claude-code/, once that site bumps the pin.
-
-Verified with the badge specs against the OSS fixture build (`DOCS_TEST_CONFIG=$PWD/fixture/.docs-test-oss.toml npx playwright test tests/test-status-badge.spec.ts tests/test-status-tooltip.spec.ts`, 11 passed), including two new tests for the rows and the fallback. Also checked in a local agentgateway.dev build with real CI results: 303 pages show one kind and 124 show two, in light mode, dark mode, and at 390px width.
-
-### Fix — search results could show heading text with HTML entities, and the theme's heading override never ran (`layouts/_partials/utils/extract-headings.html`, moved from `layouts/partials/utils/extract-headings.html`)
-
-The theme overrides Hextra's `utils/extract-headings.html` partial with a nil-safe version, which builds the heading keys in the search index. The override lived in `layouts/partials/`, but Hextra keeps its own copy in `layouts/_partials/`, and Hugo uses the `_partials/` copy first. So the theme's version never ran, and sites got Hextra's copy. That copy used each heading title as is, and a title can carry typographer entities such as `&rsquo;`, so a search result could show the entity as literal text instead of an apostrophe. agentgateway.dev showed it, for example `What&rsquo;s next` instead of "What’s next", and fixed it in its own `layouts/partials/utils/fragments.html` override (agentgateway/website#1424). This fix brings the same behavior to every consumer, without a site override. The override now lives in `layouts/_partials/`, so it runs. It also passes each heading title through `plainify`, `htmlUnescape`, and `strings.TrimSpace` before building the key, so search results show the heading as readers see it on the page. Hextra fixed the same bug in v0.13.0, and this theme pins v0.12.3.
-
-To see the fixed behavior, search agentgateway.dev for "What’s next" and open the result for https://agentgateway.dev/docs/kubernetes/latest/documentation/observability/otel-stack/. The heading shows an apostrophe. That page uses agentgateway.dev's own fix, not this one. No spec covers the search index's heading keys, and the fixture's search config indexes whole pages rather than headings, so the fixture build never uses this partial.
-### Fix — change highlights glared in dark mode, broke at line ends and around inline code, and stayed cached after an update (`assets/css/change-highlights.css`, `assets/js/change-highlights.js`, `layouts/_partials/utils/change-highlights.html`, `tests/change-highlights-overlay.spec.ts`, `tests/change-highlights.spec.ts`, `fixture/content/en/test/v2/change-highlights.md`)
-
-Three problems made changed text hard to read in local and PR preview builds. First, in dark mode the 38% yellow highlight mixed with the dark page into a mustard block, and a neon `#ffd60a` underline ran under every line, so light text glared. Dark mode now uses a faint amber tint (`rgb(255 200 0 / 0.16)`) and a softer underline (`rgb(255 204 0 / 0.75)`), and the underline does most of the marking. Light mode does not change. Second, a paragraph added over several source lines showed gaps in the highlight. The manifest lists one fragment per source line, and the space where each line broke belonged to no fragment. The overlay now joins fragments that only whitespace separates into one painted range. The panel still counts fragments, and the "Was:" tooltip still uses each fragment's own range. Third, an inline code span inside a changed run showed its padding and border as a gap in the tint and the underline, because a CSS highlight paints text only. An inline code span that a highlight covers end to end now gets an `extras-changed-code` class, which paints the tint and underline across the whole span. Code blocks and partly changed code spans do not get the class. Separately, the overlay's CSS and JS are now fingerprinted under `hugo server` too, with an `integrity` attribute. Before, the file names never changed, so a browser kept the old copy after an update and a reload showed the old behavior.
-
-No production page shows this, because the overlay never renders in production. To see the fix, run `make server-oss-changes BASE=HEAD~60` in this repository, open `/v2/cond-reuse-table/` in dark mode, and add a paragraph with inline code to that page. Verified with two new tests in `tests/change-highlights-overlay.spec.ts`: fragments from consecutive source lines paint as one range, and a fully covered code span gets the class while a partly covered one does not, and Hide clears it. The test in `tests/change-highlights.spec.ts` that checks the built page now expects fingerprinted file names. The change-highlights specs pass (21), and `make test-oss` passes (2,578 passed, 21 skipped). Also checked with screenshots: the joined paragraph in Chromium, Firefox, and WebKit, and the dark-mode colors and code spans in Chromium, in light and dark mode.
+Verified with the badge specs against the OSS fixture build (`DOCS_TEST_CONFIG=$PWD/fixture/.docs-test-oss.toml npx playwright test tests/test-status-badge.spec.ts tests/test-status-tooltip.spec.ts`, 11 passed), with the fixture listing `kubernetes`, `config`, `helm`, `functional`, and an unknown kind. Before the schema split, also checked in a local agentgateway.dev build with real CI results: 303 pages showed one kind and 124 showed two, in light mode, dark mode, and at 390px width.
 
 ### Change — card hover was easy to miss, and tables, code blocks, and images looked flat next to modern docs sites (`assets/css/docs-theme-extras.css`)
 
 A hovered card only changed its border color and got a faint shadow, so readers got little feedback that a card was a link. Wide reference tables gave no help following a row, code blocks had the same white background as the page, and cards and code blocks used different corner radii. Cards now lift 4px on hover with a deeper shadow, and the card icon grows to 110%. Keyboard focus (`:focus-visible`) gets the same effect. The movement sits inside `@media (prefers-reduced-motion: no-preference)`, so readers who set reduced motion get only the border and shadow change. The card moves but does not scale, because scaling made the browser redraw the card text, which flickered at the end of the animation. Table rows get a faint brand-color background on hover, except Chroma's line-number tables (`.lntable`), and tables use `font-variant-numeric: tabular-nums` so numbers line up in their columns. A new `--solo-radius: 8px` variable sets the corners of cards, code blocks, and content images. Before, code blocks used 6px. Small controls such as buttons, badges, and sidebar items keep their own smaller radius. Code blocks in light mode use a very light gray background (`#f8fafc`) instead of white. Dark mode does not change. Plain content images get the shared radius and a thin border. Images with a `class` (logos, card images), an inline `style` (small inline icons), or a `td` or `th` parent (badges) keep their current look. Transparent SVG diagrams also get the border, so check a page with diagrams after you bump the pin.
 
 To see the card hover, open a card grid such as https://agentgateway.dev/docs/kubernetes/latest/llm/ after the site bumps to this release. Verified with `make server-oss` in light and dark mode, plus a headless Playwright check on `/v1/everything/`: code blocks have the gray background and 8px corners, all 14 plain images have the border, provider logos and card images have none, and a hovered table cell has the brand tint. No spec checks hover styles, radius, or background colors.
+
+### Fix — a font-icon section card's icon slides left on hover (`assets/css/docs-theme-extras.css`)
+
+The hover lift scales `.section-card-icon` from its box's center. An inline SVG icon has a fixed 28px box, so it grew in place. A Material Icons ligature (`<i class="material-icons section-card-icon">`, which auto-cards emit for any `icon:` that is not in Hextra's icon data) stretched across the whole card, because the card is a column flexbox, so it scaled from the card's center and the left-aligned glyph moved left. The icon now takes `align-self: flex-start`, so its box is only as wide as its glyph. To see it, hover the Kubernetes card (`icon: hub`) next to the Standalone card (`icon: terminal`) on https://docs.solo.io/agentgateway/. Verified with `tests/auto-cards.spec.ts` against the OSS fixture build and in a local docs hub agentgateway build that served this file.
+
+
+### Fix — search results could show heading text with HTML entities, and the theme's heading override never ran (`layouts/_partials/utils/extract-headings.html`, moved from `layouts/partials/utils/extract-headings.html`)
+
+The theme overrides Hextra's `utils/extract-headings.html` partial with a nil-safe version, which builds the heading keys in the search index. The override lived in `layouts/partials/`, but Hextra keeps its own copy in `layouts/_partials/`, and Hugo uses the `_partials/` copy first. So the theme's version never ran, and sites got Hextra's copy. That copy used each heading title as is, and a title can carry typographer entities such as `&rsquo;`, so a search result could show the entity as literal text instead of an apostrophe. agentgateway.dev showed it, for example `What&rsquo;s next` instead of "What’s next", and fixed it in its own `layouts/partials/utils/fragments.html` override (agentgateway/website#1424). This fix brings the same behavior to every consumer, without a site override. The override now lives in `layouts/_partials/`, so it runs. It also passes each heading title through `plainify`, `htmlUnescape`, and `strings.TrimSpace` before building the key, so search results show the heading as readers see it on the page. Hextra fixed the same bug in v0.13.0, and this theme pins v0.12.3.
+
+To see the fixed behavior, search agentgateway.dev for "What’s next" and open the result for https://agentgateway.dev/docs/kubernetes/latest/documentation/observability/otel-stack/. The heading shows an apostrophe. That page uses agentgateway.dev's own fix, not this one. Verified in agentgateway.dev, which tested the same change in its own override (agentgateway/website#1424). No spec covers the search index's heading keys, and the fixture's search config indexes whole pages rather than headings, so the fixture build never uses this partial.
+
+
+### Fix — change highlights glared in dark mode, broke at line ends and around inline code, and stayed cached after an update (`assets/css/change-highlights.css`, `assets/js/change-highlights.js`, `layouts/_partials/utils/change-highlights.html`, `tests/change-highlights-overlay.spec.ts`, `tests/change-highlights.spec.ts`, `fixture/content/en/test/v2/change-highlights.md`)
+
+Three problems made changed text hard to read in local and PR preview builds. First, in dark mode the 38% yellow highlight mixed with the dark page into a mustard block, and a neon `#ffd60a` underline ran under every line, so light text glared. Dark mode now uses a faint amber tint (`rgb(255 200 0 / 0.16)`) and a softer underline (`rgb(255 204 0 / 0.75)`), and the underline does most of the marking. Light mode does not change. Second, a paragraph added over several source lines showed gaps in the highlight. The manifest lists one fragment per source line, and the space where each line broke belonged to no fragment. The overlay now joins fragments that only whitespace separates into one painted range. The panel still counts fragments, and the "Was:" tooltip still uses each fragment's own range. Third, an inline code span inside a changed run showed its padding and border as a gap in the tint and the underline, because a CSS highlight paints text only. An inline code span that a highlight covers end to end now gets an `extras-changed-code` class, which paints the tint and underline across the whole span. Code blocks and partly changed code spans do not get the class. Separately, the overlay's CSS and JS are now fingerprinted under `hugo server` too, with an `integrity` attribute. Before, the file names never changed, so a browser kept the old copy after an update and a reload showed the old behavior.
+
+No production page shows this, because the overlay never renders in production. To see the fix, run `make server-oss-changes BASE=HEAD~60` in this repository, open `/v2/cond-reuse-table/` in dark mode, and add a paragraph with inline code to that page. Verified with two new tests in `tests/change-highlights-overlay.spec.ts`: fragments from consecutive source lines paint as one range, and a fully covered code span gets the class while a partly covered one does not, and Hide clears it. The test in `tests/change-highlights.spec.ts` that checks the built page now expects fingerprinted file names. The change-highlights specs pass (21), and `make test-oss` passes (2,578 passed, 21 skipped). Also checked with screenshots: the joined paragraph in Chromium, Firefox, and WebKit, and the dark-mode colors and code spans in Chromium, in light and dark mode.
 
 
 ## [0.4.0] — 2026-10-28
@@ -100,11 +99,11 @@ Verified with `CONSUMER_CLONES_DIR=~/Documents/GitHub REQUIRE_CONSUMER_CLONES=1 
 
 ## [0.3.21] — 2026-10-19
 
-### Fix — the changelog toolbar test failed in solo-io/docs, which ships the real changelog script at the stub's URL (`tests/changelog-toolbar-style.spec.ts`)
+### Fix — the changelog toolbar test failed in docs hub, which ships the real changelog script at the stub's URL (`tests/changelog-toolbar-style.spec.ts`)
 
-"The controls still drive the changelog script" failed on every solo-io/docs PR after the 0.3.20 pin bump, for example in its framework-test-browser job. The test reads `data-view` and `data-show-open-source`, which only the fixture stub at `fixture/static/changelog/render_changelog.js` sets. The hub's test build mounts the fixture from this module, but its own `static/changelog/render_changelog.js` is served at the same URL, `/test/changelog/render_changelog.js`, and a project's static file wins over a module mount. So the page ran the real script and both attributes stayed unset. Adding the mount on the hub side doesn't help, for the same reason. The spec now serves the stub by `page.route`, and serves empty bodies for `Renderers.js` and `changelog_utils.js`, so the result no longer depends on which script the consumer's build kept. The test still checks what it was written for: the controls, now inside their labels, still reach a script bound to their ids.
+"The controls still drive the changelog script" failed on every docs hub PR after the 0.3.20 pin bump, for example in its framework-test-browser job. The test reads `data-view` and `data-show-open-source`, which only the fixture stub at `fixture/static/changelog/render_changelog.js` sets. The hub's test build mounts the fixture from this module, but its own `static/changelog/render_changelog.js` is served at the same URL, `/test/changelog/render_changelog.js`, and a project's static file wins over a module mount. So the page ran the real script and both attributes stayed unset. Adding the mount on the hub side doesn't help, for the same reason. The spec now serves the stub by `page.route`, and serves empty bodies for `Renderers.js` and `changelog_utils.js`, so the result no longer depends on which script the consumer's build kept. The test still checks what it was written for: the controls, now inside their labels, still reach a script bound to their ids.
 
-Verified by running `changelog-toolbar-style.spec.ts` and `changelog-toolbar.spec.ts` against a local build of solo-io/docs `main` (pinned to 0.3.20) with its `.docs-test.toml`. The last test fails there without this change and all five pass with it. All five also pass against this repo's own enterprise fixture build.
+Verified by running `changelog-toolbar-style.spec.ts` and `changelog-toolbar.spec.ts` against a local build of docs hub `main` (pinned to 0.3.20) with its `.docs-test.toml`. The last test fails there without this change and all five pass with it. All five also pass against this repo's own enterprise fixture build.
 
 ## [0.3.20] — 2026-10-19
 
@@ -291,7 +290,7 @@ The version-less branch (a page with a folder but no version segment) defaults `
 
 Visible on the docs hub at [agentgateway 2.2.x — LLM observability](https://docs.solo.io/agentgateway/kubernetes/2.2.x/documentation/llm/observability), a link to a version retired earlier the same day. The 301 to [`kubernetes/latest`](https://docs.solo.io/agentgateway/kubernetes/latest/documentation/llm/observability/) fires correctly and arrives carrying `?fromversion=2.2.x`, and the reader is told nothing: they clicked a 2.2.x URL, the address bar says something else, and no notice accounts for the move. To verify before the fix, open the link and view source on the destination — `var KNOWN` omits `2.2.x`, so the script returns at its allowlist check. After, `2.2.x` is in the array and the notice renders.
 
-`fromversion` arrives in a URL and is reader-controlled, so it selects a known string and is never echoed — that part is right and is unchanged. What was wrong is where the known strings came from. Both consumers of the parameter built their allowlist out of `[[params.versions]]`, which meant a retired version's entry had to stay in that table forever, rendering nothing, hidden from the picker with a whitespace `dropdown`, existing only to be matched against. Nothing enforces an obligation like that and nothing announces it: solo-io/docs `94be4fc64` added agentgateway's 2.1.x and 2.2.x redirect rules and deleted those two entries in the same commit, and the retired-version messaging went silent with no build error, no warning, and nothing in the diff that looks like a banner.
+`fromversion` arrives in a URL and is reader-controlled, so it selects a known string and is never echoed — that part is right and is unchanged. What was wrong is where the known strings came from. Both consumers of the parameter built their allowlist out of `[[params.versions]]`, which meant a retired version's entry had to stay in that table forever, rendering nothing, hidden from the picker with a whitespace `dropdown`, existing only to be matched against. Nothing enforces an obligation like that and nothing announces it: sdocs hub added agentgateway's 2.1.x and 2.2.x redirect rules and deleted those two entries in the same commit, and the retired-version messaging went silent with no build error, no warning, and nothing in the diff that looks like a banner.
 
 So the allowlist now asks the hosting config, which is the only place that actually knows — a version is retired exactly when something redirects away from it. `utils/retired-versions.html` unions three sources: `params.retiredVersions` for a consumer whose redirects live somewhere a template cannot read, `static/_redirects` for the Cloudflare Pages / Netlify format that agentgateway-oss-website and kgateway-oss use, and `firebase.json` for the hub. In all three the version is read from `fromversion=` in the DESTINATION, never from the source pattern, so an ordinary redirect for a renamed page contributes nothing and retirement stays opt-in per rule. The rule that causes the move is now the rule that explains it, and the two cannot drift apart.
 
@@ -1045,7 +1044,7 @@ long unbreakable code token*, is the first to test the code-span path.
 first column, verified in the served HTML. Measure the two columns at a 1280px
 viewport: the Setting column takes nearly the whole row before this release. A
 repo-wide scan of
-`solo-io/docs` found **76** such cells in 2-column tables; the 349 in 3+ column
+docs hub found **76** such cells in 2-column tables; the 349 in 3+ column
 tables were already bounded by the cap.
 
 **Verified** by measuring in-browser rather than by inspection. New assertions
@@ -1182,7 +1181,7 @@ repo's own content
 `target.name.startsWith("docs-theme-extras-fixture")` and deliberately left the rest ungated, so
 that a consumer would still get real coverage. That reasoning is right for a consumer that
 mounts the fixture content and wrong for one that mounts none, and it is a distinction
-`target.name` cannot draw: solo-io/docs is not the fixture target and has to keep running those
+`target.name` cannot draw: docs hub is not the fixture target and has to keep running those
 assertions.
 
 The suite now skips when the fixture version tree is absent:
@@ -1241,7 +1240,7 @@ comes from the book's own version tree rather than the site-wide `latest` entry,
 any other tree is relabelled. That one is a visible change to the artifact, and a correction:
 the old label was wrong.
 
-Kept as a patch despite the breaking change because solo-io/docs is the only consumer that
+Kept as a patch despite the breaking change because docs hub is the only consumer that
 builds books at all — ambientmesh.io piloted the pipeline and has no PDF workflow today — and
 the change ships together with that repo's workflow update. Read the entry below before
 bumping the pin if that is no longer true for you.
@@ -1266,7 +1265,7 @@ bumping the pin if that is no longer true for you.
 
   **Why.** `outputs` front matter selects the output format but cannot say *when* — it is
   static, so an opt-in applies to every build of that page, and a book is an entire version
-  tree stitched into one file. On [solo-io/docs](https://docs.solo.io/kagent/latest/) that
+  tree stitched into one file. On [docs](https://docs.solo.io/kagent/latest/) that
   meant every ordinary production build also produced 12 book documents totalling 92 MB on top
   of a 4.3 GB site, about 7% of the build time on the largest product, and — the part that
   actually matters — 12 publicly reachable URLs each carrying a complete unstyled duplicate of
@@ -1441,7 +1440,7 @@ bumping the pin if that is no longer true for you.
   every config (`hugo.toml`, `docs/content/configuration/pdf-export.md`).** This page of the
   docs asserted, for three releases, that Hugo does **not** merge a module's top-level
   `outputFormats` and that the block therefore had to live in each consumer config. That claim
-  is false on Hugo 0.160.1, and it was expensive: solo-io/docs carried **25 identical copies** —
+  is false on Hugo 0.160.1, and it was expensive: docs hub carried **25 identical copies** —
   three configs for each of eight products, plus the all-products preview — and forgetting one
   did not degrade the PDF, it failed the **entire** build, because the `outputs` front matter
   that selects the format belongs to the page and so applies to every config that builds that
@@ -1501,7 +1500,7 @@ bumping the pin if that is no longer true for you.
 - **`releaseVersion` on a `params.versions` entry names the real release on the book's cover
   and footer, for a tree served at `/latest/` (`layouts/_partials/utils/book-version.html`,
   `hugo-{enterprise,oss}.toml`, `tests/book-document.spec.ts`).** With the cover now reading
-  the version off the tree the book walked, three products in solo-io/docs printed **"Version
+  the version off the tree the book walked, three products in docs hub printed **"Version
   latest"** — agentregistry, kagent and agentgateway all set `version = "latest"` literally on
   their current tree and keep the release number only in `dropdown`
   (`2026.8.0 (latest)`). On the website that is fine, because the reader is standing on the URL
@@ -1539,7 +1538,7 @@ bumping the pin if that is no longer true for you.
 - **`params.pdfDownload.distribution` alone is enough to render the download item;
   `urlTemplate` no longer has to be written out (`layouts/partials/copy-markdown.html`,
   `hugo-enterprise.toml`, `tests/book-document.spec.ts`).** Wiring the remaining seven
-  products in solo-io/docs for PDF export meant writing the same 130-character release URL
+  products in docs hub for PDF export meant writing the same 130-character release URL
   into 24 files — three configs (prod, preview, local) for each of eight products, every
   copy identical, and each one a place for a typo that fails by producing a link to nothing.
   A shared config file is the obvious alternative and is worse there: 24 places in that repo
@@ -1585,7 +1584,7 @@ bumping the pin if that is no longer true for you.
 
   **Why it was inconsistent.** Two tab markups are live, and a consumer emits one or the
   other: a repo that overrides Hextra's tabs shortcode
-  ([solo-io/docs](https://docs.solo.io/kgateway/2.3.x/portal/overview/)) emits `<nav>` plus
+  ([docs hub](https://docs.solo.io/kgateway/2.3.x/portal/overview/)) emits `<nav>` plus
   panels carrying `data-tab-name`, and stock Hextra
   ([kgateway.dev](https://kgateway.dev/docs/envoy/latest/quickstart/), and the other three OSS
   sites) emits `[role="tablist"]` plus panels carrying `aria-labelledby`. This partial handled
@@ -1691,7 +1690,7 @@ bumping the pin if that is no longer true for you.
   the two answers agree only while the opted-in tree happens to be the flagged
   one.
 
-  solo-io/docs is where they stopped agreeing. `hugo-istio.toml` flags no entry
+  docs hub is where they stopped agreeing. `hugo-istio.toml` flags no entry
   `latest` at all, so the lookup fell through to the first entry, `1.31.x` — a
   tree marked under development with a blank dropdown. Rendering the stable
   [1.30.x docs](https://docs.solo.io/istio/1.30.x/) as a book therefore produced
@@ -1856,7 +1855,7 @@ bumping the pin if that is no longer true for you.
 
     The other way, and the more serious one: **stock Hextra tab markup was handled ONLY in
     `copy-markdown.html`.** The `data-tab-name` markup that `unhide-tabs.html` was written
-    against does not come from Hextra at all — it comes from solo-io/docs's own
+    against does not come from Hextra at all — it comes from docs hub's own
     `layouts/_shortcodes/tabs.html` override. A consumer without that override (this
     module's own fixture, and every OSS site) emits `[role="tablist"]` +
     `.hextra-tabs-panel[aria-labelledby]`, which `unhide-tabs.html` did not match. Such a
@@ -2014,7 +2013,7 @@ Both take effect for a consumer that bumps its extras pin **and** passes the new
 ### Test harness — the new book assertions were consumer-config-dependent (`tests/book-document.spec.ts`)
 
 `tests/book-document.spec.ts` runs against **any** consumer's built output, not only the
-bundled fixture: solo-io/docs' `framework-test-static` job points it at that repo's own `test`
+bundled fixture: docs hub's `framework-test-static` job points it at that repo's own `test`
 product, which mounts the fixture CONTENT but keeps its own Hugo config. Six of this release's
 new assertions depend on fixture CONFIG — `releaseVersion` on `v1`, the `[params.pdfDownload]`
 table, the product and distribution baked into a download URL — or on fixture content a
@@ -2098,7 +2097,7 @@ both brands.
 
 ### Test harness — the browser suite was paying for Google Fonts on every navigation
 
-**Why.** `framework-test-browser` in solo-io/docs kept flaking on
+**Why.** `framework-test-browser` in docs hub kept flaking on
 `contrast.spec.ts › accent text contrast … dark mode`, and the cause was not the assertion:
 the test **timed out**. It had been sitting at 29.5–30.1s against a 30s ceiling for days
 (passing by fractions of a second on 2026-08-29 and 08-30, failing on 08-31), while the same
