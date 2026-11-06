@@ -52,7 +52,7 @@ test.describe("doc-test Verified badge", () => {
     const html = builtPage("types");
     expect(html.split(BADGE).length - 1, "badge count").toBe(1);
     expect(html).toContain('class="test-status-tooltip test-status-tooltip-types" aria-hidden="true"');
-    expect(html).toContain("Passed automated tests for:");
+    expect(html).toContain("Automated tests passed for:");
     const labels = [...html.matchAll(/class="test-status-type-label">([^<]+)</g)].map((m) => m[1]);
     expect(labels).toEqual([
       "Kubernetes resources",
@@ -63,7 +63,7 @@ test.describe("doc-test Verified badge", () => {
     expect(html).not.toContain("not-a-kind");
     expect(html).not.toContain("Code examples on this page have been automatically tested");
     // Screen readers get the same rows as text, in one sentence.
-    expect(html).toMatch(/class="test-status-sr">: Passed automated tests for: Kubernetes resources: The Kubernetes resources on this page/);
+    expect(html).toMatch(/class="test-status-sr">: Automated tests passed for: Kubernetes resources: The Kubernetes resources on this page/);
   });
 
   test("without test_types the tooltip keeps the generic sentence", () => {

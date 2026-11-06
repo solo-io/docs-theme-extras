@@ -78,7 +78,7 @@ keys in your site's `i18n/<lang>.yaml`:
 |---|---|
 | `testStatusVerified` | Verified |
 | `testStatusVerifiedTooltip` | Code examples on this page have been automatically tested and verified. |
-| `testStatusTypesIntro` | Passed automated tests for: |
+| `testStatusTypesIntro` | Automated tests passed for: |
 | `testTypeKubernetes`, `testTypeKubernetesDescription` | Kubernetes resources; The Kubernetes resources on this page were checked against their API schemas. |
 | `testTypeConfig`, `testTypeConfigDescription` | Configuration files; The configuration files on this page were checked against their schema. |
 | `testTypeSchema`, `testTypeSchemaDescription` | Code examples; The code examples on this page were checked against their schemas. |
