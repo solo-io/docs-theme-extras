@@ -13,7 +13,7 @@ testStatusVerified: Verified
 testStatusVerifiedTooltip: Code examples on this page have been automatically tested and verified.
 # When the page lists the kinds of test that ran (`test_types`), the tooltip
 # shows this intro and one label plus description per kind instead.
-testStatusTypesIntro: "The code examples on this page passed these automated tests:"
+testStatusTypesIntro: "Passed automated tests for:"
 testTypeKubernetes: Kubernetes resources
 testTypeKubernetesDescription: The Kubernetes resources on this page were checked against their API schemas.
 testTypeConfig: Configuration files

@@ -7,7 +7,7 @@ docsNavigation: ドキュメント
 # Doc-test badge (components/test-status-badge.html).
 testStatusVerified: 検証済み
 testStatusVerifiedTooltip: このページのコード例は自動テストで検証済みです。
-testStatusTypesIntro: このページのコード例は、次の自動テストに合格しています。
+testStatusTypesIntro: 次の項目の自動テストに合格しました。
 testTypeKubernetes: Kubernetes リソース
 testTypeKubernetesDescription: このページの Kubernetes リソースを API スキーマと照合しました。
 testTypeConfig: 設定ファイル
