@@ -30,9 +30,14 @@ the latest doc-test results and writes one of three values:
 | `partial` | No scenario failed, but at least one was skipped because its test annotations no longer match the page. | No |
 
 For a `passed` page, the script also writes `test_types`, the kinds of test
-that ran on it, such as `[schema, functional]`. The tooltip lists each kind
-with a short description. A kind the module has no wording for is skipped, and
-a page without `test_types` shows the generic sentence.
+that ran on it, such as `[kubernetes, helm, functional]`. The tooltip lists each
+kind with a short description. A kind the module has no wording for is skipped,
+and a page without `test_types` shows the generic sentence.
+
+The schema check reports what it validated on the page itself: `kubernetes` for
+Kubernetes resources, `config` for configuration files, and `helm` for Helm
+values. A standalone page with only configuration files therefore never
+mentions Kubernetes. Older results report only the generic `schema` kind.
 
 A page without the field shows no badge. A site that never runs the inject step
 therefore renders exactly what it rendered before the badge existed.
@@ -73,11 +78,14 @@ keys in your site's `i18n/<lang>.yaml`:
 |---|---|
 | `testStatusVerified` | Verified |
 | `testStatusVerifiedTooltip` | Code examples on this page have been automatically tested and verified. |
-| `testStatusTypesIntro` | The code examples on this page passed these automated tests: |
-| `testTypeSchema`, `testTypeSchemaDescription` | Matches the API; The Kubernetes resources and config files on this page were checked against their schemas. |
-| `testTypeFunctional`, `testTypeFunctionalDescription` | Runs end to end; Every step ran in a fresh test environment, and the results were checked. |
-| `testTypeLive`, `testTypeLiveDescription` | Reaches real services; Requests went to a real external endpoint. |
-| `testTypeCredentialed`, `testTypeCredentialedDescription` | Works with the provider; The steps ran against the real provider with a test account. |
+| `testStatusTypesIntro` | Automated tests passed for: |
+| `testTypeKubernetes`, `testTypeKubernetesDescription` | Kubernetes resources; The Kubernetes resources on this page were checked against their API schemas. |
+| `testTypeConfig`, `testTypeConfigDescription` | Configuration files; The configuration files on this page were checked against their schema. |
+| `testTypeSchema`, `testTypeSchemaDescription` | Code examples; The code examples on this page were checked against their schemas. |
+| `testTypeHelm`, `testTypeHelmDescription` | Helm values; The Helm values on this page were checked against the values the chart accepts. |
+| `testTypeFunctional`, `testTypeFunctionalDescription` | End-to-end run; Every step ran in a fresh test environment and the results were checked. |
+| `testTypeLive`, `testTypeLiveDescription` | Live services; Requests went to a real external endpoint. |
+| `testTypeCredentialed`, `testTypeCredentialedDescription` | Real provider account; The steps ran against the real provider with a test account. |
 
 ## Upgrading from a site-local badge
 

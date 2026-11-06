@@ -25,8 +25,11 @@
   WCAG 1.4.13 asks of content shown on hover or focus.
 
   WHAT RAN. The same inject script also writes `test_types`, the kinds of test
-  that ran on the page (schema, functional, live, credentialed), taken from the
-  results. When it lists a kind this partial has wording for, the tooltip
+  that ran on the page (kubernetes, config, schema, helm, functional, live,
+  credentialed), taken from the results. `kubernetes`, `config`, and `helm` are
+  the parts of the schema check, listed only for what the page itself has, so
+  a standalone page never mentions Kubernetes. `schema` is their generic
+  fallback, for results that predate the split. When it lists a kind this partial has wording for, the tooltip
   shows an intro line and one row per kind (a label and a one-line
   description) in place of the generic sentence. A kind with no wording is
   skipped, so a new kind never shows its raw name. A page with no known kind
@@ -42,10 +45,13 @@
 {{- $label := (T "testStatusVerified") | default "Verified" -}}
 {{- $tip := (T "testStatusVerifiedTooltip") | default "Code examples on this page have been automatically tested and verified." -}}
 {{- $defaults := dict
-  "schema" (slice "Matches the API" "The Kubernetes resources and config files on this page were checked against their schemas.")
-  "functional" (slice "Runs end to end" "Every step ran in a fresh test environment, and the results were checked.")
-  "live" (slice "Reaches real services" "Requests went to a real external endpoint.")
-  "credentialed" (slice "Works with the provider" "The steps ran against the real provider with a test account.")
+  "kubernetes" (slice "Kubernetes resources" "The Kubernetes resources on this page were checked against their API schemas.")
+  "config" (slice "Configuration files" "The configuration files on this page were checked against their schema.")
+  "schema" (slice "Code examples" "The code examples on this page were checked against their schemas.")
+  "helm" (slice "Helm values" "The Helm values on this page were checked against the values the chart accepts.")
+  "functional" (slice "End-to-end run" "Every step ran in a fresh test environment and the results were checked.")
+  "live" (slice "Live services" "Requests went to a real external endpoint.")
+  "credentialed" (slice "Real provider account" "The steps ran against the real provider with a test account.")
 -}}
 {{- $types := .Params.test_types | default slice -}}
 {{- if not (reflect.IsSlice $types) }}{{ $types = slice $types }}{{ end -}}
@@ -59,7 +65,7 @@
       "desc" ((T (printf "%sDescription" $key)) | default (index . 1))) -}}
   {{- end -}}
 {{- end -}}
-{{- $intro := (T "testStatusTypesIntro") | default "The code examples on this page passed these automated tests:" -}}
+{{- $intro := (T "testStatusTypesIntro") | default "Automated tests passed for:" -}}
 <span class="test-status-badge test-status-passed" tabindex="0">
   <svg class="test-status-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" aria-hidden="true" focusable="false">
     <path d="M447.9 142.5l-23.2 22L181 395.3l-22 20.8-22-20.8L23.2 287.6 0 265.6l44-46.5 23.2 22L159 328 380.7 118l23.2-22 44 46.5z"/>

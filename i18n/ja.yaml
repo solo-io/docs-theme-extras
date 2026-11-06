@@ -7,12 +7,18 @@ docsNavigation: ドキュメント
 # Doc-test badge (components/test-status-badge.html).
 testStatusVerified: 検証済み
 testStatusVerifiedTooltip: このページのコード例は自動テストで検証済みです。
-testStatusTypesIntro: このページのコード例は、次の自動テストに合格しています。
-testTypeSchema: API との整合
-testTypeSchemaDescription: このページの Kubernetes リソースと設定ファイルをスキーマと照合しました。
-testTypeFunctional: エンドツーエンドで実行
+testStatusTypesIntro: 次の項目の自動テストに合格しました。
+testTypeKubernetes: Kubernetes リソース
+testTypeKubernetesDescription: このページの Kubernetes リソースを API スキーマと照合しました。
+testTypeConfig: 設定ファイル
+testTypeConfigDescription: このページの設定ファイルをスキーマと照合しました。
+testTypeSchema: コード例
+testTypeSchemaDescription: このページのコード例をスキーマと照合しました。
+testTypeHelm: Helm の値
+testTypeHelmDescription: このページの Helm の値を、チャートが受け付ける値と照合しました。
+testTypeFunctional: エンドツーエンドの実行
 testTypeFunctionalDescription: 新しいテスト環境ですべての手順を実行し、結果を確認しました。
-testTypeLive: 実際のサービスに接続
+testTypeLive: 実際のサービス
 testTypeLiveDescription: 実際の外部エンドポイントにリクエストを送信しました。
-testTypeCredentialed: プロバイダーと連携
+testTypeCredentialed: 実際のプロバイダーアカウント
 testTypeCredentialedDescription: テスト用アカウントを使用して、実際のプロバイダーに対して手順を実行しました。

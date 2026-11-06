@@ -46,19 +46,24 @@ test.describe("doc-test Verified badge", () => {
   });
 
   test("test_types lists each known kind, in order, and skips unknown ones", () => {
-    // The fixture lists schema, functional, and an unknown kind. The tooltip
-    // shows the intro and a label plus description for the two known kinds,
+    // The fixture lists kubernetes, config, helm, functional, and an unknown kind. The
+    // tooltip shows the intro and a label plus description for the known kinds,
     // in place of the generic sentence, and never prints the raw unknown name.
     const html = builtPage("types");
     expect(html.split(BADGE).length - 1, "badge count").toBe(1);
     expect(html).toContain('class="test-status-tooltip test-status-tooltip-types" aria-hidden="true"');
-    expect(html).toContain("passed these automated tests:");
+    expect(html).toContain("Automated tests passed for:");
     const labels = [...html.matchAll(/class="test-status-type-label">([^<]+)</g)].map((m) => m[1]);
-    expect(labels).toEqual(["Matches the API", "Runs end to end"]);
+    expect(labels).toEqual([
+      "Kubernetes resources",
+      "Configuration files",
+      "Helm values",
+      "End-to-end run",
+    ]);
     expect(html).not.toContain("not-a-kind");
     expect(html).not.toContain("Code examples on this page have been automatically tested");
     // Screen readers get the same rows as text, in one sentence.
-    expect(html).toMatch(/class="test-status-sr">: The code examples on this page passed these automated tests: Matches the API: The Kubernetes resources and config files on this page/);
+    expect(html).toMatch(/class="test-status-sr">: Automated tests passed for: Kubernetes resources: The Kubernetes resources on this page/);
   });
 
   test("without test_types the tooltip keeps the generic sentence", () => {
