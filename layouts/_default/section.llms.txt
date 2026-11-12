@@ -22,6 +22,12 @@
 {{- end -}}
 {{- $body := "" -}}
 {{- if and (not $v.isVersioned) $children -}}
+  {{- /* This file is the section's own listing, so its own pages are listed in
+         full before the subsection index. Without them, pages that sit next to
+         a subsection in an unversioned tree were in no llms.txt at all. */ -}}
+  {{- range where .RegularPages "Params.llms" "ne" false -}}
+    {{- $body = print $body (partial "utils/llms-entry.html" (dict "page" . "prodHost" $prodHost)) "\n" -}}
+  {{- end -}}
   {{- range $children -}}
     {{- $body = print $body (partial "utils/llms-index-tree.html" (dict "page" . "level" 2 "prodHost" $prodHost)) -}}
   {{- end -}}

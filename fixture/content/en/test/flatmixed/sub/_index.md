@@ -1,0 +1,3 @@
+---
+title: Flat mixed subsection
+---

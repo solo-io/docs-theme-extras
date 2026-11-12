@@ -88,6 +88,15 @@ test.describe("root llms.txt is an index, not a dump", () => {
     expect(empty, "headings with nothing under them").toEqual([]);
   });
 
+  // An unversioned section with its own pages AND a subsection (agentregistry's
+  // /docs/mcp/local/) used to list only the subsection, so its own pages were
+  // in no llms.txt at all.
+  test("lists a section's own pages next to its subsections", () => {
+    const text = read();
+    expect(text).toMatch(/^- \[Flat mixed own page\]\(\/test\/flatmixed\/own-page[^)]*\)/m);
+    expect(text).toMatch(/^- \[Flat mixed sub page\]\(\/test\/flatmixed\/sub\/sub-page[^)]*\)/m);
+  });
+
   test("has no stray callout-title lines", () => {
     expect(read()).not.toMatch(/^(Note|Tip|Warning|Caution|Important)\s*$/m);
   });

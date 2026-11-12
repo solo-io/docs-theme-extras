@@ -12,8 +12,9 @@
      The old templates counted URL segments instead, and the count depends on
      the baseURL path: a local docs hub build (baseURL "/") lost the
      /<product>/ segment and rendered every version as an empty heading.
-   - A section with llms-eligible subsections becomes a heading, and each
-     subsection is rendered with this partial again. Subsections come from
+   - A section with llms-eligible subsections becomes a heading. Its own pages
+     are listed first, capped like a leaf section's, and then each subsection
+     is rendered with this partial again. Subsections come from
      utils/llms-children.html, so `latest` is listed first and `main` last.
    - A leaf section (pages but no subsections, like a blog) lists only its first
      `site.Params.llms.leafPageLimit` pages (default 5, in the section's own
@@ -66,20 +67,27 @@
     {{- $out = printf "\n%s %s\n\n" $hashes $s.Title -}}
   {{- end -}}
 
-  {{- if $children -}}
-    {{- range $children -}}
-      {{- $out = print $out (partial "utils/llms-index-tree.html" (dict "page" . "level" (add $level 1) "prodHost" $prodHost)) -}}
-    {{- end -}}
-
-  {{- else if $pages -}}
+  {{- /* The section's own pages come first, capped like a leaf section's, and
+         then its subsections. A section can have both: agentregistry's
+         unversioned /docs/mcp/local/ holds create, publish, and tools next to
+         a deploy/ subsection. Listing only the subsections dropped those pages
+         from every llms.txt on the site. */ -}}
+  {{- if $pages -}}
     {{- range first $limit $pages -}}
       {{- $out = print $out (partial "utils/llms-entry.html" (dict "page" . "prodHost" $prodHost)) "\n" -}}
     {{- end -}}
     {{- if gt (len $pages) $limit -}}
       {{- $out = print $out (printf "- [All %d %s pages](%s)\n" (len $pages) $s.Title $sectionURL) -}}
     {{- end -}}
+  {{- end -}}
 
-  {{- else -}}
+  {{- if $children -}}
+    {{- range $children -}}
+      {{- $out = print $out (partial "utils/llms-index-tree.html" (dict "page" . "level" (add $level 1) "prodHost" $prodHost)) -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- if not (or $children $pages) -}}
     {{- /* Its own llms.txt would list nothing, so link the page itself. */ -}}
     {{- $pageURL := print $prodHost $s.RelPermalink -}}
     {{- with $s.OutputFormats.Get "markdown" -}}{{- $pageURL = print $prodHost .RelPermalink -}}{{- end -}}
