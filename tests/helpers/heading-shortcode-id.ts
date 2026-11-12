@@ -53,12 +53,27 @@ function blankOutComments(source: string): string {
   return source.replace(/<!--[\s\S]*?-->/g, (m) => m.replace(/[^\n]/g, " "));
 }
 
+// Same treatment for a `{{< doc-test >}} … {{< /doc-test >}}` block. The
+// shortcode reads its inner content as test steps and renders nothing, so a
+// `#` line inside it is a shell comment, never a heading, and builds no
+// anchor. Older frozen version trees still carry these blocks inline, and
+// agentgateway's `# yaml-language-server: $schema={{< reuse … >}}` lines
+// inside them read as 299 shortcode headings. The opening tag must start a
+// line, so a prose or front-matter mention of `{{< doc-test >}}` cannot pair
+// with a later closing tag and hide the real headings between them.
+const DOC_TEST_BLOCK =
+  /^[ \t]*\{\{[<%]\s*doc-test\b[\s\S]*?\{\{[<%]\s*\/doc-test\s*[>%]\}\}/gm;
+
+function blankOutDocTestBlocks(source: string): string {
+  return source.replace(DOC_TEST_BLOCK, (m) => m.replace(/[^\n]/g, " "));
+}
+
 export function findHeadingShortcodeIdViolations(
   source: string,
   filePath: string,
 ): HeadingShortcodeIdViolation[] {
   const out: HeadingShortcodeIdViolation[] = [];
-  const lines = blankOutComments(source).split(/\r?\n/);
+  const lines = blankOutDocTestBlocks(blankOutComments(source)).split(/\r?\n/);
 
   // Skip YAML (`---`) or TOML (`+++`) front matter. A `#` line there is a
   // config comment, not a heading (and it may legitimately mention a

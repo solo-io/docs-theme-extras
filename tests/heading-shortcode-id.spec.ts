@@ -93,6 +93,21 @@ test.describe("heading-shortcode-id lint helper", () => {
     expect(v[0].line).toBe(4);
   });
 
+  test("does NOT flag a `#` line inside a doc-test block, which renders nothing", () => {
+    const md =
+      `{{< doc-test paths="x" >}}\ncat <<'EOF' > config.yaml\n# yaml-language-server: $schema={{< reuse "s.md" >}}\nEOF\n{{< /doc-test >}}\n\n## Real {{< reuse "x" >}}\n`;
+    const v = findHeadingShortcodeIdViolations(md, "test.md");
+    expect(v).toHaveLength(1);
+    expect(v[0].line).toBe(7);
+  });
+
+  test("a doc-test mention mid-line does not hide the headings after it", () => {
+    const md = `Wrap steps in {{< doc-test >}} like this.\n\n## Real {{< reuse "x" >}}\n\n{{< /doc-test >}}\n`;
+    const v = findHeadingShortcodeIdViolations(md, "test.md");
+    expect(v).toHaveLength(1);
+    expect(v[0].line).toBe(3);
+  });
+
   test("does NOT flag a `#` comment inside YAML front matter", () => {
     const md =
       `---\ntitle: MCP\n# note above a test block, mentions {{< doc-test >}}\ntest:\n  foo: bar\n---\n\n## Real heading\n`;
