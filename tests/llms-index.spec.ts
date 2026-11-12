@@ -61,6 +61,10 @@ test.describe("root llms.txt is an index, not a dump", () => {
     const text = read();
     expect(text).toMatch(/^- \[Nested guide v1\]\(\/test\/nested\/v1\/(?:llms\.txt|index\.md)\)/m);
     expect(text).toMatch(/^- \[v2 \(current\)\]\(\/test\/nested\/v2\/(?:llms\.txt|index\.md)\)/m);
+    // The match ignores case. v4-link is titled "V4 (linkVersion probe)" and its
+    // dropdown label starts with "v4". A case-sensitive check appended the label
+    // again, the way agentgateway's "Main (in dev)" became "Main (in dev) main".
+    expect(text).toMatch(/^- \[V4 \(linkVersion probe\)\]\(\/test\/v4-link\/(?:llms\.txt|index\.md)\)/m);
   });
 
   test("links to version files instead of inlining version pages", () => {

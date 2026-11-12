@@ -47,8 +47,11 @@
   {{- with $v.versionEntry -}}
     {{- with strings.TrimSpace (.dropdown | default "") -}}{{- $label = . -}}{{- end -}}
   {{- end -}}
+  {{- /* Compare case-insensitively: agentgateway titles its main tree
+         "Main (in dev)", which already names `main`. */ -}}
+  {{- $titleLC := lower $title -}}
   {{- $labelHead := index (split $label " ") 0 -}}
-  {{- if and $label (not (in $title $v.currentVersion)) (not (in $title $labelHead)) -}}
+  {{- if and $label (not (in $titleLC (lower $v.currentVersion))) (not (in $titleLC (lower $labelHead))) -}}
     {{- $title = printf "%s %s" $title $label -}}
   {{- end -}}
   {{- $out = printf "- [%s](%s)\n" $title $sectionURL -}}
