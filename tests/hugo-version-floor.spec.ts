@@ -154,3 +154,53 @@ test.describe("version-gated accessors are centralised behind a guard", () => {
     expect(/\bhugo\.Sites\b/.test(blankHugoComments(real))).toBe(true);
   });
 });
+
+// `return` inside a `define`d template.
+//
+// Hugo 0.160 ignores `{{ return }}` inside a template declared with `define`
+// (it only means something in a partial), so a `return` there was dead code.
+// Hugo 0.166 and later honor it. The sidebar's recursive "render-sidebar-tree"
+// used `return` as a depth cap of 4, which never applied on 0.160. On 0.166+ it
+// started applying, and every left-nav item 6 levels deep disappeared, such as
+// agentgateway.dev's Standalone > Configuration > Security > Backend
+// authentication > Token exchange > Identity providers > Google Cloud: 1,146 of
+// 4,038 agentgateway pages rendered a different sidebar on 0.167.
+//
+// CI builds with 0.160, where a fixture page cannot show the difference, so
+// this is a source scan: a `define` block must not contain `return`. Put a cap
+// or an early exit in an `if` around the work instead.
+
+const ACTION = /\{\{-?\s*(define|block|if|with|range|end|return)\b/g;
+
+function returnsInsideDefine(src: string): number[] {
+  const cleaned = blankHugoComments(src);
+  const lines: number[] = [];
+  // Block stack: each entry records whether that block is a define/block.
+  const stack: boolean[] = [];
+  for (const m of cleaned.matchAll(ACTION)) {
+    const kw = m[1];
+    if (kw === "end") stack.pop();
+    else if (kw === "return") {
+      if (stack.includes(true)) lines.push(cleaned.slice(0, m.index).split("\n").length);
+    } else stack.push(kw === "define" || kw === "block");
+  }
+  return lines;
+}
+
+test.describe("no `return` inside a define block (honored only on Hugo 0.166+)", () => {
+  test("scanner flags a return inside define and ignores one in a partial body", () => {
+    expect(returnsInsideDefine(`{{ define "t" }}\n{{ if .x }}{{ return }}{{ end }}\n{{ end }}`)).toEqual([2]);
+    expect(returnsInsideDefine(`{{ $x := 1 }}\n{{ return $x }}`)).toEqual([]);
+    expect(returnsInsideDefine(`{{ define "t" }}{{ end }}\n{{ return 1 }}`)).toEqual([]);
+    expect(returnsInsideDefine(`{{ define "t" }}{{/* {{ return }} */}}{{ end }}`)).toEqual([]);
+  });
+
+  test("no theme template has one", () => {
+    const offenders = walkHtml(LAYOUTS_DIR).flatMap((file) =>
+      returnsInsideDefine(fs.readFileSync(file, "utf8")).map(
+        (line) => `${path.relative(LAYOUTS_DIR, file)}:${line}`,
+      ),
+    );
+    expect(offenders, `return inside define: ${offenders.join(", ")}`).toEqual([]);
+  });
+});

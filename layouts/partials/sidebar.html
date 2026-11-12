@@ -638,9 +638,17 @@
          false so the non-tab sidebars keep rendering nothing for a childless
          root, exactly as before docTabs existed. */ -}}
   {{- $emptyRootLink := .emptyRootLink | default false -}}
-  {{- $maxDepth := 4 -}}
+  {{- /* Safety cap on recursion only, applied at the recursive call below.
+         It is set well past any real tree so that no page loses nav items.
 
-  {{- if gt $depth $maxDepth -}}{{- return -}}{{- end -}}
+         This used to be `$maxDepth := 4` plus `{{ return }}` at the top of this
+         template. Hugo 0.160 ignores `return` inside a `define`d template, so
+         the cap never applied and production rendered every level. Hugo 0.166
+         and later honor it, and the tree stopped at depth 4: on
+         agentgateway.dev, Standalone > Configuration > Security > Backend
+         authentication > Token exchange > Identity providers lost its pages
+         (depth 5) from the left nav. */ -}}
+  {{- $maxDepth := 20 -}}
 
   {{- /* Tab scoping is handled by the caller: when tabs are enabled the tree is
          rooted inside the active tab's directory, so no per-item filtering is
@@ -720,7 +728,7 @@
             {{- end -}}
           </div>
 
-          {{- if $hasChildren -}}
+          {{- if and $hasChildren (lt $depth $maxDepth) -}}
             <div class="sidebar-children"{{ if not $childIsExpanded }} hidden{{ end }}>
               {{- template "render-sidebar-tree" (dict "page" . "current" $current "versionPrefix" $versionPrefix "depth" (add $depth 1)) -}}
             </div>
