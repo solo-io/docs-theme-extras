@@ -55,6 +55,10 @@ things wrapping does not give you:
    whenever the getresource cache was last cold. `github` has no cache key,
    so Hugo's default keying applies.
 
+Like `github`, it fetches through `utils/get-remote.html`, which retries a
+transport error such as "connection reset by peer" up to two more times
+before it warns. A timeout is not retried. A dead URL still fails the build.
+
 ---
 
 Source: [`layouts/_shortcodes/github-yaml.html`](https://github.com/solo-io/docs-theme-extras/blob/main/layouts/_shortcodes/github-yaml.html)

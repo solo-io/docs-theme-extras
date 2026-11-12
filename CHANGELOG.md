@@ -24,6 +24,14 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [Unreleased]
+
+### Fix — `github` and `github-yaml` retry a dropped connection before warning (`layouts/_partials/utils/get-remote.html`, `layouts/_shortcodes/github.html`, `layouts/_shortcodes/github-yaml.html`, `tests/build-resilience.spec.ts`)
+
+A single "connection reset by peer" while a build fetched a remote file made `github-yaml` emit a WARN, and a consumer's hugo-warnings test fails on any WARN. That failed the docs hub's agentgateway framework tests on [solo-io/docs run 43262812016](https://github.com/solo-io/docs/actions/runs/43262812016/job/131349513739), fetching `https://agentgateway.dev/examples/mcp-multiplex/config.yaml`, which is rendered on pages such as [the MCP multiplexing guide](https://agentgateway.dev/docs/standalone/latest/integrations/mcp/servers/virtual/). Hugo's `resources.GetRemote` does not retry a transport error, and the test's own retry only rereads the saved build log. Both shortcodes now fetch through a new `utils/get-remote.html` partial that retries a transport error up to two more times, each with its own cache key so the retry makes a real request. A timeout is not retried, because a slow host would add another full timeout per attempt, and a 404 still fails the build as before. Verified with a scratch Hugo site against a local server that resets the first N connections: 1 reset succeeds on the 2nd connection, 2 resets succeed on the 3rd, constant resets stop after 3 and return the error, a 404 makes 1 request, and a 2s timeout makes 1 request. `tests/build-resilience.spec.ts` now lists the partial as the capped fetcher and fails if either shortcode calls `GetRemote` directly. The fixture build, `github-shortcode.spec.ts`, `github-yaml-shortcode.spec.ts`, and `hugo-warnings.spec.ts` pass. Takes effect when a consumer bumps its extras pin.
+
+---
+
 ## [0.4.1] — 2026-11-06
 
 ### Add — the Verified badge's tooltip lists what the automated tests checked (`layouts/_partials/components/test-status-badge.html`, `assets/css/docs-theme-extras.css`, `i18n/en.yaml`, `i18n/ja.yaml`, `docs/content/configuration/doc-test-badge.md`, `fixture/content/en/test/v2/test-status-types.md`, `tests/test-status-badge.spec.ts`)

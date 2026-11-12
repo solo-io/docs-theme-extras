@@ -31,10 +31,16 @@ const LAYOUTS_DIR = path.resolve(__dirname, "..", "layouts");
 const KNOWN_FETCHERS = [
   "_partials/scripts/mermaid.html",
   "_partials/scripts/search.html",
-  "_shortcodes/github.html",
+  "_partials/utils/get-remote.html",
   "_shortcodes/github-table.html",
   "_shortcodes/openapi.html",
 ];
+
+// Shortcodes that fetch through utils/get-remote.html, which retries a
+// transport error such as "connection reset by peer". A direct GetRemote here
+// would drop the retry, and one network blip would WARN and fail a consumer's
+// hugo-warnings test again.
+const RETRYING_FETCHERS = ["_shortcodes/github.html", "_shortcodes/github-yaml.html"];
 
 function walkHtml(root: string): string[] {
   if (!fs.existsSync(root)) return [];
@@ -177,6 +183,16 @@ test.describe("theme templates: no uncapped build-time remote fetch", () => {
       expect(calls.every((c) => c.capped), `${rel} has an uncapped fetch`).toBe(
         true,
       );
+    });
+  }
+
+  for (const rel of RETRYING_FETCHERS) {
+    test(`${rel} fetches through utils/get-remote.html (retry on reset)`, () => {
+      const src = blankHugoComments(fs.readFileSync(path.join(LAYOUTS_DIR, rel), "utf8"));
+      expect(src, `${rel} no longer calls utils/get-remote.html`).toContain(
+        'partial "utils/get-remote.html"',
+      );
+      expect(getRemoteCalls(src, rel), `${rel} calls GetRemote directly`).toEqual([]);
     });
   }
 });
