@@ -41,6 +41,10 @@
        `refs/heads/main` refreshes at least daily instead of being pinned to
        whenever the getresource cache was last cold. `github` has no cache key,
        so Hugo's default keying applies.
+
+    Like `github`, it fetches through `utils/get-remote.html`, which retries a
+    transport error such as "connection reset by peer" up to two more times
+    before it warns. A timeout is not retried. A dead URL still fails the build.
 */ -}}
 {{- $url := .Get "url" -}}
 {{- /* Directory of the URL, for the caption's "view source" link.
@@ -58,7 +62,8 @@
 {{- $dirURL := replaceRE `/[^/]*$` "" $url -}}
 {{- /* Date-stamped key so a moving ref refreshes at least once per day. */ -}}
 {{- $cacheKey := printf "%s-%s" $url (now.Format "2006-01-02") -}}
-{{- $attempt := try (resources.GetRemote $url (dict "key" $cacheKey "timeout" "15s")) -}}
+{{- /* utils/get-remote retries a transport error twice before giving up. */ -}}
+{{- $attempt := partial "utils/get-remote.html" (dict "url" $url "opts" (dict "key" $cacheKey "timeout" "15s")) -}}
 {{- with $attempt.Err -}}
   {{- warnf "github-yaml: failed to fetch %q: %s" $url . -}}
   <p><strong>Error:</strong> Unable to load code from <a href="{{ $url }}">{{ $url }}</a></p>

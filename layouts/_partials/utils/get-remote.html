@@ -1,0 +1,36 @@
+{{- /* Returns the `try` result of `resources.GetRemote`, retrying a failed
+   fetch up to two more times. Callers read `.Err` and `.Value` exactly as they
+   would on `try (resources.GetRemote ...)`.
+
+   Input: dict "url" (string) "opts" (dict, passed to GetRemote, optional).
+   A missing `timeout` in opts defaults to 15s, so every fetch stays capped.
+
+   Why: a single dropped connection ("connection reset by peer") during a CI
+   build made `github-yaml` emit a WARN, and the consumer's hugo-warnings test
+   fails on any WARN. Hugo's own GetRemote retries some HTTP status codes but
+   not a transport error like a reset, so one blip failed a whole run.
+
+   What is NOT retried:
+   - A nil `.Value` with no error. That is a 404 (a dead URL), which retrying
+     will not fix, so it returns at once and the caller still fails the build.
+   - A timeout. The host is slow, not flaky, and a retry would add another full
+     timeout to the build for each attempt.
+
+   Each retry sets a distinct cache `key`. GetRemote memoizes by key within a
+   build, so reusing the first attempt's key could hand back the same failure
+   without a new request. The first attempt keeps the caller's options as-is,
+   so a successful first fetch caches exactly as it did before. */ -}}
+{{- $url := .url -}}
+{{- $opts := merge (dict "timeout" "15s") (.opts | default dict) -}}
+{{- $baseKey := $opts.key | default $url -}}
+{{- $attempt := try (resources.GetRemote $url (merge (dict "timeout" "15s") $opts)) -}}
+{{- range $n := seq 2 3 -}}
+  {{- with $attempt.Err -}}
+    {{- if findRE `(?i)timeout|deadline exceeded` (string .) -}}{{- break -}}{{- end -}}
+  {{- else -}}
+    {{- break -}}
+  {{- end -}}
+  {{- $retryOpts := merge $opts (dict "key" (printf "%s-retry-%d" $baseKey $n)) -}}
+  {{- $attempt = try (resources.GetRemote $url (merge (dict "timeout" "15s") $retryOpts)) -}}
+{{- end -}}
+{{- return $attempt -}}

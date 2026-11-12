@@ -41,6 +41,11 @@ getresource cache fails fast instead of hanging, and `try` (required since
 Hugo v0.141 removed `resource.Err`) turns a transient fetch error into a
 warning plus a link-checker-visible fallback rather than a crash.
 
+The fetch goes through `utils/get-remote.html`, which retries a transport
+error such as "connection reset by peer" up to two more times before it
+warns. A timeout is not retried, because a slow host would add another full
+timeout per attempt.
+
 A dead or 404 URL is different: it produces a nil resource with no error,
 which is treated as a real reference bug and fails the build with `errorf`.
 The distinction is deliberate — a flaky network should not break a build,
