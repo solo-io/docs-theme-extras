@@ -1,0 +1,52 @@
+{{- /* Returns one llms.txt list line for a regular page:
+
+     - [Title](https://host/path.md): summary - Published 2026-01-02
+
+   Input: dict "page" (Page) "prodHost" (string).
+
+   Link target: the page's markdown output URL when the site publishes the
+   `markdown` output format for it, otherwise its HTML URL. The old templates
+   appended `.md` unconditionally, which 404s on a site that turns markdown
+   off.
+
+   Summary: the front matter `description` first, because it is written to
+   stand alone. Only when it is missing does this fall back to Hugo's
+   auto-summary, and then it cuts the HTML at the first callout. Without that
+   cut, a page that opens with a NOTE callout leaked the callout's title into
+   llms.txt as a stray "Note" line followed by the callout body. `htmlUnescape`
+   turns `&rsquo;`-style entities that `plainify` leaves behind back into
+   characters, and the whitespace collapse keeps every entry on one line.
+   Summaries over 160 characters are cut, up from the old 100, so most
+   front matter descriptions survive whole. */ -}}
+{{- $p := .page -}}
+{{- $prodHost := .prodHost -}}
+
+{{- /* Ask Hugo for the markdown output's URL rather than appending `.md` to
+       the page URL. They differ for a page whose front matter `url` ends in
+       "/": Hugo writes that page's markdown to <url>/index.md, so the appended
+       form (<url>.md) 404s. agentgateway's 1.4.x and 1.5.x
+       multiple-inference-pools pages hit exactly this. */ -}}
+{{- $url := print $prodHost $p.RelPermalink -}}
+{{- with $p.OutputFormats.Get "markdown" -}}
+  {{- $url = print $prodHost .RelPermalink -}}
+{{- end -}}
+
+{{- $summary := $p.Description -}}
+{{- if not $summary -}}
+  {{- $html := string $p.Summary -}}
+  {{- $html = replaceRE `(?s)<div[^>]*data-alert-type.*$` "" $html -}}
+  {{- $summary = $html | plainify -}}
+{{- end -}}
+{{- $summary = $summary | htmlUnescape | replaceRE `\s+` " " | strings.TrimSpace -}}
+{{- if gt (len $summary) 160 -}}
+  {{- /* `truncate` HTML-escapes a plain string (Istio's -> Istio&#39;s), so
+         unescape again after it. */ -}}
+  {{- $summary = truncate 160 $summary | htmlUnescape -}}
+{{- end -}}
+
+{{- $line := printf "- [%s](%s)" $p.Title $url -}}
+{{- with $summary -}}{{- $line = printf "%s: %s" $line . -}}{{- end -}}
+{{- if not $p.Date.IsZero -}}
+  {{- $line = printf "%s - Published %s" $line ($p.Date.Format "2006-01-02") -}}
+{{- end -}}
+{{- return $line -}}

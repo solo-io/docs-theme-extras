@@ -352,12 +352,15 @@
 {{ $scalarUrl := printf "%s/scalar-api-reference/1.78.0/standalone.min.js" $cdnjs }}
 {{ $scalarSrc := $scalarUrl }}
 {{ $scalarIntegrity := "" }}
-{{ with (try (resources.GetRemote $scalarUrl (dict "timeout" "30s"))).Value }}
+{{- /* Fetched through utils/get-remote.html, so a dropped connection is
+       retried. If the fetch still fails, the page loads the bundle from cdnjs
+       without SRI, the same quiet fallback as the Swagger assets. No warnf:
+       the page still works, and a WARN would fail a consumer's hugo-warnings
+       test over a network blip. */ -}}
+{{ with (partial "utils/get-remote.html" (dict "url" $scalarUrl "opts" (dict "timeout" "30s"))).Value }}
   {{ $f := . | resources.Fingerprint }}
   {{ $scalarSrc = $f.RelPermalink }}
   {{ $scalarIntegrity = $f.Data.Integrity }}
-{{ else }}
-  {{ warnf "openapi: scalar bundle fetch failed, loading from CDN: %s" $scalarUrl }}
 {{ end }}
 {{ $scalarId := printf "openapi-scalar-%d" .Ordinal }}
 <div class="openapi-container openapi-scalar">

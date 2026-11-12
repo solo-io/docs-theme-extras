@@ -1,0 +1,19 @@
+{{- /* Returns the absolute URL an llms.txt index should use for a section.
+
+     Input: dict "page" (section Page) "prodHost" (string).
+
+   Prefers the section's own llms.txt, then its `.md` page, then its HTML page.
+   The old templates appended `llms.txt` to the section URL without checking
+   that the section publishes the `llms` output format, so a site with
+   `section = ["HTML", "markdown"]` got index links that 404. */ -}}
+{{- $p := .page -}}
+{{- $prodHost := .prodHost -}}
+{{- $url := print $prodHost $p.RelPermalink -}}
+{{- with $p.OutputFormats.Get "llms" -}}
+  {{- $url = print $prodHost .RelPermalink -}}
+{{- else -}}
+  {{- with $p.OutputFormats.Get "markdown" -}}
+    {{- $url = print $prodHost .RelPermalink -}}
+  {{- end -}}
+{{- end -}}
+{{- return $url -}}

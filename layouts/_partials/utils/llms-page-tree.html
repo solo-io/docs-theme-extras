@@ -1,0 +1,29 @@
+{{- /* Returns the FULL page listing of a section for llms.txt, as a string: one
+   entry per llms-eligible page, then each subsection under its own heading.
+   Used for a version root, for sections inside a version tree, and for leaf
+   sections such as a blog. This is the only place llms.txt lists every page.
+
+     Input: dict "page" (section Page) "level" (heading level) "prodHost".
+
+   A subsection with no eligible pages of its own and no subsections becomes a
+   link to the subsection page, instead of a heading with nothing under it. */ -}}
+{{- $s := .page -}}
+{{- $level := .level | default 2 -}}
+{{- $prodHost := .prodHost -}}
+{{- $hashes := strings.Repeat $level "#" -}}
+{{- $out := "" -}}
+
+{{- range where $s.RegularPages "Params.llms" "ne" false -}}
+  {{- $out = print $out (partial "utils/llms-entry.html" (dict "page" . "prodHost" $prodHost)) "\n" -}}
+{{- end -}}
+
+{{- range where $s.Sections "Params.llms" "ne" false -}}
+  {{- $inner := partial "utils/llms-page-tree.html" (dict "page" . "level" (add $level 1) "prodHost" $prodHost) -}}
+  {{- if not $inner -}}
+    {{- $url := print $prodHost .RelPermalink -}}
+    {{- with .OutputFormats.Get "markdown" -}}{{- $url = print $prodHost .RelPermalink -}}{{- end -}}
+    {{- $inner = printf "- [%s](%s)\n" .Title $url -}}
+  {{- end -}}
+  {{- $out = print $out (printf "\n%s %s\n\n" $hashes .Title) $inner -}}
+{{- end -}}
+{{- return $out -}}

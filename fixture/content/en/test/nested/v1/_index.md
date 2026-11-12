@@ -1,5 +1,8 @@
 ---
-title: v1
+title: Nested guide
+# The title leaves out the version on purpose. Many hub version roots share one
+# title ("Solo Enterprise for Istio"), and tests/llms-index.spec.ts checks that
+# llms.txt adds the version label to the link text in that case.
 weight: 20
 description: An older version of the nested-section tree.
 ---

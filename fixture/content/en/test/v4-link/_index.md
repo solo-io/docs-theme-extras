@@ -1,5 +1,7 @@
 ---
-title: v4 (linkVersion probe)
+title: V4 (linkVersion probe)
+# Capital V on purpose: tests/llms-index.spec.ts checks that llms.txt treats this
+# title as already naming its version (dropdown "v4 …") despite the case.
 weight: 400
 description: Version tree whose URL slug (v4-link) differs from its canonical version (v4).
 ---

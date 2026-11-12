@@ -1,0 +1,85 @@
+{{- /* Returns a section's llms-eligible subsections (`llms: false` opts out), in
+   the order llms.txt should list them. Only version roots are reordered or
+   dropped; any other subsection keeps its weight order and comes after the
+   versions.
+
+   Which versions are listed follows the version dropdown, because that is the
+   set a reader is offered:
+
+   - A version tree with no `params.versions` entry is left out. agentgateway.dev
+     keeps its 1.1.x to 1.6.x Kubernetes trees on disk but lists only `main`
+     and 1.7.x in its config, and those old trees used to fill most of the
+     version list. The rule only applies when the section HAS configured
+     versions, so a site with no `params.versions` at all still lists every
+     tree.
+   - A hidden entry (whitespace-only `dropdown`, the module's "published but
+     not advertised" signal) is left out too.
+
+   Order:
+
+   1. `latest` (the version whose URL segment is `latest`).
+   2. Configured versions, in `params.versions` order. Every config lists
+      versions newest first, because the same list drives the dropdown. Version
+      `_index.md` weights are no help: agentgateway gives every version weight
+      460, so weight order was arbitrary.
+   3. Versions with no config at all (only on a site without
+      `params.versions`), newest first by their numeric parts, with `x` as 0.
+      Calendar versions sort correctly against semantic ones (2026.7.1 is
+      newer than 2.3.x).
+   4. `main` (in development) last, even though configs list it first, so an
+      agent that takes the first link reads released docs.
+
+   Version detection goes through utils/version-root.html, so the OSS and the
+   docs hub URL shapes both work. */ -}}
+{{- $items := slice -}}
+{{- $others := slice -}}
+{{- range where .Sections "Params.llms" "ne" false -}}
+  {{- $sec := . -}}
+  {{- $v := partial "utils/version-root.html" $sec -}}
+  {{- if not (and $v.isVersioned (eq $v.pathAfterVersion "")) -}}
+    {{- $others = $others | append $sec -}}
+  {{- else -}}
+    {{- $seg := $v.currentVersion -}}
+    {{- $e := $v.versionEntry -}}
+    {{- $configured := partial "utils/resolve-section-versions.html" $v.section -}}
+    {{- $keep := true -}}
+    {{- $key := "" -}}
+    {{- if $e -}}
+      {{- if and (isset $e "dropdown") (eq (trim (string $e.dropdown) " ") "") -}}
+        {{- $keep = false -}}
+      {{- end -}}
+      {{- /* Position of this entry in params.versions. Match on linkVersion and
+             product, the same pair match-version-entry.html prefers, so a
+             cross-product entry with the same linkVersion does not win. */ -}}
+      {{- $pos := -1 -}}
+      {{- range $i, $c := site.Params.versions -}}
+        {{- if and (lt $pos 0) (eq $c.linkVersion $e.linkVersion) (eq ($c.product | default "") ($e.product | default "")) -}}
+          {{- $pos = $i -}}
+        {{- end -}}
+      {{- end -}}
+      {{- $key = printf "B%05d" (cond (lt $pos 0) 99999 $pos) -}}
+    {{- else if $configured -}}
+      {{- $keep = false -}}
+    {{- else -}}
+      {{- /* No config: descending by numeric parts. Each part is inverted
+             (99999 - n) so an ascending sort puts the newest first. */ -}}
+      {{- $key = "C" -}}
+      {{- range split $seg "." -}}
+        {{- $n := 0 -}}
+        {{- /* Strip leading zeros first: `int` reads "07" as octal. */ -}}
+        {{- $digits := strings.TrimLeft "0" . -}}
+        {{- if and $digits (findRE `^\d+$` $digits) -}}{{- $n = int $digits -}}{{- end -}}
+        {{- $key = printf "%s%05d" $key (sub 99999 $n) -}}
+      {{- end -}}
+    {{- end -}}
+    {{- if eq $seg "latest" -}}{{- $key = "A" -}}{{- end -}}
+    {{- if eq $seg "main" -}}{{- $key = "D" -}}{{- end -}}
+    {{- if $keep -}}
+      {{- $items = $items | append (dict "key" $key "page" $sec) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $out := slice -}}
+{{- range sort $items "key" -}}{{- $out = $out | append .page -}}{{- end -}}
+{{- range $others -}}{{- $out = $out | append . -}}{{- end -}}
+{{- return $out -}}

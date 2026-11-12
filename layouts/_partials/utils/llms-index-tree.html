@@ -1,0 +1,101 @@
+{{- /* Returns the INDEX form of a section for llms.txt, as a string. Used by the
+   root llms.txt and by every section llms.txt that sits above a version tree.
+
+     Input: dict "page" (section Page) "level" (heading level) "prodHost".
+
+   An index points at other files instead of inlining their contents:
+
+   - A version root (/docs/<product>/<version>/ on OSS sites,
+     /<product>/[<section>/]<version>/ on the docs hub) becomes ONE link to that
+     version's own llms.txt, with the version named in the link text.
+     Detection goes through utils/version-root.html.
+     The old templates counted URL segments instead, and the count depends on
+     the baseURL path: a local docs hub build (baseURL "/") lost the
+     /<product>/ segment and rendered every version as an empty heading.
+   - A section with llms-eligible subsections becomes a heading. Its own pages
+     are listed first, capped like a leaf section's, and then each subsection
+     is rendered with this partial again. Subsections come from
+     utils/llms-children.html, so `latest` is listed first and `main` last.
+   - A leaf section (pages but no subsections, like a blog) lists only its first
+     `site.Params.llms.leafPageLimit` pages (default 5, in the section's own
+     sort order, which is newest first for a dated blog), then links to the
+     section's full listing. Inlining every post made the root grow forever.
+   - A section with neither pages nor subsections (for example one whose pages
+     a content adapter or a data-driven layout renders) becomes one link to the
+     section's own .md or HTML page, instead of a heading with nothing under
+     it. Its llms.txt would be empty, so that is not the link target. */ -}}
+{{- $s := .page -}}
+{{- $level := .level | default 2 -}}
+{{- $prodHost := .prodHost -}}
+{{- $limit := int (site.Params.llms.leafPageLimit | default 5) -}}
+{{- $hashes := strings.Repeat $level "#" -}}
+{{- $sectionURL := partial "utils/llms-section-url.html" (dict "page" $s "prodHost" $prodHost) -}}
+{{- $v := partial "utils/version-root.html" $s -}}
+{{- $out := "" -}}
+
+{{- if and $v.isVersioned (eq $v.pathAfterVersion "") -}}
+  {{- /* Name the version in the link text. Many version roots share one title
+         (every Istio version root is "Solo Enterprise for Istio"), so the
+         links read as duplicates and only the URL tells them apart. When the
+         title does not already name the version, append the version's
+         dropdown label from params.versions ("1.31.x (stable)",
+         "2.14 (latest)"), or the version's directory name when it has no
+         entry. The title counts as naming the version when it contains the
+         directory name or the label's first word, so "Solo Enterprise for
+         agentregistry 2026.10.0" under latest/ is left alone. */ -}}
+  {{- $title := $s.Title -}}
+  {{- $label := $v.currentVersion -}}
+  {{- with $v.versionEntry -}}
+    {{- with strings.TrimSpace (.dropdown | default "") -}}{{- $label = . -}}{{- end -}}
+  {{- end -}}
+  {{- /* Compare case-insensitively: agentgateway titles its main tree
+         "Main (in dev)", which already names `main`. */ -}}
+  {{- $titleLC := lower $title -}}
+  {{- $labelHead := index (split $label " ") 0 -}}
+  {{- if and $label (not (in $titleLC (lower $v.currentVersion))) (not (in $titleLC (lower $labelHead))) -}}
+    {{- $title = printf "%s %s" $title $label -}}
+  {{- end -}}
+  {{- $out = printf "- [%s](%s)\n" $title $sectionURL -}}
+
+{{- else -}}
+  {{- $children := partial "utils/llms-children.html" $s -}}
+  {{- $pages := where $s.RegularPages "Params.llms" "ne" false -}}
+  {{- /* A section with nothing to list gets a heading only at the top level,
+         where a bare link would read as part of the previous section's list.
+         Deeper down, one link line under the parent's heading is enough. */ -}}
+  {{- if or $children $pages (eq $level 2) -}}
+    {{- $out = printf "\n%s %s\n\n" $hashes $s.Title -}}
+  {{- end -}}
+
+  {{- /* The section's own pages come first, capped like a leaf section's, and
+         then its subsections. A section can have both: agentregistry's
+         unversioned /docs/mcp/local/ holds create, publish, and tools next to
+         a deploy/ subsection. Listing only the subsections dropped those pages
+         from every llms.txt on the site. */ -}}
+  {{- if $pages -}}
+    {{- range first $limit $pages -}}
+      {{- $out = print $out (partial "utils/llms-entry.html" (dict "page" . "prodHost" $prodHost)) "\n" -}}
+    {{- end -}}
+    {{- if gt (len $pages) $limit -}}
+      {{- $out = print $out (printf "- [All %d %s pages](%s)\n" (len $pages) $s.Title $sectionURL) -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- if $children -}}
+    {{- range $children -}}
+      {{- $out = print $out (partial "utils/llms-index-tree.html" (dict "page" . "level" (add $level 1) "prodHost" $prodHost)) -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- if not (or $children $pages) -}}
+    {{- /* Its own llms.txt would list nothing, so link the page itself. */ -}}
+    {{- $pageURL := print $prodHost $s.RelPermalink -}}
+    {{- with $s.OutputFormats.Get "markdown" -}}{{- $pageURL = print $prodHost .RelPermalink -}}{{- end -}}
+    {{- $line := printf "- [%s](%s)" $s.Title $pageURL -}}
+    {{- with $s.Description -}}
+      {{- $line = printf "%s: %s" $line (. | replaceRE `\s+` " " | strings.TrimSpace) -}}
+    {{- end -}}
+    {{- $out = print $out $line "\n" -}}
+  {{- end -}}
+{{- end -}}
+{{- return $out -}}
