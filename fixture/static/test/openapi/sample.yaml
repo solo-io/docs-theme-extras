@@ -1,6 +1,11 @@
 openapi: 3.0.3
 info:
   title: Test fixture sample API
+  description: |-
+    A sample API for the openapi shortcode tests.
+
+    **Markdown.** The description is Markdown with more than one paragraph, so the
+    Copy-as-Markdown summary must render it to HTML instead of printing it raw.
   version: 0.1.0
 paths:
   /marker-openapi:

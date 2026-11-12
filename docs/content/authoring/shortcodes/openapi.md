@@ -21,7 +21,7 @@ Either call form works, and both produce identical HTML.
 | `renderer` | string | no | `swagger` | The viewer to render the spec with: `swagger` or `scalar`. |
 | `tryItOut` | bool | no | `true` | Pass tryItOut="false" to remove the controls that send requests from the browser. Use it for a spec with no `servers`, which would otherwise send requests to the docs host. |
 | `hideInfo` | bool | no | `false` | Pass hideInfo="true" to drop the spec's title and description from the viewer, when the page already shows them. |
-| `serverUrl` | url | no | — | A placeholder server for Scalar's request examples, used instead of the spec's `servers`. Scalar only. |
+| `serverUrl` | url | no | — | A placeholder server for Scalar's request examples, used instead of the spec's `servers`. Pair it with tryItOut="false", so that readers cannot send requests to the placeholder. Scalar only. |
 
 ## Example
 
@@ -30,9 +30,17 @@ Either call form works, and both produce identical HTML.
 
 ## Notes
 
-Both renderers load from the site's own origin, because their assets are
-fetched and fingerprinted at build time, so they run under a CSP that
-allows only 'self' and cdnjs for scripts and has no 'unsafe-eval'. Scalar
+To render a spec with Scalar instead of Swagger UI, set the renderer:
+
+```markdown
+{{</* openapi src="api/openapi.json" renderer="scalar" tryItOut="false" */>}}
+```
+
+Both renderers load from the site's own origin when the build-time fetch
+of their assets succeeds, because the assets are fingerprinted at build
+time. They then run under a CSP that allows only 'self' and cdnjs for
+scripts and has no 'unsafe-eval'. When the fetch fails, Scalar loads its
+bundle from cdnjs without SRI, and Swagger UI loses its stylesheet. Scalar
 probes for eval support through zod, which logs a CSP violation even though
 the probe is caught. The shortcode sets zod's `jitless` flag before Scalar
 loads, so the probe never runs.
@@ -50,11 +58,10 @@ the Copy-as-Markdown output would lose the API content entirely.
 Every build-time remote fetch is capped with a timeout and wrapped in `try`,
 so an unreachable remote on a cold CI build warns and moves on instead of
 hanging. Swagger UI still renders client-side from `url`, and the CDN assets
-fall back to loading directly from unpkg when their build-time fetch fails,
-so the page works even when the build cannot reach the network. The fallback
-is cdnjs, which the docs CSP allows for scripts but not for styles, so a
-fallback render works but loses Swagger's stylesheet. The fallback also
-loads without SRI.
+fall back to loading directly from cdnjs when their build-time fetch fails,
+so the page works even when the build cannot reach the network. The docs
+CSP allows cdnjs for scripts but not for styles, so a fallback render works
+but loses Swagger's stylesheet. The fallback also loads without SRI.
 
 Swagger UI's own assets are already minified upstream and are deliberately
 NOT run through `resources.Minify`. Re-minifying webpack-bundled JS can
