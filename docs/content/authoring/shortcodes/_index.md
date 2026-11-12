@@ -62,7 +62,7 @@ Pull content from outside the page's own source.
 | [`github`](github/) | Fetches a remote file by URL and inlines its contents |
 | [`github-table`](github-table/) | Fetches a remote Markdown file and inlines one section of it by heading |
 | [`github-yaml`](github-yaml/) | Fetches a remote YAML file and renders it as a captioned code block |
-| [`openapi`](openapi/) | Embeds a Swagger UI viewer for an OpenAPI spec |
+| [`openapi`](openapi/) | Embeds an interactive viewer (Swagger UI or Scalar) for an OpenAPI spec |
 | [`readfile`](readfile/) | Inlines a file from the filesystem into the page |
 
 ## Links

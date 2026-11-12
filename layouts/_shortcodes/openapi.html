@@ -1,6 +1,6 @@
 {{- /*
   Shortcode: openapi
-  Summary: Embeds a Swagger UI viewer for an OpenAPI spec
+  Summary: Embeds an interactive viewer (Swagger UI or Scalar) for an OpenAPI spec
   Group: external-content
   CallForm: both
   Overrides: none
@@ -8,11 +8,22 @@
   Parameters:
     - src | path | no | — | An OpenAPI spec in assets/. Takes precedence over url.
     - url | url | no | — | A remote OpenAPI spec URL.
-    - deepLinking | bool | no | false | Pass deepLinking="true" to let Swagger UI write the expanded operation into the page URL.
+    - deepLinking | bool | no | false | Pass deepLinking="true" to let Swagger UI write the expanded operation into the page URL. Swagger only.
+    - renderer | string | no | swagger | The viewer to render the spec with: `swagger` or `scalar`.
+    - tryItOut | bool | no | true | Pass tryItOut="false" to remove the controls that send requests from the browser. Use it for a spec with no `servers`, which would otherwise send requests to the docs host.
+    - hideInfo | bool | no | false | Pass hideInfo="true" to drop the spec's title and description from the viewer, when the page already shows them.
+    - serverUrl | url | no | — | A placeholder server for Scalar's request examples, used instead of the spec's `servers`. Scalar only.
 
   Example: code-only
 
   Notes:
+    Both renderers load from the site's own origin, because their assets are
+    fetched and fingerprinted at build time, so they run under a CSP that
+    allows only 'self' and cdnjs for scripts and has no 'unsafe-eval'. Scalar
+    probes for eval support through zod, which logs a CSP violation even though
+    the probe is caught. The shortcode sets zod's `jitless` flag before Scalar
+    loads, so the probe never runs.
+
     Give either `src` or `url`. `src` wins when both are set, and resolves
     through `resources.Get`, so the spec is served from the site's own origin.
 
@@ -27,8 +38,10 @@
     so an unreachable remote on a cold CI build warns and moves on instead of
     hanging. Swagger UI still renders client-side from `url`, and the CDN assets
     fall back to loading directly from unpkg when their build-time fetch fails,
-    so the page works even when the build cannot reach the network. The cost of
-    that fallback is that the assets load without SRI.
+    so the page works even when the build cannot reach the network. The fallback
+    is cdnjs, which the docs CSP allows for scripts but not for styles, so a
+    fallback render works but loses Swagger's stylesheet. The fallback also
+    loads without SRI.
 
     Swagger UI's own assets are already minified upstream and are deliberately
     NOT run through `resources.Minify`. Re-minifying webpack-bundled JS can
@@ -40,6 +53,14 @@
 */ -}}
 {{ $url := .Get "url" }}
 {{ $src := .Get "src" }}
+{{ $renderer := .Get "renderer" | default "swagger" }}
+{{ if not (in (slice "swagger" "scalar") $renderer) }}
+  {{ errorf "openapi: renderer %q is not swagger or scalar: %s" $renderer .Position }}
+{{ end }}
+{{ $tryItOut := ne (.Get "tryItOut" | default "true") "false" }}
+{{ $hideInfo := eq (.Get "hideInfo" | default "false") "true" }}
+{{ $serverUrl := .Get "serverUrl" }}
+{{ $cdnjs := "https://cdnjs.cloudflare.com/ajax/libs" }}
 
 {{/* Resolve the spec URL and capture the parsed content so we can also emit a
      plain-text summary for the "Copy as Markdown" feature. Swagger UI renders
@@ -67,12 +88,13 @@
   {{ with $parsed.Err }}{{ warnf "openapi: spec %q did not parse: %s" $url . }}{{ else }}{{ with $parsed.Value.info }}{{ $info = . }}{{ end }}{{ end }}
 {{ end }}
 
+{{ if eq $renderer "swagger" }}
 {{/* Swagger UI assets are already minified upstream. Don't run them through
      resources.Minify — re-minifying webpack-bundled JS can rename internal
      identifiers (e.g. webpackUniversalModuleDefinition) and leave
      SwaggerUIBundle undefined at runtime. Just fingerprint for SRI when the
-     build-time fetch succeeds; otherwise load straight from the CDN. */}}
-{{ $cssUrl := "https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui.css" }}
+     build-time fetch succeeds; otherwise load straight from cdnjs, the CDN the docs CSP allows. */}}
+{{ $cssUrl := (printf "%s/swagger-ui/5.9.0/swagger-ui.css" $cdnjs) }}
 {{ with (try (resources.GetRemote $cssUrl (dict "timeout" "15s"))).Value }}
   {{ $f := . | resources.Fingerprint }}
   <link rel="stylesheet" href="{{ $f.RelPermalink }}" integrity="{{ $f.Data.Integrity }}">
@@ -81,7 +103,7 @@
   <link rel="stylesheet" href="{{ $cssUrl }}">
 {{ end }}
 
-{{ $bundleUrl := "https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-bundle.js" }}
+{{ $bundleUrl := (printf "%s/swagger-ui/5.9.0/swagger-ui-bundle.js" $cdnjs) }}
 {{ with (try (resources.GetRemote $bundleUrl (dict "timeout" "15s"))).Value }}
   {{ $f := . | resources.Fingerprint }}
   <script src="{{ $f.RelPermalink }}" integrity="{{ $f.Data.Integrity }}"></script>
@@ -90,7 +112,7 @@
   <script src="{{ $bundleUrl }}"></script>
 {{ end }}
 
-{{ $presetUrl := "https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-standalone-preset.js" }}
+{{ $presetUrl := (printf "%s/swagger-ui/5.9.0/swagger-ui-standalone-preset.js" $cdnjs) }}
 {{ with (try (resources.GetRemote $presetUrl (dict "timeout" "15s"))).Value }}
   {{ $f := . | resources.Fingerprint }}
   <script src="{{ $f.RelPermalink }}" integrity="{{ $f.Data.Integrity }}"></script>
@@ -103,16 +125,7 @@
   <div id="swagger-ui" data-spec-url="{{ $url }}"></div>
 </div>
 
-{{- /* Hidden summary surfaced only by the "Copy as Markdown" button. Kept off-screen
-       (display:none, also .copy-md-only in custom.css) but visible to
-       transform.HTMLToMarkdown so the copy isn't empty. */ -}}
-{{- with $info -}}
-<div class="copy-md-only" style="display:none" aria-hidden="true">
-  <p><strong>API reference: {{ .title }}{{ with .version }} v{{ . }}{{ end }}</strong></p>
-  {{- with .description }}<p>{{ . }}</p>{{ end }}
-  <p>Full OpenAPI spec: <a href="{{ $url }}">{{ $url }}</a></p>
-</div>
-{{- end -}}
+
 
 <style>
   .swagger-ui .topbar .download-url-wrapper {
@@ -273,10 +286,11 @@
         SwaggerUIStandalonePreset
       ],
       plugins: [
-        SwaggerUIBundle.plugins.DownloadUrl
+        SwaggerUIBundle.plugins.DownloadUrl{{ if $hideInfo }},
+        function () { return { wrapComponents: { InfoContainer: function () { return function () { return null; }; } } }; }{{ end }}
       ],
       layout: 'StandaloneLayout',
-      supportedSubmitMethods: ['get', 'post', 'put', 'delete', 'patch'],
+      supportedSubmitMethods: {{ if $tryItOut }}['get', 'post', 'put', 'delete', 'patch']{{ else }}[]{{ end }},
       operationsSorter: 'alpha',
       tagsSorter: 'alpha',
       docExpansion: 'list',
@@ -288,3 +302,112 @@
     });
   });
 </script>
+{{ else }}
+{{- /* Scalar ships one self-contained bundle, already minified, on cdnjs.
+       Fingerprint it like the Swagger assets so it is served from 'self'.
+
+       The first inline script sets zod's global `jitless` flag. Without it,
+       zod probes `Function("")` the first time Scalar validates its
+       configuration. The probe is caught, but a CSP without 'unsafe-eval'
+       still reports it as a violation in the console.
+
+       The mount element carries the spec URL as `data-openapi-url`, not
+       `data-spec-url`: Scalar scans the page for `[data-spec-url]` on load
+       and mounts a second viewer, with default settings, on any match.
+
+       The viewer follows the site theme: Hextra toggles the `dark` class on
+       <html>, and a MutationObserver passes the change to Scalar.
+       `withDefaultFonts: false` keeps Scalar off fonts.scalar.com, which the
+       docs CSP blocks, so it uses the site's fonts instead. `telemetry` and
+       the agent chat are off because both call scalar.com. The developer
+       toolbar (Configure, Share, Generate SDK, Deploy API) defaults to showing
+       on localhost only, which hides it from a `hugo server` review. It is
+       always off here.
+
+       The classic layout gives each untagged operation its own section with
+       48px of top padding, which reads as empty bands inside a docs page, so
+       the style block tightens it. */ -}}
+{{ $scalarUrl := printf "%s/scalar-api-reference/1.78.0/standalone.min.js" $cdnjs }}
+{{ $scalarSrc := $scalarUrl }}
+{{ $scalarIntegrity := "" }}
+{{ with (try (resources.GetRemote $scalarUrl (dict "timeout" "30s"))).Value }}
+  {{ $f := . | resources.Fingerprint }}
+  {{ $scalarSrc = $f.RelPermalink }}
+  {{ $scalarIntegrity = $f.Data.Integrity }}
+{{ else }}
+  {{ warnf "openapi: scalar bundle fetch failed, loading from CDN: %s" $scalarUrl }}
+{{ end }}
+{{ $scalarId := printf "openapi-scalar-%d" .Ordinal }}
+<div class="openapi-container openapi-scalar">
+  <div id="{{ $scalarId }}" data-openapi-url="{{ $url }}"></div>
+</div>
+<style>
+  .openapi-scalar {
+    margin: 2rem 0;
+  }
+  .openapi-scalar .scalar-app {
+    --scalar-font: inherit;
+    --scalar-font-code: inherit;
+    background: transparent;
+  }
+  .openapi-scalar .references-classic .section-container {
+    padding-top: 0.75rem !important;
+    border-top: 0;
+  }
+  .openapi-scalar .references-rendered {
+    padding-bottom: 1rem;
+  }
+  {{- if $hideInfo }}
+  .openapi-scalar .introduction-section,
+  .openapi-scalar .section-container:has(> .introduction-section) {
+    display: none !important;
+  }
+  {{- end }}
+</style>
+<script>
+  window.__zod_globalConfig = Object.assign(window.__zod_globalConfig || {}, { jitless: true });
+</script>
+<script src="{{ $scalarSrc }}"{{ with $scalarIntegrity }} integrity="{{ . }}"{{ end }}></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var el = document.getElementById({{ $scalarId }});
+    var root = document.documentElement;
+    var mode = function () { return root.classList.contains('dark') ? 'dark' : 'light'; };
+    var config = {
+      url: el.dataset.openapiUrl,
+      layout: 'classic',
+      showSidebar: false,
+      hideSearch: true,
+      hideDarkModeToggle: true,
+      darkMode: mode() === 'dark',
+      forceDarkModeState: mode(),
+      withDefaultFonts: false,
+      hideTestRequestButton: {{ not $tryItOut }},
+      hideClientButton: true,
+      documentDownloadType: 'json',
+      telemetry: false,
+      showDeveloperTools: 'never',
+      agent: { disabled: true },
+      showOperationId: false{{ with $serverUrl }},
+      servers: [{ url: {{ . }} }]{{ end }}
+    };
+    var app = Scalar.createApiReference(el, config);
+    new MutationObserver(function () {
+      if (config.forceDarkModeState === mode()) { return; }
+      config = Object.assign({}, config, { darkMode: mode() === 'dark', forceDarkModeState: mode() });
+      app.updateConfiguration(config);
+    }).observe(root, { attributes: true, attributeFilter: ['class'] });
+  });
+</script>
+{{ end }}
+
+{{- /* Hidden summary surfaced only by the "Copy as Markdown" button. Kept off-screen
+       (display:none, also .copy-md-only in custom.css) but visible to
+       transform.HTMLToMarkdown so the copy isn't empty. */ -}}
+{{- with $info -}}
+<div class="copy-md-only" style="display:none" aria-hidden="true">
+  <p><strong>API reference: {{ .title }}{{ with .version }} v{{ . }}{{ end }}</strong></p>
+  {{- with .description }}<p>{{ . }}</p>{{ end }}
+  <p>Full OpenAPI spec: <a href="{{ $url }}">{{ $url }}</a></p>
+</div>
+{{- end -}}
