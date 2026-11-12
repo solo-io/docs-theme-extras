@@ -25,7 +25,7 @@ Without `llms` on `section`, the index still renders, but its links fall back to
 
 | File | Contents |
 |---|---|
-| `/llms.txt` | One heading per top-level section. Each version is a single link to its own `llms.txt`. A leaf section lists its first few pages and links to its full list. |
+| `/llms.txt` | One heading per top-level section. Each listed version is a single link to its own `llms.txt`. A leaf section lists its first few pages and links to its full list. |
 | A section above a version tree, such as `/docs/` or `/docs/<product>/` | The same index shape, starting from that section. |
 | A version root, such as `/docs/<product>/latest/` | Every page in the version, grouped under one heading per subsection. |
 | A section inside a version tree | Every page in that section. |
@@ -33,7 +33,12 @@ Without `llms` on `section`, the index still renders, but its links fall back to
 
 Version detection uses the same resolver as the version banner and the sidebar, `utils/version-root.html`, so the OSS `/docs/<product>/<version>/` shape and the docs hub `/<product>/<version>/` shape behave the same way.
 
-Within a list of versions, `latest` comes first and `main` comes last. The other versions keep their weight order. An agent that takes the first link reads the current release, not unreleased docs.
+The version list follows the version dropdown, so it comes from `params.versions`:
+
+- `latest` comes first and `main` comes last, so an agent that takes the first link reads the current release, not unreleased docs.
+- The other versions follow their order in `params.versions`, which is newest first because the same list drives the dropdown.
+- A version tree with no `params.versions` entry is left out, and so is a hidden entry (a whitespace-only `dropdown`). To drop an old version from llms.txt, remove it from `params.versions` or hide it. Its own `llms.txt` is still built, but no index links to it.
+- On a site with no `params.versions` at all, every version tree is listed, newest first by its numeric parts.
 
 Each page entry links to the page's `.md` URL and uses its front matter `description` as the summary. A page without a description falls back to Hugo's auto-summary, cut before the first callout.
 

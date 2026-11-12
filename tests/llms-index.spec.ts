@@ -8,8 +8,9 @@ import { target } from "./helpers/target";
 //
 //   1. No build timestamp. "Generated on …" changed every llms.txt on every
 //      build, so two builds of identical content were never byte-identical.
-//   2. Versions are links, listed with `main` (in development) LAST, so an
-//      agent that takes the first version link reads released docs.
+//   2. Versions are links, in params.versions order, with `main` (in
+//      development) LAST so an agent that takes the first version link reads
+//      released docs. Hidden versions are left out.
 //   3. Nothing from inside a version tree is inlined. The root links to the
 //      version's own file (llms.txt, or index.md when the site does not publish
 //      section llms.txt, as the fixture does not); it never lists the
@@ -37,6 +38,18 @@ test.describe("root llms.txt is an index, not a dump", () => {
     const mainIdx = versionLinks.findIndex((l) => l.url.includes("/test/main/"));
     expect(mainIdx, "main (dev) version link missing").toBeGreaterThanOrEqual(0);
     expect(mainIdx, `main is not last: ${versionLinks.map((l) => l.title).join(", ")}`).toBe(versionLinks.length - 1);
+  });
+
+  // hugo-oss.toml lists v2, v1, main, v3, v4-link, then v8-link with a
+  // whitespace `dropdown` (hidden). Version `_index.md` weights would give a
+  // different order, so this proves the config order is the one used.
+  test("follows params.versions order and leaves out hidden versions", () => {
+    const urls = [...read().matchAll(/^- \[[^\]]+\]\(([^)]+)\)/gm)].map((m) => m[1]);
+    const top = urls
+      .map((u) => u.match(/^\/test\/([^/]+)\/(?:llms\.txt|index\.md)$/)?.[1])
+      .filter((s): s is string => !!s && /^(v\d[^/]*|main)$/.test(s));
+    expect(top).toEqual(["v2", "v1", "v3", "v4-link", "main"]);
+    expect(top, "hidden version (whitespace dropdown) should not be listed").not.toContain("v8-link");
   });
 
   test("links to version files instead of inlining version pages", () => {
