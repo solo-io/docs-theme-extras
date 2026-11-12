@@ -1,0 +1,25 @@
+{{- /* Returns a section's llms-eligible subsections (`llms: false` opts out),
+   with a `latest` version first and a `main` version last.
+
+   Weight order puts `main` (in development) at the top of most version lists,
+   so an agent that took the first link in llms.txt read unreleased docs. The
+   reorder only moves sections whose last URL segment is literally `latest` or
+   `main`; everything else keeps its weight order. */ -}}
+{{- $latest := slice -}}
+{{- $rest := slice -}}
+{{- $main := slice -}}
+{{- range where .Sections "Params.llms" "ne" false -}}
+  {{- $seg := path.Base (strings.TrimSuffix "/" .RelPermalink) -}}
+  {{- if eq $seg "latest" -}}
+    {{- $latest = $latest | append . -}}
+  {{- else if eq $seg "main" -}}
+    {{- $main = $main | append . -}}
+  {{- else -}}
+    {{- $rest = $rest | append . -}}
+  {{- end -}}
+{{- end -}}
+{{- $out := slice -}}
+{{- range $latest -}}{{- $out = $out | append . -}}{{- end -}}
+{{- range $rest -}}{{- $out = $out | append . -}}{{- end -}}
+{{- range $main -}}{{- $out = $out | append . -}}{{- end -}}
+{{- return $out -}}

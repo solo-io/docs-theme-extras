@@ -1,35 +1,38 @@
+{{- /* Section llms.txt, for every section type (the docs-type copy under
+   layouts/docs/ was folded into this one).
+
+   - Above a version tree (a product or docs root section): an INDEX, built by
+     utils/llms-index-tree.html. Versions link to their own llms.txt, latest
+     first; nothing is inlined.
+   - A version root, anything inside a version tree, and a leaf section with no
+     subsections: the FULL page listing, built by utils/llms-page-tree.html.
+
+   "Version tree" comes from utils/version-root.html, not from counting URL
+   segments, so whether the baseURL carries a path (the docs hub's /<product>/
+   in production, none in a local build) no longer changes which branch a
+   section takes. */ -}}
 {{- $prodHost := partial "utils/prod-host.html" . -}}
+{{- $v := partial "utils/version-root.html" . -}}
+{{- $children := partial "utils/llms-children.html" . -}}
+{{- $intro := .Description | replaceRE `\s+` " " | strings.TrimSpace -}}
+{{- if and (not $intro) (eq .Type "docs") .Parent -}}
+  {{- if .Parent.IsHome -}}
+    {{- $intro = site.Params.llms.docsIntro | default (site.Params.description | default "") -}}
+  {{- end -}}
+{{- end -}}
+{{- $body := "" -}}
+{{- if and (not $v.isVersioned) $children -}}
+  {{- range $children -}}
+    {{- $body = print $body (partial "utils/llms-index-tree.html" (dict "page" . "level" 2 "prodHost" $prodHost)) -}}
+  {{- end -}}
+{{- else -}}
+  {{- $body = partial "utils/llms-page-tree.html" (dict "page" . "level" 2 "prodHost" $prodHost) -}}
+{{- end -}}
 # {{ .Title }}
-{{ with .Description }}
+{{ with $intro }}
 > {{ . }}
 {{ end }}
-{{- $depth := len (findRE "[^/]+" .RelPermalink) -}}
-{{- if and .Sections (lt $depth 3) }}
-{{- /* Intermediate section (e.g. docs, docs/<product>): list subsection llms.txt links */}}
-{{ range where .Sections "Params.llms" "ne" false }}
-- [{{ .Title }}]({{ print $prodHost .RelPermalink }}llms.txt)
-{{- end }}
-
-{{- else }}
-{{- /* Content section (version dirs and leaf sections): full page listing */}}
-{{- template "llms-section-full-tree" dict "context" . "level" 2 "prodHost" $prodHost }}
-{{- end }}
-
----
-Generated on {{ now.Format "2006-01-02 15:04:05 UTC" }}
-
-{{- define "llms-section-full-tree" -}}
-{{- $context := .context -}}
-{{- $level := .level | default 2 -}}
-{{- $prodHost := .prodHost -}}
-{{- $hashes := strings.Repeat $level "#" -}}
-
-{{- range where $context.RegularPages "Params.llms" "ne" false }}
-- [{{ .Title }}]({{ print $prodHost (.RelPermalink | strings.TrimSuffix "/") }}.md): {{ .Summary | plainify | truncate 100 | strings.TrimSpace }}{{ if .Date }} - Published {{ .Date.Format "2006-01-02" }}{{ end }}
-{{- end }}
-
-{{- range where $context.Sections "Params.llms" "ne" false }}
-{{ "\n" }}{{ $hashes }} {{ .Title }}
-{{ template "llms-section-full-tree" dict "context" . "level" (add $level 1) "prodHost" $prodHost }}
-{{- end }}
-{{- end -}}
+{{- with partial "utils/llms-href.html" . }}
+For the full site index, see [llms.txt]({{ print $prodHost . }}).
+{{ end }}
+{{ $body | replaceRE `\n{3,}` "\n\n" | strings.TrimSpace }}
