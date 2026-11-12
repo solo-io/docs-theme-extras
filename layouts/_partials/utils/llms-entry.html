@@ -4,9 +4,10 @@
 
    Input: dict "page" (Page) "prodHost" (string).
 
-   Link target: the page's `.md` URL when the site publishes the `markdown`
-   output format for it, otherwise its HTML URL. The old templates appended
-   `.md` unconditionally, which 404s on a site that turns markdown off.
+   Link target: the page's markdown output URL when the site publishes the
+   `markdown` output format for it, otherwise its HTML URL. The old templates
+   appended `.md` unconditionally, which 404s on a site that turns markdown
+   off.
 
    Summary: the front matter `description` first, because it is written to
    stand alone. Only when it is missing does this fall back to Hugo's
@@ -20,9 +21,14 @@
 {{- $p := .page -}}
 {{- $prodHost := .prodHost -}}
 
+{{- /* Ask Hugo for the markdown output's URL rather than appending `.md` to
+       the page URL. They differ for a page whose front matter `url` ends in
+       "/": Hugo writes that page's markdown to <url>/index.md, so the appended
+       form (<url>.md) 404s. agentgateway's 1.4.x and 1.5.x
+       multiple-inference-pools pages hit exactly this. */ -}}
 {{- $url := print $prodHost $p.RelPermalink -}}
-{{- if $p.OutputFormats.Get "markdown" -}}
-  {{- $url = print $prodHost ($p.RelPermalink | strings.TrimSuffix "/") ".md" -}}
+{{- with $p.OutputFormats.Get "markdown" -}}
+  {{- $url = print $prodHost .RelPermalink -}}
 {{- end -}}
 
 {{- $summary := $p.Description -}}
