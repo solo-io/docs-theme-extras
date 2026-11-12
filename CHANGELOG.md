@@ -52,6 +52,10 @@ A single "connection reset by peer" while a build fetched a remote file made `gi
 
 ---
 
+### Chore — the release check failed because kagent.dev stopped duplicating the test-status badge CSS (`tests/helpers/override-baseline.json`)
+
+`tests/override-parity.spec.ts` ratchets each consumer's overrides down: it fails when a consumer adds an override, and also when one listed in the baseline goes away, so the baseline gets tightened. kagent-oss-website removed its copy of the `.test-status-*` rules in `custom.css` ([kagent-dev/website@aaf2726](https://github.com/kagent-dev/website/commit/aaf2726e6aff4e47504c5fe92fb8f1aa8bde6c80), "Updated theme version"), so the 13 baseline entries for them made the spec fail. Removed those entries. No rendered page changes, so the commit link stands in for a production page. Verified with `CONSUMER_CLONES_DIR` pointed at the clones folder, because from a git worktree the spec otherwise finds no consumer clones and reports every override as removed. `make test-all` passes on both brands.
+
 ## [0.4.1] — 2026-11-06
 
 ### Add — the Verified badge's tooltip lists what the automated tests checked (`layouts/_partials/components/test-status-badge.html`, `assets/css/docs-theme-extras.css`, `i18n/en.yaml`, `i18n/ja.yaml`, `docs/content/configuration/doc-test-badge.md`, `fixture/content/en/test/v2/test-status-types.md`, `tests/test-status-badge.spec.ts`)
