@@ -39,6 +39,7 @@ The version list follows the version dropdown, so it comes from `params.versions
 - The other versions follow their order in `params.versions`, which is newest first because the same list drives the dropdown.
 - A version tree with no `params.versions` entry is left out, and so is a hidden entry (a whitespace-only `dropdown`). To drop an old version from llms.txt, remove it from `params.versions` or hide it. Its own `llms.txt` is still built, but no index links to it.
 - On a site with no `params.versions` at all, every version tree is listed, newest first by its numeric parts.
+- The link text is the version root's title. If the title doesn't name the version, the version's `dropdown` label is added after it, or the version's directory name when the version has no `dropdown`. For example, a version root titled `Solo Enterprise for Istio` with the dropdown label `1.31.x (stable)` is listed as `Solo Enterprise for Istio 1.31.x (stable)`.
 
 Each page entry links to the page's `.md` URL and uses its front matter `description` as the summary. A page without a description falls back to Hugo's auto-summary, cut before the first callout.
 

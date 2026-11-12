@@ -52,6 +52,17 @@ test.describe("root llms.txt is an index, not a dump", () => {
     expect(top, "hidden version (whitespace dropdown) should not be listed").not.toContain("v8-link");
   });
 
+  // Many hub version roots share one title (every Istio version root is
+  // "Solo Enterprise for Istio"), so the version has to be in the link text or
+  // the links read as duplicates. nested/v1's title, "Nested guide", leaves the
+  // version out; v1 has no dropdown label, so its directory name is appended.
+  // nested/v2's title "v2 (current)" already names its version and stays as is.
+  test("names the version in each version link", () => {
+    const text = read();
+    expect(text).toMatch(/^- \[Nested guide v1\]\(\/test\/nested\/v1\/(?:llms\.txt|index\.md)\)/m);
+    expect(text).toMatch(/^- \[v2 \(current\)\]\(\/test\/nested\/v2\/(?:llms\.txt|index\.md)\)/m);
+  });
+
   test("links to version files instead of inlining version pages", () => {
     const urls = [...read().matchAll(/\]\(([^)]+)\)/g)].map((m) => m[1]);
     const inlined = urls.filter((u) => /\/test\/(v\d[^/]*|main)\/.+/.test(u) && !/\/(llms\.txt|index\.md)$/.test(u));

@@ -7,7 +7,8 @@
 
    - A version root (/docs/<product>/<version>/ on OSS sites,
      /<product>/[<section>/]<version>/ on the docs hub) becomes ONE link to that
-     version's own llms.txt. Detection goes through utils/version-root.html.
+     version's own llms.txt, with the version named in the link text.
+     Detection goes through utils/version-root.html.
      The old templates counted URL segments instead, and the count depends on
      the baseURL path: a local docs hub build (baseURL "/") lost the
      /<product>/ segment and rendered every version as an empty heading.
@@ -32,7 +33,25 @@
 {{- $out := "" -}}
 
 {{- if and $v.isVersioned (eq $v.pathAfterVersion "") -}}
-  {{- $out = printf "- [%s](%s)\n" $s.Title $sectionURL -}}
+  {{- /* Name the version in the link text. Many version roots share one title
+         (every Istio version root is "Solo Enterprise for Istio"), so the
+         links read as duplicates and only the URL tells them apart. When the
+         title does not already name the version, append the version's
+         dropdown label from params.versions ("1.31.x (stable)",
+         "2.14 (latest)"), or the version's directory name when it has no
+         entry. The title counts as naming the version when it contains the
+         directory name or the label's first word, so "Solo Enterprise for
+         agentregistry 2026.10.0" under latest/ is left alone. */ -}}
+  {{- $title := $s.Title -}}
+  {{- $label := $v.currentVersion -}}
+  {{- with $v.versionEntry -}}
+    {{- with strings.TrimSpace (.dropdown | default "") -}}{{- $label = . -}}{{- end -}}
+  {{- end -}}
+  {{- $labelHead := index (split $label " ") 0 -}}
+  {{- if and $label (not (in $title $v.currentVersion)) (not (in $title $labelHead)) -}}
+    {{- $title = printf "%s %s" $title $label -}}
+  {{- end -}}
+  {{- $out = printf "- [%s](%s)\n" $title $sectionURL -}}
 
 {{- else -}}
   {{- $children := partial "utils/llms-children.html" $s -}}
