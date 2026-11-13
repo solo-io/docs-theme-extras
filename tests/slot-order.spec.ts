@@ -116,7 +116,7 @@ test.describe("docs/single.html prose-column slot order", () => {
       // empty badge must not add whitespace either. The slot renders into
       // $under first so the badge can be skipped when the slot already holds
       // one (see the header of single.html).
-      `{{- end }}{{ $under := partial "docs/under-heading.html" . }}{{ if not (strings.Contains $under "test-status-badge") }}{{ partial "components/test-status-badge.html" . }}{{ end }}{{ $under }}`,
+      `{{- partial "components/page-badges.html" . }}{{ $under := partial "docs/under-heading.html" . }}{{ if not (strings.Contains $under "test-status-badge") }}{{ partial "components/test-status-badge.html" . }}{{ end }}{{ $under }}`,
       `{{ end }}{{ partial "docs/after-title.html" . }}`,
       `{{- end }}{{ partial "docs/after-description.html" . }}`,
     ];
