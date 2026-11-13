@@ -18,7 +18,10 @@
           {{ partial "docs-llms-directive.html" . }}
           {{ if .Title }}
           <div class="hx:flex hx:flex-col hx:sm:flex-row hx:items-start hx:sm:items-center hx:sm:justify-between hx:gap-4 hx:mb-4">
-            <h1 class="hx:mb-0">{{ .Title }}</h1>
+            <div>
+              <h1 class="hx:mb-0">{{ .Title }}</h1>
+              {{- partial "components/page-badges.html" . }}
+            </div>
             <div class="hx:flex hx:items-center hx:gap-2">
               {{ partial "copy-markdown.html" . }}
               {{ partial "components/page-context-menu" . }}

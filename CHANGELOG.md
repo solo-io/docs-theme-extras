@@ -24,6 +24,14 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [0.5.1] — 2026-11-13
+
+### Fix — section pages dropped their Enterprise, Alpha, Beta, Open Source, and Experimental badges under the H1 (`layouts/docs/list.html`, `layouts/docs/single.html`, new `layouts/_partials/components/page-badges.html`, `fixture/content/en/test/v2/nav-group/_index.md`, `tests/static.spec.ts`, `tests/slot-order.spec.ts`)
+
+Only `docs/single.html` rendered the release badges. A section page (`_index.md`) renders through `docs/list.html`, which printed a bare `<h1>`, so a section page that set `enterprise`, `alpha`, `beta`, `oss`, or `experimental` showed no badge under its title, even though the parent page's section card showed it. For example, https://docs.solo.io/agentgateway/kubernetes/latest/documentation/mcp/elicitation/ sets `enterprise: true` and has no Enterprise badge. Both templates now call the new `components/page-badges.html` partial, so the two can't drift again. In `list.html`, the H1 and its badges now share a wrapper `<div>`, the same layout as `single.html`, so the badges sit under the title and the copy buttons stay on the right. The left nav is unchanged and still shows only the `enterprise` and `oss` badges. Verified by a new `static.spec.ts` test against the fixture section page `/test/v2/nav-group/`, which now sets `beta: true`, plus the existing badge tests on `/test/v2/everything/` and `/test/v1/everything/`, and a full `make test-oss` and `make test-enterprise` run.
+
+---
+
 ## [0.5.0] — 2026-11-12
 
 ### Add — the `openapi` shortcode can render with Scalar (`layouts/_shortcodes/openapi.html`, `fixture/content/en/test/v2/openapi-scalar.md`, `fixture/assets/test/openapi/sample.yaml`, `fixture/static/test/openapi/sample.yaml`, `tests/openapi-scalar.spec.ts`, `playwright.config.ts`)

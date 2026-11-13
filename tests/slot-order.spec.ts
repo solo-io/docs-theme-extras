@@ -60,7 +60,7 @@ test.describe("docs/single.html prose-column slot order", () => {
     // Six landmarks, in the order a reader of the page meets them.
     const LANDMARKS: [string, RegExp][] = [
       ["the <h1> itself", /<h1 class="hx:mb-0">/],
-      ["the release badges", /<div class="page-badges">/],
+      ["the release badges", /\{\{- partial "components\/page-badges\.html" \. \}\}/],
       [
         // Rendered into $under first, so single.html can drop its own badge
         // when an override already prints one; $under is output right after.
@@ -116,7 +116,7 @@ test.describe("docs/single.html prose-column slot order", () => {
       // empty badge must not add whitespace either. The slot renders into
       // $under first so the badge can be skipped when the slot already holds
       // one (see the header of single.html).
-      `{{- end }}{{ $under := partial "docs/under-heading.html" . }}{{ if not (strings.Contains $under "test-status-badge") }}{{ partial "components/test-status-badge.html" . }}{{ end }}{{ $under }}`,
+      `{{- partial "components/page-badges.html" . }}{{ $under := partial "docs/under-heading.html" . }}{{ if not (strings.Contains $under "test-status-badge") }}{{ partial "components/test-status-badge.html" . }}{{ end }}{{ $under }}`,
       `{{ end }}{{ partial "docs/after-title.html" . }}`,
       `{{- end }}{{ partial "docs/after-description.html" . }}`,
     ];

@@ -1,0 +1,26 @@
+{{- /*
+  RELEASE BADGES under a page's `<h1>`: Enterprise, Alpha, Beta, Open Source,
+  and Experimental, one per truthy front matter flag of the same name
+  (`enterprise`, `alpha`, `beta`, `oss`, `experimental`). Renders nothing when
+  no flag is set, so the `page-badges` wrapper never appears empty.
+
+  CALLED BY docs/single.html (regular pages) and docs/list.html (section
+  `_index.md` pages). Both templates call this one partial so the two can't
+  drift. Before v0.5.1 only single.html had the block, so a section page
+  silently dropped its badges at the H1 while the parent's section card still
+  showed them.
+
+  NOT the left nav. The sidebar shows only `enterprise` and `oss` badges, by
+  design (see partials/sidebar.html).
+
+  Context: the page.
+*/ -}}
+{{- if or .Params.enterprise .Params.alpha .Params.beta .Params.oss .Params.experimental -}}
+<div class="page-badges">
+  {{- if .Params.enterprise }}<span class="section-card-badge">Enterprise</span>{{ end -}}
+  {{- if .Params.alpha }}<span class="section-card-badge badge-tag">Alpha</span>{{ end -}}
+  {{- if .Params.beta }}<span class="section-card-badge badge-tag">Beta</span>{{ end -}}
+  {{- if .Params.oss }}<span class="section-card-badge badge-oss">Open Source</span>{{ end -}}
+  {{- if .Params.experimental }}<span class="section-card-badge badge-tag">Experimental</span>{{ end -}}
+</div>
+{{- end -}}
