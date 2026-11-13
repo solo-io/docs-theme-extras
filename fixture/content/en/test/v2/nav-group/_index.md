@@ -6,6 +6,9 @@ title: Nav group
 # .Title, so it keeps showing "Nav group" — auto-cards.spec.ts is unaffected.
 linkTitle: Nav grp
 weight: 400
+# A section page with a badge flag, so static.spec.ts can prove docs/list.html
+# renders the release badges under the H1, not only docs/single.html.
+beta: true
 description: A section WITH child pages so the sidebar renders it as a collapsible branch (data-sidebar-item + sidebar-toggle). Exercised by sidebar-rail.spec.ts for the expand-state and scroll-restore behavior.
 ---
 

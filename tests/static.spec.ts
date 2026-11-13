@@ -526,6 +526,23 @@ test.describe("title badges (PR 2414 regression guard)", () => {
       "page-badges container leaked onto a page with no badge front-matter",
     ).not.toContain('class="page-badges"');
   });
+
+  // Section pages (_index.md) render through docs/list.html, which had no
+  // badge block before v0.5.1. The badge showed on the parent's section card
+  // but not under the section page's own H1.
+  test("v2/nav-group (section page, beta: true) renders .page-badges", () => {
+    const navGroup = path.join(TEST_PRODUCT_ROOT, "v2", "nav-group", "index.html");
+    if (!fs.existsSync(navGroup)) {
+      test.skip(true, "v2/nav-group not present in builtRoot");
+    }
+    const html = readFixture(navGroup);
+    const badgesMatch = html.match(/<div class="page-badges">([\s\S]*?)<\/div>/);
+    expect(
+      badgesMatch,
+      ".page-badges missing on a section page — docs/list.html ignores badge front matter",
+    ).not.toBeNull();
+    expect(badgesMatch![1]).toMatch(/section-card-badge badge-tag">Beta</);
+  });
 });
 
 // Manual `{{< card >}}` blocks must render correctly even when wrapped by
