@@ -9,9 +9,16 @@
    after the index sentence, for site-wide text an agent should read before
    the links (agentgateway.dev points agents at its installable skills). With
    no rootNote the output is byte-identical to a build without this param, so
-   a consumer no longer needs to shadow this file to add one paragraph. */ -}}
+   a consumer no longer needs to shadow this file to add one paragraph. A
+   non-string value (a list or map) fails the build with a message that names
+   the param, instead of a strings.TrimSpace type error. The note is printed
+   only here, not in section llms.txt files such as /docs/llms.txt. */ -}}
 {{- $prodHost := partial "utils/prod-host.html" . -}}
-{{- $rootNote := site.Params.llms.rootNote | default "" | strings.TrimSpace -}}
+{{- $rootNote := site.Params.llms.rootNote | default "" -}}
+{{- if ne (printf "%T" $rootNote) "string" -}}
+  {{- errorf "params.llms.rootNote must be a string of Markdown, not %T. Use a YAML block scalar (>- or |) or a TOML multi-line string." $rootNote -}}
+{{- end -}}
+{{- $rootNote = strings.TrimSpace $rootNote -}}
 {{- $body := "" -}}
 {{- range partial "utils/llms-children.html" . -}}
   {{- $body = print $body (partial "utils/llms-index-tree.html" (dict "page" . "level" 2 "prodHost" $prodHost)) -}}

@@ -56,7 +56,7 @@ params:
 ```
 
 `llms.rootNote`
-: Markdown added to the root `/llms.txt` as its own block, after the "This is the root documentation index" sentence and before the section links. Use it for site-wide text that an agent should read before it follows the links, such as where to install the site's agent skills. Without it, the root file is unchanged. Use `>-` to fold one paragraph, or `|` to keep line breaks.
+: Markdown added to the root `/llms.txt` as its own block, after the "This is the root documentation index" sentence and before the section links. Use it for site-wide text that an agent should read before it follows the links, such as where to install the site's agent skills. The note goes only in the root `/llms.txt`, not in section files such as `/docs/llms.txt`, so an agent that starts at a section's `llms.txt` never sees it. Without it, the root file is unchanged. The value must be a string: use `>-` to fold one paragraph, or `|` to keep line breaks. A list or map fails the build.
 
 `llms.docsIntro`
 : Summary line for a top-level `docs`-type section's `llms.txt` when that section has no `description`. Falls back to the site `description`.

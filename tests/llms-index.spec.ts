@@ -118,12 +118,24 @@ test.describe("root llms.txt rootNote", () => {
     "AI coding assistants can install the fixture skill with `npx skills add https://example.com`.\n" +
     "[Skill index](https://example.com/.well-known/agent-skills/index.json).";
 
+  // Check the ORDER, not the exact line after the note: llms-index-tree.html
+  // starts a section with a `- [` version link or a `## Heading`, so which one
+  // comes first depends on the fixture's sections, not on rootNote.
   test("renders the note as its own block before the links, or nothing when unset", () => {
     const text = read();
-    if (target.name.endsWith("-oss")) {
-      expect(text).toContain(`${INDEX_SENTENCE}\n\n${NOTE}\n\n- [`);
+    const sentenceIdx = text.indexOf(INDEX_SENTENCE);
+    expect(sentenceIdx, "index sentence missing").toBeGreaterThanOrEqual(0);
+    const firstLinkIdx = text.search(/^(- \[|## )/m);
+    expect(firstLinkIdx, "no section link or heading in the root llms.txt").toBeGreaterThan(sentenceIdx);
+    if (target.brand === "oss") {
+      const noteIdx = text.indexOf(NOTE);
+      expect(noteIdx, "rootNote missing").toBeGreaterThan(sentenceIdx);
+      expect(noteIdx, "rootNote is not before the section links").toBeLessThan(firstLinkIdx);
+      // Its own block: a blank line on each side.
+      expect(text).toContain(`${INDEX_SENTENCE}\n\n${NOTE}\n\n`);
     } else {
-      expect(text).toContain(`${INDEX_SENTENCE}\n\n- [`);
+      // No note: the index sentence goes straight to the links.
+      expect(text.slice(sentenceIdx + INDEX_SENTENCE.length, firstLinkIdx)).toBe("\n\n");
       expect(text).not.toContain("npx skills add");
     }
   });
