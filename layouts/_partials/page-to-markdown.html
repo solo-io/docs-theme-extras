@@ -76,6 +76,29 @@
        partial for the rationale. */ -}}
 {{- $html = $html | replaceRE `(?s)<div[^>]*data-alert-copyas="([^"]*)"[^>]*>\s*<p[^>]*hx:font-medium[^>]*>.*?</p>\s*<div[^>]*>\s*<div[^>]*>(.*?)<span data-alert-md-end></span>\s*</div>\s*</div>\s*</div>` "<blockquote><p>[!$1]</p>$2</blockquote>" -}}
 
+{{- /* Explicit heading ids. Hextra puts the id on a <span> inside the heading,
+       and transform.HTMLToMarkdown drops it, so a `## Title {#custom-id}`
+       heading comes out as plain `## Title`. In-page links such as
+       `[x](#custom-id)` then point at nothing in the .md file, and link checkers
+       (Lychee) fall back to the heading-text slug and report a broken fragment.
+       When the id differs from the slug that the heading text would produce,
+       mark the heading with a placeholder and restore it below as a
+       `{#custom-id}` heading attribute. Headings whose id equals the slug are
+       left alone so the export stays clean. */ -}}
+{{- $headingIDs := slice -}}
+{{- range findRE `(?s)<h[1-6]\b[^>]*>.*?</h[1-6]>` $html -}}
+  {{- $h := . -}}
+  {{- with findRESubmatch `\bid="([^"]+)"` $h 1 -}}
+    {{- $id := index (index . 0) 1 -}}
+    {{- $text := $h | plainify | htmlUnescape | strings.TrimSpace -}}
+    {{- if ne $id (anchorize $text) -}}
+      {{- $marked := replaceRE `(</h[1-6]>)$` (printf "XHEADINGIDPLACEHOLDER%dX${1}" (len $headingIDs)) $h -}}
+      {{- $headingIDs = $headingIDs | append $id -}}
+      {{- $html = replace $html $h $marked 1 -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
 {{- $md := $html | transform.HTMLToMarkdown -}}
 
 {{- /* Restore GFM tables before the link/punctuation passes below so table-cell
@@ -99,6 +122,12 @@
 
 {{- /* Remove empty heading-permalink anchors. */ -}}
 {{- $md = $md | replaceRE `\[\]\(#[^)]+\)` "" -}}
+
+{{- /* Restore explicit heading ids marked above. Runs after the empty
+       permalink anchors are gone so the attribute ends the heading line. */ -}}
+{{- range $i, $id := $headingIDs -}}
+  {{- $md = $md | replaceRE (printf `[ \t]*XHEADINGIDPLACEHOLDER%dX` $i) (printf " {#%s}" $id) -}}
+{{- end -}}
 
 {{- /* Normalize smart punctuation to ASCII so the markdown is
        easier to diff and friendlier to non-Unicode-aware consumers. */ -}}

@@ -24,6 +24,14 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [Unreleased]
+
+### Fix — the `.md` export dropped explicit heading ids (`layouts/_partials/page-to-markdown.html`, `tests/md-heading-ids.spec.ts`, `playwright.config.ts`)
+
+A heading written as `### Install kagent with Helm {#install-kagent-helm}` came out of the `.md` output format as a plain `### Install kagent with Helm`, because Hextra puts the id on a `<span>` inside the heading and `transform.HTMLToMarkdown` drops it. In-page links such as `[install kagent](#install-kagent-helm)` then pointed at nothing in the `.md` file, and the Lychee link check, which scans the `.md` exports, reported "Cannot find fragment" (kagent-dev/website#737, see https://kagent.dev/docs/kagent/main/setup/installation.md). The partial now restores the id as a `{#id}` heading attribute when it differs from the slug of the heading text, and leaves headings with auto ids alone so the export stays clean. Verified with the new `md-heading-ids.spec.ts` against the OSS fixture, and by building the kagent docs site against this branch: the `.md` pages now carry `{#install-kagent-helm}` and `{#origin-format}`, and an offline Lychee run with `--include-fragments` over every `.md` export reports 0 fragment errors. The full static and content suites show the same 25 failures on this branch as on a clean `main` build. The Copy as Markdown button (`copy-markdown.html`) is unchanged.
+
+---
+
 ## [0.5.1] — 2026-11-13
 
 ### Fix — section pages dropped their Enterprise, Alpha, Beta, Open Source, and Experimental badges under the H1 (`layouts/docs/list.html`, `layouts/docs/single.html`, new `layouts/_partials/components/page-badges.html`, `fixture/content/en/test/v2/nav-group/_index.md`, `tests/static.spec.ts`, `tests/slot-order.spec.ts`)
