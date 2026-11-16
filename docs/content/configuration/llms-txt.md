@@ -50,7 +50,13 @@ params:
   llms:
     docsIntro: agentgateway is an open source proxy and gateway for agent traffic.
     leafPageLimit: 5
+    rootNote: >-
+      AI coding assistants can install the agentgateway skills with
+      `npx skills add https://agentgateway.dev`.
 ```
+
+`llms.rootNote`
+: Markdown added to the root `/llms.txt` as its own block, after the "This is the root documentation index" sentence and before the section links. Use it for site-wide text that an agent should read before it follows the links, such as where to install the site's agent skills. Without it, the root file is unchanged. Use `>-` to fold one paragraph, or `|` to keep line breaks.
 
 `llms.docsIntro`
 : Summary line for a top-level `docs`-type section's `llms.txt` when that section has no `description`. Falls back to the site `description`.

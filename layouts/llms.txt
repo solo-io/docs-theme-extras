@@ -3,8 +3,15 @@
    llms.txt (latest first), caps leaf sections such as a blog at
    site.Params.llms.leafPageLimit entries, and never inlines a full docs tree.
    No build timestamp: it changed every llms.txt on every build, which made
-   byte-identical comparisons of two builds impossible. */ -}}
+   byte-identical comparisons of two builds impossible.
+
+   site.Params.llms.rootNote is optional Markdown printed as its own block
+   after the index sentence, for site-wide text an agent should read before
+   the links (agentgateway.dev points agents at its installable skills). With
+   no rootNote the output is byte-identical to a build without this param, so
+   a consumer no longer needs to shadow this file to add one paragraph. */ -}}
 {{- $prodHost := partial "utils/prod-host.html" . -}}
+{{- $rootNote := site.Params.llms.rootNote | default "" | strings.TrimSpace -}}
 {{- $body := "" -}}
 {{- range partial "utils/llms-children.html" . -}}
   {{- $body = print $body (partial "utils/llms-index-tree.html" (dict "page" . "level" 2 "prodHost" $prodHost)) -}}
@@ -14,5 +21,7 @@
 > {{ . }}
 {{ end }}
 This is the root documentation index. For detailed page listings, follow the section links below.
-
+{{ with $rootNote }}
+{{ . }}
+{{ end }}
 {{ $body | replaceRE `\n{3,}` "\n\n" | strings.TrimSpace }}

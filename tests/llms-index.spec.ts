@@ -101,3 +101,30 @@ test.describe("root llms.txt is an index, not a dump", () => {
     expect(read()).not.toMatch(/^(Note|Tip|Warning|Caution|Important)\s*$/m);
   });
 });
+
+// params.llms.rootNote adds one Markdown block to the root llms.txt, between the
+// index sentence and the section links, so a consumer can point agents at
+// site-wide resources (agentgateway.dev's installable skills) without shadowing
+// layouts/llms.txt. hugo-oss.toml sets a two-line note; hugo-enterprise.toml
+// leaves it unset, so the enterprise run proves the default output still goes
+// straight from the index sentence to the links.
+test.describe("root llms.txt rootNote", () => {
+  test.skip(!IS_FIXTURE_TARGET, "fixture-only: asserts the fixture's llms params");
+
+  const read = () => readFixture(path.join(TEST_PRODUCT_ROOT, "llms.txt"));
+  const INDEX_SENTENCE =
+    "This is the root documentation index. For detailed page listings, follow the section links below.";
+  const NOTE =
+    "AI coding assistants can install the fixture skill with `npx skills add https://example.com`.\n" +
+    "[Skill index](https://example.com/.well-known/agent-skills/index.json).";
+
+  test("renders the note as its own block before the links, or nothing when unset", () => {
+    const text = read();
+    if (target.name.endsWith("-oss")) {
+      expect(text).toContain(`${INDEX_SENTENCE}\n\n${NOTE}\n\n- [`);
+    } else {
+      expect(text).toContain(`${INDEX_SENTENCE}\n\n- [`);
+      expect(text).not.toContain("npx skills add");
+    }
+  });
+});
