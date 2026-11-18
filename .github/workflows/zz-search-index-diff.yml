@@ -24,7 +24,10 @@ jobs:
   diff:
     runs-on: ubuntu-latest
     steps:
+      # Round 3: the commit whose CI run failed (#96's first commit).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 87561034c604483ee376fcb4372523a96d96e4c7
 
       - name: Set up Hugo
         uses: peaceiris/actions-hugo@2752ce1d29631191ea3f27c23495fa06139a5b78 # v3.2.1
@@ -67,7 +70,7 @@ jobs:
           echo "::group::bundle"; cmp -s "$out/public-oss.bundle.js" "$out/public-oss-changes.bundle.js" && echo IDENTICAL || diff -u "$out/public-oss.bundle.split.js" "$out/public-oss-changes.bundle.split.js" | head -150; echo "::endgroup::"
           # Which page does each build's HTML point at, and are the logs clean?
           grep -ho 'en.search.min.[0-9a-f]*' public-oss/test/v2/everything/index.html public-oss-changes/test/v2/everything/index.html
-          tail -5 .build-oss.log .build-oss-changes.log || true
+          tail -n 5 .build-oss.log .build-oss-changes.log || true
 
       - name: Upload indexes and diffs
         if: always()
