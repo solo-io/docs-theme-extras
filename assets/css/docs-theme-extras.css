@@ -359,12 +359,19 @@
 
    Fix: pin the span to the heading's top edge (position: relative on the
    heading + top: 0, so a heading that wraps doesn't put the span on its LAST
-   line, which is where an absolute span with `top: auto` would sit), drop
-   Hextra's -5rem, and give the span the same scroll-margin as the heading. The
-   span is empty and the permalink <a> beside it is inline, so the relative
-   heading changes no layout. tests/heading-anchor-offset.spec.ts asserts the
-   heading lands below the sticky chrome, with and without the band. */
-.content :is(h1, h2, h3, h4, h5, h6):has(> span[id]) {
+   line, which is where an absolute span with `top: auto` would sit) and drop
+   Hextra's -5rem. The scroll margin itself comes from the `.content [id]` rule
+   below. The span is empty and the permalink <a> beside it is inline, so the
+   relative heading changes no layout. tests/heading-anchor-offset.spec.ts
+   asserts the heading lands below the sticky chrome, with and without the band.
+
+   The two rules MUST stay unconditional on the same selector support. The
+   position rule was once gated on `:has(> span[id])`; a browser without :has()
+   (Firefox < 121, Safari < 15.4) dropped it but kept `top: 0`, so the span was
+   positioned against <body> and EVERY heading link scrolled to the top of the
+   page. Both rules use only :is(), so a browser either applies both or
+   neither (and falls back to Hextra's own -5rem). */
+.content :is(h1, h2, h3, h4, h5, h6) {
   position: relative;
 }
 .content :is(h1, h2, h3, h4, h5, h6) > span[id] {
