@@ -2383,6 +2383,24 @@ details[open].hextra-search-other-versions > summary::before {
   color: #e5e7eb;
 }
 
+/* TAP TARGETS ON TOUCH SCREENS. At 0.875rem the crumbs are 16 to 21px tall
+   and the home icon is 16px wide, below the 24 by 24px minimum in WCAG 2.2
+   (2.5.8, Target Size). On a coarse pointer, give every crumb a 24px minimum
+   box and center its content, so the text and icon do not move. Fine pointers
+   keep the compact line, which also keeps the breadcrumb aligned with the
+   "On this page" heading on desktop. */
+@media (pointer: coarse) {
+  .solo-breadcrumb-home,
+  .solo-breadcrumb-back,
+  .solo-breadcrumb-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 1.5rem;
+    min-width: 1.5rem;
+  }
+}
+
 /* THE LONE-HOME BREADCRUMB — a section landing, where the left nav is
    suppressed by design (it sits above the version trees) and the product logo
    that normally carries the up-link goes with it. With no ancestors to list,
