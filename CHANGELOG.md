@@ -34,6 +34,10 @@ A heading written as `### Install kagent with Helm {#install-kagent-helm}` came 
 
 Inside `{{ if hugo.IsProduction }}`, the template declared a new `$searchData` with `:=` instead of assigning to the outer variable with `=`. The minified, fingerprinted index went out of scope at `{{ end }}`, so the page loaded the plain `en.search-data.json` URL, and browsers could keep an old cached index after a deploy. Hextra fixed the same bug upstream in 0.13.0. 
 
+### Fix — breadcrumb links were too small to tap on phones (`assets/css/docs-theme-extras.css`)
+
+At `0.875rem`, breadcrumb links were 16 to 21px tall and the home icon was 16px wide, below the 24 by 24px minimum in WCAG 2.2 (2.5.8, Target Size). This affected agentgateway.dev, kagent.dev, and the agentgateway and kagent docs on docs.solo.io. On a coarse pointer, every crumb now gets a 24px minimum height and width, with its content centered. Fine pointers keep the compact line, so desktop layout and the alignment with the "On this page" heading do not change. Verified in Playwright on the OSS fixture at `/v2/nav-group/child/`: with `devices['iPhone 13']` the home icon is 24x24 and the text crumbs are 24px tall. At 1280px with a mouse, the sizes match `main` (16x16 icon, 21px crumbs).
+
 ---
 
 ## [0.5.1] — 2026-11-13
