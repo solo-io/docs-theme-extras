@@ -15,7 +15,7 @@ document.addEventListener("DOMContentLoaded", function () {
 // {{ $searchDataFile := printf "%s.search-data.json" .Language.Lang }}
 // {{ $searchData := resources.Get "json/search-data.json" | resources.ExecuteAsTemplate $searchDataFile . }}
 // {{ if hugo.IsProduction }}
-//   {{ $searchData := $searchData | minify | fingerprint }}
+//   {{ $searchData = $searchData | minify | fingerprint }}
 // {{ end }}
 // {{ $noResultsFound := (T "noResultsFound") | default "No results found." }}
 
