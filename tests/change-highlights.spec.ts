@@ -144,7 +144,12 @@ test.describe("change highlights: the source list the overlay matches against", 
     const on = read("public-oss-changes");
     const off = read("public-oss");
     test.skip(!on || !off, "public-oss and public-oss-changes both needed");
-    const body = (h: string) => h.slice(h.indexOf("<body"));
+    // Production builds fingerprint the search bundle, and its hash follows the
+    // search index. The index can hash differently in two builds of the same
+    // content (it does on CI, though not locally), so mask that one URL and
+    // its integrity value. Every other byte of the body still has to match.
+    const body = (h: string) =>
+      h.slice(h.indexOf("<body")).replace(/(search\.min\.)[0-9a-f]{64}(\.js" integrity="sha256-)[^"]+/g, "$1<hash>$2<hash>");
     expect(body(on!)).toBe(body(off!));
   });
 });
