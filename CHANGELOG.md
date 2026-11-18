@@ -24,7 +24,7 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
-## [Unreleased]
+## [0.5.2] — 2026-11-18
 
 ### Add — `params.llms.rootNote` adds a block of text to the root llms.txt (`layouts/llms.txt`, `hugo-oss.toml`, `tests/llms-index.spec.ts`, `docs/content/configuration/llms-txt.md`)
 
