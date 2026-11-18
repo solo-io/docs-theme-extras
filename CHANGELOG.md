@@ -30,6 +30,10 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 A heading written as `### Install kagent with Helm {#install-kagent-helm}` came out of the `.md` output format as a plain `### Install kagent with Helm`, because Hextra puts the id on a `<span>` inside the heading and `transform.HTMLToMarkdown` drops it. In-page links such as `[install kagent](#install-kagent-helm)` then pointed at nothing in the `.md` file, and the Lychee link check, which scans the `.md` exports, reported "Cannot find fragment" (kagent-dev/website#737, see https://kagent.dev/docs/kagent/main/setup/installation.md). The partial now restores the id as a `{#id}` heading attribute when it differs from the slug of the heading text, and leaves headings with auto ids alone so the export stays clean. Verified with the new `md-heading-ids.spec.ts` against the OSS fixture, and by building the kagent docs site against this branch: the `.md` pages now carry `{#install-kagent-helm}` and `{#origin-format}`, and an offline Lychee run with `--include-fragments` over every `.md` export reports 0 fragment errors. The full static and content suites show the same 25 failures on this branch as on a clean `main` build. The Copy as Markdown button (`copy-markdown.html`) is unchanged.
 
+### Fix — production builds did not fingerprint the search index (`assets/js/flexsearch.js`)
+
+Inside `{{ if hugo.IsProduction }}`, the template declared a new `$searchData` with `:=` instead of assigning to the outer variable with `=`. The minified, fingerprinted index went out of scope at `{{ end }}`, so the page loaded the plain `en.search-data.json` URL, and browsers could keep an old cached index after a deploy. Hextra fixed the same bug upstream in 0.13.0. 
+
 ---
 
 ## [0.5.1] — 2026-11-13
