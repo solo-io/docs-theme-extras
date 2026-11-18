@@ -37,6 +37,14 @@ percent-form splice-back semantics breaks on a rebased page.
 
 ### Network behavior
 
+The fetch uses a date-stamped cache key, like `github` and `github-yaml`,
+so a URL on a moving ref such as `main` refreshes at least once a day.
+Without it, Hugo's getresource cache never expires a fetched file, and a
+build with a long-lived cache kept rendering the first-fetched copy, months
+old on this module's own CI. A URL on a tag or commit is unaffected. The
+cost is one fresh download per URL per day on a machine that keeps its
+cache, which matters only for the very large remotes described below.
+
 `timeout` caps how long a slow or unreachable remote can block the build and
 `try` turns a fetch error into a warning plus a link-checker-visible
 fallback. This is the "cel.md GetRemote stall": a cold CI build fetches
