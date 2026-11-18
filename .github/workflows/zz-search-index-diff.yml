@@ -46,6 +46,19 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
+      # Round 4: restore the Hugo cache exactly like test.yml does, since the
+      # failing run restored one (Linux-hugo-<go.sum hash>) and rounds 1-3 did not.
+      - name: Cache Hugo modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/hugo_cache
+          key: ${{ runner.os }}-hugo-${{ hashFiles('go.sum', 'go.mod') }}
+          restore-keys: |
+            ${{ runner.os }}-hugo-
+
+      - name: List what the restored Hugo cache holds
+        run: find ~/.cache/hugo_cache -maxdepth 3 -type d | head -40 || true
+
       - name: Install npm dependencies
         run: npm ci || npm install
 
