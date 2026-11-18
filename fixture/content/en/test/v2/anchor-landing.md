@@ -8,6 +8,10 @@ description: Regression page for where #anchor links land.
 build:
   list: never
   render: always
+# Synced, so the hidden-tab case also covers the reader's saved tab choice
+# (localStorage 'hextra-tab-<group>'), which a link must not overwrite.
+tabs:
+  sync: true
 ---
 
 <!--

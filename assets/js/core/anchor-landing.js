@@ -10,8 +10,8 @@
 //    that hides the target (outermost first, so nested tabs work) and opens any
 //    closed <details> (Chrome opens those itself; older Safari and Firefox
 //    don't). Tabs are selected by clicking their button, so a synced tab group
-//    switches and remembers the choice exactly as if the reader had clicked it.
-//    tabs-sync-scroll.js ignores these clicks (they aren't trusted events), so
+//    switches on this page as if the reader had clicked it, but the reader's
+//    saved tab choice is put back (see clickKeepingSavedTab). tabs-sync-scroll.js ignores these clicks (they aren't trusted events), so
 //    it doesn't fight the scroll below.
 //
 // 2. Content above the target that grows AFTER the scroll. The Swagger UI
@@ -62,6 +62,24 @@
     return null;
   }
 
+  // Click a tab button without changing the reader's saved tab choice. Hextra
+  // saves a synced group's selection to localStorage ('hextra-tab-<group>') on
+  // every click, so a link into the "Config file" tab would otherwise switch
+  // every later page to "Config file" too, though the reader never chose it.
+  // The tabs on THIS page still switch together, as a click would.
+  function clickKeepingSavedTab(btn) {
+    var group = btn.parentElement && btn.parentElement.dataset.tabGroup;
+    var key = group ? 'hextra-tab-' + encodeURIComponent(group) : null;
+    var saved = null;
+    try { if (key) saved = localStorage.getItem(key); } catch (e) { key = null; }
+    btn.click();
+    if (!key) return;
+    try {
+      if (saved === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, saved);
+    } catch (e) {}
+  }
+
   // Unhide everything between the document and `el`. Returns true if it
   // changed anything (the caller then has to scroll itself, since the
   // browser's scroll already ran, or found nothing to scroll to).
@@ -77,7 +95,7 @@
       }
       var btn = hiddenTabButton(n);
       if (btn) {
-        btn.click();
+        clickKeepingSavedTab(btn);
         changed = true;
       }
     });

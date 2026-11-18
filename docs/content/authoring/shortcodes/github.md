@@ -31,10 +31,16 @@ is passed through with `safeHTML`, and callers typically wrap the call in a
 code fence so it renders as a code block.
 
 For a YAML file specifically, prefer `github-yaml`: it writes the fence for
-you, strips the editor schema directive, captions the block and uses a
-date-stamped cache key.
+you, strips the editor schema directive and captions the block.
 
 ### Network behavior
+
+The fetch uses a date-stamped cache key, so a URL on a moving ref such as
+`main` refreshes at least once a day. Without it, Hugo's getresource cache
+never expires a fetched file, so a build with a long-lived cache (a CI cache
+restored run after run, or a local machine) kept showing the copy from the
+first fetch, which can be months old. A URL on a tag or commit is
+unaffected: its contents do not change.
 
 `timeout` caps a slow or unreachable remote so a cold CI build with no
 getresource cache fails fast instead of hanging, and `try` (required since

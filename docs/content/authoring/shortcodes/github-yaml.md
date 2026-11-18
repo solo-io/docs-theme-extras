@@ -52,8 +52,8 @@ things wrapping does not give you:
    its directory. See Hextra's `_markup/render-codeblock.html`.
 3. It uses a date-stamped cache key, so a moving ref such as
    `refs/heads/main` refreshes at least daily instead of being pinned to
-   whenever the getresource cache was last cold. `github` has no cache key,
-   so Hugo's default keying applies.
+   whenever the getresource cache was last cold. `github` uses the same
+   key.
 
 Like `github`, it fetches through `utils/get-remote.html`, which retries a
 transport error such as "connection reset by peer" up to two more times

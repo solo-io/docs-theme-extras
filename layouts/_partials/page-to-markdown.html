@@ -124,9 +124,17 @@
 {{- $md = $md | replaceRE `\[\]\(#[^)]+\)` "" -}}
 
 {{- /* Restore explicit heading ids marked above. Runs after the empty
-       permalink anchors are gone so the attribute ends the heading line. */ -}}
+       permalink anchors are gone so the attribute ends the heading line.
+       Literal replaces, not replaceRE: a regex per placeholder (leading
+       `[ \t]*` defeats Go's literal-prefix fast path) rescanned the whole page
+       once per heading, which took 28s for a page with 750 such headings.
+       The placeholder normally follows the space the removed permalink left;
+       the second replace covers a heading where it doesn't. The trailing `X`
+       keeps placeholder 1 from matching placeholder 10. */ -}}
 {{- range $i, $id := $headingIDs -}}
-  {{- $md = $md | replaceRE (printf `[ \t]*XHEADINGIDPLACEHOLDER%dX` $i) (printf " {#%s}" $id) -}}
+  {{- $ph := printf "XHEADINGIDPLACEHOLDER%dX" $i -}}
+  {{- $md = replace $md (printf " %s" $ph) (printf " {#%s}" $id) 1 -}}
+  {{- $md = replace $md $ph (printf " {#%s}" $id) 1 -}}
 {{- end -}}
 
 {{- /* Normalize smart punctuation to ASCII so the markdown is

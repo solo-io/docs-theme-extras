@@ -195,6 +195,25 @@ test.describe("anchor landing — hidden, footnote and late-layout targets", () 
     await expectLanded(page, "config-file-heading", "click");
   });
 
+  test("following a link into a synced tab keeps the reader's saved tab choice", async ({ page }) => {
+    await page.goto(url);
+    const key = await page.evaluate(() => {
+      const bar = document.querySelector<HTMLElement>(".hextra-tabs-toggle")?.parentElement;
+      return bar?.dataset.tabGroup ? "hextra-tab-" + encodeURIComponent(bar.dataset.tabGroup) : null;
+    });
+    expect(key, "fixture tab group is not synced (tabs.sync front matter)").not.toBeNull();
+    // Both starting states: no saved choice, and a saved choice of the first tab.
+    for (const saved of [null, "0"]) {
+      await page.evaluate(([k, v]) => { v === null ? localStorage.removeItem(k!) : localStorage.setItem(k!, v); }, [key, saved]);
+      await page.goto(url);
+      await page.locator('a[href="#config-file-heading"]').first().click();
+      await page.waitForTimeout(400);
+      await expectLanded(page, "config-file-heading", "click");
+      const after = await page.evaluate((k) => localStorage.getItem(k), key!);
+      expect(after, `link into a synced tab overwrote the saved tab choice (was ${saved})`).toBe(saved);
+    }
+  });
+
   test("loading url#id for a heading in a non-default tab selects the tab", async ({ page }) => {
     await page.goto(`${url}#config-file-heading`);
     await page.waitForTimeout(1200);
@@ -270,4 +289,33 @@ test.describe("anchor landing — hidden, footnote and late-layout targets", () 
     expect(m.textTop - m.chromeBottom, `reader was pulled back to the heading (scrollY ${before} -> ${after})`)
       .toBeGreaterThan(100);
   });
+});
+
+// The rule that positions headings (so the id span's `top: 0` is measured
+// against the heading) must not depend on :has(). It once did; a browser
+// without :has() (Firefox < 121, Safari < 15.4) dropped it but still applied
+// `top: 0`, so the span sat at the top of <body> and every heading link
+// scrolled to the top of the page. Chromium supports :has(), so landing tests
+// can't see this; check the rule itself.
+test("the heading position rule does not depend on :has()", async ({ page }) => {
+  test.skip(!built(LANDING), `fixture page ${LANDING} not built`);
+  await page.goto(`${BASE}/${LANDING}`);
+  const rules = await page.evaluate(() => {
+    const out: string[] = [];
+    const walk = (list: CSSRuleList) => {
+      for (const r of Array.from(list)) {
+        if (r instanceof CSSStyleRule) {
+          if (r.style.position === "relative" && /\.content\b/.test(r.selectorText) && /\bh2\b/.test(r.selectorText)) out.push(r.selectorText);
+        } else if ("cssRules" in r) {
+          try { walk((r as CSSGroupingRule).cssRules); } catch { /* cross-origin */ }
+        }
+      }
+    };
+    for (const sheet of Array.from(document.styleSheets)) {
+      try { walk(sheet.cssRules); } catch { /* cross-origin */ }
+    }
+    return out;
+  });
+  expect(rules.length, "no `.content` heading rule sets position: relative").toBeGreaterThan(0);
+  for (const sel of rules) expect(sel, `heading position rule is gated on :has(): ${sel}`).not.toContain(":has(");
 });
