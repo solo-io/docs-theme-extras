@@ -116,6 +116,16 @@
   <link rel="stylesheet" href="{{ $cssUrl }}">
 {{ end }}
 
+{{/* The Swagger bundle ships zenscroll, which on load installs a window-wide
+     click listener that hijacks EVERY same-page #anchor link (TOC, heading
+     permalinks) and scrolls to the target's offsetTop itself. That ignores
+     scroll-margin-top, so on any page embedding this shortcode the heading
+     landed under the sticky navbar. `noZensmooth` must be set BEFORE the bundle
+     evaluates; it only skips that global listener, Swagger's own scrolling
+     still works. tests/heading-anchor-offset.spec.ts clicks a TOC link on a
+     page with this shortcode to guard it. */}}
+<script>window.noZensmooth = true;</script>
+
 {{ $bundleUrl := (printf "%s/swagger-ui/5.9.0/swagger-ui-bundle.js" $cdnjs) }}
 {{ with (try (resources.GetRemote $bundleUrl (dict "timeout" "15s"))).Value }}
   {{ $f := . | resources.Fingerprint }}
