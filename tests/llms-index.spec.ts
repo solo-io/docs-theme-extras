@@ -101,3 +101,42 @@ test.describe("root llms.txt is an index, not a dump", () => {
     expect(read()).not.toMatch(/^(Note|Tip|Warning|Caution|Important)\s*$/m);
   });
 });
+
+// params.llms.rootNote adds one Markdown block to the root llms.txt, between the
+// index sentence and the section links, so a consumer can point agents at
+// site-wide resources (agentgateway.dev's installable skills) without shadowing
+// layouts/llms.txt. hugo-oss.toml sets a two-line note; hugo-enterprise.toml
+// leaves it unset, so the enterprise run proves the default output still goes
+// straight from the index sentence to the links.
+test.describe("root llms.txt rootNote", () => {
+  test.skip(!IS_FIXTURE_TARGET, "fixture-only: asserts the fixture's llms params");
+
+  const read = () => readFixture(path.join(TEST_PRODUCT_ROOT, "llms.txt"));
+  const INDEX_SENTENCE =
+    "This is the root documentation index. For detailed page listings, follow the section links below.";
+  const NOTE =
+    "AI coding assistants can install the fixture skill with `npx skills add https://example.com`.\n" +
+    "[Skill index](https://example.com/.well-known/agent-skills/index.json).";
+
+  // Check the ORDER, not the exact line after the note: llms-index-tree.html
+  // starts a section with a `- [` version link or a `## Heading`, so which one
+  // comes first depends on the fixture's sections, not on rootNote.
+  test("renders the note as its own block before the links, or nothing when unset", () => {
+    const text = read();
+    const sentenceIdx = text.indexOf(INDEX_SENTENCE);
+    expect(sentenceIdx, "index sentence missing").toBeGreaterThanOrEqual(0);
+    const firstLinkIdx = text.search(/^(- \[|## )/m);
+    expect(firstLinkIdx, "no section link or heading in the root llms.txt").toBeGreaterThan(sentenceIdx);
+    if (target.brand === "oss") {
+      const noteIdx = text.indexOf(NOTE);
+      expect(noteIdx, "rootNote missing").toBeGreaterThan(sentenceIdx);
+      expect(noteIdx, "rootNote is not before the section links").toBeLessThan(firstLinkIdx);
+      // Its own block: a blank line on each side.
+      expect(text).toContain(`${INDEX_SENTENCE}\n\n${NOTE}\n\n`);
+    } else {
+      // No note: the index sentence goes straight to the links.
+      expect(text.slice(sentenceIdx + INDEX_SENTENCE.length, firstLinkIdx)).toBe("\n\n");
+      expect(text).not.toContain("npx skills add");
+    }
+  });
+});

@@ -166,6 +166,16 @@ pageContextMode = "siteParams"
   # (components/github-style-alert.html + data/icons.yaml), so custom-alert.spec
   # exercises it with zero consumer config.
 
+# Extra root llms.txt block (layouts/llms.txt). Set on the OSS brand only, so
+# llms-index.spec.ts checks the block here and its absence on the enterprise
+# brand, which leaves the param unset. Two lines prove multi-line Markdown
+# passes through as written.
+[params.llms]
+  rootNote = """
+AI coding assistants can install the fixture skill with `npx skills add https://example.com`.
+[Skill index](https://example.com/.well-known/agent-skills/index.json).
+"""
+
 [params.footer]
   copyright = "Solo.io copyright 2026"
   displayPoweredBy = false
