@@ -27,7 +27,7 @@ jobs:
       # Round 3: the commit whose CI run failed (#96's first commit).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: 87561034c604483ee376fcb4372523a96d96e4c7
+          ref: 6569f2f4f4f4b35b3adf15fb8777d54a6562f3d4
 
       - name: Set up Hugo
         uses: peaceiris/actions-hugo@2752ce1d29631191ea3f27c23495fa06139a5b78 # v3.2.1
@@ -65,8 +65,14 @@ jobs:
       # Round 1 (a1/a2/b in isolation) showed identical indexes. Round 2: the
       # exact build sequence `make test-oss` runs on CI, then compare the two
       # builds the change-highlights test compares.
-      - name: Build like make test-oss
-        run: HUGO=hugo make build-oss build-devpath build-flat build-nosections build-section-title build-section-current build-nobook build-prodhost build-sitemap-i18n build-changes
+      - name: Build like make test-oss, listing the getresource cache around the first build
+        run: |
+          C=~/.cache/hugo_cache/docs-theme-extras/filecache/getresource
+          echo "== cache BEFORE build-oss"; ls -la --time-style=+%F $C 2>/dev/null | head -40
+          HUGO=hugo make build-oss
+          echo "== cache AFTER build-oss"; ls -la --time-style=+%F $C 2>/dev/null | head -40
+          HUGO=hugo make build-devpath build-flat build-nosections build-section-title build-section-current build-nobook build-prodhost build-sitemap-i18n build-changes
+          echo "== cache AFTER all"; ls -la --time-style=+%F $C 2>/dev/null | head -40
 
       - name: Diff public-oss vs public-oss-changes search files
         run: |
