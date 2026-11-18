@@ -46,37 +46,28 @@ jobs:
       - name: Install npm dependencies
         run: npm ci || npm install
 
-      - name: Build a1, a2 (plain) and b (change highlights)
-        run: |
-          set -euo pipefail
-          hugo --config hugo-oss.toml --gc -d "$RUNNER_TEMP/a1"
-          hugo --config hugo-oss.toml --gc -d "$RUNNER_TEMP/a2"
-          HUGO_PARAMS_THEMEEXTRAS_CHANGEHIGHLIGHTS=true hugo --config hugo-oss.toml,hugo-oss-changes.toml --gc -d "$RUNNER_TEMP/b"
+      # Round 1 (a1/a2/b in isolation) showed identical indexes. Round 2: the
+      # exact build sequence `make test-oss` runs on CI, then compare the two
+      # builds the change-highlights test compares.
+      - name: Build like make test-oss
+        run: HUGO=hugo make build-oss build-devpath build-flat build-nosections build-section-title build-section-current build-nobook build-prodhost build-sitemap-i18n build-changes
 
-      - name: Diff the search indexes
+      - name: Diff public-oss vs public-oss-changes search files
         run: |
           set -uo pipefail
           out="$RUNNER_TEMP/out"; mkdir -p "$out"
-          for v in a1 a2 b; do
-            f=$(find "$RUNNER_TEMP/$v" -name 'en.search-data.min.*.json' | head -1)
-            echo "$v: $(basename "$f")"
-            jq -S . "$f" > "$out/$v.json"
-            jq -r 'to_entries[] | "\(.key)\t\(.value | tostring | length)"' "$f" | sort > "$out/$v.keys.tsv"
+          for d in public-oss public-oss-changes; do
+            echo "$d: $(ls $d/test | grep -E 'search' | tr '\n' ' ')"
+            cp $d/test/en.search-data.min.*.json "$out/$d.index.json"
+            cp $d/test/en.search.min.*.js "$out/$d.bundle.js"
+            tr ',;' '\n\n' < $d/test/en.search.min.*.js > "$out/$d.bundle.split.js"
+            jq -S . $d/test/en.search-data.min.*.json > "$out/$d.index.pretty.json"
           done
-          for pair in "a1 a2" "a1 b"; do
-            set -- $pair
-            echo "::group::$1 vs $2"
-            if cmp -s "$out/$1.json" "$out/$2.json"; then
-              echo "IDENTICAL"
-            else
-              echo "Pages whose entry differs (key, length in $1, length in $2):"
-              join -t $'\t' -a1 -a2 -e MISSING -o 0,1.2,2.2 "$out/$1.keys.tsv" "$out/$2.keys.tsv" | awk -F'\t' '$2!=$3' | head -50
-              diff -u "$out/$1.json" "$out/$2.json" > "$out/$1-vs-$2.diff"
-              echo "--- first 200 lines of the diff:"
-              head -200 "$out/$1-vs-$2.diff"
-            fi
-            echo "::endgroup::"
-          done
+          echo "::group::index"; cmp -s "$out/public-oss.index.pretty.json" "$out/public-oss-changes.index.pretty.json" && echo IDENTICAL || diff -u "$out/public-oss.index.pretty.json" "$out/public-oss-changes.index.pretty.json" | head -150; echo "::endgroup::"
+          echo "::group::bundle"; cmp -s "$out/public-oss.bundle.js" "$out/public-oss-changes.bundle.js" && echo IDENTICAL || diff -u "$out/public-oss.bundle.split.js" "$out/public-oss-changes.bundle.split.js" | head -150; echo "::endgroup::"
+          # Which page does each build's HTML point at, and are the logs clean?
+          grep -ho 'en.search.min.[0-9a-f]*' public-oss/test/v2/everything/index.html public-oss-changes/test/v2/everything/index.html
+          tail -5 .build-oss.log .build-oss-changes.log || true
 
       - name: Upload indexes and diffs
         if: always()
