@@ -131,9 +131,18 @@
   // instant scrollIntoView below and leave the anchor mispositioned).
   window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
 
+  // window.soloAnchorLanding comes from js/core/anchor-landing.js (deferred,
+  // so it's defined by DOMContentLoaded). It unhides a target that sits in a
+  // hidden tab or closed <details>, and keeps the target aligned while late
+  // content (Swagger, Mermaid) changes the page height. Guarded so a site
+  // without the core bundle still gets the plain scroll.
+  var settled = false;
   function scrollToHash(){
     var el = document.getElementById(id);
+    var landing = window.soloAnchorLanding;
+    if (el && landing) landing.reveal(el);
     if (el) el.scrollIntoView({ behavior: 'instant', block: 'start' });
+    if (el && landing && !settled) { settled = true; landing.settle(el); }
     reveal();
     clearTimeout(failsafe);
   }
