@@ -292,8 +292,13 @@
        /reference/cel/yaml-and-examples/; the enterprise docs serve a single
        /reference/cel/ page that carries the same anchors (for example
        #functions-policy-all). Gated on the rebase-injected product so the OSS
-       site, which has no product param, keeps its own paths. */ -}}
-{{- if and (eq $product "agentgateway") (in $path "reference/cel/") -}}
+       site, which has no product param, keeps its own paths.
+       Only the Kubernetes trees have the single page. The standalone trees
+       (/agentgateway/standalone/<version>/) serve the split OSS layout, with
+       their own /reference/cel/variables/ page, so links there stay as
+       written. Rewriting them dropped the page and broke the anchor (for
+       example /reference/cel/#agent-sessions). */ -}}
+{{- if and (eq $product "agentgateway") (in $path "reference/cel/") (not (in .Page.RelPermalink "/agentgateway/standalone/")) -}}
   {{- $path = replaceRE `reference/cel/(variables|yaml-and-examples)/?` "reference/cel/" $path -}}
 {{- end -}}
 
