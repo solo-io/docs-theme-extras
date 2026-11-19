@@ -515,9 +515,17 @@ document.addEventListener('DOMContentLoaded', function(){
         setActive(targets[targets.length - 1]);
         return;
       }
-      // Otherwise pick the last heading whose top is at or above 120px from the viewport top.
+      // Otherwise pick the last heading whose top is at or above the threshold.
       // Falls back to the first heading if none are above the threshold yet.
-      var threshold = 120;
+      //
+      // The threshold is the anchor-jump landing line, the target's own
+      // scroll-margin-top (--solo-rail-top + 0.5rem, see the `.content [id]`
+      // rule in docs-theme-extras.css), plus a few px of slack. A fixed 120px
+      // broke once the chrome grew past it: with a banner and the docTabs band
+      // a jump to #custom-providers landed that heading at 209px, so the TOC
+      // kept the PREVIOUS heading highlighted. Read on every update rather than
+      // cached, because the banner can be dismissed without a resize.
+      var threshold = (parseFloat(getComputedStyle(targets[0]).scrollMarginTop) || 112) + 8;
       var current = null;
       for (var i = 0; i < targets.length; i++){
         if (targets[i].getBoundingClientRect().top <= threshold){
