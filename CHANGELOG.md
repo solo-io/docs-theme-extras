@@ -24,6 +24,14 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [Unreleased]
+
+### Fix — the right-nav TOC highlighted the previous heading after an anchor jump (`assets/js/docs-init.js`, `tests/heading-anchor-offset.spec.ts`)
+
+Following a link to a section, or clicking it in the right-nav TOC, scrolled to the right heading but left the heading above it highlighted. The TOC scroll-spy counted a heading as current only once its top was within a fixed 120px of the viewport top, but an anchor jump lands the heading at its `scroll-margin-top` (`--solo-rail-top` + 0.5rem), which is larger than 120px once a banner and the docTabs band sit above the content: on https://agentgateway.dev/docs/standalone/latest/integrations/llm/providers/#custom-providers the heading lands at 209px, so the TOC kept "First-class providers" highlighted. The threshold now reads the target's own `scroll-margin-top` (plus 8px of slack) on every update, so the scroll-spy and the anchor landing line always agree, including after the banner is dismissed. Sites without the docTabs band were mostly unaffected, because their landing line was already close to 120px. Verified with a new `heading-anchor-offset.spec.ts` check, which fails with the old 120px value on the docTabs fixture page and passes with the fix, and by building agentgateway.dev against this change: loading `#custom-providers` highlights Custom providers, and each of the page's 7 TOC links highlights the heading it jumps to.
+
+---
+
 ## [0.5.2] — 2026-11-18
 
 ### Add — `params.llms.rootNote` adds a block of text to the root llms.txt (`layouts/llms.txt`, `hugo-oss.toml`, `tests/llms-index.spec.ts`, `docs/content/configuration/llms-txt.md`)

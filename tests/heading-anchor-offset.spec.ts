@@ -139,6 +139,30 @@ for (const width of [1440, 1024]) {
         expect(checked, "no TOC link clicked; check the a.solo-toc-link selector").toBeGreaterThan(0);
       });
 
+      // The TOC scroll-spy (docs-init.js) must agree with where the jump
+      // landed. Its threshold was a fixed 120px, so once the chrome (banner +
+      // docTabs band) pushed the landing line past that, the TOC kept the
+      // PREVIOUS heading highlighted after every jump.
+      test("after an anchor jump the TOC highlights the target heading", async ({ page }) => {
+        test.skip(width < 1280, "right-rail TOC is hidden below xl");
+        await page.goto(url);
+        const ids = await spanAnchorIds(page, 6);
+        let checked = 0;
+        for (const id of ids.slice(1)) {
+          if ((await page.locator(`a.solo-toc-link[href="#${id}"]`).count()) === 0) continue;
+          await page.evaluate(() => window.scrollTo(0, 0));
+          await page.evaluate((id) => { location.hash = id; }, id);
+          await page.waitForTimeout(150);
+          const m = await measure(page, id);
+          if (m.clamped) continue;
+          checked++;
+          const active = await page.evaluate(() =>
+            document.querySelector(".solo-toc-link.toc-active")?.getAttribute("href"));
+          expect(active, `#${id}: TOC highlights ${active} instead (${JSON.stringify(m)})`).toBe(`#${id}`);
+        }
+        expect(checked, "no TOC-listed anchor checked; pick a longer page").toBeGreaterThan(0);
+      });
+
       test("loading url#id lands the heading below the sticky chrome", async ({ page }) => {
         await page.goto(url);
         const ids = await spanAnchorIds(page, 3);
