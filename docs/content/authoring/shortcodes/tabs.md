@@ -6,7 +6,7 @@
 # `npm run gen:docs -- --check` and fails on any diff.
 title: tabs
 description: "Groups tab shortcodes into one tabbed block, with page-unique DOM ids"
-weight: 100
+weight: 110
 ---
 
 **Angle-bracket form only** (`{{</* … */>}}`). The percent form would re-render the output as Markdown.

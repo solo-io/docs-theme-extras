@@ -21,6 +21,7 @@ Render a visual component on the page.
 | [`callout`](callout/) | Renders an admonition box whose icon is derived from its type |
 | [`card`](card/) | Renders a styled card link with an optional icon or image, title and subtitle |
 | [`cards`](cards/) | Wraps inner card shortcodes in a responsive grid |
+| [`changelog-compare`](changelog-compare/) | Adds "changes from / through" version dropdowns that filter a Markdown changelog page |
 | [`checklist`](checklist/) | Renders its body as a checklist whose ticks persist in the browser |
 | [`details`](details/) | Renders a collapsible details and summary block, closed by default |
 | [`gloss`](gloss/) | Renders an inline glossary term with a tooltip carrying its definition |
