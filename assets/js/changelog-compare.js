@@ -21,8 +21,9 @@
  * only checks which END of the page is newest, by comparing the first and last
  * release numbers, so an oldest-first page also works.
  *
- * Range semantics are "changes since A, through B": the releases strictly newer than
- * A, up to and including B. The selection is mirrored to ?from=&to= (query, not
+ * Range semantics are "changes from A through B": A, B, and every release
+ * between them, both ends included. Both dropdowns default to real version
+ * numbers, the oldest and newest on the page. The selection is mirrored to ?from=&to= (query, not
  * hash, so it never collides with heading anchors or anchor-landing.js).
  */
 (function () {
@@ -161,9 +162,12 @@
     var uid = "changelog-compare-" + Math.random().toString(36).slice(2, 8);
     var bar = el("div", { class: "changelog-toolbar changelog-compare-toolbar", role: "group", "aria-label": "Compare versions" });
     var fromLabel = el("label", { class: "changelog-toolbar-field", for: uid + "-from" });
-    fromLabel.appendChild(el("span", { class: "changelog-toolbar-label" }, "Changes since"));
+    // Both ends are INCLUDED, so the default can be real version numbers: the
+    // oldest and newest on the page. With an exclusive start ("since X"), the
+    // default start would hide the oldest entry, which is why the label is
+    // "from", not "since".
+    fromLabel.appendChild(el("span", { class: "changelog-toolbar-label" }, "Changes from"));
     var fromSel = el("select", { id: uid + "-from", class: "changelog-toolbar-select", "data-compare": "from" });
-    fromSel.appendChild(el("option", { value: "" }, "the first release"));
     var toLabel = el("label", { class: "changelog-toolbar-field", for: uid + "-to" });
     toLabel.appendChild(el("span", { class: "changelog-toolbar-label" }, "through"));
     var toSel = el("select", { id: uid + "-to", class: "changelog-toolbar-select", "data-compare": "to" });
@@ -182,21 +186,25 @@
     holder.appendChild(status);
     holder.hidden = false;
 
+    var newest = ordered[0];
+    var oldest = ordered[ordered.length - 1];
+    fromSel.value = oldest.version;
+
     function syncToOptions() {
-      var from = byVersion[fromSel.value];
+      var from = byVersion[fromSel.value] || oldest;
       Array.prototype.forEach.call(toSel.options, function (o) {
-        o.disabled = !!from && byVersion[o.value].rank <= from.rank;
+        o.disabled = byVersion[o.value].rank < from.rank;
       });
-      if (toSel.selectedOptions[0] && toSel.selectedOptions[0].disabled) toSel.value = ordered[0].version;
+      if (toSel.selectedOptions[0] && toSel.selectedOptions[0].disabled) toSel.value = newest.version;
     }
 
     function apply(writeUrl) {
       syncToOptions();
-      var from = byVersion[fromSel.value];
-      var to = byVersion[toSel.value] || ordered[0];
+      var from = byVersion[fromSel.value] || oldest;
+      var to = byVersion[toSel.value] || newest;
       var shown = 0;
       releases.forEach(function (r) {
-        var on = (!from || r.rank > from.rank) && r.rank <= to.rank;
+        var on = r.rank >= from.rank && r.rank <= to.rank;
         if (on) shown++;
         r.visible = on;
         r.els.forEach(function (e) { e.classList.toggle(HIDDEN, !on); });
@@ -205,19 +213,15 @@
         var on = g.members.length === 0 || g.members.some(function (r) { return r.visible; });
         g.els.forEach(function (e) { e.classList.toggle(HIDDEN, !on); });
       });
-      var filtered = !!from || to !== ordered[0];
+      var filtered = from !== oldest || to !== newest;
       reset.hidden = !filtered;
-      if (!filtered) {
-        status.textContent = "";
-      } else if (from) {
-        status.textContent = "Showing " + shown + (shown === 1 ? " release" : " releases") + " after " + from.version + ", through " + to.version + ".";
-      } else {
-        status.textContent = "Showing " + shown + (shown === 1 ? " release" : " releases") + " up to " + to.version + ".";
-      }
+      status.textContent = filtered
+        ? "Showing " + shown + (shown === 1 ? " release" : " releases") + ", " + from.version + " through " + to.version + "."
+        : "";
       if (writeUrl && window.history && history.replaceState) {
         var url = new URL(window.location.href);
-        if (from) url.searchParams.set("from", from.version); else url.searchParams.delete("from");
-        if (to !== ordered[0]) url.searchParams.set("to", to.version); else url.searchParams.delete("to");
+        if (from !== oldest) url.searchParams.set("from", from.version); else url.searchParams.delete("from");
+        if (to !== newest) url.searchParams.set("to", to.version); else url.searchParams.delete("to");
         history.replaceState(history.state, "", url.toString());
       }
     }
@@ -225,8 +229,8 @@
     fromSel.addEventListener("change", function () { apply(true); });
     toSel.addEventListener("change", function () { apply(true); });
     reset.addEventListener("click", function () {
-      fromSel.value = "";
-      toSel.value = ordered[0].version;
+      fromSel.value = oldest.version;
+      toSel.value = newest.version;
       apply(true);
     });
 

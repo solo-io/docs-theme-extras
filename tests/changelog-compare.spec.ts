@@ -37,17 +37,19 @@ test.describe("changelog-compare", () => {
     await page.goto(PAGE);
     const from = page.locator('[data-compare="from"] option');
     const to = page.locator('[data-compare="to"] option');
-    await expect(from).toHaveCount(ALL.length + 1); // + "the first release"
-    expect(await from.evaluateAll((os) => os.slice(1).map((o) => (o as HTMLOptionElement).value))).toEqual(ALL);
+    expect(await from.evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value))).toEqual(ALL);
     expect(await to.evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value))).toEqual(ALL);
+    // The defaults are real version numbers: oldest and newest on the page.
+    await expect(page.locator('[data-compare="from"]')).toHaveValue(ALL[ALL.length - 1]);
+    await expect(page.locator('[data-compare="to"]')).toHaveValue(ALL[0]);
     // Group headings ("v2.4") are not releases and must not become options.
     expect(await to.evaluateAll((os) => os.map((o) => o.textContent))).not.toContain("v2.4");
     expect(await visibleReleases(page)).toEqual(ALL);
   });
 
-  test("changes since 2.3.1 through 2.4.0 shows the releases after 2.3.1 through 2.4.0", async ({ page }) => {
+  test("changes from 2.3.2 through 2.4.0 includes both ends", async ({ page }) => {
     await page.goto(PAGE);
-    await page.selectOption('[data-compare="from"]', "2.3.1");
+    await page.selectOption('[data-compare="from"]', "2.3.2");
     await page.selectOption('[data-compare="to"]', "2.4.0");
     expect(await visibleReleases(page)).toEqual(["2.4.0", "2.4.0-beta.1", "2.3.2"]);
     // The section body goes with its heading: 2.4.1's bug fix is hidden,
@@ -58,29 +60,30 @@ test.describe("changelog-compare", () => {
     await expect(page.locator(".content h2", { hasText: "v2.4" })).toBeVisible();
     await expect(page.locator(".content h2", { hasText: "v2.3" })).toBeVisible();
     await expect(page.locator(".changelog-compare-status")).toHaveText(
-      "Showing 3 releases after 2.3.1, through 2.4.0.",
+      "Showing 3 releases, 2.3.2 through 2.4.0.",
     );
-    expect(new URL(page.url()).search).toBe("?from=2.3.1&to=2.4.0");
+    expect(new URL(page.url()).search).toBe("?from=2.3.2&to=2.4.0");
   });
 
   test("a group with no release in range is hidden; unrelated headings never are", async ({ page }) => {
     await page.goto(PAGE);
-    await page.selectOption('[data-compare="from"]', "2.3.2");
+    await page.selectOption('[data-compare="from"]', "2.4.0-beta.1");
     await expect(page.locator(".content h2", { hasText: "v2.3" })).toBeHidden();
     await expect(page.locator(".content h2", { hasText: "Changelog entry types" })).toBeVisible();
   });
 
-  test("the to list disables versions at or before from", async ({ page }) => {
+  test("the through list disables versions older than from", async ({ page }) => {
     await page.goto(PAGE);
     await page.selectOption('[data-compare="from"]', "2.4.0");
     const disabled = await page
       .locator('[data-compare="to"] option')
       .evaluateAll((os) => os.filter((o) => (o as HTMLOptionElement).disabled).map((o) => (o as HTMLOptionElement).value));
-    expect(disabled).toEqual(["2.4.0", "2.4.0-beta.1", "2.3.2", "2.3.1", "2.3.0"]);
+    // 2.4.0 itself stays enabled: "from 2.4.0 through 2.4.0" is one release.
+    expect(disabled).toEqual(["2.4.0-beta.1", "2.3.2", "2.3.1", "2.3.0"]);
   });
 
   test("a shared ?from=&to= link restores the filter, and Reset clears it", async ({ page }) => {
-    await page.goto(`${PAGE}?from=2.3.0&to=2.3.2`);
+    await page.goto(`${PAGE}?from=2.3.1&to=2.3.2`);
     expect(await visibleReleases(page)).toEqual(["2.3.2", "2.3.1"]);
     await page.getByRole("button", { name: "Reset" }).click();
     expect(await visibleReleases(page)).toEqual(ALL);
