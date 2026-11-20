@@ -24,7 +24,7 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
-## [Unreleased]
+## [0.5.3] — 2026-11-20
 
 ### Fix — agentgateway standalone CEL links lost their page and anchor (`layouts/_partials/utils/resolve-link.html`)
 
@@ -33,6 +33,10 @@ The resolver collapsed every agentgateway link to `reference/cel/variables/` or 
 ### Fix — the right-nav TOC highlighted the previous heading after an anchor jump (`assets/js/docs-init.js`, `tests/heading-anchor-offset.spec.ts`)
 
 Following a link to a section, or clicking it in the right-nav TOC, scrolled to the right heading but left the heading above it highlighted. The TOC scroll-spy counted a heading as current only once its top was within a fixed 120px of the viewport top, but an anchor jump lands the heading at its `scroll-margin-top` (`--solo-rail-top` + 0.5rem), which is larger than 120px once a banner and the docTabs band sit above the content: on https://agentgateway.dev/docs/standalone/latest/integrations/llm/providers/#custom-providers the heading lands at 209px, so the TOC kept "First-class providers" highlighted. The threshold now reads the target's own `scroll-margin-top` (plus 8px of slack) on every update, so the scroll-spy and the anchor landing line always agree, including after the banner is dismissed. Sites without the docTabs band were mostly unaffected, because their landing line was already close to 120px. Verified with a new `heading-anchor-offset.spec.ts` check, which fails with the old 120px value on the docTabs fixture page and passes with the fix, and by building agentgateway.dev against this change: loading `#custom-providers` highlights Custom providers, and each of the page's 7 TOC links highlights the heading it jumps to.
+
+### Fix — a link into a synced tab overwrote the reader's saved tab choice on the docs hub (`assets/js/core/anchor-landing.js`, `tests/heading-anchor-offset.spec.ts`)
+
+v0.5.2 made a link to a heading inside a hidden tab select that tab without changing the reader's saved tab choice, but it found the tab group only through Hextra's `data-tab-group` attribute. The docs hub (solo-io/docs) replaces Hextra's tabs with its own `tabs.html` shortcode, which names a synced group in `data-solo-tab-sync` and syncs it with `solo-tab-sync.js` under the same `hextra-tab-<group>` localStorage key. On the hub, following a link into the "Config file" tab therefore saved "Config file" as the reader's choice for every later page, though the reader never picked it. The two v0.5.2 tests for this case also looked only for Hextra's markup (`.hextra-tabs-toggle`, `data-tab-group`), so `framework-test-browser` failed on every solo-io/docs PR after the v0.5.2 pin bump (solo-io/docs#5196). The script now reads either attribute, and the tests accept either kind of tab button. No hub page turns on `tabs.sync` yet, so no production page shows the bug today. It appears as soon as a page or the site sets `tabs.sync`, for example on the UI and CLI tabs on https://docs.solo.io/agentregistry/latest/agents/publish/. Verified by running `heading-anchor-offset.spec.ts` against this repo's OSS fixture (21 passed) and against the solo-io/docs test fixture built with this branch through a go.mod `replace` (15 passed). With only the script change reverted, the hub run fails with "link into a synced tab overwrote the saved tab choice".
 
 ---
 
