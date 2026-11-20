@@ -6,7 +6,7 @@
 # `npm run gen:docs -- --check` and fails on any diff.
 title: table
 description: "Wraps a markdown table so the author picks how its columns size"
-weight: 90
+weight: 100
 ---
 
 Either call form works, and both produce identical HTML.

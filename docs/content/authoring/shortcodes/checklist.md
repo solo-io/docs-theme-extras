@@ -6,7 +6,7 @@
 # `npm run gen:docs -- --check` and fails on any diff.
 title: checklist
 description: "Renders its body as a checklist whose ticks persist in the browser"
-weight: 50
+weight: 60
 ---
 
 Either call form works, and both produce identical HTML.

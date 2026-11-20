@@ -6,7 +6,7 @@
 # `npm run gen:docs -- --check` and fails on any diff.
 title: gloss
 description: "Renders an inline glossary term with a tooltip carrying its definition"
-weight: 70
+weight: 80
 ---
 
 Either call form works, and both produce identical HTML.
