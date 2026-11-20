@@ -16,9 +16,9 @@
     "gen:docs": "node scripts/gen-docs.mjs"
   },
   "devDependencies": {
-    "@playwright/test": "^1.65.0",
+    "@playwright/test": "^1.65.1",
     "parse5": "^8.1.1",
-    "serve": "^14.2.7",
+    "serve": "^14.2.8",
     "smol-toml": "^1.9.1"
   },
   "workspaces": [
