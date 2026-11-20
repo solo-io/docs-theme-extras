@@ -198,6 +198,9 @@ for (const width of [1440, 1024]) {
 // The fixes are the `.content [id]` scroll-margin in docs-theme-extras.css and
 // assets/js/core/anchor-landing.js.
 const LANDING = "v2/anchor-landing/";
+// Tab buttons in Hextra's tabs markup, or in the docs hub's own tabs shortcode,
+// which shadows Hextra's when this suite runs against the hub's fixture build.
+const TAB_BUTTON = "button.hextra-tabs-toggle, button.hextra-tab-btn";
 
 async function expectLanded(page: Page, id: string, how: string) {
   const m = await measure(page, id);
@@ -221,10 +224,12 @@ test.describe("anchor landing — hidden, footnote and late-layout targets", () 
 
   test("following a link into a synced tab keeps the reader's saved tab choice", async ({ page }) => {
     await page.goto(url);
-    const key = await page.evaluate(() => {
-      const bar = document.querySelector<HTMLElement>(".hextra-tabs-toggle")?.parentElement;
-      return bar?.dataset.tabGroup ? "hextra-tab-" + encodeURIComponent(bar.dataset.tabGroup) : null;
-    });
+    // Hextra's markup (data-tab-group) or the docs hub's own (data-solo-tab-sync).
+    const key = await page.evaluate((sel) => {
+      const bar = document.querySelector<HTMLElement>(sel)?.parentElement;
+      const group = bar?.dataset.tabGroup || bar?.dataset.soloTabSync;
+      return group ? "hextra-tab-" + encodeURIComponent(group) : null;
+    }, TAB_BUTTON);
     expect(key, "fixture tab group is not synced (tabs.sync front matter)").not.toBeNull();
     // Both starting states: no saved choice, and a saved choice of the first tab.
     for (const saved of [null, "0"]) {
@@ -248,7 +253,7 @@ test.describe("anchor landing — hidden, footnote and late-layout targets", () 
     await page.goto(url);
     await page.evaluate(() => { location.hash = "config-file-heading"; });
     await page.waitForTimeout(400);
-    await page.locator("button.hextra-tabs-toggle", { hasText: "UI" }).first().click();
+    await page.locator(TAB_BUTTON, { hasText: "UI" }).first().click();
     await page.evaluate(() => { location.hash = "filler-1"; });
     await page.waitForTimeout(400);
     await page.goBack();

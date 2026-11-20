@@ -67,8 +67,12 @@
   // every click, so a link into the "Config file" tab would otherwise switch
   // every later page to "Config file" too, though the reader never chose it.
   // The tabs on THIS page still switch together, as a click would.
+  // Hextra's markup names the group in data-tab-group; the docs hub's own tabs
+  // shortcode names it in data-solo-tab-sync (its solo-tab-sync.js writes the
+  // same 'hextra-tab-<group>' key on click).
   function clickKeepingSavedTab(btn) {
-    var group = btn.parentElement && btn.parentElement.dataset.tabGroup;
+    var bar = btn.parentElement;
+    var group = bar && (bar.dataset.tabGroup || bar.dataset.soloTabSync);
     var key = group ? 'hextra-tab-' + encodeURIComponent(group) : null;
     var saved = null;
     try { if (key) saved = localStorage.getItem(key); } catch (e) { key = null; }
