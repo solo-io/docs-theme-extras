@@ -6,7 +6,7 @@
 # `npm run gen:docs -- --check` and fails on any diff.
 title: render
 description: "Embeds the interactive changelog browser on a page"
-weight: 80
+weight: 90
 ---
 
 Either call form works, and both produce identical HTML.

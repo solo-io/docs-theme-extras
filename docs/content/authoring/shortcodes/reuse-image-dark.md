@@ -6,7 +6,7 @@
 # `npm run gen:docs -- --check` and fails on any diff.
 title: reuse-image-dark
 description: "Renders an image in dark mode only, hidden entirely in light mode"
-weight: 190
+weight: 200
 ---
 
 Either call form works, and both produce identical HTML.
