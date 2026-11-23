@@ -3533,3 +3533,21 @@ a[class*="word-break:break-word"] {
   border-color: #4b5563;
 }
 .dark .changelog-toolbar-select option { background: #1f2937; color: #e5e7eb; }
+
+/* changelog-compare shortcode (assets/js/changelog-compare.js). Reuses the
+   .changelog-toolbar look above. !important because a hidden section can be
+   any element, and some (tables, alerts) set their own display. */
+.changelog-compare-hidden { display: none !important; }
+.changelog-compare-reset {
+  padding: 0.25rem 0.625rem;
+  font-size: 0.875rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.changelog-compare-reset:hover,
+.changelog-compare-reset:focus-visible { border-color: var(--theme-primary); }
+.changelog-compare-status:empty { display: none; }
+.changelog-compare-status { margin: -0.5rem 0 1.25rem; font-size: 0.875rem; color: #4b5563; }
+.dark .changelog-compare-reset { border-color: #4b5563; }
+.dark .changelog-compare-status { color: #9ca3af; }

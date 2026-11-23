@@ -6,7 +6,7 @@
 # `npm run gen:docs -- --check` and fails on any diff.
 title: details
 description: "Renders a collapsible details and summary block, closed by default"
-weight: 60
+weight: 70
 ---
 
 Either call form works, and both produce identical HTML.

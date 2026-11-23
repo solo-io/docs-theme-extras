@@ -6,7 +6,7 @@
 # `npm run gen:docs -- --check` and fails on any diff.
 title: openapi
 description: "Embeds an interactive viewer (Swagger UI or Scalar) for an OpenAPI spec"
-weight: 250
+weight: 260
 ---
 
 Either call form works, and both produce identical HTML.
