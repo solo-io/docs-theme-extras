@@ -6,7 +6,7 @@
 # `npm run gen:docs -- --check` and fails on any diff.
 title: reuse
 description: "Inlines a shared Markdown file from assets, resolving a version-specific copy first"
-weight: 160
+weight: 170
 ---
 
 Either call form works, and both produce identical HTML.

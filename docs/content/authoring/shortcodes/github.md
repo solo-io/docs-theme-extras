@@ -6,7 +6,7 @@
 # `npm run gen:docs -- --check` and fails on any diff.
 title: github
 description: "Fetches a remote file by URL and inlines its contents"
-weight: 220
+weight: 230
 ---
 
 Either call form works, and both produce identical HTML.

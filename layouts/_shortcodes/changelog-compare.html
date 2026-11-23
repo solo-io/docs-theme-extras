@@ -1,0 +1,49 @@
+{{- /*
+  Shortcode: changelog-compare
+  Summary: Adds "changes from / through" version dropdowns that filter a Markdown changelog page
+  Group: ui-components
+  CallForm: both
+  Overrides: none
+
+  Parameters: none
+
+  Example: code-only
+    {{< changelog-compare >}}
+
+    ## v2.4
+    ### 2.4.1
+    ...
+
+  Notes:
+    Place it above the changelog's version headings. The versions in both
+    dropdowns are read from the page's own headings in the browser on every
+    load, so nobody maintains a list: publish a new release heading and it
+    shows up.
+
+    A version heading is any h2 to h5 on the page whose whole text is a
+    version. If version headings sit above the shortcode, for example because
+    a sync script inserted a new minor section right after the front matter,
+    they are still included, and the toolbar moves above the first of them.
+    Three numeric parts (`2.4.1`, `v2026.11.0`, `1.0.0-rc2`) make a release;
+    two (`v2.4`, `v2026.11`) make a group heading, hidden when none of its
+    releases is in range. Other headings are left alone.
+
+    Choosing "Changes from A through B" shows A, B, and every release between
+    them, in page order. The dropdowns default to the oldest and newest
+    version on the page. The choice is written to `?from=&to=` so the
+    filtered view can be shared as a link.
+
+    For the `render` shortcode's JSON changelogs (Gloo Gateway, GME), use that
+    shortcode's own "Compare versions" view instead.
+
+    The shortcode itself outputs only an empty, hidden placeholder, so the
+    `.md` export and Copy as Markdown are unaffected. With JavaScript off, or
+    with fewer than two version headings, the page renders unfiltered.
+*/ -}}
+<div class="changelog-compare" data-changelog-compare hidden></div>
+{{- /* Emitted on every call, with no once-per-page guard: .Page.Store
+       survives `hugo server` rebuilds, so a Store guard dropped the script
+       after the first live reload. The script guards against running twice. */ -}}
+{{- with resources.Get "js/changelog-compare.js" | minify | fingerprint }}
+<script src="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" defer></script>
+{{- end }}

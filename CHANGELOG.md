@@ -24,6 +24,12 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [Unreleased]
+
+### Add — `changelog-compare` shortcode filters a Markdown changelog by version range (`layouts/_shortcodes/changelog-compare.html`, `assets/js/changelog-compare.js`, `tests/changelog-compare.spec.ts`)
+
+Adds "Changes from" and "through" dropdowns to changelog pages that are plain Markdown (agentgateway, agentregistry, kagent, kgateway, and the Gloo Operator changelog for Istio), the way the `render` shortcode already does for the JSON-based Gloo Gateway and Gloo Mesh changelogs. Nothing lists the versions: the script reads them from the page's own version headings on every load, so a new release heading shows up in both dropdowns with no other change. A heading whose whole text is a three-part version (`2.4.1`, `v2026.11.0`, `1.0.0-rc2`) is a release, and a two-part one (`v2.4`) is a group heading that is hidden when none of its releases is in range. Versions follow page order rather than a sort, because the kagent changelog files `1.0.0-rc2` under `v2026.11`. The range includes both ends, so both dropdowns can default to real version numbers, the oldest and newest on the page. (An exclusive "since" start would have hidden the oldest entry by default.) The view hides their entries in the right-nav TOC too, and writes `?from=&to=` so the view can be shared. Version headings above the shortcode are included too, and the toolbar moves above the first one. The agentregistry sync script inserts each new minor section straight after the front matter, which would otherwise put the newest release above the toolbar and out of the dropdowns. The shortcode itself outputs only an empty hidden `<div>` plus its script tag, so the `.md` export and Copy as Markdown are unchanged. The script tag is emitted on every call rather than once per page, because `.Page.Store` survives `hugo server` rebuilds and a once-per-page guard dropped the script after the first live reload. Verified with the new spec (7 passed on the OSS fixture) and by building the current agentregistry and kagent Enterprise changelogs from the docs hub into the fixture: 9 and 16 versions were detected, the range filter was correct, and the console had no errors.
+
 ## [0.5.3] — 2026-11-20
 
 ### Fix — agentgateway standalone CEL links lost their page and anchor (`layouts/_partials/utils/resolve-link.html`)
