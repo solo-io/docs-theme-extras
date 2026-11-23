@@ -32,7 +32,16 @@
     {{- $body = print $body (partial "utils/llms-index-tree.html" (dict "page" . "level" 2 "prodHost" $prodHost)) -}}
   {{- end -}}
 {{- else -}}
-  {{- $body = partial "utils/llms-page-tree.html" (dict "page" . "level" 2 "prodHost" $prodHost) -}}
+  {{- /* Size limit: see the SIZE LIMIT note in utils/llms-page-tree.html.
+         The header lines above the body (title, intro, index link, the
+         section's own entry) are not counted there, so leave them room. */ -}}
+  {{- /* isset, not `default`: `default` treats an explicit 0 as unset. */ -}}
+  {{- $maxChars := 50000 -}}
+  {{- with site.Params.llms -}}
+    {{- if isset . "maxchars" }}{{ $maxChars = int .maxChars }}{{ end -}}
+  {{- end -}}
+  {{- $budget := cond (gt $maxChars 0) (sub $maxChars 2000) 0 -}}
+  {{- $body = partial "utils/llms-page-tree.html" (dict "page" . "level" 2 "prodHost" $prodHost "maxChars" $budget) -}}
 {{- end -}}
 {{- /* Link this section's own page (a version root such as /istio/1.33.x/, or
        an OSS /docs/ root) first. Every other section page is linked under its
