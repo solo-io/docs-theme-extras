@@ -3075,6 +3075,22 @@ i.sidebar-mobile-section-icon {
   }
 }
 
+/* Content-first source order. layouts/docs/single.html and list.html emit
+   <article> BEFORE the sidebar <aside> and the TOC <nav>, so a tool that reads
+   the HTML top to bottom (an AI agent, the afdocs `content-start-position`
+   check) reaches the page text before 20-80K characters of navigation. This
+   rule puts the sidebar back in the left column of the flex row. The TOC
+   already sits on the right through `hx:order-last`.
+
+   A plain rule, not the `hx:order-first` utility the <aside> also carries:
+   Hextra's compiled CSS only holds utilities Hextra itself uses, and it never
+   needed `order-first` because its sidebar came first in the HTML anyway, so
+   that class has no CSS behind it. content-first-source-order.spec.ts checks
+   the HTML order and content-first-columns.spec.ts the rendered columns. */
+.hextra-sidebar-container {
+  order: -1;
+}
+
 /* Tree lists. Depth 0 sits at the section root; deeper levels indent under
    a thin left rule that mirrors the docs-theme-lotus pattern. */
 .sidebar-list {

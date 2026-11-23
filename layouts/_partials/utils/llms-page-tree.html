@@ -23,6 +23,11 @@
     {{- $url := print $prodHost .RelPermalink -}}
     {{- with .OutputFormats.Get "markdown" -}}{{- $url = print $prodHost .RelPermalink -}}{{- end -}}
     {{- $inner = printf "- [%s](%s)\n" .Title $url -}}
+  {{- else -}}
+    {{- /* The heading stands for the section, but llms.txt also links the
+           section's own page first, so it is listed somewhere. See
+           utils/llms-section-entry.html. */ -}}
+    {{- $inner = print (partial "utils/llms-section-entry.html" (dict "page" . "prodHost" $prodHost)) "\n" $inner -}}
   {{- end -}}
   {{- $out = print $out (printf "\n%s %s\n\n" $hashes .Title) $inner -}}
 {{- end -}}

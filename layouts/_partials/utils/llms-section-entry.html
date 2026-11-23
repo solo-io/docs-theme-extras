@@ -1,0 +1,28 @@
+{{- /* Returns one llms.txt list line that links a SECTION's own page:
+
+     - [Title](https://host/path/index.md)
+
+   Input: dict "page" (section Page) "prodHost" (string).
+
+   Why: llms.txt used to render a section only as a heading, with its pages
+   listed under it, so the section's own landing page (`_index.md`, for example
+   /istio/1.33.x/setup/install/) was linked from no llms.txt at all. Those
+   pages are in the sitemap, so llms.txt coverage checks (afdocs
+   `llms-txt-coverage`, which wants 95% of sitemap doc pages) counted every one
+   as missing: 54 of 233 pages on istio 1.33.x, 63 of 311 on kgateway 2.5.x.
+
+   Link target: the section's markdown output (<section>/index.md) when the
+   site publishes one, otherwise its HTML page. Never the section's llms.txt:
+   this line stands for the page, and utils/llms-section-url.html already
+   covers the "follow this index" case.
+
+   No description, on purpose. The heading right above the line already names
+   the section, and the largest llms.txt files (agentgateway kubernetes, about
+   90 sections) sit near the 100K-character size limit, where a description per
+   section would add about 11K. */ -}}
+{{- $p := .page -}}
+{{- $url := print .prodHost $p.RelPermalink -}}
+{{- with $p.OutputFormats.Get "markdown" -}}
+  {{- $url = print $.prodHost .RelPermalink -}}
+{{- end -}}
+{{- return printf "- [%s](%s)" ($p.Title | replaceRE `\s+` " " | strings.TrimSpace) $url -}}

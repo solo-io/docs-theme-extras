@@ -34,6 +34,12 @@
 {{- else -}}
   {{- $body = partial "utils/llms-page-tree.html" (dict "page" . "level" 2 "prodHost" $prodHost) -}}
 {{- end -}}
+{{- /* Link this section's own page (a version root such as /istio/1.33.x/, or
+       an OSS /docs/ root) first. Every other section page is linked under its
+       heading by the tree partials; this one has no parent heading in this
+       file, so without the line it was in no llms.txt. See
+       utils/llms-section-entry.html. */ -}}
+{{- $body = print (partial "utils/llms-section-entry.html" (dict "page" . "prodHost" $prodHost)) "\n" $body -}}
 # {{ .Title }}
 {{ with $intro }}
 > {{ . }}

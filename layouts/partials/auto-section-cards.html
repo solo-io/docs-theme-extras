@@ -22,12 +22,12 @@
           <div class="section-card-body">
             <p class="section-card-title">
               {{ .Title }}
-              {{- if .Draft }} <span class="section-card-badge">DRAFT</span>{{ end -}}
-              {{- if .Params.Enterprise }} <span class="section-card-badge">Enterprise</span>{{ end -}}
-              {{- if .Params.Oss }} <span class="section-card-badge badge-oss">Open Source</span>{{ end -}}
-              {{- if .Params.Alpha }} <span class="section-card-badge badge-tag">Alpha</span>{{ end -}}
-              {{- if .Params.Beta }} <span class="section-card-badge badge-tag">Beta</span>{{ end -}}
-              {{- if .Params.Experimental }} <span class="section-card-badge badge-tag">Experimental</span>{{ end -}}
+              {{- if .Draft }} <span class="section-card-badge" data-markdown-ignore>DRAFT</span>{{ end -}}
+              {{- if .Params.Enterprise }} <span class="section-card-badge" data-markdown-ignore>Enterprise</span>{{ end -}}
+              {{- if .Params.Oss }} <span class="section-card-badge badge-oss" data-markdown-ignore>Open Source</span>{{ end -}}
+              {{- if .Params.Alpha }} <span class="section-card-badge badge-tag" data-markdown-ignore>Alpha</span>{{ end -}}
+              {{- if .Params.Beta }} <span class="section-card-badge badge-tag" data-markdown-ignore>Beta</span>{{ end -}}
+              {{- if .Params.Experimental }} <span class="section-card-badge badge-tag" data-markdown-ignore>Experimental</span>{{ end -}}
             </p>
             {{- /* Strip markdown to plain text (markdownify renders it, plainify
                    removes the tags), THEN truncate. Two reasons this beats the
@@ -38,7 +38,13 @@
                    half (`**bol…`) and leak a stray `**`. Matches the plain-text
                    treatment in `utils/page-description.html`. */ -}}
             {{- with .Description }}
-              <p class="section-card-desc">{{ . | markdownify | plainify | htmlUnescape | truncate 100 }}</p>
+              {{- /* `data-markdown-ignore` on the shortened description and on the
+                     badges above: the .md twin lists each child with its FULL
+                     description (utils/md-section-child-links.html), so an HTML-
+                     to-markdown parity check (afdocs `markdown-content-parity`)
+                     would report the 100-character cut and the badge words as
+                     text missing from the markdown. */}}
+              <p class="section-card-desc" data-markdown-ignore>{{ . | markdownify | plainify | htmlUnescape | truncate 100 }}</p>
             {{- end }}
           </div>
         </a>

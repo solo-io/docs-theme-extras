@@ -38,7 +38,7 @@ const SECTION = "MARKER_BANNER_SECTION";
 function banners(filePath: string): string[] {
   const html = readFixture(filePath);
   return [
-    ...html.matchAll(/<div class="version-banner">([\s\S]*?)<\/div>/g),
+    ...html.matchAll(/<div class="version-banner"[^>]*>([\s\S]*?)<\/div>/g),
   ].map((m) => m[1].replace(/<[^>]+>/g, "").trim());
 }
 

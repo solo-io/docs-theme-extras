@@ -24,7 +24,7 @@ function findBannerLinkPage(): string | null {
     try {
       const html = fs.readFileSync(target.fileForUrl(p.url), "utf8");
       const banner = html.match(
-        /<div class="version-banner">([\s\S]*?)<\/div>/,
+        /<div class="version-banner"[^>]*>([\s\S]*?)<\/div>/,
       );
       if (banner && /<a\s[^>]*href=/.test(banner[1])) return p.url;
     } catch {

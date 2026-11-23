@@ -40,6 +40,10 @@
   `testStatusVerifiedTooltip`, `testStatusTypesIntro`, and per kind
   `testType<Kind>` and `testType<Kind>Description`. Styles live in
   assets/css/docs-theme-extras.css under `.test-status-*`.
+
+  `data-markdown-ignore` marks the badge as page chrome. The .md export does
+  not carry it, and HTML-to-markdown parity checks (afdocs
+  `markdown-content-parity`) skip elements with this attribute.
 */ -}}
 {{- if eq .Params.test_status "passed" -}}
 {{- $label := (T "testStatusVerified") | default "Verified" -}}
@@ -66,7 +70,7 @@
   {{- end -}}
 {{- end -}}
 {{- $intro := (T "testStatusTypesIntro") | default "Automated tests passed for:" -}}
-<span class="test-status-badge test-status-passed" tabindex="0">
+<span class="test-status-badge test-status-passed" tabindex="0" data-markdown-ignore>
   <svg class="test-status-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" aria-hidden="true" focusable="false">
     <path d="M447.9 142.5l-23.2 22L181 395.3l-22 20.8-22-20.8L23.2 287.6 0 265.6l44-46.5 23.2 22L159 328 380.7 118l23.2-22 44 46.5z"/>
   </svg>
