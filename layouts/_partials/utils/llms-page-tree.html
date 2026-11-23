@@ -3,13 +3,28 @@
    Used for a version root, for sections inside a version tree, and for leaf
    sections such as a blog. This is the only place llms.txt lists every page.
 
-     Input: dict "page" (section Page) "level" (heading level) "prodHost".
+     Input: dict "page" (section Page) "level" (heading level) "prodHost",
+            and optionally "maxChars" (int, 0 or unset = no limit).
 
    A subsection with no eligible pages of its own and no subsections becomes a
-   link to the subsection page, instead of a heading with nothing under it. */ -}}
+   link to the subsection page, instead of a heading with nothing under it.
+
+   SIZE LIMIT ("maxChars"). Agents truncate a long llms.txt, and the afdocs
+   `llms-txt-size` check warns above 50,000 characters and fails above
+   100,000. When the listing would be longer than maxChars, the LARGEST
+   subsections are replaced, one at a time, by a pointer to that subsection's
+   own llms.txt (its heading, its own page, and "- [All <Title> pages](…/llms.txt)")
+   until the listing fits. The subsection's llms.txt is rendered by
+   section.llms.txt with the same limit, so a subsection that is itself too
+   big splits the same way. A listing that already fits is unchanged, byte for
+   byte. Only subsections that publish the `llms` output format can be
+   replaced; on a site that turns it off for sections, nothing is split.
+   Only the top call (from section.llms.txt) passes maxChars; nested calls
+   render in full, because their size is already counted in the parent's. */ -}}
 {{- $s := .page -}}
 {{- $level := .level | default 2 -}}
 {{- $prodHost := .prodHost -}}
+{{- $maxChars := int (.maxChars | default 0) -}}
 {{- $hashes := strings.Repeat $level "#" -}}
 {{- $out := "" -}}
 
@@ -17,13 +32,43 @@
   {{- $out = print $out (partial "utils/llms-entry.html" (dict "page" . "prodHost" $prodHost)) "\n" -}}
 {{- end -}}
 
-{{- range where $s.Sections "Params.llms" "ne" false -}}
-  {{- $inner := partial "utils/llms-page-tree.html" (dict "page" . "level" (add $level 1) "prodHost" $prodHost) -}}
+{{- /* Render every subsection block first, so the size limit can pick which
+       ones to replace before anything is written. */ -}}
+{{- $blocks := slice -}}
+{{- range $i, $sec := where $s.Sections "Params.llms" "ne" false -}}
+  {{- $inner := partial "utils/llms-page-tree.html" (dict "page" $sec "level" (add $level 1) "prodHost" $prodHost) -}}
+  {{- $entry := partial "utils/llms-section-entry.html" (dict "page" $sec "prodHost" $prodHost) -}}
   {{- if not $inner -}}
-    {{- $url := print $prodHost .RelPermalink -}}
-    {{- with .OutputFormats.Get "markdown" -}}{{- $url = print $prodHost .RelPermalink -}}{{- end -}}
-    {{- $inner = printf "- [%s](%s)\n" .Title $url -}}
+    {{- $url := print $prodHost $sec.RelPermalink -}}
+    {{- with $sec.OutputFormats.Get "markdown" -}}{{- $url = print $prodHost .RelPermalink -}}{{- end -}}
+    {{- $inner = printf "- [%s](%s)\n" $sec.Title $url -}}
+  {{- else -}}
+    {{- /* The heading stands for the section, but llms.txt also links the
+           section's own page first, so it is listed somewhere. See
+           utils/llms-section-entry.html. */ -}}
+    {{- $inner = print $entry "\n" $inner -}}
   {{- end -}}
-  {{- $out = print $out (printf "\n%s %s\n\n" $hashes .Title) $inner -}}
+  {{- $full := print (printf "\n%s %s\n\n" $hashes $sec.Title) $inner -}}
+  {{- $short := "" -}}
+  {{- with $sec.OutputFormats.Get "llms" -}}
+    {{- $short = print (printf "\n%s %s\n\n" $hashes $sec.Title) $entry "\n" (printf "- [All %s pages](%s)\n" $sec.Title (print $prodHost .RelPermalink)) -}}
+  {{- end -}}
+  {{- $blocks = $blocks | append (dict "i" $i "full" $full "short" $short "saving" (cond (eq $short "") 0 (sub (len $full) (len $short)))) -}}
+{{- end -}}
+
+{{- $collapse := dict -}}
+{{- if gt $maxChars 0 -}}
+  {{- $total := len $out -}}
+  {{- range $blocks }}{{ $total = add $total (len .full) }}{{ end -}}
+  {{- range sort $blocks "saving" "desc" -}}
+    {{- if and (gt $total $maxChars) (gt .saving 0) -}}
+      {{- $collapse = merge $collapse (dict (string .i) true) -}}
+      {{- $total = sub $total .saving -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- range $blocks -}}
+  {{- $out = print $out (cond (index $collapse (string .i) | default false) .short .full) -}}
 {{- end -}}
 {{- return $out -}}

@@ -138,12 +138,21 @@
 {{- end -}}
 
 {{- /* Normalize smart punctuation to ASCII so the markdown is
-       easier to diff and friendlier to non-Unicode-aware consumers. */ -}}
+       easier to diff and friendlier to non-Unicode-aware consumers.
+
+       EXCEPT the em dash, which stays `—`. Rewriting it to `--` made every
+       sentence with an em dash read as different text from the HTML page:
+       HTML-to-markdown parity checks (afdocs `markdown-content-parity`) fold
+       `—` to `-` on both sides, and `a - b` never matches `a -- b`. A `—` in
+       the .md file folds the same way the HTML does. This is the one rule
+       where the .md URL and Copy as Markdown (partials/copy-markdown.html,
+       which still writes `--`) differ on purpose: the Copy path also feeds the
+       Japanese translation export, and changing its output would churn every
+       translation-source file. */ -}}
 {{- $md = $md | replaceRE `[“”]` `"` -}}
 {{- $md = $md | replaceRE `[‘’]` `'` -}}
 {{- $md = $md | replaceRE `…` `...` -}}
 {{- $md = $md | replaceRE `–` `-` -}}
-{{- $md = $md | replaceRE `—` `--` -}}
 
 {{- /* Resolve URLs to absolute. Host comes from utils/prod-host (explicit
        themeExtras.prodHost > site.BaseURL host > empty). */ -}}

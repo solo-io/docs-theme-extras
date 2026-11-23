@@ -3,12 +3,12 @@
   rationale; the same four slots apply here, with the same byte-identical
   guarantee when they are empty. Keep the slot calls glued to their neighbouring
   tags — moving one onto its own line injects whitespace and breaks that.
+  The sidebar and TOC come AFTER <article> in the HTML on purpose; see the
+  SOURCE ORDER note in docs/single.html.
 */ -}}
 {{ define "main" }}{{ partial "docs/chrome-top.html" . }}
   {{ partial "docs-tabs.html" . }}
   {{ $docTabs := .Store.Get "docTabs" }}<div class='hx:mx-auto hx:flex {{ partial "docs/width-class.html" . }}'{{ if and $docTabs $docTabs.enabled }} style="padding-top: 0.75rem;"{{ end }}>
-    {{ partial "sidebar.html" (dict "context" .) }}
-    {{ partial "toc.html" . }}
     <article class="hx:w-full hx:break-words hx:flex hx:min-h-[calc(100vh-var(--navbar-height))] hx:min-w-0 hx:justify-center hx:pb-8 hx:pr-[calc(env(safe-area-inset-right)-1.5rem)]">
       <main id="content" class="hx:w-full hx:min-w-0 {{ partial "docs/content-class.html" . }}">
         {{ partial "breadcrumb.html" (dict "page" . "enable" true) }}
@@ -51,11 +51,16 @@
         </div>
         {{ partial "components/last-updated.html" . }}
         {{- if (site.Params.page.displayPagination | default true) -}}
-          {{- partial "components/pager.html" . -}}
+          {{- /* Hextra's prev/next pager carries no class or rel that marks it as
+                 navigation, so a parity check reads "Previous title" + "Next
+                 title" as page text. The wrapper says it is chrome. */ -}}
+          <div data-markdown-ignore>{{- partial "components/pager.html" . -}}</div>
         {{- end -}}
         {{ partial "components/page-feedback.html" . }}
         {{ partial "components/comments.html" . }}
       </main>
     </article>
+    {{ partial "sidebar.html" (dict "context" .) }}
+    {{ partial "toc.html" . }}
   </div>{{ partial "docs/chrome-bottom.html" . }}
 {{ end }}

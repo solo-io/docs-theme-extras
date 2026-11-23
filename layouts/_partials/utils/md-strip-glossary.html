@@ -64,7 +64,7 @@
        whitespace between its tags, which is how gloss.html emits it. See the
        warning in that file: reformatting it breaks these regexes AND blinds
        the scan that guards them, in the same edit. */ -}}
-{{- $html = $html | replaceRE `(?s)<span class="tooltip-content"><strong>[^<]*</strong><span>.*?</span>(?:<a[^>]*>.*?</a>)?</span>` "" -}}
+{{- $html = $html | replaceRE `(?s)<span class="tooltip-content"[^>]*><strong>[^<]*</strong><span>.*?</span>(?:<a[^>]*>.*?</a>)?</span>` "" -}}
 {{- $html = $html | replaceRE `(?s)<span class="glossary-term"[^>]*>(.*?)</span>` "$1" -}}
 
 {{- return $html -}}

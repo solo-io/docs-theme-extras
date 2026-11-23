@@ -541,7 +541,7 @@ test.describe("title badges (PR 2414 regression guard)", () => {
       badgesMatch,
       ".page-badges missing on a section page — docs/list.html ignores badge front matter",
     ).not.toBeNull();
-    expect(badgesMatch![1]).toMatch(/section-card-badge badge-tag">Beta</);
+    expect(badgesMatch![1]).toMatch(/section-card-badge badge-tag"[^>]*>Beta</);
   });
 });
 

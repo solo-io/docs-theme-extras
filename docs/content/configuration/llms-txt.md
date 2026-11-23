@@ -50,6 +50,7 @@ params:
   llms:
     docsIntro: agentgateway is an open source proxy and gateway for agent traffic.
     leafPageLimit: 5
+    maxChars: 50000
     rootNote: >-
       AI coding assistants can install the agentgateway skills with
       `npx skills add https://agentgateway.dev`.
@@ -63,6 +64,9 @@ params:
 
 `llms.leafPageLimit`
 : How many pages of a leaf section, such as a blog, the index lists before the "All N pages" link. Defaults to `5`. The section's own `llms.txt` always lists every page.
+
+`llms.maxChars`
+: The longest a section's `llms.txt` should be, in characters. Defaults to `50000`, the size above which agents start to truncate the file and the afdocs `llms-txt-size` check warns. When a section's full page listing would be longer, its largest subsections are replaced, one at a time, by a link to their own `llms.txt` until the listing fits. Each of those files splits the same way if it is too long. A listing that already fits is unchanged. Splitting needs the `llms` output format on sections, because a subsection without its own `llms.txt` can't be linked. Set `0` to turn splitting off.
 
 ## Leave a page or section out
 

@@ -134,8 +134,13 @@
   {{- if $translated -}}{{- $bannerText = $translated -}}{{- end -}}
 {{- end -}}
 
+{{- /* `data-markdown-ignore` marks the banner as page chrome, not page content.
+       The .md export leaves the banner out, and tools that compare a page's
+       HTML against its .md twin (the afdocs `markdown-content-parity` check)
+       skip elements with this attribute instead of reporting the banner as
+       content missing from the markdown. */ -}}
 {{- with $bannerText }}
-<div class="version-banner">
+<div class="version-banner" data-markdown-ignore>
   {{ . | markdownify }}
 </div>
 {{- end -}}

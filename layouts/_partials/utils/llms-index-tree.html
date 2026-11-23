@@ -66,6 +66,13 @@
   {{- if or $children $pages (eq $level 2) -}}
     {{- $out = printf "\n%s %s\n\n" $hashes $s.Title -}}
   {{- end -}}
+  {{- /* A heading with pages or subsections under it also links the section's
+         own page first; otherwise that landing page is in no llms.txt. See
+         utils/llms-section-entry.html. (With nothing under it, the section is
+         linked by the "link the page itself" branch at the bottom instead.) */ -}}
+  {{- if or $children $pages -}}
+    {{- $out = print $out (partial "utils/llms-section-entry.html" (dict "page" $s "prodHost" $prodHost)) "\n" -}}
+  {{- end -}}
 
   {{- /* The section's own pages come first, capped like a leaf section's, and
          then its subsections. A section can have both: agentregistry's

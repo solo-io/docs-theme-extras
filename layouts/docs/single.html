@@ -56,12 +56,21 @@
   all 8 docs-hub products and the fixture unchanged. If you edit this file, keep
   the slot calls glued to their neighbouring tags — moving one onto its own line
   injects whitespace and breaks that guarantee.
+
+  SOURCE ORDER: <article> comes BEFORE the sidebar and TOC in the HTML, and the
+  flex `order` rules put them back on the left and right: `.hextra-sidebar-container
+  { order: -1 }` in docs-theme-extras.css for the sidebar (its `hx:order-first`
+  class has no CSS in Hextra's build) and `hx:order-last` on the TOC <nav>.
+  The page looks the same; what changes is what a tool that reads the raw HTML
+  top to bottom reaches first. With the sidebar first, an AI agent (or the
+  afdocs `content-start-position` check) had to read through 20-80K characters
+  of navigation before the first sentence of the page. Do not move the sidebar
+  back above the article. tests/content-first-source-order.spec.ts pins the
+  HTML order and tests/content-first-columns.spec.ts the rendered columns.
 */ -}}
 {{ define "main" }}{{ partial "docs/chrome-top.html" . }}
   {{ partial "docs-tabs.html" . }}
   {{ $docTabs := .Store.Get "docTabs" }}<div class='hx:mx-auto hx:flex {{ partial "docs/width-class.html" . }}'{{ if and $docTabs $docTabs.enabled }} style="padding-top: 0.75rem;"{{ end }}>
-    {{ partial "sidebar.html" (dict "context" .) }}
-    {{ partial "toc.html" . }}
     <article class="hx:w-full hx:break-words hx:flex hx:min-h-[calc(100vh-var(--navbar-height))] hx:min-w-0 hx:justify-center hx:pb-8 hx:pr-[calc(env(safe-area-inset-right)-1.5rem)]">
       <main id="content" class="hx:w-full hx:min-w-0 {{ partial "docs/content-class.html" . }}">
         {{ partial "breadcrumb.html" (dict "page" . "enable" true) }}
@@ -88,11 +97,16 @@
         </div>
         {{ partial "components/last-updated.html" . }}
         {{- if (site.Params.page.displayPagination | default true) -}}
-          {{- partial "components/pager.html" . -}}
+          {{- /* Hextra's prev/next pager carries no class or rel that marks it as
+                 navigation, so a parity check reads "Previous title" + "Next
+                 title" as page text. The wrapper says it is chrome. */ -}}
+          <div data-markdown-ignore>{{- partial "components/pager.html" . -}}</div>
         {{- end -}}
         {{ partial "components/page-feedback.html" . }}
         {{ partial "components/comments.html" . }}
       </main>
     </article>
+    {{ partial "sidebar.html" (dict "context" .) }}
+    {{ partial "toc.html" . }}
   </div>{{ partial "docs/chrome-bottom.html" . }}
 {{ end }}
