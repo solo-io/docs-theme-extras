@@ -26,7 +26,7 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ## [Unreleased]
 
-These four changes come from the agent-readiness scan in solo-io/docs (afdocs 0.18.7, Agent-Friendly Documentation Spec), which scored every Solo docs site and failed the same checks on almost all of them. Rendered output changes for every consumer, so this is a minor release.
+These four changes come from the docs hub's agent-readiness scan (afdocs 0.18.7, Agent-Friendly Documentation Spec), which scored every Solo docs site and failed the same checks on almost all of them. Rendered output changes for every consumer, so this is a minor release.
 
 ### Fix — page content came after 20-80K characters of navigation in the HTML (`layouts/docs/single.html`, `layouts/docs/list.html`, `assets/css/docs-theme-extras.css`)
 
@@ -42,7 +42,7 @@ llms.txt rendered each section as a heading with its pages under it, but never l
 
 ### Consumer follow-up
 
-Same-path overrides keep the old markup until they are updated in the same PR as the pin bump: solo-io/docs (`partials/version-banner.html`, `_shortcodes/gloss.html`, `docs/api-ref.html`), kagent.dev `docs-site/` (`partials/version-banner.html`, `_shortcodes/gloss.html`), and agentgateway.dev (`docs/api-ref.html`, `docs/kubernetes/api-ref.html`). Do not add `data-markdown-ignore` to a consumer's `gloss` copy before the pin bump, because older module versions do not strip a tooltip span that has attributes, and the definition would leak into every .md URL.
+Same-path overrides keep the old markup until they are updated in the same PR as the pin bump: the docs hub (`partials/version-banner.html`, `_shortcodes/gloss.html`, `docs/api-ref.html`), kagent.dev `docs-site/` (`partials/version-banner.html`, `_shortcodes/gloss.html`), and agentgateway.dev (`docs/api-ref.html`, `docs/kubernetes/api-ref.html`). Do not add `data-markdown-ignore` to a consumer's `gloss` copy before the pin bump, because older module versions do not strip a tooltip span that has attributes, and the definition would leak into every .md URL.
 
 ---
 
