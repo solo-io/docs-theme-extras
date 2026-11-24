@@ -455,6 +455,10 @@
         </button>
       </li>
       {{- end -}}
+      {{- /* Offline builds (`params.offline`) drop the docs MCP and "Open in"
+             items: each one opens a page on another host, which an air-gapped
+             reader cannot reach. */ -}}
+      {{- if not site.Params.offline -}}
       <li class="copy-md-dropdown-sep" role="separator"></li>
       <li role="none">
         <button role="menuitem" data-action="connect-docs-mcp">
@@ -490,6 +494,7 @@
           Open in Perplexity
         </button>
       </li>
+      {{- end -}}
       <li class="copy-md-dropdown-sep" role="separator"></li>
       <li role="none">
         <button role="menuitem" data-action="print">

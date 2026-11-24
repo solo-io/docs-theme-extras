@@ -1,0 +1,59 @@
+{{- /*
+  Offline font faces. Called from themeExtras/head-end.html in place of the
+  Google Fonts <link>s when `site.Params.offline` is true, so a site built for
+  an air-gapped environment loads no fonts from another host.
+
+  The font files live under assets/fonts/offline/ rather than static/, so the
+  public site never publishes them: a resource is only written to public/ when
+  a template asks for its .RelPermalink, and only this partial does that.
+
+  Sources (npm, with their licenses alongside the files):
+    material-symbols 0.49.0           Apache-2.0  Material Symbols Outlined
+    @fontsource-variable/open-sans    OFL-1.1     Open Sans (oss brand)
+    @fontsource-variable/nunito       OFL-1.1     Nunito (enterprise brand)
+
+  All three are variable fonts, so one file per subset covers every weight the
+  Google Fonts URLs requested. Only the latin and latin-ext subsets are
+  bundled; other scripts fall back to the system font stack.
+
+  Each entry in `site.Params.offlineFonts` lets a consumer that
+  loads its own Google font (kgateway's Figtree, for example) do the same thing
+  from its own assets without copying this partial. Shape:
+
+    offlineFonts:
+      - family: Figtree
+        style: normal
+        files:
+          - path: fonts/offline/figtree-latin-wght-normal.woff2
+            unicodeRange: "U+0000-00FF,..."
+*/ -}}
+{{- $latin := "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD" -}}
+{{- $latinExt := "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF" -}}
+
+{{- $faces := slice -}}
+{{- $faces = $faces | append (dict "family" "Material Symbols Outlined" "style" "normal" "weight" "100 700" "display" "block" "files" (slice (dict "path" "fonts/offline/material-symbols-outlined.woff2"))) -}}
+
+{{- $brand := "" -}}
+{{- with site.Params.themeExtras }}{{ $brand = .brand | default "" }}{{ end -}}
+{{- $brandFamily := "" -}}{{- $brandSlug := "" -}}
+{{- if eq $brand "oss" }}{{ $brandFamily = "Open Sans" }}{{ $brandSlug = "open-sans" }}
+{{- else if eq $brand "enterprise" }}{{ $brandFamily = "Nunito" }}{{ $brandSlug = "nunito" }}{{ end -}}
+{{- with $brandSlug -}}
+  {{- $faces = $faces | append (dict "family" $brandFamily "style" "normal" "weight" "300 700" "display" "swap" "files" (slice
+        (dict "path" (printf "fonts/offline/%s-latin-ext-wght-normal.woff2" .) "unicodeRange" $latinExt)
+        (dict "path" (printf "fonts/offline/%s-latin-wght-normal.woff2" .) "unicodeRange" $latin))) -}}
+{{- end -}}
+
+{{- range site.Params.offlineFonts -}}
+  {{- $faces = $faces | append (dict "family" .family "style" (.style | default "normal") "weight" (.weight | default "100 900") "display" "swap" "files" .files) -}}
+{{- end }}
+<style>
+{{- range $face := $faces }}
+{{- range $face.files }}
+{{- $f := resources.Get .path }}
+{{- if not $f }}{{ errorf "offline-fonts: %q not found under assets/ (family %q)" .path $face.family }}{{ end }}
+@font-face{font-family:"{{ $face.family }}";font-style:{{ $face.style }};font-weight:{{ $face.weight }};font-display:{{ $face.display }};src:url("{{ $f.RelPermalink }}") format("woff2"){{ with .unicodeRange }};unicode-range:{{ . }}{{ end }}}
+{{- end }}
+{{- end }}
+.material-symbols-outlined{font-family:"Material Symbols Outlined";font-weight:normal;font-style:normal;font-size:24px;line-height:1;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;word-wrap:normal;direction:ltr;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;font-feature-settings:"liga"}
+</style>

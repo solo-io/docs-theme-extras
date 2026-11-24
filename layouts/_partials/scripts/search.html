@@ -61,7 +61,13 @@
         {{- with .Err -}}
           {{- /* extras: don't fail the build on a transient CDN failure; warn and
                  fall back to loading the same pinned bundle from the CDN at
-                 runtime. See the header comment for the rationale. */ -}}
+                 runtime. See the header comment for the rationale.
+                 An offline build (`params.offline`) cannot take that fallback:
+                 the reader has no route to the CDN, so search would silently
+                 never load. Fail the build instead. */ -}}
+          {{- if site.Params.offline -}}
+            {{- errorf "FlexSearch: could not fetch %s at build time (%s). An offline build (params.offline) cannot fall back to the CDN at runtime; rerun the build." $flexSearchJsUrl . -}}
+          {{- end -}}
           {{- warnf "FlexSearch: could not fetch %s at build time (%s); falling back to a runtime CDN <script> tag. Build not failed; search still works." $flexSearchJsUrl . -}}
           <script defer src="{{ $flexSearchJsUrl }}" crossorigin="anonymous"></script>
         {{- else with .Value -}}

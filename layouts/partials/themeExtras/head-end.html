@@ -14,7 +14,15 @@
   MARKER_CUSTOM_HEAD_END sentinel.
 */ -}}
 {{/* Google Material Symbols — unconditional, drives sidebar nav icons,
-     section-card icons, and copy-as-md feedback icons across all brands. */}}
+     section-card icons, and copy-as-md feedback icons across all brands.
+
+     `params.offline` swaps every Google Fonts <link> below for locally bundled
+     faces (themeExtras/offline-fonts.html), so a site built for an air-gapped
+     environment loads no fonts from another host. Off by default: the public
+     build takes the `else` branch and is unchanged. */}}
+{{- if site.Params.offline }}
+{{ partial "themeExtras/offline-fonts.html" . }}
+{{- else }}
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
 
 {{/* Brand-conditional font imports. brand-{oss,enterprise}.css references
@@ -26,6 +34,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 {{- else if eq $brandFont "enterprise" }}
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+{{- end }}
 {{- end }}
 
 {{/* Module CSS layers, loaded after Hextra's compiled bundle. The
