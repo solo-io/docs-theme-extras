@@ -29,12 +29,6 @@
 {{- if (site.Params.search.enable | default true) -}}
   {{- $searchType := site.Params.search.type | default "flexsearch" -}}
   {{- if eq $searchType "flexsearch" -}}
-    {{- $jsSearchScript := printf "%s.search.js" .Language.Lang -}}
-    {{- $jsSearch := resources.Get "js/flexsearch.js" | resources.ExecuteAsTemplate $jsSearchScript . -}}
-    {{- if hugo.IsProduction -}}
-      {{- $jsSearch = $jsSearch | minify | fingerprint -}}
-    {{- end -}}
-
     {{- $flexSearchBase := "" -}}
     {{- $useDefaultCdn := true -}}
     {{- with site.Params.search.flexsearch.base -}}
@@ -88,7 +82,38 @@
       {{- errorf "FlexSearch local loading requires params.search.flexsearch.js when using non-remote base %q" $flexSearchBase -}}
     {{- end -}}
 
-    <script defer src="{{ $jsSearch.RelPermalink }}" integrity="{{ $jsSearch.Data.Integrity }}"></script>
+    {{- /* extras: the search bundle is built in a DEFERRED block, which Hugo
+           runs after every page has rendered.
+
+           The bundle (js/flexsearch.js) builds the search index
+           (json/search-data.json), and the index reads `.Content` of every
+           page. Built inline, the first page to reach this partial rendered
+           the content of the WHOLE site on one goroutine, while every other
+           page blocked on the same resource, because each page's <script src>
+           needs the bundle's fingerprint, which needs the index's fingerprint.
+           Measured on the docs hub (gloo-mesh-enterprise preview build,
+           Hugo 0.160.1, 10-core laptop): 139 s with the inline build, 107 s
+           with search disabled, at the same total CPU — the cost was pure
+           serialization, not work.
+
+           Deferred, pages render in parallel and the index is assembled at
+           the end from content Hugo has already rendered and cached. Output
+           is unchanged: same bundle, same fingerprints, same tag.
+
+           `key` makes Hugo run the block once per language and reuse the
+           result on every page; the `data` dict has to be identical across
+           pages for that, which is why it carries only the language. Inside
+           the block `.` is that dict, so the page context the templates need
+           comes from `site.Home` (the index ranges `.Site.Pages`, the bundle
+           reads `.Language.Lang` and `T`, all site-level). */ -}}
+    {{- with (templates.Defer (dict "key" (printf "extras-search-%s" site.Language.Lang) "data" (dict "lang" site.Language.Lang))) -}}
+      {{- $jsSearchScript := printf "%s.search.js" .lang -}}
+      {{- $jsSearch := resources.Get "js/flexsearch.js" | resources.ExecuteAsTemplate $jsSearchScript site.Home -}}
+      {{- if hugo.IsProduction -}}
+        {{- $jsSearch = $jsSearch | minify | fingerprint -}}
+      {{- end -}}
+      <script defer src="{{ $jsSearch.RelPermalink }}" integrity="{{ $jsSearch.Data.Integrity }}"></script>
+    {{- end -}}
   {{- else -}}
     {{- warnf `search type "%s" is not supported` $searchType -}}
   {{- end -}}

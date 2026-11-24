@@ -24,6 +24,12 @@ deliberately, one PR at a time. Never use floating refs in production hugo confi
 
 ---
 
+## [Unreleased]
+
+### Fix — building the search index stalled every page until the whole site had rendered on one thread (`layouts/_partials/scripts/search.html`)
+
+The search bundle (`js/flexsearch.js`) builds the search index (`json/search-data.json`), and the index reads `.Content` of every page. Because each page's `<script src>` carries the bundle's fingerprint, and the bundle carries the index's fingerprint, the first page to reach the search partial rendered the content of the entire site on one goroutine while every other page waited for it. On the docs hub's gloo-mesh-enterprise preview build (Hugo 0.160.1, 10-core laptop) the build took 139 s, and 107 s with search turned off, at the same total CPU: the cost was serialization, not work. The bundle and its `<script>` tag are now built in a `templates.Defer` block, which Hugo runs after every page has rendered, so pages render in parallel and the index is assembled from content Hugo has already cached. On the same build, with section RSS feeds slimmed, the time went from 69 s to 50 s, and building the index took 1.5 s instead of 30 s. The index and the bundle are byte-identical, with the same fingerprints. The only change in the HTML is that the search `<script>` tag is no longer minified (Hugo inserts deferred output after `--minify` runs), so its `src` keeps its quotes and `+` in `integrity` is written as `&#43;`, which browsers decode to the same value.
+
 ## [0.6.0] — 2026-11-23
 
 The `params.llms.maxChars` entry and the three Fix entries below come from the docs hub's agent-readiness scan (afdocs 0.18.7, Agent-Friendly Documentation Spec), which scored every Solo docs site and failed the same checks on almost all of them. Rendered output changes for every consumer, so this is a minor release.
