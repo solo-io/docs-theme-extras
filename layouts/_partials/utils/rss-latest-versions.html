@@ -1,0 +1,25 @@
+{{- /* Returns the URL segments (linkVersion, else version) of every
+       params.versions entry that the RSS feed treats as LATEST, so its pages
+       keep full content in list.rss.xml. Empty on an unversioned site.
+
+       An entry counts as latest when any of these holds:
+         - `latest = true`              (same flag as utils/version-noindex.html)
+         - `linkVersion = "latest"`     (same signal as utils/version-noindex.html)
+         - its `dropdown` label contains "(latest)" or "(stable)"
+
+       The label rule is RSS-only. The docs hub publishes its current version
+       under a numbered segment (`1.32.x`) and marks it only in the label
+       (istio says "stable"). version-noindex.html deliberately ignores labels,
+       because a wrong guess there deindexes live docs; here a wrong guess only
+       makes one feed larger.
+
+       A page is in a latest version when one of its URL segments equals one of
+       the returned values. */ -}}
+{{- $latest := slice -}}
+{{- range site.Params.versions -}}
+  {{- $lv := .linkVersion | default .version -}}
+  {{- if or .latest (eq $lv "latest") (findRE `\((latest|stable)\)` (.dropdown | default "")) -}}
+    {{- $latest = $latest | append $lv -}}
+  {{- end -}}
+{{- end -}}
+{{- return $latest -}}

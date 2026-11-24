@@ -9,7 +9,11 @@
 {{- $hasMd := $outputs.markdown | default true -}}
 {{- $llmsHref := partial "utils/llms-href.html" . -}}
 {{- if or $llmsHref $hasMd -}}
-<p class="hx:sr-only">
+{{- /* aria-hidden: reader-mode extractors (Readability and friends) skip
+       aria-hidden nodes, so feed readers no longer open every article with
+       this line. Agents read the raw HTML and still see it. Screen readers
+       skip it too, which is fine: it is written for agents, not people. */ -}}
+<p class="hx:sr-only" aria-hidden="true">
   {{- with $llmsHref -}}
     For the complete documentation index, see <a href="{{ . }}">llms.txt</a>.
   {{- end }}
