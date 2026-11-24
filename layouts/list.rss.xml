@@ -1,0 +1,144 @@
+{{- /* Slim RSS feed. SHADOWS Hextra's layouts/list.rss.xml (v0.12.3), so every
+     consumer gets it. A consumer's own layouts/list.rss.xml (or
+     layouts/_default/list.rss.xml) still wins.
+
+     Changes from upstream:
+
+     1. CONTENT. A page in an OLD version (a params.versions entry that does
+        not count as latest, see utils/rss-latest-versions.html, or an
+        unlisted `N.N.x` tree) carries its
+        front-matter `description`, not its full rendered `.Content`. Every
+        other page keeps full content: the latest version, and pages that are
+        in no version at all (a blog, an unversioned site). Hextra embeds full
+        content for up to 50 pages in every section feed; on the docs hub that
+        was 132 MB of XML and about 45% of the build CPU for
+        gloo-mesh-enterprise (107 s build, against 45 s slim). Generated
+        `reference/` pages are description-only everywhere: large tables
+        nobody reads in a feed reader, and they cost the most.
+
+        `.Summary` is NOT a cheap substitute. Since Hugo v0.147.9 a page with
+        a Markdown table is rendered again for each non-HTML output format,
+        so `.Summary` in the RSS format re-renders the page. `.Description`
+        is front matter and renders nothing.
+
+        A versioned site where no version counts as latest gets a build
+        warning, because its docs would lose full content in every feed.
+
+     2. WHICH PAGES. Hextra's rules left two kinds of feed empty on docs
+        sites. The site root lists pages whose Type is in params.rss.sections
+        (default `blog`): kept as is when that finds pages, so a site's blog
+        stays its root feed. When it finds none, the root lists the current
+        docs instead (every page not in an old version, minus `reference/`).
+        A top-level section listed pages whose Type equals the section name,
+        which docs pages (cascading `type: docs`) never match; it now lists
+        every page under it. Any other section lists its direct children, as
+        upstream.
+
+     3. DATES AND ORDER. <pubDate> is the page's own `date` when it sets one
+        (a blog post's publish date), else .Lastmod. Most docs pages set no
+        `date`, so upstream's .Date showed "31 Dec 0001". .Lastmod follows the
+        site's [frontmatter] lastmod setting; with `enableGitInfo` and
+        `lastmod = ["lastmod", ":git", ...]` it is the page's last commit,
+        which needs full git history at build time (a depth-1 checkout gives
+        every page the same date; `filter: blob:none` keeps a full-history
+        clone cheap). A page with neither leaves pubDate out, which RSS 2.0
+        allows. Every feed is newest first by that same date, so the 50-item
+        cap keeps the newest pages.
+
+     4. FEATURED IMAGE. A full-content item whose page bundle has an image
+        matching `*featured*` starts with that image, resized to 640px wide
+        (from agentgateway-oss-website's own feed template). */ -}}
+{{- $latest := partial "utils/rss-latest-versions.html" . -}}
+{{- $old := slice -}}
+{{- range site.Params.versions -}}
+  {{- $lv := .linkVersion | default .version -}}
+  {{- if not (in $latest $lv) -}}{{- $old = $old | append $lv -}}{{- end -}}
+{{- end -}}
+{{- /* A segment shaped like a version tree (`1.6.x`, `v2.4.x`) that is not
+       latest also counts as old, even when params.versions does not list it:
+       sites keep frozen older trees that are no longer in the dropdown
+       (agentgateway-oss-website has several), and those would otherwise keep
+       full content. Narrow on purpose: `1.25` (a changelog path) or a dated
+       blog slug does not match. */ -}}
+{{- $treeRE := `^v?\d+\.\d+\.x$` -}}
+{{- if and site.Params.versions (not $latest) -}}
+  {{- warnidf "extras-rss-no-latest" "RSS: no entry in params.versions counts as latest, so no versioned page gets full content in its feed. Set `latest = true` on the current version, or use linkVersion \"latest\" or a dropdown label containing \"(latest)\" or \"(stable)\"." -}}
+{{- end -}}
+{{- /* Candidate pages for this feed. */ -}}
+{{- $pages := slice -}}
+{{- if not $.Section -}}
+  {{- $sections := site.Params.rss.sections | default (slice "blog") -}}
+  {{- $pages = where site.RegularPages "Type" "in" $sections -}}
+  {{- if not $pages -}}
+    {{- range site.RegularPages -}}
+      {{- $s := split .RelPermalink "/" -}}
+      {{- $inOld := false -}}
+      {{- range $s -}}
+        {{- if or (in $old .) (and (findRE $treeRE .) (not (in $latest .))) -}}{{- $inOld = true -}}{{- end -}}
+      {{- end -}}
+      {{- if and (not $inOld) (not (in $s "reference")) -}}
+        {{- $pages = $pages | append . -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- else if $.Parent.IsHome -}}
+  {{- $pages = $.RegularPagesRecursive -}}
+{{- else -}}
+  {{- $pages = $.Pages -}}
+{{- end -}}
+{{- /* Newest 50 by the same date pubDate shows. */ -}}
+{{- $dated := slice -}}
+{{- range $pages -}}
+  {{- $d := cond .Date.IsZero .Lastmod .Date -}}
+  {{- $dated = $dated | append (dict "p" . "d" $d "t" $d.Unix) -}}
+{{- end -}}
+{{- $dated = first 50 (sort $dated "t" "desc") -}}
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>{{ .Site.Title }} – {{ .Title }}</title>
+    <link>{{ .Permalink }}</link>
+    <description>Recent content {{ if ne  .Title  .Site.Title }}{{ with .Title }}in {{.}} {{ end }}{{ end }}on {{ .Site.Title }}</description>
+    <generator>Hugo -- gohugo.io</generator>{{ with partial "utils/hugo-compat/language-locale.html" .Site.Language }}
+    <language>{{.}}</language>{{end}}{{ with .Site.Params.Author.email }}
+    <managingEditor>{{.}}{{ with $.Site.Params.Author.name }} ({{.}}){{end}}</managingEditor>{{end}}{{ with .Site.Params.Author.email }}
+    <webMaster>{{.}}{{ with $.Site.Params.Author.name }} ({{.}}){{end}}</webMaster>{{end}}{{ with .Site.Copyright }}
+    <copyright>{{.}}</copyright>{{end}}{{ if not .Date.IsZero }}
+    <lastBuildDate>{{ .Date.Format "Mon, 02 Jan 2006 15:04:05 -0700" | safeHTML }}</lastBuildDate>{{ end }}
+    {{ with .OutputFormats.Get "RSS" }}
+	  {{ printf "<atom:link href=%q rel=\"self\" type=%q />" .Permalink .MediaType | safeHTML }}
+    {{ end }}
+    {{- range $dated }}
+    {{- $d := .d }}
+    {{- with .p }}
+    <item>
+      <title>{{ .Title }}</title>
+      <link>{{ .Permalink }}</link>
+      {{- if not $d.IsZero }}
+      <pubDate>{{ $d.Format "Mon, 02 Jan 2006 15:04:05 -0700" | safeHTML }}</pubDate>
+      {{- end }}
+      {{ with .Site.Params.Author.email }}<author>{{.}}{{ with $.Site.Params.Author.name }} ({{.}}){{end}}</author>{{end}}
+      <guid>{{ .Permalink }}</guid>
+      {{- $segs := split .RelPermalink "/" -}}
+      {{- $full := not (in $segs "reference") -}}
+      {{- range $segs -}}
+        {{- if or (in $old .) (and (findRE $treeRE .) (not (in $latest .))) -}}{{- $full = false -}}{{- end -}}
+      {{- end -}}
+      {{- if $full }}
+      <description>
+        {{- with (.Resources.ByType "image").GetMatch "*featured*" }}
+        {{- with .Resize "640x" }}
+        {{ printf "<![CDATA[<img src=\"%s\" width=\"%d\" height=\"%d\"/>]]>" .Permalink .Width .Height | safeHTML }}
+        {{- end }}
+        {{- end }}
+        {{ .Content | html }}
+      </description>
+      {{- else -}}
+      {{- with .Description }}
+      <description>{{ . }}</description>
+      {{- end -}}
+      {{- end }}
+    </item>
+    {{- end }}
+    {{- end }}
+  </channel>
+</rss>
