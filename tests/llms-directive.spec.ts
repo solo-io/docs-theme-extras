@@ -48,9 +48,18 @@ test.describe("llms.txt discovery directive: derived, product-prefix-aware href"
 
       // Robust against other sr-only paragraphs on the page: pick the one that
       // actually carries the llms.txt link.
-      const paras = [...html.matchAll(/<p class="hx:sr-only">([\s\S]*?)<\/p>/g)].map((m) => m[1]);
-      const directive = paras.find((p) => p.includes("llms.txt"));
-      expect(directive, "sr-only llms.txt directive missing from content").toBeTruthy();
+      const paras = [...html.matchAll(/<p class="hx:sr-only"([^>]*)>([\s\S]*?)<\/p>/g)].map((m) => ({
+        attrs: m[1],
+        body: m[2],
+      }));
+      const found = paras.find((p) => p.body.includes("llms.txt"));
+      expect(found, "sr-only llms.txt directive missing from content").toBeTruthy();
+      // aria-hidden keeps reader-mode extractors (feed readers' article view)
+      // from opening every page with this line.
+      expect(found!.attrs, "llms.txt directive lost aria-hidden; reader views will show it").toContain(
+        'aria-hidden="true"',
+      );
+      const directive = found!.body;
 
       const hrefMatch = directive!.match(/<a href="([^"]+)">llms\.txt<\/a>/);
       expect(hrefMatch, "llms.txt anchor missing from the directive").not.toBeNull();

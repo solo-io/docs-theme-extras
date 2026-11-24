@@ -354,6 +354,9 @@ document.addEventListener('DOMContentLoaded', function(){
       toggle.addEventListener('click', function(e){
         e.stopPropagation();
         var open = dropdown.classList.toggle('open');
+        // The markup ships `hidden` so reader-mode extractors skip the menu;
+        // keep the attribute in step with the class.
+        dropdown.hidden = !open;
         toggle.setAttribute('aria-expanded', String(open));
       });
     }
@@ -363,6 +366,7 @@ document.addEventListener('DOMContentLoaded', function(){
         item.addEventListener('click', function(e){
           e.stopPropagation();
           dropdown.classList.remove('open');
+          dropdown.hidden = true;
           if (toggle) toggle.setAttribute('aria-expanded', 'false');
           if (item.dataset.action === 'copy') {
             doCopyMd(wrapper, mainBtn);
@@ -451,6 +455,7 @@ document.addEventListener('DOMContentLoaded', function(){
     document.querySelectorAll('.copy-md-dropdown.open').forEach(function(dd){
       var tog = dd.closest('.copy-md-split') && dd.closest('.copy-md-split').querySelector('.copy-md-toggle');
       dd.classList.remove('open');
+      dd.hidden = true;
       if (tog) tog.setAttribute('aria-expanded', 'false');
     });
   });
